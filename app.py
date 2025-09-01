@@ -6,14 +6,14 @@ import uuid # Para gerar IDs únicos
 from datetime import datetime
 
 # Importe os modelos e o Base, create_engine, sessionmaker do seu arquivo models.py
-from database.models import Base, RegimeTributario, Cliente, CertificadoDigital, NFeEmitidas, Cfop, Ncm, Produto, RegraTributacao
+from database.models import Base, Cfop
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 app = Flask(__name__)
 
 # --- Configuração do Banco de Dados ---
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://root:Mo@2508@host:5432/sjtnfe")
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo2505@host:5432/sjtnfe")
 # Configura o tipo de DB para o JSONB condicional (se for usar PgSQL)
 if "postgresql" in SQLALCHEMY_DATABASE_URL:
     os.environ['DB_TYPE'] = 'postgresql'
@@ -29,32 +29,6 @@ def get_db():
     finally:
         db.close()
 
-# # --- Configurações da Aplicação ---
-# # Caminho para o arquivo de dados CFOP
-# # Em produção, você pode carregar isso de um banco de dados ou serviço externo
-# CFOP_DATA_FILE = 'cfop_data.json'
-
-# # Simulando um "cofre" de certificados em memória (NÃO PARA PRODUÇÃO)
-# # Em produção, isso seria um banco de dados seguro, KMS, HashiCorp Vault, etc.
-# CERTIFICATE_STORE = {}
-
-# # --- Funções Auxiliares para Carregar Dados ---
-# def load_cfop_data():
-#     """Carrega os dados de CFOP do arquivo JSON."""
-#     try:
-#         with open(CFOP_DATA_FILE, 'r', encoding='utf-8') as f:
-#             data = json.load(f)
-#         app.logger.info(f"Dados de CFOP carregados com sucesso de {CFOP_DATA_FILE}. Total: {len(data)} entradas.")
-#         return data
-#     except FileNotFoundError:
-#         app.logger.error(f"Erro: O arquivo '{CFOP_DATA_FILE}' não foi encontrado. Certifique-se de que ele existe.")
-#         return []
-#     except json.JSONDecodeError:
-#         app.logger.error(f"Erro ao decodificar JSON de '{CFOP_DATA_FILE}'. Verifique o formato do arquivo.")
-#         return []
-
-# # Carrega os dados de CFOP ao iniciar a aplicação
-# cfop_list = load_cfop_data()
 
 # --- Rotas da API ---
 
@@ -82,7 +56,7 @@ def get_cfops():
     """Retorna a lista completa de CFOPs."""
     db = next(get_db())
     cfops = db.query(Cfop).all()
-    cfop_list = [{"codigo": cfop.codigo, "descricao": cfop.descricao} for cfop in cfops]
+    cfop_list = [{"cfop": cfop.cfop, "descricao": cfop.descricao} for cfop in cfops]
     return jsonify(cfop_list), 200
 
 
