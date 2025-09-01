@@ -1,2 +1,2 @@
 Flask==2.3.2  # Ou a versão mais recente estável
-gunicorn==21.2.0 # Servidor WSGI para produção (necessário para Heroku, por exemplo)
+gunicorn==23.0.0 # Servidor WSGI para produção (necessário para Heroku, por exemplo)
