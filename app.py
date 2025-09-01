@@ -6,7 +6,7 @@ import uuid # Para gerar IDs únicos
 from datetime import datetime
 
 # Importe os modelos e o Base, create_engine, sessionmaker do seu arquivo models.py
-from database.models import Base, Cfop
+from database.models import Base, Cfop, Ncm, Produto, Cliente, RegimeTributario, CertificadoDigital, NFeEmitidas, RegraTributacao, Csosnicms, Csticms  # Importe outros modelos conforme necessário
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -59,7 +59,77 @@ def get_cfops():
     cfop_list = [{"cfop": cfop.cfop, "descricao": cfop.descricao} for cfop in cfops]
     return jsonify(cfop_list), 200
 
+@app.route('/ncms', methods=['GET'])
+def get_ncms():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    ncms = db.query(Ncm).all()
+    ncm_list = [{"codigo": ncm.codigo, "descricao": ncm.descricao} for ncm in ncms]
+    return jsonify(ncm_list), 200
 
+@app.route('/produtos', methods=['GET'])
+def get_produtos():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    produtos = db.query(Produto).all()
+    produto_list = [{"codigo": produtos.codigo_interno, "descricao": produtos.descricao} for produto in produtos]
+    return jsonify(produto_list), 200
+
+@app.route('/clientes', methods=['GET'])
+def get_clientes():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    clientes = db.query(Cliente).all()
+    cliente_list = [{"cnpj": clientes.cnpj, "razao_social": clientes.razao_social} for cliente in clientes]
+    return jsonify(cliente_list), 200
+
+@app.route('/certificados', methods=['GET'])
+def get_certificados(): 
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    certificados = db.query(CertificadoDigital).all()
+    certificado_list = [{"fingerprint": certificados.fingerprint, "conteudo_certificado": certificados.conteudo_certificado} for certificado in certificados]
+    return jsonify(certificado_list), 200
+
+@app.route('/nfes', methods=['GET'])
+def get_nfes():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    nfes = db.query(NFeEmitidas).all()
+    nfe_list = [{"nfe_emitida_id": nfes.nfe_emitida_id, "tipo_nfe": nfes.tipo_nfe} for nfe in nfes]
+    return jsonify(nfe_list), 200
+
+@app.route('/regimes_tributarios', methods=['GET'])
+def get_regimes_tributarios():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    regimes_tributarios = db.query(RegimeTributario).all()
+    regimes_tributario_list = [{"nome": regimes_tributarios.nome, "descricao": regimes_tributarios.descricao} for regimes_tributario in regimes_tributarios]
+    return jsonify(regimes_tributario_list), 200
+
+@app.route('/regras_tributacao', methods=['GET'])
+def get_regras_tributacao():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    regras_tributacao = db.query(RegraTributacao).all()
+    regra_tributacao_list = [{"regra_tributacao_id": regras_tributacao.regra_tributacao_id} for regra_tributacao in regras_tributacao]
+    return jsonify(regra_tributacao_list), 200
+
+@app.route('/csosn', methods=['GET'])
+def get_csosns():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    csosns = db.query(Csosnicms).all()
+    csosn_list = [{"codigo": csosn.codigo, "descricao": csosn.descricao} for csosn in csosns]
+    return jsonify(csosn_list), 200
+
+@app.route('/cst', methods=['GET'])
+def get_csts():
+    """Retorna a lista completa de CFOPs."""
+    db = next(get_db())
+    csts = db.query(Csticms).all()
+    cst_list = [{"codigo": cst.codigo, "descricao": cst.descricao} for cst in csts]
+    return jsonify(cst_list), 200
 
 # --- Configuração de Execução Local ---
 if __name__ == '__main__':
