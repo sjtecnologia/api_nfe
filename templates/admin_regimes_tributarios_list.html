@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}Regimes Tributários - Admin{% endblock %}
+
+{% block content %}
+    <h1>Administração de Regimes Tributários</h1>
+    {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <p><a href="{{ url_for('admin_regimes_tributarios_add') }}" class="btn">Adicionar Novo Regime</a></p>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Descrição</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for regime in regimes %}
+            <tr>
+                <td>{{ regime.regime_tributario_id }}</td>
+                <td>{{ regime.nome }}</td>
+                <td>{{ regime.descricao }}</td>
+                <td>
+                    <a href="{{ url_for('admin_regimes_tributarios_edit', regime_id=regime.regime_tributario_id) }}" class="btn btn-warning">Editar</a>
+                    <form action="{{ url_for('admin_regimes_tributarios_delete', regime_id=regime.regime_tributario_id) }}" method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-danger" onclick="return confirm('Tem certeza que deseja excluir este regime?');">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
