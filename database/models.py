@@ -2,14 +2,41 @@
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Date, ForeignKey, Numeric, LargeBinary, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+import base64 # Importe para lidar com LargeBinary
+from decimal import Decimal # Importe para lidar com Numeric
 # Importa JSONB se for usar PostgreSQL. Se não for usar PgSQL, remova ou comente esta linha.
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import class_mapper # Importe esta linha, se ainda não estiver
 
 from datetime import datetime, date
 import os # Para usar variáveis de ambiente, se necessário na string de conexão
 
 # Define a base para os modelos declarativos
 Base = declarative_base()
+
+def serialize_sqla_object(obj):
+    """
+    Serializa um objeto SQLAlchemy para um dicionário, lidando com tipos específicos.
+    """
+    data = {}
+    for column in obj.__table__.columns:
+        value = getattr(obj, column.name)
+        if isinstance(value, datetime):
+            data[column.name] = value.isoformat()
+        elif isinstance(value, date):
+            data[column.name] = value.isoformat()
+        elif isinstance(value, Decimal):
+            data[column.name] = float(value) # Ou str(value) se precisar de precisão total
+        elif isinstance(value, bytes): # Para LargeBinary
+            # Certifique-se de que o dado seja decodificável antes de codificar em base64
+            # Isso é importante se o campo puder estar vazio ou não ser um byte válido.
+            try:
+                data[column.name] = base64.b64encode(value).decode('utf-8')
+            except TypeError: # Se value for None ou algo não passível de b64encode
+                data[column.name] = None
+        else:
+            data[column.name] = value
+    return data
 
 # --- Tabela de Apoio ---
 class RegimeTributario(Base):

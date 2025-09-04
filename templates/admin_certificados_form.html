@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if certificado %}Editar Certificado Digital{% else %}Novo Certificado Digital{% endif %}{% endblock %}
+
+{% block content %}
+    <h1>{% if certificado %}Editar Certificado Digital (ID: {{ certificado.certificado_digital_id }}){% else %}Novo Certificado Digital{% endif %}</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {# Adicionado enctype="multipart/form-data" para upload de arquivos #}
+    <form method="POST" enctype="multipart/form-data">
+        <fieldset>
+            <legend>Dados do Certificado</legend>
+
+            <div class="form-group">
+                <label for="cliente_id">Cliente Associado:</label>
+                <select id="cliente_id" name="cliente_id" required>
+                    <option value="">Selecione um Cliente</option>
+                    {% for cliente_obj in clientes %}
+                        <option value="{{ cliente_obj.cliente_id }}"
+                            {% if certificado and certificado.cliente_id == cliente_obj.cliente_id %}selected{% endif %}>
+                            {{ cliente_obj.razao_social }} ({{ cliente_obj.cnpj }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="conteudo_certificado_file">Arquivo do Certificado (.PFX/.PEM):</label>
+                <input type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" {% if not certificado %}required{% endif %}>
+                {% if certificado and certificado.nome_arquivo_original %}
+                    <small>Arquivo atual: {{ certificado.nome_arquivo_original }}</small>
+                {% else %}
+                    <small>Selecione o arquivo .pfx ou .pem</small>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="nome_arquivo_original">Nome Descritivo do Arquivo (Opcional):</label>
+                <input type="text" id="nome_arquivo_original" name="nome_arquivo_original" placeholder="Ex: Meu Certificado PJ 2024" value="{{ certificado.nome_arquivo_original if certificado else '' }}">
+                <small>Será usado para identificar o arquivo. Se deixado em branco, será o nome do arquivo enviado.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="senha_certificado">Senha do Certificado:</label>
+                <input type="password" id="senha_certificado" name="senha_certificado" placeholder="********" {% if not certificado %}required{% endif %}>
+                <small>Para sua segurança, a senha não é exibida na edição. Informe apenas se deseja alterá-la.</small>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="validade_inicio">Data de Validade Início:</label>
+                    <input type="date" id="validade_inicio" name="validade_inicio"
+                           value="{{ certificado.validade_inicio.strftime('%Y-%m-%d') if certificado and certificado.validade_inicio else '' }}" required>
+                    <small>Formato: AAAA-MM-DD</small>
+                </div>
+                <div class="form-group">
+                    <label for="validade_fim">Data de Validade Fim:</label>
+                    <input type="date" id="validade_fim" name="validade_fim"
+                           value="{{ certificado.validade_fim.strftime('%Y-%m-%d') if certificado and certificado.validade_fim else '' }}" required>
+                    <small>Formato: AAAA-MM-DD</small>
+                </div>
+            </div>
+
+            <div class="form-group inline">
+                <input type="checkbox" id="ativo" name="ativo" {% if certificado and certificado.ativo %}checked{% endif %}>
+                <label for="ativo">Certificado Ativo</label>
+            </div>
+            
+            {# Campos que seriam preenchidos automaticamente em um sistema real (fingerprint) #}
+            {# <div class="form-group">
+                <label for="fingerprint">Fingerprint (Gerado automaticamente após upload):</label>
+                <input type="text" id="fingerprint" name="fingerprint" value="{{ certificado.fingerprint if certificado else '' }}" readonly>
+            </div> #}
+
+        </fieldset>
+        
+        <div class="button-group">
+            <button type="submit" class="btn">Salvar Certificado</button>
+            <a href="{{ url_for('admin_certificados_list') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+{% endblock %}
