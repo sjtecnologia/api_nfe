@@ -92,7 +92,7 @@ class Cliente(Base):
     __tablename__ = 'clientes'
 
     cliente_id = Column(Integer, primary_key=True)
-    cnpj = Column(String(14), unique=True, nullable=False)
+    cnpj = Column(String(18), unique=True, nullable=False)
     razao_social = Column(String(255), nullable=False)
     nome_fantasia = Column(String(255), nullable=True)
     inscricao_estadual = Column(String(14), nullable=True)
@@ -111,7 +111,7 @@ class Cliente(Base):
     codigo_municipio = Column(String(7), nullable=False) # Código IBGE
     nome_municipio = Column(String(100), nullable=False)
     uf = Column(String(2), nullable=False)
-    cep = Column(String(8), nullable=False)
+    cep = Column(String(9), nullable=False)
 
     # Contato
     email_contato = Column(String(255), nullable=True)
