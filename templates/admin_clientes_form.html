@@ -3,7 +3,7 @@
 {% block title %}{% if cliente %}Editar Cliente{% else %}Novo Cliente{% endif %}{% endblock %}
 
 {% block content %}
-    <h1>{% if cliente %}Editar Cliente (ID: {{ cliente.cliente_id }}){% else %}Novo Cliente{% endif %}</h1>
+    <h1>{% if cliente %}Editando Cliente ({{ cliente.razao_social }}){% else %}Novo Cliente{% endif %}</h1>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}

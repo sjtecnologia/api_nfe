@@ -85,6 +85,76 @@ class OrigemMercadoria(Base):
 
 # --- Tabelas Principais de Negócio ---
 
+# --- Modelo para Destinatário da NFe ---
+class DestinatarioNFe(Base):
+    __tablename__ = 'destinatarios_nfe'
+
+    destinatario_id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Dados Básicos
+    tipo_pessoa = Column(String(1), nullable=False) # 'F' para Física, 'J' para Jurídica
+    nome_razao_social = Column(String(255), nullable=False)
+    cpf_cnpj = Column(String(14), unique=True, nullable=False) # CPF (11) ou CNPJ (14)
+    ie = Column(String(14), nullable=True) # Inscrição Estadual
+    ie_indicador_nfe = Column(String(1), default='C', nullable=False) # 'C', 'I', 'N' (Contribuinte, Isento, Não Contribuinte)
+    email = Column(String(255), nullable=True)
+    telefone = Column(String(20), nullable=True)
+
+    # Endereço
+    logradouro = Column(String(255), nullable=False)
+    numero = Column(String(60), nullable=False)
+    complemento = Column(String(255), nullable=True)
+    bairro = Column(String(255), nullable=False)
+    cep = Column(String(8), nullable=False)
+    codigo_municipio = Column(String(7), nullable=False) # Código IBGE do município
+    nome_municipio = Column(String(255), nullable=False)
+    uf = Column(String(2), nullable=False) # Sigla da UF
+    codigo_uf = Column(String(2), nullable=False) # Código IBGE da UF (ex: '35' para SP)
+    codigo_pais = Column(String(4), default='1058', nullable=False) # Padrão: 1058 (Brasil)
+    nome_pais = Column(String(255), default='Brasil', nullable=False)
+
+    data_cadastro = Column(DateTime, default=datetime.now, nullable=False)
+    data_atualizacao = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+    def to_dict(self):
+        # Adaptação do to_dict para incluir todos os campos e tratar datas
+        data = {}
+        for col in self.__table__.columns:
+            value = getattr(self, col.name)
+            if isinstance(value, (datetime, date)):
+                data[col.name] = value.isoformat()
+            elif isinstance(value, Decimal):
+                data[col.name] = float(value) # Ou str(value) para precisão total
+            else:
+                data[col.name] = value
+        return data
+
+    def __repr__(self):
+        return f"<DestinatarioNFe(id={self.destinatario_id}, nome='{self.nome_razao_social}', cnpj='{self.cpf_cnpj}')>"
+
+# --- Modelo para Motivos de Desoneração ICMS ---
+class MotivoDesoneracao(Base):
+    __tablename__ = 'motivos_desoneracao_icms'
+
+    motivo_id = Column(Integer, primary_key=True, autoincrement=True)
+    codigo = Column(String(2), unique=True, nullable=False) # Código numérico do motivo
+    descricao = Column(String(255), nullable=False) # Descrição completa
+
+    def to_dict(self):
+        data = {}
+        for col in self.__table__.columns:
+            value = getattr(self, col.name)
+            if isinstance(value, (datetime, date)):
+                data[col.name] = value.isoformat()
+            elif isinstance(value, Decimal):
+                data[col.name] = float(value)
+            else:
+                data[col.name] = value
+        return data
+
+    def __repr__(self):
+        return f"<MotivoDesoneracao(id={self.motivo_id}, codigo='{self.codigo}', descricao='{self.descricao[:30]}...')>"
+
 class Cliente(Base):
     __tablename__ = 'clientes'
     cliente_id = Column(Integer, primary_key=True)

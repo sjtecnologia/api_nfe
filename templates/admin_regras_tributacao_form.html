@@ -19,16 +19,22 @@
 
             <div class="form-group">
                 <label for="cliente_id">Cliente Associado (Opcional - Regra global se vazio):</label>
-                <select id="cliente_id" name="cliente_id">
+                {# O CAMPO ABAIXO SERÁ DESABILITADO E PRÉ-SELECIONADO SE return_client_id EXISTIR #}
+                <select id="cliente_id" name="cliente_id" {% if return_client_id %}disabled{% endif %}>
                     <option value="">Selecione um Cliente (Regra Global)</option>
                     {% for cliente_obj in clientes %}
                         <option value="{{ cliente_obj.cliente_id }}"
-                            {% if regra and regra.cliente_id == cliente_obj.cliente_id %}selected{% endif %}
-                            {% if form_data and form_data.cliente_id|string == cliente_obj.cliente_id|string %}selected{% endif %}>
+                            {# SE return_client_id EXISTIR, PRÉ-SELECIONA O CLIENTE DA URL #}
+                            {% if return_client_id and return_client_id == cliente_obj.cliente_id %}selected{% endif %}
+                            {# CASO CONTRÁRIO, USA O CLIENTE JÁ ASSOCIADO À REGRA OU DO form_data #}
+                            {% if not return_client_id and regra and regra.cliente_id == cliente_obj.cliente_id %}selected{% endif %}
+                            {% if not return_client_id and form_data and form_data.cliente_id|string == cliente_obj.cliente_id|string %}selected{% endif %}>
                             {{ cliente_obj.razao_social }} ({{ cliente_obj.cnpj }})
                         </option>
                     {% endfor %}
                 </select>
+                {# CAMPO ESCONDIDO PARA PASSAR O CLIENTE_ID SE O SELECT ESTIVER DESABILITADO #}
+                {% if return_client_id %}<input type="hidden" name="cliente_id" value="{{ return_client_id }}">{% endif %}
             </div>
 
             <div class="form-row">
@@ -200,7 +206,8 @@
         
         <div class="button-group">
             <button type="submit" class="btn">Salvar Regra de Tributação</button>
-            <a href="{{ url_for('admin_regras_tributacao_list') }}" class="btn btn-secondary">Cancelar</a>
+            {# BOTÃO CANCELAR: RETORNA PARA A TELA DO CLIENTE SE RETURN_CLIENT_ID EXISTIR, E SEMPRE COM A ABA DE REGRAS ATIVA #}
+            <a href="{{ url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='tab-client-rules') if return_client_id else url_for('admin_regras_tributacao_list') }}" class="btn btn-secondary">Cancelar</a>
         </div>
     </form>
 {% endblock %}
