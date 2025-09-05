@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if ncm %}Editar NCM{% else %}Novo NCM{% endif %}{% endblock %}
+
+{% block content %}
+    <h1>{% if ncm %}Editando NCM ({{ ncm.codigo }}){% else %}Novo NCM{% endif %}</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <fieldset>
+            <legend>Dados do NCM</legend>
+
+            <div class="form-group">
+                <label for="codigo">Código NCM:</label>
+                <input type="text" id="codigo" name="codigo" placeholder="Ex: 8471.30.12" value="{{ ncm.codigo if ncm else (form_data.codigo if form_data else '') }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="descricao">Descrição:</label>
+                <textarea id="descricao" name="descricao" placeholder="Descrição completa do NCM" required>{{ ncm.descricao if ncm else (form_data.descricao if form_data else '') }}</textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="data_Inicio">Data de Início (Vigência):</label>
+                    <input type="date" id="data_Inicio" name="data_Inicio" value="{{ ncm.data_Inicio.strftime('%Y-%m-%d') if ncm and ncm.data_Inicio else (form_data.data_Inicio if form_data else '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="data_Fim">Data de Fim (Vigência):</label>
+                    <input type="date" id="data_Fim" name="data_Fim" value="{{ ncm.data_Fim.strftime('%Y-%m-%d') if ncm and ncm.data_Fim else (form_data.data_Fim if form_data else '') }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="tipo_ato">Tipo de Ato Legal:</label>
+                    <input type="text" id="tipo_ato" name="tipo_ato" placeholder="Ex: Resolução CAMEX" value="{{ ncm.tipo_ato if ncm else (form_data.tipo_ato if form_data else '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="numero_ato">Número do Ato:</label>
+                    <input type="text" id="numero_ato" name="numero_ato" placeholder="Ex: 92" value="{{ ncm.numero_ato if ncm else (form_data.numero_ato if form_data else '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="ano_ato">Ano do Ato:</label>
+                    <input type="text" id="ano_ato" name="ano_ato" placeholder="Ex: 2017" value="{{ ncm.ano_ato if ncm else (form_data.ano_ato if form_data else '') }}">
+                </div>
+            </div>
+        </fieldset>
+        
+        <div class="button-group">
+            <button type="submit" class="btn">Salvar NCM</button>
+            <a href="{{ url_for('admin_ncms_list') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+{% endblock %}

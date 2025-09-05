@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Produtos - Admin{% endblock %}
+
+{% block content %}
+    <h1>Administração de Produtos</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p><a href="{{ url_for('admin_produtos_add') }}" class="btn">Adicionar Novo Produto</a></p>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Cliente</th>
+                <th scope="col">Código Interno</th>
+                <th scope="col">Descrição</th>
+                <th scope="col">NCM</th>
+                <th scope="col">Preço Padrão</th>
+                <th scope="col">Tipo Item</th>
+                <th scope="col">Ativo</th>
+                <th scope="col">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for produto in produtos %}
+            <tr>
+                <td>{{ produto.produto_id }}</td>
+                <td>{{ produto.cliente_id }}</td> {# Exibir nome do cliente aqui exigiria um join ou subquery #}
+                <td>{{ produto.codigo_interno }}</td>
+                <td>{{ produto.descricao }}</td>
+                <td>{{ produto.ncm_id if produto.ncm_id else 'N/A' }}</td> {# Exibir código NCM exigiria join #}
+                <td>{{ "%.2f"|format(produto.preco_unitario_padrao) }}</td>
+                <td>{{ produto.tipo_item }}</td>
+                <td>{{ 'Sim' if produto.ativo else 'Não' }}</td>
+                <td>
+                    <a href="{{ url_for('admin_produtos_edit', produto_id=produto.produto_id) }}" class="btn btn-warning btn-sm">Editar</a>
+                    <form action="{{ url_for('admin_produtos_delete', produto_id=produto.produto_id) }}" method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir o produto {{ produto.codigo_interno }}?');">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9">Nenhum Produto cadastrado.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

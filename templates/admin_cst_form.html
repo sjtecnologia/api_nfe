@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if cst %}Editar CST ICMS{% else %}Novo CST ICMS{% endif %}{% endblock %}
+
+{% block content %}
+    <h1>{% if cst %}Editando CST ICMS ({{ cst.codigo }}){% else %}Novo CST ICMS{% endif %}</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <fieldset>
+            <legend>Dados do CST ICMS</legend>
+
+            <div class="form-group">
+                <label for="codigo">Código CST ICMS:</label>
+                <input type="text" id="codigo" name="codigo" placeholder="Ex: 00" value="{{ cst.codigo if cst else (form_data.codigo if form_data else '') }}" maxlength="2" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="descricao">Descrição:</label>
+                <textarea id="descricao" name="descricao" placeholder="Descrição completa do CST ICMS" required>{{ cst.descricao if cst else (form_data.descricao if form_data else '') }}</textarea>
+            </div>
+        </fieldset>
+        
+        <div class="button-group">
+            <button type="submit" class="btn">Salvar CST ICMS</button>
+            <a href="{{ url_for('admin_cst_list') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+{% endblock %}

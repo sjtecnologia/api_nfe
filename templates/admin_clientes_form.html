@@ -19,6 +19,10 @@
         <div class="tabs">
             <button type="button" class="tab-button active" data-tab-id="tab-client-details">Dados do Cliente</button>
             <button type="button" class="tab-button" data-tab-id="tab-client-certificates">Certificados</button>
+            {% if cliente %} {# Abas de Produtos e Regras só aparecem se o cliente já existe (modo edição) #}
+                <button type="button" class="tab-button" data-tab-id="tab-client-products">Produtos</button>
+                <button type="button" class="tab-button" data-tab-id="tab-client-rules">Regras Tributárias</button>
+            {% endif %}
         </div>
 
         {# CONTEÚDO DA ABA: DADOS DO CLIENTE #}
@@ -223,9 +227,123 @@
                 
             </fieldset>
         </div>
+
+        {# CONTEÚDO DA ABA: PRODUTOS #}
+        {% if cliente %} {# Esta aba só aparece em modo de edição #}
+            <div id="tab-client-products" class="tab-content">
+                <fieldset>
+                    <legend>Produtos do Cliente</legend>
+                    <h3>Produtos Cadastrados</h3>
+                    {% if produtos_existentes %}
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Cód. Interno</th>
+                                    <th scope="col">Descrição</th>
+                                    <th scope="col">NCM</th>
+                                    <th scope="col">Preço Unit.</th>
+                                    <th scope="col">Ativo</th>
+                                    <th scope="col">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for produto in produtos_existentes %}
+                                <tr>
+                                    <td>{{ produto.produto_id }}</td>
+                                    <td>{{ produto.codigo_interno }}</td>
+                                    <td>{{ produto.descricao }}</td>
+                                    <td>{{ produto.ncm_id if produto.ncm_id else 'N/A' }}</td> {# Para exibir o código NCM, precisaria do objeto NCM #}
+                                    <td>{{ "%.2f"|format(produto.preco_unitario_padrao) }}</td>
+                                    <td>{{ 'Sim' if produto.ativo else 'Não' }}</td>
+                                    <td>
+                                        {# Manteremos as rotas separadas para editar/excluir um produto existente #}
+                                        {# PASSANDO O CLIENTE_ID PARA RETORNAR À TELA CORRETA #}
+                                        <a href="{{ url_for('admin_produtos_edit', produto_id=produto.produto_id, cliente_id=cliente.cliente_id) }}" class="btn btn-warning btn-sm">Editar</a>
+                                        <form action="{{ url_for('admin_produtos_delete', produto_id=produto.produto_id) }}?cliente_id={{ cliente.cliente_id }}" method="post" style="display:inline;">
+                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir este produto?');">Excluir</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <br>
+                    {% else %}
+                        <p>Nenhum produto cadastrado para este cliente.</p>
+                    {% endif %}
+
+                    <h3>Adicionar Novo Produto</h3>
+                    <p><small>Preencha os campos abaixo para adicionar um novo produto a este cliente.</small></p>
+
+                    {# Formulário para Adicionar Produto #}
+                    {# ATENÇÃO: Este é apenas um formulário de *exibição*. A submissão dele será via AJAX ou através das rotas 'admin_produtos_add' #}
+                    {# Por simplicidade, os links "Adicionar" na aba apenas redirecionam para a tela de produto específica. #}
+                    <div class="button-group" style="text-align: left;">
+                        {# PASSANDO O CLIENTE_ID PARA A TELA DE ADIÇÃO #}
+                        <a href="{{ url_for('admin_produtos_add', cliente_id=cliente.cliente_id) }}" class="btn">Adicionar Produto</a>
+                    </div>
+                </fieldset>
+            </div>
+        {% endif %}
+
+        {# CONTEÚDO DA ABA: REGRAS TRIBUTÁRIAS #}
+        {% if cliente %} {# Esta aba só aparece em modo de edição #}
+            <div id="tab-client-rules" class="tab-content">
+                <fieldset>
+                    <legend>Regras de Tributação do Cliente</legend>
+                    <h3>Regras Cadastradas</h3>
+                    {% if regras_existentes %}
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">ID</th>
+                                    <th scope="col">Regime</th>
+                                    <th scope="col">CFOP</th>
+                                    <th scope="col">NCM</th>
+                                    <th scope="col">Descrição</th>
+                                    <th scope="col">Ativo</th>
+                                    <th scope="col">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for regra in regras_existentes %}
+                                <tr>
+                                    <td>{{ regra.regra_tributacao_id }}</td>
+                                    <td>{{ regra.regime_tributario_id }}</td> {# Exibir nome do regime #}
+                                    <td>{{ regra.cfop_id }}</td> {# Exibir código CFOP #}
+                                    <td>{{ regra.ncm_id if regra.ncm_id else 'N/A' }}</td> {# Exibir código NCM #}
+                                    <td>{{ regra.descricao_regra if regra.descricao_regra else 'N/A' }}</td>
+                                    <td>{{ 'Sim' if regra.ativo else 'Não' }}</td>
+                                    <td>
+                                        {# Manteremos as rotas separadas para editar/excluir uma regra existente #}
+                                        {# PASSANDO O CLIENTE_ID PARA RETORNAR À TELA CORRETA #}
+                                        <a href="{{ url_for('admin_regras_tributacao_edit', regra_tributacao_id=regra.regra_tributacao_id, cliente_id=cliente.cliente_id) }}" class="btn btn-warning btn-sm">Editar</a>
+                                        <form action="{{ url_for('admin_regras_tributacao_delete', regra_tributacao_id=regra.regra_tributacao_id) }}?cliente_id={{ cliente.cliente_id }}" method="post" style="display:inline;">
+                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir esta regra?');">Excluir</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <br>
+                    {% else %}
+                        <p>Nenhuma regra de tributação cadastrada para este cliente.</p>
+                    {% endif %}
+
+                    <h3>Adicionar Nova Regra de Tributação</h3>
+                    <p><small>Preencha os campos abaixo para adicionar uma nova regra de tributação a este cliente.</small></p>
+                    <div class="button-group" style="text-align: left;">
+                        {# PASSANDO O CLIENTE_ID PARA A TELA DE ADIÇÃO #}
+                        <a href="{{ url_for('admin_regras_tributacao_add', cliente_id=cliente.cliente_id) }}" class="btn">Adicionar Regra</a>
+                    </div>
+                </fieldset>
+            </div>
+        {% endif %}
         
         <div class="button-group">
-            <button type="submit" class="btn">Salvar</button>
+            <button type="submit" class="btn">Salvar Cliente e Configurações</button>
             <a href="{{ url_for('admin_clientes_list') }}" class="btn btn-secondary">Cancelar</a>
         </div>
     </form>
@@ -240,7 +358,19 @@
 {% block scripts %}
 <script>
     $(document).ready(function(){
-        // Funcionalidade das Abas
+        // Lógica para ativar abas baseada no hash da URL ao carregar a página
+        const urlHash = window.location.hash.substring(1); // Pega o hash sem o '#'
+        if (urlHash) {
+            // Desativa todas as abas e conteúdos
+            $('.tab-button').removeClass('active');
+            $('.tab-content').removeClass('active');
+
+            // Ativa a aba e o conteúdo correspondente ao hash da URL
+            $(`.tab-button[data-tab-id="${urlHash}"]`).addClass('active');
+            $(`#${urlHash}`).addClass('active');
+        }
+
+        // Funcionalidade das Abas (já existente, para cliques)
         $('.tab-button').on('click', function() {
             $('.tab-button').removeClass('active');
             $(this).addClass('active');

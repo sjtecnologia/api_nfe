@@ -1,33 +1,40 @@
-# app.py
-from flask import Flask, jsonify, request, abort, render_template, redirect, url_for, flash
+from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, abort
 import json
 import os
 import uuid
 from datetime import datetime, date
-import base64
-from decimal import Decimal
+from decimal import Decimal # Para lidar com tipos Numeric do SQLAlchemy
 
-# Importe os modelos necessários
-from database.models import Base, Cfop, Ncm, Produto, Cliente, RegimeTributario, CertificadoDigital, NFeEmitidas, RegraTributacao, Csosnicms, Csticms, serialize_sqla_object
+# Importe os modelos do seu arquivo models.py
+# Certifique-se de que todos os modelos necessários estejam aqui.
+# Ex: from database.models import Cliente, Produto, RegraTributacao, etc.
+from database.models import Base, Cfop, Ncm, Produto, Cliente, RegimeTributario, CertificadoDigital, NFeEmitidas, RegraTributacao, Csosnicms, Csticms, OrigemMercadoria 
 
-from sqlalchemy import create_engine, DateTime, Date, Numeric, LargeBinary
+# Imports para processar certificado
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes # Para gerar fingerprint
+
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 app = Flask(__name__)
-
-app.secret_key = 'keysegura123' # NECESSÁRIO PARA USAR flash (SUBSTITUA POR UMA CHAVE SEGURA EM PRODUÇÃO)
+# Chave secreta para mensagens flash (SUBSTITUA POR UMA CHAVE SEGURA EM PRODUÇÃO)
+app.secret_key = 'keysegura123' 
 
 # --- Configuração do Banco de Dados ---
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo2505@host:5432/sjtnfe")
-# Configura o tipo de DB para o JSONB condicional (se for usar PgSQL)
+# ATENÇÃO: Verifique se o host e o nome do banco de dados estão corretos para o seu ambiente.
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo2505@localhost:5432/sjtnfe")
+
 if "postgresql" in SQLALCHEMY_DATABASE_URL:
     os.environ['DB_TYPE'] = 'postgresql'
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Adicione uma dependência para obter a sessão do DB em cada requisição
+# Dependência para obter a sessão do DB em cada requisição
 def get_db():
     db = SessionLocal()
     try:
@@ -35,255 +42,82 @@ def get_db():
     finally:
         db.close()
 
-
-# --- Rotas para Certificados Digitais (Web Admin) ---
-
-@app.route('/admin/certificados')
-def admin_certificados_list():
-    """Exibe a lista de Certificados Digitais na interface web."""
-    db = next(get_db())
-    certificados = db.query(CertificadoDigital).all()
-    # Para exibição, o conteudo_certificado e senha_certificado não devem ser mostrados,
-    # mas o to_dict() os serializa. Você pode querer removê-los do dicionário aqui ou no template.
-    return render_template('admin_certificados_list.html', certificados=certificados)
-
-
-@app.route('/admin/certificados/add', methods=['GET', 'POST'])
-def admin_certificados_add():
-    """Adiciona um novo Certificado Digital via interface web."""
-    db = next(get_db())
-    clientes = db.query(Cliente).all() # Para preencher o dropdown de cliente_id
-
-    if request.method == 'POST':
-        errors = []
-        
-        # Obtenha os dados do formulário
-        cliente_id = request.form.get('cliente_id')
-        senha_certificado_str = request.form.get('senha_certificado')
-        validade_inicio_str = request.form.get('validade_inicio')
-        validade_fim_str = request.form.get('validade_fim')
-        ativo = 'ativo' in request.form
-        nome_arquivo_original = request.form.get('nome_arquivo_original')
-        
-        # Lidar com o upload do arquivo
-        uploaded_file = request.files.get('conteudo_certificado_file')
-        conteudo_certificado_bytes = None
-        if uploaded_file and uploaded_file.filename != '':
-            conteudo_certificado_bytes = uploaded_file.read()
-            # O nome do arquivo original pode ser o nome do arquivo enviado, se não for fornecido um nome_arquivo_original no form
-            if not nome_arquivo_original:
-                nome_arquivo_original = uploaded_file.filename
-        else:
-            errors.append("O arquivo do certificado é obrigatório.")
-        
-        # Validação básica
-        if not cliente_id:
-            errors.append("O Cliente é obrigatório.")
-        if not senha_certificado_str:
-            errors.append("A Senha do Certificado é obrigatória.")
-        if not validade_inicio_str:
-            errors.append("A Data de Validade Inicial é obrigatória.")
-        if not validade_fim_str:
-            errors.append("A Data de Validade Final é obrigatória.")
-
-        # Conversão de tipos e tratamento de erros
-        try:
-            cliente_id = int(cliente_id) if cliente_id else None
-            # Simplesmente convertendo a senha para bytes para demonstração.
-            # Lembre-se: EM PRODUÇÃO, A SENHA DEVE SER CRIPTOGRAFADA.
-            senha_certificado_bytes = senha_certificado_str.encode('utf-8') if senha_certificado_str else None
-            validade_inicio = datetime.fromisoformat(validade_inicio_str) if validade_inicio_str else None
-            validade_fim = datetime.fromisoformat(validade_fim_str) if validade_fim_str else None
-        except ValueError:
-            errors.append("Formato de ID de cliente ou data inválido.")
-
-        if errors:
-            flash(f"Erro no preenchimento do formulário: {'. '.join(errors)}", 'danger')
-            return render_template(
-                'admin_certificados_form.html',
-                clientes=clientes,
-                certificado=request.form # Passa os dados para preencher o form novamente
-            )
-
-        try:
-            new_certificado = CertificadoDigital(
-                cliente_id=cliente_id,
-                conteudo_certificado=conteudo_certificado_bytes, # Lembre-se da criptografia!
-                senha_certificado=senha_certificado_bytes,     # Lembre-se da criptografia!
-                validade_inicio=validade_inicio,
-                validade_fim=validade_fim,
-                ativo=ativo,
-                nome_arquivo_original=nome_arquivo_original,
-                data_upload=datetime.now() # A data de upload é definida automaticamente
-            )
-            db.add(new_certificado)
-            db.commit()
-            flash('Certificado Digital cadastrado com sucesso!', 'success')
-            return redirect(url_for('admin_certificados_list'))
-        except IntegrityError as e:
-            db.rollback()
-            flash(f"Erro de integridade ao cadastrar certificado: {e.orig.pgerror}", 'danger')
-        except Exception as e:
-            db.rollback()
-            flash(f"Erro interno ao cadastrar certificado: {e}", 'danger')
-            
-    return render_template(
-        'admin_certificados_form.html',
-        clientes=clientes,
-        certificado=None # Nenhum certificado existente para preencher o form
-    )
-
-@app.route('/admin/certificados/edit/<int:certificado_digital_id>', methods=['GET', 'POST'])
-def admin_certificados_edit(certificado_digital_id):
-    """Edita um Certificado Digital existente via interface web."""
-    db = next(get_db())
-    certificado = db.query(CertificadoDigital).get(certificado_digital_id)
-    if not certificado:
-        abort(404, description="Certificado Digital não encontrado.")
-
-    clientes = db.query(Cliente).all()
-
-    if request.method == 'POST':
-        errors = []
-        
-        # Obtenha os dados do formulário
-        cliente_id = request.form.get('cliente_id')
-        senha_certificado_str = request.form.get('senha_certificado')
-        validade_inicio_str = request.form.get('validade_inicio')
-        validade_fim_str = request.form.get('validade_fim')
-        ativo = 'ativo' in request.form
-        nome_arquivo_original = request.form.get('nome_arquivo_original')
-
-        # Lidar com o upload do novo arquivo (opcional na edição)
-        uploaded_file = request.files.get('conteudo_certificado_file')
-        if uploaded_file and uploaded_file.filename != '':
-            certificado.conteudo_certificado = uploaded_file.read() # Atualiza o conteúdo
-            if not nome_arquivo_original:
-                certificado.nome_arquivo_original = uploaded_file.filename
-            else:
-                certificado.nome_arquivo_original = nome_arquivo_original
-        else:
-            # Se não houver novo upload, mantém o nome original existente ou o que foi digitado
-            if nome_arquivo_original:
-                certificado.nome_arquivo_original = nome_arquivo_original
-
-        # Validação básica
-        if not cliente_id:
-            errors.append("O Cliente é obrigatório.")
-        if not senha_certificado_str:
-            errors.append("A Senha do Certificado é obrigatória.")
-        if not validade_inicio_str:
-            errors.append("A Data de Validade Inicial é obrigatória.")
-        if not validade_fim_str:
-            errors.append("A Data de Validade Final é obrigatória.")
-
-        # Conversão de tipos e tratamento de erros
-        try:
-            certificado.cliente_id = int(cliente_id) if cliente_id else None
-            # Senha só é atualizada se for fornecida no formulário de edição
-            if senha_certificado_str:
-                 # Lembre-se: EM PRODUÇÃO, A SENHA DEVE SER CRIPTOGRAFADA.
-                certificado.senha_certificado = senha_certificado_str.encode('utf-8')
-            certificado.validade_inicio = datetime.fromisoformat(validade_inicio_str) if validade_inicio_str else None
-            certificado.validade_fim = datetime.fromisoformat(validade_fim_str) if validade_fim_str else None
-            certificado.ativo = ativo
-        except ValueError:
-            errors.append("Formato de ID de cliente ou data inválido.")
-
-        if errors:
-            flash(f"Erro no preenchimento do formulário: {'. '.join(errors)}", 'danger')
-            return render_template(
-                'admin_certificados_form.html',
-                clientes=clientes,
-                certificado=certificado # Passa o objeto certificado existente para preencher o formulário
-            )
-
-        try:
-            db.commit()
-            flash('Certificado Digital atualizado com sucesso!', 'success')
-            return redirect(url_for('admin_certificados_list'))
-        except IntegrityError as e:
-            db.rollback()
-            flash(f"Erro de integridade ao atualizar certificado: {e.orig.pgerror}", 'danger')
-        except Exception as e:
-            db.rollback()
-            flash(f"Erro interno ao atualizar certificado: {e}", 'danger')
-
-    # Para requisições GET, renderiza o formulário com os dados atuais do certificado
-    return render_template(
-        'admin_certificados_form.html',
-        clientes=clientes,
-        certificado=certificado # Passa o objeto certificado para o formulário GET
-    )
-
-@app.route('/admin/certificados/delete/<int:certificado_digital_id>', methods=['POST'])
-def admin_certificados_delete(certificado_digital_id):
-    """Deleta um Certificado Digital via interface web."""
-    db = next(get_db())
-    certificado = db.query(CertificadoDigital).get(certificado_digital_id)
-    if not certificado:
-        abort(404, description="Certificado Digital não encontrado para exclusão.")
+# --- Funções Auxiliares ---
+# ATENÇÃO: Em um ambiente de produção, o conteúdo e senha do certificado DEVERIAM
+# ser criptografados ANTES de serem armazenados no banco de dados.
+# Para este exemplo, estamos armazenando os bytes brutos do arquivo.
+def process_certificate_upload(db, cliente_id, request_form, request_files):
+    cert_file = request_files.get('conteudo_certificado_file')
     
-    try:
-        db.delete(certificado)
-        db.commit()
-        flash('Certificado Digital excluído com sucesso!', 'success')
-        return redirect(url_for('admin_certificados_list'))
-    except IntegrityError:
-        db.rollback()
-        flash('Não foi possível excluir o Certificado Digital devido a dependências em outras tabelas.', 'danger')
-        return redirect(url_for('admin_certificados_list'))
-    except Exception as e:
-        db.rollback()
-        flash(f"Erro ao deletar certificado: {e}", 'danger')
-        return redirect(url_for('admin_certificados_list'))
+    # Só processa se um arquivo foi enviado E não está vazio
+    if cert_file and cert_file.filename != '':
+        try:
+            file_content = cert_file.read() # Conteúdo em bytes
+            cert_password = request_form.get('cert_senha_certificado')
+            if not cert_password:
+                flash('Senha do certificado é obrigatória ao fazer upload de um arquivo.', 'danger')
+                return False, None
 
-
-# --- Funções Auxiliares para Manipulação de Dados ---
-def parse_request_data(model, data):
-    """Converte dados da requisição para o formato do modelo, lidando com tipos especiais."""
-    parsed_data = {}
-    for column in model.__table__.columns:
-        col_name = column.name
-        if col_name in data:
-            value = data[col_name]
-            if isinstance(column.type, (type(DateTime()), type(Date()))): # Checa se é DateTime ou Date
-                if value:
-                    try:
-                        # Tenta parsear do formato ISO 8601 (padrão JSON)
-                        parsed_data[col_name] = datetime.fromisoformat(value)
-                    except ValueError:
-                        # Se falhar, tenta outros formatos comuns, ou você pode exigir ISO
-                        try:
-                            parsed_data[col_name] = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
-                        except ValueError:
-                            if isinstance(column.type, type(Date())):
-                                try:
-                                    parsed_data[col_name] = datetime.strptime(value, '%Y-%m-%d').date()
-                                except ValueError:
-                                    abort(400, description=f"Formato de data/hora inválido para '{col_name}'. Use YYYY-MM-DDTHH:MM:SS ou YYYY-MM-DD.")
-                            else:
-                                abort(400, description=f"Formato de data/hora inválido para '{col_name}'. Use YYYY-MM-DDTHH:MM:SS.")
-                else:
-                    parsed_data[col_name] = None # Permite nulo se o campo permitir
-            elif isinstance(column.type, type(Numeric())):
+            # Tenta extrair o fingerprint e datas do próprio certificado (melhor prática)
+            try:
+                # Tenta carregar como PFX (PKCS12)
+                private_key = None
+                cert_x509_obj = None # Renomeado para evitar conflito com 'cert' no return
+                # O cryptography.x509.load_key_and_certificates espera bytes e senha em bytes
                 try:
-                    parsed_data[col_name] = Decimal(str(value))
-                except (TypeError, ValueError):
-                    abort(400, description=f"Valor numérico inválido para '{col_name}'.")
-            elif isinstance(column.type, type(LargeBinary())):
-                if value:
+                    p12 = x509.load_key_and_certificates(
+                        file_content,
+                        cert_password.encode('utf-8'), # Senha precisa ser em bytes
+                        default_backend()
+                    )
+                    private_key = p12.key
+                    cert_x509_obj = p12.cert # Assume que o primeiro é o certificado principal
+                except ValueError:
+                    # Se falhar como PFX, tenta como PEM (pode ser apenas o certificado)
                     try:
-                        parsed_data[col_name] = base64.b64decode(value)
-                    except (TypeError, ValueError):
-                        abort(400, description=f"Conteúdo binário inválido para '{col_name}'. Deve ser base64.")
-                else:
-                    parsed_data[col_name] = None
-            else:
-                parsed_data[col_name] = value
-    return parsed_data
+                        cert_x509_obj = x509.load_pem_x509_certificate(file_content, default_backend())
+                    except ValueError:
+                        flash(f'Erro ao carregar o certificado: Formato de arquivo ou senha inválidos para {cert_file.filename}.', 'danger')
+                        return False, None
+                
+                if not cert_x509_obj:
+                    flash(f'Não foi possível carregar o certificado do arquivo {cert_file.filename}.', 'danger')
+                    return False, None
 
-# --- Rotas da API ---
+                # Extrai fingerprint e datas do próprio certificado
+                fingerprint = cert_x509_obj.fingerprint(hashes.SHA256()).hex()
+                # Use as datas do certificado se estiverem disponíveis
+                validade_inicio_final = cert_x509_obj.not_valid_before_utc.replace(tzinfo=None)
+                validade_fim_final = cert_x509_obj.not_valid_after_utc.replace(tzinfo=None)
+
+            except Exception as e:
+                flash(f'Erro ao ler dados do certificado (fingerprint/validade): {e}. Verifique o arquivo e a senha.', 'danger')
+                return False, None
+
+            # Criptografar senha do certificado antes de armazenar
+            # Para este exemplo, estamos apenas convertendo para bytes
+            encrypted_cert_password = cert_password.encode('utf-8')
+            
+            cert_obj = CertificadoDigital(
+                cliente_id=cliente_id,
+                fingerprint=fingerprint,
+                conteudo_certificado=file_content, # Armazena os bytes brutos
+                senha_certificado=encrypted_cert_password, # Senha convertida para bytes
+                validade_inicio=validade_inicio_final, # Usar data do certificado
+                validade_fim=validade_fim_final, # Usar data do certificado
+                ativo=request_form.get('cert_ativo') == 'on',
+                data_upload=datetime.now(),
+                nome_arquivo_original=request_form.get('cert_nome_arquivo_original') or cert_file.filename
+            )
+            db.add(cert_obj)
+            return True, cert_obj
+        except Exception as e:
+            flash(f'Erro inesperado ao processar o certificado: {e}', 'danger')
+            print(f"Certificate processing error: {e}") # Para depuração no console
+            return False, None
+    return True, None # Nenhum arquivo de certificado enviado, sem erro
+
+# --- Rotas da API Gerais (retornam JSON) ---
 
 @app.route('/')
 def home():
@@ -293,991 +127,1272 @@ def home():
         "version": "1.0.0",
         "endpoints": {
             "/health": "Verifica a saúde da API.",
-            "/cfops": "Gerencia CFOPs.",
-            "/ncms": "Gerencia NCMs.",
-            "/produtos": "Gerencia Produtos.",
-            "/clientes": "Gerencia Clientes.",
-            "/certificados": "Gerencia Certificados Digitais.",
-            "/nfes": "Gerencia NF-e Emitidas.",
-            "/regimes_tributarios": "Gerencia Regimes Tributários.",
-            "/regras_tributacao": "Gerencia Regras de Tributação.",
-            "/csosn": "Gerencia CSOSN ICMS.",
-            "/cst": "Gerencia CST ICMS."
+            "/cfops": "Lista todos os códigos CFOPs e suas descrições (API).",
+            "/admin/clientes/list": "Acessa a interface de administração de clientes."
         }
     })
-
-
 
 @app.route('/health', methods=['GET'])
 def health_check():
     """Endpoint para verificar a saúde da API."""
     return jsonify({"status": "UP", "timestamp": datetime.now().isoformat()}), 200
 
-# --- Rotas para RegimeTributario ---
-@app.route('/regimes_tributarios', methods=['GET'])
-def get_regimes_tributarios():
-    """Retorna a lista completa de Regimes Tributários."""
-    db = next(get_db())
-    regimes = db.query(RegimeTributario).all()
-    return jsonify([regime.to_dict() for regime in regimes]), 200
-
-@app.route('/regimes_tributarios/<int:regime_id>', methods=['GET'])
-def get_regime_tributario(regime_id):
-    """Retorna um Regime Tributário específico pelo ID."""
-    db = next(get_db())
-    regime = db.query(RegimeTributario).get(regime_id)
-    if not regime:
-        abort(404, description="Regime Tributário não encontrado.")
-    return jsonify(regime.to_dict()), 200
-
-@app.route('/regimes_tributarios', methods=['POST'])
-def create_regime_tributario():
-    """Cria um novo Regime Tributário."""
-    db = next(get_db())
-    data = request.json
-    if not data or 'nome' not in data:
-        abort(400, description="Dados insuficientes. 'nome' é obrigatório.")
-    
-    try:
-        new_regime = RegimeTributario(
-            nome=data['nome'],
-            descricao=data.get('descricao')
-        )
-        db.add(new_regime)
-        db.commit()
-        return jsonify(new_regime.to_dict()), 201 # 201 Created
-    except IntegrityError as e:
-        db.rollback()
-        abort(409, description=f"Erro de integridade: {e.orig.pgerror}") # Conflict if 'nome' is duplicated
-    except Exception as e:
-        db.rollback()
-        abort(500, description=f"Erro interno ao criar Regime Tributário: {e}")
-
-@app.route('/regimes_tributarios/<int:regime_id>', methods=['PUT'])
-def update_regime_tributario(regime_id):
-    """Atualiza um Regime Tributário existente."""
-    db = next(get_db())
-    regime = db.query(RegimeTributario).get(regime_id)
-    if not regime:
-        abort(404, description="Regime Tributário não encontrado.")
-    
-    data = request.json
-    if not data:
-        abort(400, description="Nenhum dado fornecido para atualização.")
-
-    try:
-        # Atualiza apenas os campos fornecidos no request.json
-        for key, value in data.items():
-            if hasattr(regime, key):
-                setattr(regime, key, value)
-        
-        db.commit()
-        return jsonify(regime.to_dict()), 200
-    except IntegrityError as e:
-        db.rollback()
-        abort(409, description=f"Erro de integridade: {e.orig.pgerror}")
-    except Exception as e:
-        db.rollback()
-        abort(500, description=f"Erro interno ao atualizar Regime Tributário: {e}")
-
-@app.route('/regimes_tributarios/<int:regime_id>', methods=['DELETE'])
-def delete_regime_tributario(regime_id):
-    """Deleta um Regime Tributário."""
-    db = next(get_db())
-    regime = db.query(RegimeTributario).get(regime_id)
-    if not regime:
-        abort(404, description="Regime Tributário não encontrado.")
-    
-    try:
-        db.delete(regime)
-        db.commit()
-        return jsonify({"message": "Regime Tributário excluído com sucesso"}), 204 # 204 No Content
-    except IntegrityError as e:
-        db.rollback()
-        abort(409, description=f"Não foi possível excluir o Regime Tributário devido a dependências em outras tabelas. Erro: {e.orig.pgerror}")
-    except Exception as e:
-        db.rollback()
-        abort(500, description=f"Erro interno ao deletar Regime Tributário: {e}")
-
-@app.route('/cfops', methods=['GET'])
-def get_cfops():
+# Rotas de API para listagem geral (podem ser usadas em dropdowns de outros formulários)
+@app.route('/api/cfops', methods=['GET'])
+def get_api_cfops():
     """Retorna a lista completa de CFOPs."""
     db = next(get_db())
     cfops = db.query(Cfop).all()
-    cfop_list = [{"cfop": cfop.cfop, "descricao": cfop.descricao} for cfop in cfops]
+    cfop_list = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in cfops]
     return jsonify(cfop_list), 200
-# --- Rotas para Cfop ---
-# As rotas de GET ALL já existem, as de GET BY ID, POST, PUT, DELETE seguem o mesmo padrão
-@app.route('/cfops/<int:cfop_id>', methods=['GET'])
-def get_cfop(cfop_id):
-    db = next(get_db())
-    cfop_obj = db.query(Cfop).get(cfop_id) # Renomeado para evitar conflito com a classe Cfop
-    if not cfop_obj:
-        abort(404, description="CFOP não encontrado.")
-    return jsonify(cfop_obj.to_dict()), 200
 
-@app.route('/cfops', methods=['POST'])
-def create_cfop():
-    db = next(get_db())
-    data = request.json
-    # cfop, descricao, observacao são NOT NULL no seu modelo
-    if not data or not all(k in data for k in ['cfop', 'descricao', 'observacao']):
-        abort(400, description="Dados insuficientes. 'cfop', 'descricao', 'observacao' são obrigatórios.")
-    
-    try:
-        new_cfop = Cfop(
-            cfop=data['cfop'],
-            descricao=data['descricao'],
-            observacao=data['observacao'],
-            tipooperacao=data.get('tipooperacao'),
-            identificadordestinooperacao=data.get('identificadordestinooperacao')
-        )
-        db.add(new_cfop)
-        db.commit()
-        return jsonify(new_cfop.to_dict()), 201
-    except IntegrityError as e:
-        db.rollback()
-        abort(409, description=f"Erro de integridade (CFOP duplicado, etc.): {e.orig.pgerror}")
-    except Exception as e:
-        db.rollback()
-        abort(500, description=f"Erro interno ao criar CFOP: {e}")
-
-@app.route('/cfops/<int:cfop_id>', methods=['PUT'])
-def update_cfop(cfop_id):
-    db = next(get_db())
-    cfop_obj = db.query(Cfop).get(cfop_id)
-    if not cfop_obj:
-        abort(404, description="CFOP não encontrado.")
-    
-    data = request.json
-    if not data:
-        abort(400, description="Nenhum dado fornecido para atualização.")
-
-    try:
-        # Atualiza os campos que não são a PK
-        if 'cfop' in data: cfop_obj.cfop = data['cfop']
-        if 'descricao' in data: cfop_obj.descricao = data['descricao']
-        if 'observacao' in data: cfop_obj.observacao = data['observacao']
-        if 'tipooperacao' in data: cfop_obj.tipooperacao = data['tipooperacao']
-        if 'identificadordestinooperacao' in data: cfop_obj.identificadordestinooperacao = data['identificadordestinooperacao']
-        
-        db.commit()
-        return jsonify(cfop_obj.to_dict()), 200
-    except IntegrityError as e:
-        db.rollback()
-        abort(409, description=f"Erro de integridade: {e.orig.pgerror}")
-    except Exception as e:
-        db.rollback()
-        abort(500, description=f"Erro interno ao atualizar CFOP: {e}")
-
-@app.route('/cfops/<int:cfop_id>', methods=['DELETE'])
-def delete_cfop(cfop_id):
-    db = next(get_db())
-    cfop_obj = db.query(Cfop).get(cfop_id)
-    if not cfop_obj:
-        abort(404, description="CFOP não encontrado.")
-    
-    try:
-        db.delete(cfop_obj)
-        db.commit()
-        return jsonify({"message": "CFOP excluído com sucesso"}), 204
-    except IntegrityError as e:
-        db.rollback()
-        abort(409, description=f"Não foi possível excluir o CFOP devido a dependências em outras tabelas. Erro: {e.orig.pgerror}")
-    except Exception as e:
-        db.rollback()
-        abort(500, description=f"Erro interno ao deletar CFOP: {e}")
-
-@app.route('/ncms', methods=['GET'])
-def get_ncms():
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/ncms', methods=['GET'])
+def get_api_ncms():
+    """Retorna a lista completa de NCMs."""
     db = next(get_db())
     ncms = db.query(Ncm).all()
-    ncm_list = [{"codigo": ncm.codigo, "descricao": ncm.descricao} for ncm in ncms]
+    ncm_list = [{"ncm_id": n.ncm_id, "codigo": n.codigo, "descricao": n.descricao} for n in ncms]
     return jsonify(ncm_list), 200
 
-# --- Rotas para Ncm ---
-# Primary Key: ncm_id, Campo Único: codigo
-@app.route('/ncms/<int:ncm_id>', methods=['GET'])
-def get_ncm(ncm_id):
-    db = next(get_db())
-    obj = db.query(Ncm).get(ncm_id)
-    if not obj: abort(404, description="NCM não encontrado.")
-    return jsonify(obj.to_dict()), 200
-
-@app.route('/ncms', methods=['POST'])
-def create_ncm():
-    db = next(get_db())
-    data = parse_request_data(Ncm, request.json)
-    required_fields = ['codigo', 'descricao']
-    if not all(field in data and data[field] is not None for field in required_fields):
-        abort(400, description=f"Campos obrigatórios ausentes ou nulos: {', '.join(required_fields)}.")
-    try:
-        new_obj = Ncm(**data)
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/ncms/<int:ncm_id>', methods=['PUT'])
-def update_ncm(ncm_id):
-    db = next(get_db()); obj = db.query(Ncm).get(ncm_id)
-    if not obj: abort(404, description="NCM não encontrado.")
-    data = parse_request_data(Ncm, request.json)
-    try:
-        for key, value in data.items(): setattr(obj, key, value)
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/ncms/<int:ncm_id>', methods=['DELETE'])
-def delete_ncm(ncm_id):
-    db = next(get_db()); obj = db.query(Ncm).get(ncm_id)
-    if not obj: abort(404, description="NCM não encontrado.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "NCM excluído."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/produtos', methods=['GET'])
-def get_produtos():
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/produtos', methods=['GET'])
+def get_api_produtos():
+    """Retorna a lista completa de Produtos."""
     db = next(get_db())
     produtos = db.query(Produto).all()
-    produto_list = [{"codigo": produtos.codigo_interno, "descricao": produtos.descricao} for produto in produtos]
+    produto_list = [{"produto_id": p.produto_id, "codigo_interno": p.codigo_interno, "descricao": p.descricao} for p in produtos]
     return jsonify(produto_list), 200
 
-# --- Rotas para Produto ---
-# Primary Key: produto_id, UniqueConstraint: (cliente_id, codigo_interno)
-@app.route('/produtos/<int:produto_id>', methods=['GET'])
-def get_produto(produto_id):
-    db = next(get_db())
-    obj = db.query(Produto).get(produto_id)
-    if not obj: abort(404, description="Produto não encontrado.")
-    return jsonify(obj.to_dict()), 200
-
-@app.route('/produtos', methods=['POST'])
-def create_produto():
-    db = next(get_db())
-    data = parse_request_data(Produto, request.json)
-    required_fields = ['codigo_interno', 'descricao', 'unidade_comercial', 'preco_unitario_padrao', 'origem_mercadoria', 'tipo_item']
-    if not all(field in data and data[field] is not None for field in required_fields):
-        abort(400, description=f"Campos obrigatórios ausentes ou nulos: {', '.join(required_fields)}.")
-    try:
-        new_obj = Produto(**data)
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/produtos/<int:produto_id>', methods=['PUT'])
-def update_produto(produto_id):
-    db = next(get_db()); obj = db.query(Produto).get(produto_id)
-    if not obj: abort(404, description="Produto não encontrado.")
-    data = parse_request_data(Produto, request.json)
-    try:
-        for key, value in data.items(): setattr(obj, key, value)
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/produtos/<int:produto_id>', methods=['DELETE'])
-def delete_produto(produto_id):
-    db = next(get_db()); obj = db.query(Produto).get(produto_id)
-    if not obj: abort(404, description="Produto não encontrado.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "Produto excluído."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-
-@app.route('/clientes', methods=['GET'])
-def get_clientes():
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/clientes', methods=['GET'])
+def get_api_clientes():
+    """Retorna a lista completa de Clientes (API)."""
     db = next(get_db())
     clientes = db.query(Cliente).all()
-    cliente_list = [{"cnpj": clientes.cnpj, "razao_social": clientes.razao_social} for cliente in clientes]
+    cliente_list = [{"cliente_id": c.cliente_id, "cnpj": c.cnpj, "razao_social": c.razao_social} for c in clientes]
     return jsonify(cliente_list), 200
 
-# --- Rotas para Clientes ---
-# Primary Key: cliente_id, Campo Único: cnpj
-@app.route('/clientes/<int:cliente_id>', methods=['GET'])
-def get_cliente(cliente_id):
-    db = next(get_db())
-    obj = db.query(Cliente).get(cliente_id)
-    if not obj: abort(404, description="Cliente não encontrado.")
-    return jsonify(obj.to_dict()), 200
-
-@app.route('/clientes', methods=['POST'])
-def create_cliente():
-    db = next(get_db())
-    data = parse_request_data(Cliente, request.json) # Use a função auxiliar
-    # Validação dos campos obrigatórios conforme seu modelo
-    required_fields = ['cnpj', 'razao_social', 'regime_tributario_id', 'logradouro', 'numero', 'bairro', 'codigo_municipio', 'nome_municipio', 'uf', 'cep']
-    if not all(field in data and data[field] is not None for field in required_fields):
-        abort(400, description=f"Campos obrigatórios ausentes ou nulos: {', '.join(required_fields)}.")
-    try:
-        new_obj = Cliente(**data)
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/clientes/<int:cliente_id>', methods=['PUT'])
-def update_cliente(cliente_id):
-    db = next(get_db()); obj = db.query(Cliente).get(cliente_id)
-    if not obj: abort(404, description="Cliente não encontrado.")
-    data = parse_request_data(Cliente, request.json) # Use a função auxiliar
-    try:
-        for key, value in data.items(): setattr(obj, key, value)
-        obj.data_atualizacao = datetime.now() # Atualiza data de atualização
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/clientes/<int:cliente_id>', methods=['DELETE'])
-def delete_cliente(cliente_id):
-    db = next(get_db()); obj = db.query(Cliente).get(cliente_id)
-    if not obj: abort(404, description="Cliente não encontrado.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "Cliente excluído."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/certificados', methods=['GET'])
-def get_certificados(): 
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/certificados', methods=['GET'])
+def get_api_certificados():
+    """Retorna a lista completa de Certificados Digitais (API)."""
     db = next(get_db())
     certificados = db.query(CertificadoDigital).all()
-    certificado_list = [{"fingerprint": certificados.fingerprint, "conteudo_certificado": certificados.conteudo_certificado} for certificado in certificados]
+    certificado_list = [{"certificado_digital_id": c.certificado_digital_id, "fingerprint": c.fingerprint, "validade_fim": c.validade_fim.isoformat()} for c in certificados]
     return jsonify(certificado_list), 200
 
-# --- Rotas para CertificadoDigital ---
-# Primary Key: certificado_digital_id (cliente_id é parte da PK composta no DDL, mas o Flask usa PK simples para rotas)
-# NOTE: Conteúdo do certificado e senha são LargeBinary, requer base64 encode/decode.
-# SEGURANÇA: NUNCA exponha senhas de certificados digitais diretamente em uma API. Certifique-se de que o uso de `senha_certificado` e `conteudo_certificado` via API esteja criptografado e/ou muito bem protegido.
-@app.route('/certificados/<int:certificado_digital_id>', methods=['GET'])
-def get_certificado(certificado_digital_id):
-    db = next(get_db())
-    obj = db.query(CertificadoDigital).get(certificado_digital_id)
-    if not obj: abort(404, description="Certificado Digital não encontrado.")
-    return jsonify(obj.to_dict()), 200
-
-@app.route('/certificados', methods=['POST'])
-def create_certificado():
-    db = next(get_db())
-    data = parse_request_data(CertificadoDigital, request.json) # Use a função auxiliar
-    required_fields = ['cliente_id', 'conteudo_certificado', 'senha_certificado', 'validade_inicio', 'validade_fim']
-    if not all(field in data and data[field] is not None for field in required_fields):
-        abort(400, description=f"Campos obrigatórios ausentes ou nulos: {', '.join(required_fields)}.")
-    try:
-        new_obj = CertificadoDigital(**data)
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/certificados/<int:certificado_digital_id>', methods=['PUT'])
-def update_certificado(certificado_digital_id):
-    db = next(get_db()); obj = db.query(CertificadoDigital).get(certificado_digital_id)
-    if not obj: abort(404, description="Certificado Digital não encontrado.")
-    data = parse_request_data(CertificadoDigital, request.json) # Use a função auxiliar
-    try:
-        for key, value in data.items(): setattr(obj, key, value)
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/certificados/<int:certificado_digital_id>', methods=['DELETE'])
-def delete_certificado(certificado_digital_id):
-    db = next(get_db()); obj = db.query(CertificadoDigital).get(certificado_digital_id)
-    if not obj: abort(404, description="Certificado Digital não encontrado.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "Certificado Digital excluído."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/nfes', methods=['GET'])
-def get_nfes():
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/nfes', methods=['GET'])
+def get_api_nfes():
+    """Retorna a lista completa de NF-e emitidas."""
     db = next(get_db())
     nfes = db.query(NFeEmitidas).all()
-    nfe_list = [{"nfe_emitida_id": nfes.nfe_emitida_id, "tipo_nfe": nfes.tipo_nfe} for nfe in nfes]
+    nfe_list = [{"nfe_emitida_id": n.nfe_emitida_id, "tipo_nfe": n.tipo_nfe, "data_criacao": n.data_criacao.isoformat()} for n in nfes]
     return jsonify(nfe_list), 200
 
-# --- Rotas para NFeEmitidas ---
-# Primary Key: nfe_emitida_id
-# O campo json_nfe é JSONB, então o JSON enviado no request deve ser um objeto JSON válido.
-@app.route('/nfes/<int:nfe_emitida_id>', methods=['GET'])
-def get_nfe(nfe_emitida_id):
+@app.route('/api/regimes_tributarios', methods=['GET'])
+def get_api_regimes_tributarios():
+    """Retorna a lista completa de Regimes Tributários (API)."""
     db = next(get_db())
-    obj = db.query(NFeEmitidas).get(nfe_emitida_id)
-    if not obj: abort(404, description="NF-e Emitida não encontrada.")
-    return jsonify(obj.to_dict()), 200
+    regimes_tributarios = db.query(RegimeTributario).all()
+    regimes_tributario_list = [{"regime_tributario_id": r.regime_tributario_id, "nome": r.nome, "descricao": r.descricao} for r in regimes_tributarios]
+    return jsonify(regimes_tributario_list), 200
 
-@app.route('/nfes', methods=['POST'])
-def create_nfe():
-    db = next(get_db())
-    data = parse_request_data(NFeEmitidas, request.json) # Use a função auxiliar
-    required_fields = ['cliente_id', 'tipo_nfe', 'finalidade_emissao', 'natureza_operacao', 'json_nfe']
-    if not all(field in data and data[field] is not None for field in required_fields):
-        abort(400, description=f"Campos obrigatórios ausentes ou nulos: {', '.join(required_fields)}.")
-    try:
-        new_obj = NFeEmitidas(**data)
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/nfes/<int:nfe_emitida_id>', methods=['PUT'])
-def update_nfe(nfe_emitida_id):
-    db = next(get_db()); obj = db.query(NFeEmitidas).get(nfe_emitida_id)
-    if not obj: abort(404, description="NF-e Emitida não encontrada.")
-    data = parse_request_data(NFeEmitidas, request.json) # Use a função auxiliar
-    try:
-        for key, value in data.items(): setattr(obj, key, value)
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/nfes/<int:nfe_emitida_id>', methods=['DELETE'])
-def delete_nfe(nfe_emitida_id):
-    db = next(get_db()); obj = db.query(NFeEmitidas).get(nfe_emitida_id)
-    if not obj: abort(404, description="NF-e Emitida não encontrada.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "NF-e Emitida excluída."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-# @app.route('/regimes_tributarios', methods=['GET'])
-# def get_regimes_tributarios():
-#     """Retorna a lista completa de CFOPs."""
-#     db = next(get_db())
-#     regimes_tributarios = db.query(RegimeTributario).all()
-#     regimes_tributario_list = [{"nome": regimes_tributarios.nome, "descricao": regimes_tributarios.descricao} for regimes_tributario in regimes_tributarios]
-#     return jsonify(regimes_tributario_list), 200
-
-@app.route('/regras_tributacao', methods=['GET'])
-def get_regras_tributacao():
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/regras_tributacao', methods=['GET'])
+def get_api_regras_tributacao():
+    """Retorna a lista completa de Regras de Tributação (API)."""
     db = next(get_db())
     regras_tributacao = db.query(RegraTributacao).all()
-    regra_tributacao_list = [{"regra_tributacao_id": regras_tributacao.regra_tributacao_id} for regra_tributacao in regras_tributacao]
+    regra_tributacao_list = [{"regra_tributacao_id": r.regra_tributacao_id, "descricao_regra": r.descricao_regra} for r in regras_tributacao]
     return jsonify(regra_tributacao_list), 200
 
-# --- Rotas para RegraTributacao ---
-# Primary Key: regra_tributacao_id
-@app.route('/regras_tributacao/<int:regra_tributacao_id>', methods=['GET'])
-def get_regra_tributacao(regra_tributacao_id):
-    db = next(get_db())
-    obj = db.query(RegraTributacao).get(regra_tributacao_id)
-    if not obj: abort(404, description="Regra de Tributação não encontrada.")
-    return jsonify(obj.to_dict()), 200
-
-@app.route('/regras_tributacao', methods=['POST'])
-def create_regra_tributacao():
-    db = next(get_db())
-    data = parse_request_data(RegraTributacao, request.json)
-    required_fields = ['regime_tributario_id', 'cfop_id'] # ncm_id pode ser nullable
-    if not all(field in data and data[field] is not None for field in required_fields):
-        abort(400, description=f"Campos obrigatórios ausentes ou nulos: {', '.join(required_fields)}.")
-    try:
-        new_obj = RegraTributacao(**data)
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/regras_tributacao/<int:regra_tributacao_id>', methods=['PUT'])
-def update_regra_tributacao(regra_tributacao_id):
-    db = next(get_db()); obj = db.query(RegraTributacao).get(regra_tributacao_id)
-    if not obj: abort(404, description="Regra de Tributação não encontrada.")
-    data = parse_request_data(RegraTributacao, request.json)
-    try:
-        for key, value in data.items(): setattr(obj, key, value)
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/regras_tributacao/<int:regra_tributacao_id>', methods=['DELETE'])
-def delete_regra_tributacao(regra_tributacao_id):
-    db = next(get_db()); obj = db.query(RegraTributacao).get(regra_tributacao_id)
-    if not obj: abort(404, description="Regra de Tributação não encontrada.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "Regra de Tributação excluída."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/csosn', methods=['GET'])
-def get_csosns():
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/csosn', methods=['GET'])
+def get_api_csosns():
+    """Retorna a lista completa de CSOSN ICMS."""
     db = next(get_db())
     csosns = db.query(Csosnicms).all()
-    csosn_list = [{"codigo": csosn.codigo, "descricao": csosn.descricao} for csosn in csosns]
+    csosn_list = [{"csosn_id": c.csosn_id, "codigo": c.codigo, "descricao": c.descricao} for c in csosns]
     return jsonify(csosn_list), 200
 
-# --- Rotas para Csosnicms ---
-# Primay Key: csosn_id, Campo Único: codigo
-@app.route('/csosn/<int:csosn_id>', methods=['GET'])
-def get_csosn(csosn_id):
-    db = next(get_db())
-    obj = db.query(Csosnicms).get(csosn_id)
-    if not obj: abort(404, description="CSOSN não encontrado.")
-    return jsonify(obj.to_dict()), 200
-
-@app.route('/csosn', methods=['POST'])
-def create_csosn():
-    db = next(get_db())
-    data = request.json
-    if not data or not all(k in data for k in ['codigo', 'descricao']): abort(400, description="'codigo' e 'descricao' são obrigatórios.")
-    try:
-        new_obj = Csosnicms(codigo=data['codigo'], descricao=data['descricao'])
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/csosn/<int:csosn_id>', methods=['PUT'])
-def update_csosn(csosn_id):
-    db = next(get_db()); obj = db.query(Csosnicms).get(csosn_id)
-    if not obj: abort(404, description="CSOSN não encontrado.")
-    data = request.json
-    try:
-        if 'codigo' in data: obj.codigo = data['codigo']
-        if 'descricao' in data: obj.descricao = data['descricao']
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/csosn/<int:csosn_id>', methods=['DELETE'])
-def delete_csosn(csosn_id):
-    db = next(get_db()); obj = db.query(Csosnicms).get(csosn_id)
-    if not obj: abort(404, description="CSOSN não encontrado.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "CSOSN excluído."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/cst', methods=['GET'])
-def get_csts():
-    """Retorna a lista completa de CFOPs."""
+@app.route('/api/cst', methods=['GET'])
+def get_api_csts():
+    """Retorna a lista completa de CST ICMS."""
     db = next(get_db())
     csts = db.query(Csticms).all()
-    cst_list = [{"codigo": cst.codigo, "descricao": cst.descricao} for cst in csts]
+    cst_list = [{"cst_id": c.cst_id, "codigo": c.codigo, "descricao": c.descricao} for c in csts]
     return jsonify(cst_list), 200
 
-# --- Rotas para Csticms ---
-# Primary Key: cst_id, Campo Único: codigo
-@app.route('/cst/<int:cst_id>', methods=['GET'])
-def get_cst(cst_id):
+@app.route('/api/origens_mercadoria', methods=['GET'])
+def get_api_origens_mercadoria():
+    """Retorna a lista completa de Origens de Mercadoria."""
     db = next(get_db())
-    obj = db.query(Csticms).get(cst_id)
-    if not obj: abort(404, description="CST não encontrado.")
-    return jsonify(obj.to_dict()), 200
+    origens = db.query(OrigemMercadoria).all()
+    origens_list = [{"origem_id": o.origem_id, "codigo": o.codigo, "descricao": o.descricao} for o in origens]
+    return jsonify(origens_list), 200
 
-@app.route('/cst', methods=['POST'])
-def create_cst():
+
+# --- Rotas de Administração (Front-end Rendering) ---
+
+# Rotas para Certificados (ainda existem, mas não no menu principal)
+@app.route('/admin/certificados')
+def admin_certificados_list():
     db = next(get_db())
-    data = request.json
-    if not data or not all(k in data for k in ['codigo', 'descricao']): abort(400, description="'codigo' e 'descricao' são obrigatórios.")
-    try:
-        new_obj = Csticms(codigo=data['codigo'], descricao=data['descricao'])
-        db.add(new_obj); db.commit(); return jsonify(new_obj.to_dict()), 201
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
+    certificados = db.query(CertificadoDigital).all()
+    return render_template('admin_certificados_list.html', certificados=certificados)
 
-@app.route('/cst/<int:cst_id>', methods=['PUT'])
-def update_cst(cst_id):
-    db = next(get_db()); obj = db.query(Csticms).get(cst_id)
-    if not obj: abort(404, description="CST não encontrado.")
-    data = request.json
-    try:
-        if 'codigo' in data: obj.codigo = data['codigo']
-        if 'descricao' in data: obj.descricao = data['descricao']
-        db.commit(); return jsonify(obj.to_dict()), 200
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Erro: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-@app.route('/cst/<int:cst_id>', methods=['DELETE'])
-def delete_cst(cst_id):
-    db = next(get_db()); obj = db.query(Csticms).get(cst_id)
-    if not obj: abort(404, description="CST não encontrado.")
-    try: db.delete(obj); db.commit(); return jsonify({"message": "CST excluído."}), 204
-    except IntegrityError as e: db.rollback(); abort(409, description=f"Não foi possível excluir: {e.orig.pgerror}")
-    except Exception as e: db.rollback(); abort(500, description=f"Erro: {e}")
-
-
-# --- Rotas para Clientes (Web Admin) ---
-
-@app.route('/admin/clientes')
-def admin_clientes_list():
-    """Exibe a lista de Clientes na interface web."""
+@app.route('/admin/certificados/edit/<int:certificado_digital_id>', methods=['GET', 'POST'])
+def admin_certificados_edit(certificado_digital_id):
     db = next(get_db())
-    clientes = db.query(Cliente).all()
-    return render_template('admin_clientes_list.html', clientes=clientes)
-
-
-@app.route('/admin/clientes/add', methods=['GET', 'POST'])
-def admin_clientes_add():
-    """Adiciona um novo Cliente via interface web, com opção de certificado."""
-    db = next(get_db())
-    regimes_tributarios = db.query(RegimeTributario).all()
-
-    if request.method == 'POST':
-        form_data = {
-            'cnpj': request.form.get('cpf_cnpj'),
-            'razao_social': request.form.get('nome_completo'),
-            'nome_fantasia': request.form.get('nome_fantasia'),
-            'inscricao_estadual': request.form.get('rg_ie'),
-            'inscricao_municipal': request.form.get('inscricao_municipal'),
-            'regime_tributario_id': request.form.get('regime_tributario_id'),
-            'cnae': request.form.get('cnae'),
-            'logradouro': request.form.get('logradouro'),
-            'numero': request.form.get('numero'),
-            'complemento': request.form.get('complemento'),
-            'bairro': request.form.get('bairro'),
-            'codigo_municipio': request.form.get('codigo_municipio'),
-            'nome_municipio': request.form.get('cidade'),
-            'uf': request.form.get('estado'),
-            'cep': request.form.get('cep'),
-            'email_contato': request.form.get('email'),
-            'telefone_contato': request.form.get('telefone_celular'),
-            'ativo': 'ativo' in request.form # Checkbox
-        }
-        
-        required_model_fields = [
-            'cnpj', 'razao_social', 'regime_tributario_id', 'logradouro', 'numero',
-            'bairro', 'codigo_municipio', 'nome_municipio', 'uf', 'cep'
-        ]
-        
-        errors = []
-        for field in required_model_fields:
-            if not form_data.get(field):
-                errors.append(f"O campo '{field.replace('_', ' ').capitalize()}' é obrigatório.")
-        
-        try:
-            if form_data.get('regime_tributario_id'):
-                form_data['regime_tributario_id'] = int(form_data['regime_tributario_id'])
-            else:
-                errors.append("O campo 'Regime Tributário' é obrigatório.")
-        except ValueError:
-            errors.append("Regime Tributário inválido.")
-
-        # --- Lógica de Certificado (NOVO) ---
-        cert_uploaded_file = request.files.get('conteudo_certificado_file')
-        cert_senha = request.form.get('cert_senha_certificado') # Renomeado para evitar conflito
-        cert_validade_inicio_str = request.form.get('cert_validade_inicio')
-        cert_validade_fim_str = request.form.get('cert_validade_fim')
-        cert_nome_arquivo = request.form.get('cert_nome_arquivo_original')
-        cert_ativo = 'cert_ativo' in request.form
-
-        # Só tenta processar certificado se um arquivo foi enviado
-        if cert_uploaded_file and cert_uploaded_file.filename != '':
-            if not cert_senha:
-                errors.append("A Senha do Certificado é obrigatória.")
-            if not cert_validade_inicio_str:
-                errors.append("A Data de Validade Início do Certificado é obrigatória.")
-            if not cert_validade_fim_str:
-                errors.append("A Data de Validade Fim do Certificado é obrigatória.")
-            
-            try:
-                cert_validade_inicio = datetime.fromisoformat(cert_validade_inicio_str) if cert_validade_inicio_str else None
-                cert_validade_fim = datetime.fromisoformat(cert_validade_fim_str) if cert_validade_fim_str else None
-            except ValueError:
-                errors.append("Formato de data de certificado inválido (use AAAA-MM-DD).")
-        elif any([cert_senha, cert_validade_inicio_str, cert_validade_fim_str, cert_nome_arquivo]):
-            # Se algum campo de certificado foi preenchido mas o arquivo não, é um erro
-            errors.append("Por favor, selecione um arquivo de certificado ou deixe os campos de certificado em branco.")
-
-
-        if errors:
-            flash(f"Erro no preenchimento do formulário: {'. '.join(errors)}", 'danger')
-            return render_template(
-                'admin_clientes_form.html',
-                regimes_tributarios=regimes_tributarios,
-                cliente=form_data, # Passa os dados preenchidos para manter no formulário
-                # Passa também os dados do certificado para re-preencher
-                cert_data={
-                    'conteudo_certificado_file': None, # Arquivo não pode ser repassado
-                    'senha_certificado': cert_senha,
-                    'validade_inicio': cert_validade_inicio_str,
-                    'validade_fim': cert_validade_fim_str,
-                    'nome_arquivo_original': cert_nome_arquivo,
-                    'ativo': cert_ativo
-                }
-            )
-
-        try:
-            new_cliente = Cliente(**form_data)
-            db.add(new_cliente)
-            db.flush() # flush para que new_cliente.cliente_id esteja disponível
-            
-            # --- Salvar Certificado (se houver) ---
-            if cert_uploaded_file and cert_uploaded_file.filename != '':
-                new_certificado = CertificadoDigital(
-                    cliente_id=new_cliente.cliente_id,
-                    conteudo_certificado=cert_uploaded_file.read(), # Lembre-se da criptografia!
-                    senha_certificado=cert_senha.encode('utf-8'),     # Lembre-se da criptografia!
-                    validade_inicio=cert_validade_inicio,
-                    validade_fim=cert_validade_fim,
-                    ativo=cert_ativo,
-                    nome_arquivo_original=cert_nome_arquivo if cert_nome_arquivo else cert_uploaded_file.filename,
-                    data_upload=datetime.now()
-                )
-                db.add(new_certificado)
-
-            db.commit()
-            flash('Cliente e certificado (se houver) cadastrados com sucesso!', 'success')
-            return redirect(url_for('admin_clientes_list'))
-        except IntegrityError as e:
-            db.rollback()
-            flash(f"Erro de integridade ao cadastrar cliente: {e.orig.pgerror}", 'danger')
-        except Exception as e:
-            db.rollback()
-            flash(f"Erro interno ao cadastrar cliente: {e}", 'danger')
-            
-    return render_template(
-        'admin_clientes_form.html',
-        regimes_tributarios=regimes_tributarios,
-        cliente=None, # Nenhum cliente pre-existente
-        cert_data=None # Nenhum dado de certificado pré-existente
-    )
-
-
-# --- Rotas para Cliente (EDIT e DELETE - Exemplo, a serem implementadas de forma similar) ---
-
-@app.route('/admin/clientes/edit/<int:cliente_id>', methods=['GET', 'POST'])
-def admin_clientes_edit(cliente_id):
-    """Edita um Cliente existente via interface web, com opção de adicionar certificado."""
-    db = next(get_db())
-    cliente = db.query(Cliente).get(cliente_id)
-    if not cliente:
-        abort(404, description="Cliente não encontrado.")
-
-    regimes_tributarios = db.query(RegimeTributario).all()
-    # Busca os certificados existentes do cliente
-    certificados_existentes = db.query(CertificadoDigital).filter_by(cliente_id=cliente_id).all()
-
-    if request.method == 'POST':
-        form_data = {
-            'cnpj': request.form.get('cpf_cnpj'),
-            'razao_social': request.form.get('nome_completo'),
-            'nome_fantasia': request.form.get('nome_fantasia'),
-            'inscricao_estadual': request.form.get('rg_ie'),
-            'inscricao_municipal': request.form.get('inscricao_municipal'),
-            'regime_tributario_id': request.form.get('regime_tributario_id'),
-            'cnae': request.form.get('cnae'),
-            'logradouro': request.form.get('logradouro'),
-            'numero': request.form.get('numero'),
-            'complemento': request.form.get('complemento'),
-            'bairro': request.form.get('bairro'),
-            'codigo_municipio': request.form.get('codigo_municipio'),
-            'nome_municipio': request.form.get('cidade'),
-            'uf': request.form.get('estado'),
-            'cep': request.form.get('cep'),
-            'email_contato': request.form.get('email'),
-            'telefone_contato': request.form.get('telefone_celular'),
-            'ativo': 'ativo' in request.form
-        }
-
-        required_model_fields = [
-            'cnpj', 'razao_social', 'regime_tributario_id', 'logradouro', 'numero',
-            'bairro', 'codigo_municipio', 'nome_municipio', 'uf', 'cep'
-        ]
-        
-        errors = []
-        for field in required_model_fields:
-            if not form_data.get(field):
-                errors.append(f"O campo '{field.replace('_', ' ').capitalize()}' é obrigatório.")
-        
-        try:
-            if form_data.get('regime_tributario_id'):
-                form_data['regime_tributario_id'] = int(form_data['regime_tributario_id'])
-            else:
-                errors.append("O campo 'Regime Tributário' é obrigatório.")
-        except ValueError:
-            errors.append("Regime Tributário inválido.")
-
-        # --- Lógica de Certificado (NOVO) ---
-        cert_uploaded_file = request.files.get('conteudo_certificado_file')
-        cert_senha = request.form.get('cert_senha_certificado')
-        cert_validade_inicio_str = request.form.get('cert_validade_inicio')
-        cert_validade_fim_str = request.form.get('cert_validade_fim')
-        cert_nome_arquivo = request.form.get('cert_nome_arquivo_original')
-        cert_ativo = 'cert_ativo' in request.form
-
-        cert_data_for_template = {
-            'senha_certificado': cert_senha,
-            'validade_inicio': cert_validade_inicio_str,
-            'validade_fim': cert_validade_fim_str,
-            'nome_arquivo_original': cert_nome_arquivo,
-            'ativo': cert_ativo
-        }
-
-        # Só tenta processar um NOVO certificado se um arquivo foi enviado na seção de "adicionar"
-        if cert_uploaded_file and cert_uploaded_file.filename != '':
-            if not cert_senha:
-                errors.append("A Senha do Certificado é obrigatória para o novo certificado.")
-            if not cert_validade_inicio_str:
-                errors.append("A Data de Validade Início para o novo certificado é obrigatória.")
-            if not cert_validade_fim_str:
-                errors.append("A Data de Validade Fim para o novo certificado é obrigatória.")
-            
-            try:
-                cert_validade_inicio = datetime.fromisoformat(cert_validade_inicio_str) if cert_validade_inicio_str else None
-                cert_validade_fim = datetime.fromisoformat(cert_validade_fim_str) if cert_validade_fim_str else None
-            except ValueError:
-                errors.append("Formato de data de novo certificado inválido (use AAAA-MM-DD).")
-        elif any([cert_senha, cert_validade_inicio_str, cert_validade_fim_str, cert_nome_arquivo]):
-            # Se algum campo de certificado foi preenchido mas o arquivo não, é um erro para adição
-            errors.append("Por favor, selecione um arquivo de certificado para o novo certificado ou deixe os campos em branco.")
-
-
-        if errors:
-            flash(f"Erro no preenchimento do formulário: {'. '.join(errors)}", 'danger')
-            return render_template(
-                'admin_clientes_form.html',
-                regimes_tributarios=regimes_tributarios,
-                cliente=cliente, # Passa o objeto cliente existente para preencher o formulário
-                form_data=form_data, # Dados do POST para preservar as alterações do cliente
-                certificados_existentes=certificados_existentes, # Para re-exibir a lista
-                cert_data=cert_data_for_template # Dados do novo certificado preenchidos
-            )
-
-        try:
-            for key, value in form_data.items():
-                if key == 'regime_tributario_id' and value is not None:
-                    setattr(cliente, key, int(value))
-                elif key in ['ativo'] and value is not None:
-                    setattr(cliente, key, value)
-                else:
-                    setattr(cliente, key, value)
-            
-            cliente.data_atualizacao = datetime.now()
-            db.commit() # Commit do cliente primeiro
-
-            # --- Salvar NOVO Certificado (se houver) ---
-            if cert_uploaded_file and cert_uploaded_file.filename != '':
-                new_certificado = CertificadoDigital(
-                    cliente_id=cliente.cliente_id,
-                    conteudo_certificado=cert_uploaded_file.read(), # Lembre-se da criptografia!
-                    senha_certificado=cert_senha.encode('utf-8'),     # Lembre-se da criptografia!
-                    validade_inicio=cert_validade_inicio,
-                    validade_fim=cert_validade_fim,
-                    ativo=cert_ativo,
-                    nome_arquivo_original=cert_nome_arquivo if cert_nome_arquivo else cert_uploaded_file.filename,
-                    data_upload=datetime.now()
-                )
-                db.add(new_certificado)
-                db.commit() # Commit do novo certificado
-
-            flash('Cliente e certificado (se houver) atualizados com sucesso!', 'success')
-            return redirect(url_for('admin_clientes_list'))
-        except IntegrityError as e:
-            db.rollback()
-            flash(f"Erro de integridade ao atualizar cliente: {e.orig.pgerror}", 'danger')
-        except Exception as e:
-            db.rollback()
-            flash(f"Erro interno ao atualizar cliente: {e}", 'danger')
-
-    # Para requisições GET
-    return render_template(
-        'admin_clientes_form.html',
-        regimes_tributarios=regimes_tributarios,
-        cliente=cliente, # Passa o objeto cliente para o formulário GET
-        certificados_existentes=certificados_existentes, # Para exibir a lista de certificados
-        cert_data=None # Nenhum dado de novo certificado no GET
-    )
-
-@app.route('/admin/clientes/delete/<int:cliente_id>', methods=['POST'])
-def admin_clientes_delete(cliente_id):
-    db = next(get_db())
-    cliente = db.query(Cliente).get(cliente_id)
-    if not cliente:
-        abort(404, description="Cliente não encontrado para exclusão.")
+    certificado = db.query(CertificadoDigital).get(certificado_digital_id)
+    if not certificado:
+        abort(404)
     
+    if request.method == 'POST':
+        certificado.nome_arquivo_original = request.form.get('cert_nome_arquivo_original')
+        
+        validade_inicio_str = request.form.get('cert_validade_inicio')
+        validade_fim_str = request.form.get('cert_validade_fim')
+
+        try:
+            certificado.validade_inicio = datetime.strptime(validade_inicio_str, '%Y-%m-%d')
+            certificado.validade_fim = datetime.strptime(validade_fim_str, '%Y-%m-%d')
+        except ValueError:
+            flash('Formato de data inválido para o certificado. Use AAAA-MM-DD.', 'danger')
+            return render_template('admin_certificados_form.html', certificado=certificado, cert_data=request.form)
+        certificado.ativo = request.form.get('cert_ativo') == 'on'
+        
+        new_password = request.form.get('cert_senha_certificado')
+        if new_password: # Assume que a nova senha é fornecida em texto simples para ser criptografada
+            certificado.senha_certificado = new_password.encode('utf-8') # Convertendo para bytes
+
+        try:
+            db.commit()
+            flash('Certificado atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_clientes_edit', cliente_id=certificado.cliente_id))
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar certificado: {e}", 'danger')
+    
+    cert_data = {
+        'nome_arquivo_original': certificado.nome_arquivo_original,
+        'validade_inicio': certificado.validade_inicio.strftime('%Y-%m-%d') if certificado.validade_inicio else '',
+        'validade_fim': certificado.validade_fim.strftime('%Y-%m-%d') if certificado.validade_fim else '',
+        'ativo': certificado.ativo
+    }
+    return render_template('admin_certificados_form.html', certificado=certificado, cert_data=cert_data)
+
+@app.route('/admin/certificados/delete/<int:certificado_digital_id>', methods=['POST'])
+def admin_certificados_delete(certificado_digital_id):
+    db = next(get_db())
+    certificado = db.query(CertificadoDigital).get(certificado_digital_id)
+    if not certificado:
+        abort(404)
+    cliente_id = certificado.cliente_id
     try:
-        db.delete(cliente)
+        db.delete(certificado)
         db.commit()
-        flash('Cliente excluído com sucesso!', 'success')
-        return redirect(url_for('admin_clientes_list'))
-    except IntegrityError:
-        db.rollback()
-        flash('Não foi possível excluir o Cliente devido a dependências em outras tabelas.', 'danger')
-        return redirect(url_for('admin_clientes_list'))
+        flash('Certificado excluído com sucesso!', 'success')
     except Exception as e:
         db.rollback()
-        flash(f"Erro ao deletar cliente: {e}", 'danger')
-        return redirect(url_for('admin_clientes_list'))
+        flash(f"Erro ao excluir certificado: {e}", 'danger')
 
-# --- Rotas da Aplicação Web de Administração (Exemplo: Regimes Tributários) ---
+    return redirect(url_for('admin_clientes_edit', cliente_id=cliente_id))
 
-@app.route('/admin/regimes_tributarios')
+# Rotas para Regimes Tributários
+@app.route('/admin/regimes_tributarios/list')
 def admin_regimes_tributarios_list():
-    """Exibe a lista de Regimes Tributários na interface web."""
     db = next(get_db())
     regimes = db.query(RegimeTributario).all()
     return render_template('admin_regimes_tributarios_list.html', regimes=regimes)
 
 @app.route('/admin/regimes_tributarios/add', methods=['GET', 'POST'])
 def admin_regimes_tributarios_add():
-    """Adiciona um novo Regime Tributário via interface web."""
     db = next(get_db())
+    form_data = request.form
     if request.method == 'POST':
-        nome = request.form['nome']
+        nome = request.form.get('nome')
         descricao = request.form.get('descricao')
         
+        if not nome:
+            flash('O nome do regime tributário é obrigatório.', 'danger')
+            return render_template('admin_regimes_tributarios_form.html', form_data=form_data)
+
         try:
-            new_regime = RegimeTributario(nome=nome, descricao=descricao)
-            db.add(new_regime)
+            novo_regime = RegimeTributario(nome=nome, descricao=descricao)
+            db.add(novo_regime)
             db.commit()
+            flash('Regime Tributário adicionado com sucesso!', 'success')
             return redirect(url_for('admin_regimes_tributarios_list'))
         except IntegrityError:
             db.rollback()
-            # Poderíamos adicionar uma mensagem flash para o usuário aqui
-            return render_template('admin_regimes_tributarios_form.html', regime=None, error="Já existe um Regime Tributário com este nome.")
+            flash('Nome do regime tributário já existe.', 'danger')
         except Exception as e:
             db.rollback()
-            return render_template('admin_regimes_tributarios_form.html', regime=None, error=f"Erro ao adicionar: {e}")
-            
-    return render_template('admin_regimes_tributarios_form.html', regime=None, error=None)
+            flash(f"Erro ao adicionar regime tributário: {e}", 'danger')
+    
+    return render_template('admin_regimes_tributarios_form.html', form_data=form_data)
 
-@app.route('/admin/regimes_tributarios/edit/<int:regime_id>', methods=['GET', 'POST'])
-def admin_regimes_tributarios_edit(regime_id):
-    """Edita um Regime Tributário existente via interface web."""
+@app.route('/admin/regimes_tributarios/edit/<int:regime_tributario_id>', methods=['GET', 'POST'])
+def admin_regimes_tributarios_edit(regime_tributario_id):
     db = next(get_db())
-    regime = db.query(RegimeTributario).get(regime_id)
+    regime = db.query(RegimeTributario).get(regime_tributario_id)
     if not regime:
-        abort(404, description="Regime Tributário não encontrado para edição.")
+        abort(404)
+    form_data = request.form
 
     if request.method == 'POST':
-        regime.nome = request.form['nome']
+        regime.nome = request.form.get('nome')
         regime.descricao = request.form.get('descricao')
         
+        if not regime.nome:
+            flash('O nome do regime tributário é obrigatório.', 'danger')
+            return render_template('admin_regimes_tributarios_form.html', regime=regime, form_data=form_data)
         try:
             db.commit()
+            flash('Regime Tributário atualizado com sucesso!', 'success')
             return redirect(url_for('admin_regimes_tributarios_list'))
         except IntegrityError:
             db.rollback()
-            return render_template('admin_regimes_tributarios_form.html', regime=regime, error="Já existe um Regime Tributário com este nome.")
+            flash('Nome do regime tributário já existe.', 'danger')
         except Exception as e:
             db.rollback()
-            return render_template('admin_regimes_tributarios_form.html', regime=regime, error=f"Erro ao editar: {e}")
+            flash(f"Erro ao atualizar regime tributário: {e}", 'danger')
+            
+    return render_template('admin_regimes_tributarios_form.html', regime=regime, form_data=form_data)
 
-    return render_template('admin_regimes_tributarios_form.html', regime=regime, error=None)
-
-@app.route('/admin/regimes_tributarios/delete/<int:regime_id>', methods=['POST'])
-def admin_regimes_tributarios_delete(regime_id):
-    """Deleta um Regime Tributário via interface web."""
+@app.route('/admin/regimes_tributarios/delete/<int:regime_tributario_id>', methods=['POST'])
+def admin_regimes_tributarios_delete(regime_tributario_id):
     db = next(get_db())
-    regime = db.query(RegimeTributario).get(regime_id)
+    regime = db.query(RegimeTributario).get(regime_tributario_id)
     if not regime:
-        abort(404, description="Regime Tributário não encontrado para exclusão.")
-    
+        abort(404)
     try:
         db.delete(regime)
         db.commit()
-        return redirect(url_for('admin_regimes_tributarios_list'))
+        flash('Regime Tributário excluído com sucesso!', 'success')
     except IntegrityError:
         db.rollback()
-        # Poderíamos adicionar uma mensagem flash para o usuário aqui
-        return redirect(url_for('admin_regimes_tributarios_list', error="Não foi possível excluir o Regime Tributário devido a dependências em outras tabelas."))
+        flash('Não é possível excluir este regime tributário pois ele está vinculado a clientes.', 'danger')
     except Exception as e:
         db.rollback()
-        return redirect(url_for('admin_regimes_tributarios_list', error=f"Erro ao deletar: {e}"))
+        flash(f"Erro ao excluir regime tributário: {e}", 'danger')
+
+    return redirect(url_for('admin_regimes_tributarios_list'))
+
+# Rotas para Clientes
+@app.route('/admin/clientes/list')
+def admin_clientes_list():
+    db = next(get_db())
+    clientes = db.query(Cliente).all()
+    return render_template('admin_clientes_list.html', clientes=clientes)
+
+@app.route('/admin/clientes/add', methods=['GET', 'POST'])
+def admin_clientes_add():
+    db = next(get_db())
+    regimes_tributarios = db.query(RegimeTributario).all()
+    # Dados para dropdowns em produtos e regras (mesmo que o cliente ainda não exista, para o POST)
+    ncms = db.query(Ncm).all()
+    origens_mercadoria = db.query(OrigemMercadoria).all()
+    cfops = db.query(Cfop).all()
+    csts = db.query(Csticms).all()
+    csosns = db.query(Csosnicms).all()
+
+    form_data = request.form # Para manter dados do formulário em caso de erro
+    if request.method == 'POST':
+        cnpj = request.form.get('cnpj')
+        razao_social = request.form.get('razao_social')
+        nome_fantasia = request.form.get('nome_fantasia')
+        inscricao_estadual = request.form.get('inscricao_estadual')
+        inscricao_municipal = request.form.get('inscricao_municipal')
+        regime_tributario_id = request.form.get('regime_tributario_id')
+        cnae = request.form.get('cnae')
+        logradouro = request.form.get('logradouro')
+        numero = request.form.get('numero')
+        complemento = request.form.get('complemento')
+        bairro = request.form.get('bairro')
+        codigo_municipio = request.form.get('codigo_municipio')
+        nome_municipio = request.form.get('nome_municipio')
+        uf = request.form.get('uf')
+        cep = request.form.get('cep')
+        email_contato = request.form.get('email_contato')
+        telefone_contato = request.form.get('telefone_contato')
+        ativo = request.form.get('ativo') == 'on'
+        
+        # Validação simples para os dados do cliente
+        if not all([cnpj, razao_social, regime_tributario_id, logradouro, numero, bairro, codigo_municipio, nome_municipio, uf, cep]):
+            flash('Por favor, preencha todos os campos obrigatórios do cliente.', 'danger')
+            return render_template('admin_clientes_form.html', 
+                                   regimes_tributarios=regimes_tributarios, 
+                                   ncms=ncms, # Passa para manter os dropdowns
+                                   origens_mercadoria=origens_mercadoria, # Passa para manter os dropdowns
+                                   cfops=cfops, csts=csts, csosns=csosns, # Passa para manter os dropdowns
+                                   form_data=form_data)
+        
+        try:
+            regime_tributario_id = int(regime_tributario_id)
+
+            novo_cliente = Cliente(
+                cnpj=cnpj,
+                razao_social=razao_social,
+                nome_fantasia=nome_fantasia,
+                inscricao_estadual=inscricao_estadual,
+                inscricao_municipal=inscricao_municipal,
+                regime_tributario_id=regime_tributario_id,
+                cnae=cnae,
+                logradouro=logradouro,
+                numero=numero,
+                complemento=complemento,
+                bairro=bairro,
+                codigo_municipio=codigo_municipio,
+                nome_municipio=nome_municipio,
+                uf=uf,
+                cep=cep,
+                email_contato=email_contato,
+                telefone_contato=telefone_contato,
+                ativo=ativo,
+                data_cadastro=datetime.now(),
+                data_atualizacao=datetime.now()
+            )
+            db.add(novo_cliente)
+            db.flush() # flush para obter o cliente_id
+
+            # Processa o upload do certificado, se houver
+            success, cert_obj = process_certificate_upload(db, novo_cliente.cliente_id, request.form, request.files)
+            if not success:
+                db.rollback() 
+                return render_template('admin_clientes_form.html', regimes_tributarios=regimes_tributarios, ncms=ncms, origens_mercadoria=origens_mercadoria, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data)
+
+            db.commit()
+            flash('Cliente e configurações iniciais cadastrados com sucesso!', 'success')
+            # Redireciona para edição para que abas de produtos/regras apareçam
+            return redirect(url_for('admin_clientes_edit', cliente_id=novo_cliente.cliente_id)) 
+        except IntegrityError as e:
+            db.rollback()
+            error_message = f"Erro de integridade: {e.orig}"
+            if "duplicate key value violates unique constraint" in str(e.orig) and "cnpj" in str(e.orig):
+                error_message = "Erro: CNPJ já cadastrado."
+            flash(error_message, 'danger')
+        except ValueError as e:
+            db.rollback()
+            flash(f"Erro de formato: {e}. Verifique os campos numéricos e de IDs.", 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro interno ao cadastrar cliente: {e}", 'danger')
+        
+    return render_template('admin_clientes_form.html', 
+                           regimes_tributarios=regimes_tributarios, 
+                           ncms=ncms, 
+                           origens_mercadoria=origens_mercadoria,
+                           cfops=cfops, csts=csts, csosns=csosns,
+                           form_data=form_data)
+
+@app.route('/admin/clientes/edit/<int:cliente_id>', methods=['GET', 'POST'])
+def admin_clientes_edit(cliente_id):
+    db = next(get_db())
+    cliente = db.query(Cliente).get(cliente_id)
+    if not cliente:
+        abort(404)
+    
+    # Dados para as abas
+    regimes_tributarios = db.query(RegimeTributario).all()
+    certificados_existentes = db.query(CertificadoDigital).filter_by(cliente_id=cliente_id).all()
+    produtos_existentes = db.query(Produto).filter_by(cliente_id=cliente_id).all()
+    regras_existentes = db.query(RegraTributacao).filter_by(cliente_id=cliente_id).all()
+
+    # Dados para os dropdowns dentro das abas de Produtos e Regras Tributárias
+    ncms = db.query(Ncm).all()
+    origens_mercadoria = db.query(OrigemMercadoria).all()
+    cfops = db.query(Cfop).all()
+    csts = db.query(Csticms).all()
+    csosns = db.query(Csosnicms).all()
+
+    form_data = request.form # Para manter dados do formulário em caso de erro
+
+    if request.method == 'POST':
+        # Atualiza os dados do cliente
+        cliente.cnpj = request.form.get('cnpj')
+        cliente.razao_social = request.form.get('razao_social')
+        cliente.nome_fantasia = request.form.get('nome_fantasia')
+        cliente.inscricao_estadual = request.form.get('inscricao_estadual')
+        cliente.inscricao_municipal = request.form.get('inscricao_municipal')
+        cliente.regime_tributario_id = int(request.form.get('regime_tributario_id'))
+        cliente.cnae = request.form.get('cnae')
+        cliente.logradouro = request.form.get('logradouro')
+        cliente.numero = request.form.get('numero')
+        cliente.complemento = request.form.get('complemento')
+        cliente.bairro = request.form.get('bairro')
+        cliente.codigo_municipio = request.form.get('codigo_municipio')
+        cliente.nome_municipio = request.form.get('nome_municipio')
+        cliente.uf = request.form.get('uf')
+        cliente.cep = request.form.get('cep')
+        cliente.email_contato = request.form.get('email_contato')
+        cliente.telefone_contato = request.form.get('telefone_contato')
+        cliente.ativo = request.form.get('ativo') == 'on'
+        cliente.data_atualizacao = datetime.now()
+
+        # Validação simples para os dados do cliente
+        if not all([cliente.cnpj, cliente.razao_social, cliente.regime_tributario_id, cliente.logradouro, cliente.numero, cliente.bairro, cliente.codigo_municipio, cliente.nome_municipio, cliente.uf, cliente.cep]):
+            flash('Por favor, preencha todos os campos obrigatórios do cliente.', 'danger')
+            return render_template('admin_clientes_form.html', 
+                                   cliente=cliente, 
+                                   regimes_tributarios=regimes_tributarios, 
+                                   certificados_existentes=certificados_existentes,
+                                   produtos_existentes=produtos_existentes, 
+                                   regras_existentes=regras_existentes, 
+                                   ncms=ncms, origens_mercadoria=origens_mercadoria, 
+                                   cfops=cfops, csts=csts, csosns=csosns, 
+                                   form_data=form_data)
+        try:
+            # Processa o upload do certificado, se houver (lógica existente)
+            success_cert, cert_obj = process_certificate_upload(db, cliente_id, request.form, request.files)
+            if not success_cert:
+                db.rollback() 
+                certificados_existentes = db.query(CertificadoDigital).filter_by(cliente_id=cliente_id).all() # Recarrega
+                return render_template('admin_clientes_form.html', cliente=cliente, regimes_tributarios=regimes_tributarios, certificados_existentes=certificados_existentes, produtos_existentes=produtos_existentes, regras_existentes=regras_existentes, ncms=ncms, origens_mercadoria=origens_mercadoria, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data)
+            
+            db.commit()
+            flash('Cliente e configurações atualizados com sucesso!', 'success')
+            return redirect(url_for('admin_clientes_edit', cliente_id=cliente_id)) # Redireciona para recarregar com dados atualizados
+        except IntegrityError as e:
+            db.rollback()
+            error_message = f"Erro de integridade: {e.orig}"
+            if "duplicate key value violates unique constraint" in str(e.orig) and "cnpj" in str(e.orig):
+                error_message = "Erro: CNPJ já cadastrado para outro cliente."
+            flash(error_message, 'danger')
+        except ValueError as e:
+            db.rollback()
+            flash(f"Erro de formato: {e}. Verifique os campos numéricos e de IDs.", 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro interno ao atualizar cliente: {e}", 'danger')
+    
+    # Para GET, use o objeto cliente para pré-preencher o formulário
+    return render_template('admin_clientes_form.html',
+                           cliente=cliente,
+                           regimes_tributarios=regimes_tributarios,
+                           certificados_existentes=certificados_existentes,
+                           produtos_existentes=produtos_existentes, 
+                           regras_existentes=regras_existentes, 
+                           ncms=ncms, origens_mercadoria=origens_mercadoria, 
+                           cfops=cfops, csts=csts, csosns=csosns, 
+                           form_data=cliente)
+
+@app.route('/admin/clientes/delete/<int:cliente_id>', methods=['POST'])
+def admin_clientes_delete(cliente_id):
+    db = next(get_db())
+    cliente = db.query(Cliente).get(cliente_id)
+    if not cliente:
+        abort(404)
+
+    try:
+        db.delete(cliente)
+        db.commit()
+        flash('Cliente excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir este cliente pois ele está vinculado a outros registros (ex: NF-e).', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir cliente: {e}", 'danger')
+
+    return redirect(url_for('admin_clientes_list'))
+
+# --- Rotas para NCM ---
+@app.route('/admin/ncms/list')
+def admin_ncms_list():
+    db = next(get_db())
+    ncms = db.query(Ncm).all()
+    return render_template('admin_ncms_list.html', ncms=ncms)
+
+@app.route('/admin/ncms/add', methods=['GET', 'POST'])
+def admin_ncms_add():
+    db = next(get_db())
+    form_data = request.form
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+        data_inicio_str = request.form.get('data_Inicio')
+        data_fim_str = request.form.get('data_Fim')
+        tipo_ato = request.form.get('tipo_ato')
+        numero_ato = request.form.get('numero_ato')
+        ano_ato = request.form.get('ano_ato')
+
+        if not all([codigo, descricao]):
+            flash('Código e Descrição são campos obrigatórios para NCM.', 'danger')
+            return render_template('admin_ncms_form.html', form_data=form_data)
+        
+        try:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else None
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else None
+            
+            novo_ncm = Ncm(
+                codigo=codigo,
+                descricao=descricao,
+                data_Inicio=data_inicio,
+                data_Fim=data_fim,
+                tipo_ato=tipo_ato,
+                numero_ato=numero_ato,
+                ano_ato=ano_ato
+            )
+            db.add(novo_ncm)
+            db.commit()
+            flash('NCM adicionado com sucesso!', 'success')
+            return redirect(url_for('admin_ncms_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código NCM já existe.', 'danger')
+        except ValueError:
+            db.rollback()
+            flash('Formato de data inválido. Use AAAA-MM-DD.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar NCM: {e}", 'danger')
+    return render_template('admin_ncms_form.html', form_data=form_data)
+
+@app.route('/admin/ncms/edit/<int:ncm_id>', methods=['GET', 'POST'])
+def admin_ncms_edit(ncm_id):
+    db = next(get_db())
+    ncm = db.query(Ncm).get(ncm_id)
+    if not ncm:
+        abort(404)
+    form_data = request.form
+
+    if request.method == 'POST':
+        ncm.codigo = request.form.get('codigo')
+        ncm.descricao = request.form.get('descricao')
+        data_inicio_str = request.form.get('data_Inicio')
+        data_fim_str = request.form.get('data_Fim')
+        ncm.tipo_ato = request.form.get('tipo_ato')
+        ncm.numero_ato = request.form.get('numero_ato')
+        ncm.ano_ato = request.form.get('ano_ato')
+
+        if not all([ncm.codigo, ncm.descricao]):
+            flash('Código e Descrição são campos obrigatórios para NCM.', 'danger')
+            return render_template('admin_ncms_form.html', ncm=ncm, form_data=form_data)
+        
+        try:
+            ncm.data_Inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else None
+            ncm.data_Fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else None
+            db.commit()
+            flash('NCM atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_ncms_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código NCM já existe.', 'danger')
+        except ValueError:
+            db.rollback()
+            flash('Formato de data inválido. Use AAAA-MM-DD.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar NCM: {e}", 'danger')
+    return render_template('admin_ncms_form.html', ncm=ncm, form_data=ncm)
+
+@app.route('/admin/ncms/delete/<int:ncm_id>', methods=['POST'])
+def admin_ncms_delete(ncm_id):
+    db = next(get_db())
+    ncm = db.query(Ncm).get(ncm_id)
+    if not ncm:
+        abort(404)
+    try:
+        db.delete(ncm)
+        db.commit()
+        flash('NCM excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir este NCM pois ele está vinculado a outros registros (ex: Produtos).', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir NCM: {e}", 'danger')
+    return redirect(url_for('admin_ncms_list'))
+
+# --- Rotas para CST ICMS ---
+@app.route('/admin/cst/list')
+def admin_cst_list():
+    db = next(get_db())
+    csts = db.query(Csticms).all()
+    return render_template('admin_cst_list.html', csts=csts)
+
+@app.route('/admin/cst/add', methods=['GET', 'POST'])
+def admin_cst_add():
+    db = next(get_db())
+    form_data = request.form
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+
+        if not all([codigo, descricao]):
+            flash('Código e Descrição são campos obrigatórios para CST ICMS.', 'danger')
+            return render_template('admin_cst_form.html', form_data=form_data)
+        
+        try:
+            novo_cst = Csticms(codigo=codigo, descricao=descricao)
+            db.add(novo_cst)
+            db.commit()
+            flash('CST ICMS adicionado com sucesso!', 'success')
+            return redirect(url_for('admin_cst_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código CST ICMS já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar CST ICMS: {e}", 'danger')
+    return render_template('admin_cst_form.html', form_data=form_data)
+
+@app.route('/admin/cst/edit/<int:cst_id>', methods=['GET', 'POST'])
+def admin_cst_edit(cst_id):
+    db = next(get_db())
+    cst = db.query(Csticms).get(cst_id)
+    if not cst:
+        abort(404)
+    form_data = request.form
+
+    if request.method == 'POST':
+        cst.codigo = request.form.get('codigo')
+        cst.descricao = request.form.get('descricao')
+
+        if not all([cst.codigo, cst.descricao]):
+            flash('Código e Descrição são campos obrigatórios para CST ICMS.', 'danger')
+            return render_template('admin_cst_form.html', cst=cst, form_data=form_data)
+        
+        try:
+            db.commit()
+            flash('CST ICMS atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_cst_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código CST ICMS já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar CST ICMS: {e}", 'danger')
+    return render_template('admin_cst_form.html', cst=cst, form_data=cst)
+
+@app.route('/admin/cst/delete/<int:cst_id>', methods=['POST'])
+def admin_cst_delete(cst_id):
+    db = next(get_db())
+    cst = db.query(Csticms).get(cst_id)
+    if not cst:
+        abort(404)
+    try:
+        db.delete(cst)
+        db.commit()
+        flash('CST ICMS excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir este CST ICMS pois ele está vinculado a outros registros.', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir CST ICMS: {e}", 'danger')
+    return redirect(url_for('admin_cst_list'))
+
+# --- Rotas para CFOP ---
+@app.route('/admin/cfops/list')
+def admin_cfops_list():
+    db = next(get_db())
+    cfops = db.query(Cfop).all()
+    return render_template('admin_cfops_list.html', cfops=cfops)
+
+@app.route('/admin/cfops/add', methods=['GET', 'POST'])
+def admin_cfops_add():
+    db = next(get_db())
+    form_data = request.form
+    if request.method == 'POST':
+        cfop_code = request.form.get('cfop') # 'cfop' é o nome da coluna no modelo Cfop
+        descricao = request.form.get('descricao')
+        observacao = request.form.get('observacao')
+        tipooperacao = request.form.get('tipooperacao')
+        identificadordestinooperacao = request.form.get('identificadordestinooperacao')
+
+        if not all([cfop_code, descricao, observacao]):
+            flash('CFOP, Descrição e Observação são campos obrigatórios.', 'danger')
+            return render_template('admin_cfops_form.html', form_data=form_data)
+        
+        try:
+            novo_cfop = Cfop(
+                cfop=cfop_code, # Use o nome da variável local
+                descricao=descricao,
+                observacao=observacao,
+                tipooperacao=tipooperacao,
+                identificadordestinooperacao=identificadordestinooperacao
+            )
+            db.add(novo_cfop)
+            db.commit()
+            flash('CFOP adicionado com sucesso!', 'success')
+            return redirect(url_for('admin_cfops_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código CFOP já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar CFOP: {e}", 'danger')
+    return render_template('admin_cfops_form.html', form_data=form_data)
+
+@app.route('/admin/cfops/edit/<int:cfop_id>', methods=['GET', 'POST'])
+def admin_cfops_edit(cfop_id):
+    db = next(get_db())
+    cfop_obj = db.query(Cfop).get(cfop_id) # Renomeado para não conflitar com a classe Cfop
+    if not cfop_obj:
+        abort(404)
+    form_data = request.form
+
+    if request.method == 'POST':
+        cfop_obj.cfop = request.form.get('cfop')
+        cfop_obj.descricao = request.form.get('descricao')
+        cfop_obj.observacao = request.form.get('observacao')
+        cfop_obj.tipooperacao = request.form.get('tipooperacao')
+        cfop_obj.identificadordestinooperacao = request.form.get('identificadordestinooperacao')
+
+        if not all([cfop_obj.cfop, cfop_obj.descricao, cfop_obj.observacao]):
+            flash('CFOP, Descrição e Observação são campos obrigatórios.', 'danger')
+            return render_template('admin_cfops_form.html', cfop=cfop_obj, form_data=form_data)
+        
+        try:
+            db.commit()
+            flash('CFOP atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_cfops_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código CFOP já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar CFOP: {e}", 'danger')
+    return render_template('admin_cfops_form.html', cfop=cfop_obj, form_data=cfop_obj)
+
+@app.route('/admin/cfops/delete/<int:cfop_id>', methods=['POST'])
+def admin_cfops_delete(cfop_id):
+    db = next(get_db())
+    cfop_obj = db.query(Cfop).get(cfop_id)
+    if not cfop_obj:
+        abort(404)
+    try:
+        db.delete(cfop_obj)
+        db.commit()
+        flash('CFOP excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir este CFOP pois ele está vinculado a outros registros (ex: Regras de Tributação).', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir CFOP: {e}", 'danger')
+    return redirect(url_for('admin_cfops_list'))
+
+# --- Rotas para CSOSN ICMS ---
+@app.route('/admin/csosn/list')
+def admin_csosn_list():
+    db = next(get_db())
+    csosns = db.query(Csosnicms).all()
+    return render_template('admin_csosn_list.html', csosns=csosns)
+
+@app.route('/admin/csosn/add', methods=['GET', 'POST'])
+def admin_csosn_add():
+    db = next(get_db())
+    form_data = request.form
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+
+        if not all([codigo, descricao]):
+            flash('Código e Descrição são campos obrigatórios para CSOSN ICMS.', 'danger')
+            return render_template('admin_csosn_form.html', form_data=form_data)
+        
+        try:
+            novo_csosn = Csosnicms(codigo=codigo, descricao=descricao)
+            db.add(novo_csosn)
+            db.commit()
+            flash('CSOSN ICMS adicionado com sucesso!', 'success')
+            return redirect(url_for('admin_csosn_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código CSOSN ICMS já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar CSOSN ICMS: {e}", 'danger')
+    return render_template('admin_csosn_form.html', form_data=form_data)
+
+@app.route('/admin/csosn/edit/<int:csosn_id>', methods=['GET', 'POST'])
+def admin_csosn_edit(csosn_id):
+    db = next(get_db())
+    csosn = db.query(Csosnicms).get(csosn_id)
+    if not csosn:
+        abort(404)
+    form_data = request.form
+
+    if request.method == 'POST':
+        csosn.codigo = request.form.get('codigo')
+        csosn.descricao = request.form.get('descricao')
+
+        if not all([csosn.codigo, csosn.descricao]):
+            flash('Código e Descrição são campos obrigatórios para CSOSN ICMS.', 'danger')
+            return render_template('admin_csosn_form.html', csosn=csosn, form_data=form_data)
+        
+        try:
+            db.commit()
+            flash('CSOSN ICMS atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_csosn_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código CSOSN ICMS já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar CSOSN ICMS: {e}", 'danger')
+    return render_template('admin_csosn_form.html', csosn=csosn, form_data=csosn)
+
+@app.route('/admin/csosn/delete/<int:csosn_id>', methods=['POST'])
+def admin_csosn_delete(csosn_id):
+    db = next(get_db())
+    csosn = db.query(Csosnicms).get(csosn_id)
+    if not csosn:
+        abort(404)
+    try:
+        db.delete(csosn)
+        db.commit()
+        flash('CSOSN ICMS excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir este CSOSN ICMS pois ele está vinculado a outros registros.', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir CSOSN ICMS: {e}", 'danger')
+    return redirect(url_for('admin_csosn_list'))
+
+# --- Rotas para Produtos ---
+# Removido do menu principal, agora o fluxo principal é através do cliente
+@app.route('/admin/produtos/list') # Mantida rota de listagem, pode ser útil para debug
+def admin_produtos_list():
+    db = next(get_db())
+    produtos = db.query(Produto).all()
+    return render_template('admin_produtos_list.html', produtos=produtos)
+
+@app.route('/admin/produtos/add', methods=['GET', 'POST'])
+def admin_produtos_add():
+    db = next(get_db())
+    clientes = db.query(Cliente).all()
+    ncms = db.query(Ncm).all()
+    origens = db.query(OrigemMercadoria).all()
+    form_data = request.form
+    
+    # Captura o cliente_id da URL se vier da tela do cliente
+    # Usamos request.args.get para obter parâmetros de URL
+    return_client_id = request.args.get('cliente_id', type=int) 
+
+    if request.method == 'POST':
+        cliente_id = request.form.get('cliente_id')
+        codigo_interno = request.form.get('codigo_interno')
+        descricao = request.form.get('descricao')
+        ncm_id = request.form.get('ncm_id')
+        cest = request.form.get('cest')
+        unidade_comercial = request.form.get('unidade_comercial')
+        preco_unitario_padrao_str = request.form.get('preco_unitario_padrao')
+        origem_mercadoria = request.form.get('origem_mercadoria')
+        tipo_item = request.form.get('tipo_item')
+        ativo = request.form.get('ativo') == 'on'
+
+        if not all([cliente_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao_str, origem_mercadoria, tipo_item]):
+            flash('Por favor, preencha todos os campos obrigatórios do produto.', 'danger')
+            return render_template('admin_produtos_form.html', clientes=clientes, ncms=ncms, origens=origens, form_data=form_data, return_client_id=return_client_id)
+        
+        try:
+            cliente_id = int(cliente_id)
+            ncm_id = int(ncm_id) if ncm_id else None # NCM pode ser nulo
+            preco_unitario_padrao = Decimal(preco_unitario_padrao_str)
+            origem_mercadoria = int(origem_mercadoria) # Código da origem
+
+            novo_produto = Produto(
+                cliente_id=cliente_id,
+                codigo_interno=codigo_interno,
+                descricao=descricao,
+                ncm_id=ncm_id,
+                cest=cest,
+                unidade_comercial=unidade_comercial,
+                preco_unitario_padrao=preco_unitario_padrao,
+                origem_mercadoria=origem_mercadoria,
+                tipo_item=tipo_item,
+                ativo=ativo
+            )
+            db.add(novo_produto)
+            db.commit()
+            flash('Produto adicionado com sucesso!', 'success')
+            # Redireciona de volta para a tela de edição do cliente e para a aba de produtos
+            if return_client_id:
+                return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='tab-client-products'))
+            return redirect(url_for('admin_produtos_list')) # Fallback se não veio da tela do cliente
+        except IntegrityError:
+            db.rollback()
+            flash('Código Interno do produto já existe para este cliente.', 'danger')
+        except ValueError as e:
+            db.rollback()
+            flash(f'Erro de formato: {e}. Verifique os campos numéricos e de IDs.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar produto: {e}", 'danger')
+    return render_template('admin_produtos_form.html', clientes=clientes, ncms=ncms, origens=origens, form_data=form_data, return_client_id=return_client_id)
+
+@app.route('/admin/produtos/edit/<int:produto_id>', methods=['GET', 'POST'])
+def admin_produtos_edit(produto_id):
+    db = next(get_db())
+    produto = db.query(Produto).get(produto_id)
+    if not produto:
+        abort(404)
+    
+    # Captura o cliente_id da URL se vier da tela do cliente
+    return_client_id = request.args.get('cliente_id', type=int) 
+    # Ou se não vier na URL, tenta pegar do produto que está sendo editado
+    if not return_client_id and produto:
+        return_client_id = produto.cliente_id
+
+    clientes = db.query(Cliente).all()
+    ncms = db.query(Ncm).all()
+    origens = db.query(OrigemMercadoria).all()
+    form_data = request.form
+
+    if request.method == 'POST':
+        produto.cliente_id = int(request.form.get('cliente_id'))
+        produto.codigo_interno = request.form.get('codigo_interno')
+        produto.descricao = request.form.get('descricao')
+        produto.ncm_id = int(request.form.get('ncm_id')) if request.form.get('ncm_id') else None
+        produto.cest = request.form.get('cest')
+        produto.unidade_comercial = request.form.get('unidade_comercial')
+        preco_unitario_padrao = request.form.get('preco_unitario_padrao') # Captura como str para Decimal
+        produto.origem_mercadoria = int(request.form.get('origem_mercadoria'))
+        produto.tipo_item = request.form.get('tipo_item')
+        produto.ativo = request.form.get('ativo') == 'on'
+
+        if not all([produto.cliente_id, produto.codigo_interno, produto.descricao, produto.unidade_comercial, preco_unitario_padrao, produto.origem_mercadoria, produto.tipo_item]):
+            flash('Por favor, preencha todos os campos obrigatórios do produto.', 'danger')
+            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes, ncms=ncms, origens=origens, form_data=form_data, return_client_id=return_client_id)
+        
+        try:
+            produto.preco_unitario_padrao = Decimal(preco_unitario_padrao) # Converte para Decimal aqui
+            db.commit()
+            flash('Produto atualizado com sucesso!', 'success')
+            # Redireciona de volta para a tela de edição do cliente e para a aba de produtos
+            if return_client_id:
+                return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='tab-client-products'))
+            return redirect(url_for('admin_produtos_list')) # Fallback se não veio da tela do cliente
+        except IntegrityError:
+            db.rollback()
+            flash('Código Interno do produto já existe para este cliente.', 'danger')
+        except ValueError as e:
+            db.rollback()
+            flash(f'Erro de formato: {e}. Verifique os campos numéricos e de IDs.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar produto: {e}", 'danger')
+    return render_template('admin_produtos_form.html', produto=produto, clientes=clientes, ncms=ncms, origens=origens, form_data=produto, return_client_id=return_client_id)
+
+@app.route('/admin/produtos/delete/<int:produto_id>', methods=['POST'])
+def admin_produtos_delete(produto_id):
+    db = next(get_db())
+    produto = db.query(Produto).get(produto_id)
+    if not produto:
+        abort(404)
+    
+    # Captura o cliente_id para redirecionar de volta corretamente
+    return_client_id = produto.cliente_id if produto else None
+
+    try:
+        db.delete(produto)
+        db.commit()
+        flash('Produto excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir este produto pois ele está vinculado a outros registros.', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir produto: {e}", 'danger')
+    
+    # Redireciona de volta para a tela de edição do cliente e para a aba de produtos
+    if return_client_id:
+        return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='tab-client-products'))
+    return redirect(url_for('admin_produtos_list')) # Fallback
+
+# --- Rotas para Regras de Tributação ---
+# Removido do menu principal, agora o fluxo principal é através do cliente
+@app.route('/admin/regras_tributacao/list') # Mantida rota de listagem, pode ser útil para debug
+def admin_regras_tributacao_list():
+    db = next(get_db())
+    regras = db.query(RegraTributacao).all()
+    return render_template('admin_regras_tributacao_list.html', regras=regras)
+
+@app.route('/admin/regras_tributacao/add', methods=['GET', 'POST'])
+def admin_regras_tributacao_add():
+    db = next(get_db())
+    clientes = db.query(Cliente).all()
+    regimes_tributarios = db.query(RegimeTributario).all()
+    cfops = db.query(Cfop).all()
+    ncms = db.query(Ncm).all()
+    csts = db.query(Csticms).all()
+    csosns = db.query(Csosnicms).all()
+    form_data = request.form
+
+    # Captura o cliente_id da URL se vier da tela do cliente
+    return_client_id = request.args.get('cliente_id', type=int) 
+
+    if request.method == 'POST':
+        cliente_id = request.form.get('cliente_id')
+        regime_tributario_id = request.form.get('regime_tributario_id')
+        cfop_id = request.form.get('cfop_id')
+        ncm_id = request.form.get('ncm_id')
+        uf_origem = request.form.get('uf_origem')
+        uf_destino = request.form.get('uf_destino')
+        tipo_item = request.form.get('tipo_item')
+        prioridade_str = request.form.get('prioridade')
+        cst_icms = request.form.get('cst_icms')
+        csosn_icms = request.form.get('csosn_icms')
+        aliquota_icms_str = request.form.get('aliquota_icms')
+        reducao_base_icms_str = request.form.get('reducao_base_icms')
+        modalidade_bc_icms_str = request.form.get('modalidade_bc_icms')
+        motivo_desoneracao_icms_str = request.form.get('motivo_desoneracao_icms')
+        cst_pis = request.form.get('cst_pis')
+        aliquota_pis_str = request.form.get('aliquota_pis')
+        cst_cofins = request.form.get('cst_cofins')
+        aliquota_cofins_str = request.form.get('aliquota_cofins')
+        cst_ipi = request.form.get('cst_ipi')
+        aliquota_ipi_str = request.form.get('aliquota_ipi')
+        descricao_regra = request.form.get('descricao_regra')
+        ativo = request.form.get('ativo') == 'on'
+
+        if not all([regime_tributario_id, cfop_id]): # Campos minimos obrigatorios
+            flash('Regime Tributário e CFOP são campos obrigatórios para Regra de Tributação.', 'danger')
+            return render_template('admin_regras_tributacao_form.html', clientes=clientes, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
+        
+        try:
+            # Conversão de tipos
+            cliente_id = int(cliente_id) if cliente_id else None
+            regime_tributario_id = int(regime_tributario_id)
+            cfop_id = int(cfop_id)
+            ncm_id = int(ncm_id) if ncm_id else None
+            prioridade = int(prioridade_str) if prioridade_str else 100
+            aliquota_icms = Decimal(aliquota_icms_str) if aliquota_icms_str else None
+            reducao_base_icms = Decimal(reducao_base_icms_str) if reducao_base_icms_str else None
+            modalidade_bc_icms = int(modalidade_bc_icms_str) if modalidade_bc_icms_str else None
+            motivo_desoneracao_icms = int(motivo_desoneracao_icms_str) if motivo_desoneracao_icms_str else None
+            aliquota_pis = Decimal(aliquota_pis_str) if aliquota_pis_str else None
+            aliquota_cofins = Decimal(aliquota_cofins_str) if aliquota_cofins_str else None
+            aliquota_ipi = Decimal(aliquota_ipi_str) if aliquota_ipi_str else None
+
+            nova_regra = RegraTributacao(
+                cliente_id=cliente_id,
+                regime_tributario_id=regime_tributario_id,
+                cfop_id=cfop_id,
+                ncm_id=ncm_id,
+                uf_origem=uf_origem,
+                uf_destino=uf_destino,
+                tipo_item=tipo_item,
+                prioridade=prioridade,
+                cst_icms=cst_icms,
+                csosn_icms=csosn_icms,
+                aliquota_icms=aliquota_icms,
+                reducao_base_icms=reducao_base_icms,
+                modalidade_bc_icms=modalidade_bc_icms,
+                motivo_desoneracao_icms=motivo_desoneracao_icms,
+                cst_pis=cst_pis,
+                aliquota_pis=aliquota_pis,
+                cst_cofins=cst_cofins,
+                aliquota_cofins=aliquota_cofins,
+                cst_ipi=cst_ipi,
+                aliquota_ipi=aliquota_ipi,
+                descricao_regra=descricao_regra,
+                data_criacao=datetime.now(),
+                ativo=ativo
+            )
+            db.add(nova_regra)
+            db.commit()
+            flash('Regra de Tributação adicionada com sucesso!', 'success')
+            # Redireciona de volta para a tela de edição do cliente E ABRE A ABA DE REGRAS
+            if return_client_id:
+                return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='tab-client-rules'))
+            return redirect(url_for('admin_regras_tributacao_list')) # Fallback
+        except ValueError as e:
+            db.rollback()
+            flash(f'Erro de formato: {e}. Verifique os campos numéricos e de IDs.', 'danger')
+        except IntegrityError:
+            db.rollback()
+            flash('Erro de integridade ao adicionar regra. Verifique se os IDs existem ou se há duplicatas.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar Regra de Tributação: {e}", 'danger')
+    return render_template('admin_regras_tributacao_form.html', clientes=clientes, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
+
+@app.route('/admin/regras_tributacao/edit/<int:regra_tributacao_id>', methods=['GET', 'POST'])
+def admin_regras_tributacao_edit(regra_tributacao_id):
+    db = next(get_db())
+    regra = db.query(RegraTributacao).get(regra_tributacao_id)
+    if not regra:
+        abort(404)
+    
+    # Captura o cliente_id da URL se vier da tela do cliente
+    return_client_id = request.args.get('cliente_id', type=int) 
+    # Ou se não vier na URL, tenta pegar da regra que está sendo editada
+    if not return_client_id and regra:
+        return_client_id = regra.cliente_id
+
+    clientes = db.query(Cliente).all()
+    regimes_tributarios = db.query(RegimeTributario).all()
+    cfops = db.query(Cfop).all()
+    ncms = db.query(Ncm).all()
+    csts = db.query(Csticms).all()
+    csosns = db.query(Csosnicms).all()
+    form_data = request.form
+
+    if request.method == 'POST':
+        regra.cliente_id = int(request.form.get('cliente_id')) if request.form.get('cliente_id') else None
+        regra.regime_tributario_id = int(request.form.get('regime_tributario_id'))
+        regra.cfop_id = int(request.form.get('cfop_id'))
+        regra.ncm_id = int(request.form.get('ncm_id')) if request.form.get('ncm_id') else None
+        regra.uf_origem = request.form.get('uf_origem')
+        regra.uf_destino = request.form.get('uf_destino')
+        regra.tipo_item = request.form.get('tipo_item')
+        prioridade_str = request.form.get('prioridade')
+        regra.cst_icms = request.form.get('cst_icms')
+        regra.csosn_icms = request.form.get('csosn_icms')
+        aliquota_icms_str = request.form.get('aliquota_icms')
+        reducao_base_icms_str = request.form.get('reducao_base_icms')
+        modalidade_bc_icms_str = request.form.get('modalidade_bc_icms')
+        motivo_desoneracao_icms_str = request.form.get('motivo_desoneracao_icms')
+        regra.cst_pis = request.form.get('cst_pis')
+        aliquota_pis_str = request.form.get('aliquota_pis')
+        regra.cst_cofins = request.form.get('cst_cofins')
+        aliquota_cofins_str = request.form.get('aliquota_cofins')
+        regra.cst_ipi = request.form.get('cst_ipi')
+        aliquota_ipi_str = request.form.get('aliquota_ipi')
+        regra.descricao_regra = request.form.get('descricao_regra')
+        regra.ativo = request.form.get('ativo') == 'on'
+
+        if not all([regra.regime_tributario_id, regra.cfop_id]):
+            flash('Regime Tributário e CFOP são campos obrigatórios para Regra de Tributação.', 'danger')
+            return render_template('admin_regras_tributacao_form.html', regra=regra, clientes=clientes, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
+        
+        try:
+            regra.prioridade = int(prioridade_str) if prioridade_str else 100
+            regra.aliquota_icms = Decimal(aliquota_icms_str) if aliquota_icms_str else None
+            regra.reducao_base_icms = Decimal(reducao_base_icms_str) if reducao_base_icms_str else None
+            regra.modalidade_bc_icms = int(modalidade_bc_icms_str) if modalidade_bc_icms_str else None
+            regra.motivo_desoneracao_icms = int(motivo_desoneracao_icms_str) if motivo_desoneracao_icms_str else None
+            regra.aliquota_pis = Decimal(aliquota_pis_str) if aliquota_pis_str else None
+            regra.aliquota_cofins = Decimal(aliquota_cofins_str) if aliquota_cofins_str else None
+            regra.aliquota_ipi = Decimal(aliquota_ipi_str) if aliquota_ipi_str else None
+            
+            db.commit()
+            flash('Regra de Tributação atualizada com sucesso!', 'success')
+            # Redireciona de volta para a tela de edição do cliente E ABRE A ABA DE REGRAS
+            if return_client_id:
+                return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='tab-client-rules'))
+            return redirect(url_for('admin_regras_tributacao_list')) # Fallback
+        except ValueError as e:
+            db.rollback()
+            flash(f'Erro de formato: {e}. Verifique os campos numéricos e de IDs.', 'danger')
+        except IntegrityError:
+            db.rollback()
+            flash('Erro de integridade ao atualizar regra. Verifique se os IDs existem ou se há duplicatas.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar Regra de Tributação: {e}", 'danger')
+    return render_template('admin_regras_tributacao_form.html', regra=regra, clientes=clientes, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, form_data=regra, return_client_id=return_client_id)
+
+@app.route('/admin/regras_tributacao/delete/<int:regra_tributacao_id>', methods=['POST'])
+def admin_regras_tributacao_delete(regra_tributacao_id):
+    db = next(get_db())
+    regra = db.query(RegraTributacao).get(regra_tributacao_id)
+    if not regra:
+        abort(404)
+    
+    # Captura o cliente_id para redirecionar de volta corretamente
+    return_client_id = regra.cliente_id if regra else None
+
+    try:
+        db.delete(regra)
+        db.commit()
+        flash('Regra de Tributação excluída com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir esta regra de tributação pois ela está vinculada a outros registros.', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir Regra de Tributação: {e}", 'danger')
+    
+    # Redireciona de volta para a tela de edição do cliente E ABRE A ABA DE REGRAS
+    if return_client_id:
+        return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='tab-client-rules'))
+    return redirect(url_for('admin_regras_tributacao_list')) # Fallback
+
+# --- Rotas para OrigemMercadoria ---
+@app.route('/admin/origens_mercadoria/list')
+def admin_origens_mercadoria_list():
+    db = next(get_db())
+    origens = db.query(OrigemMercadoria).all()
+    return render_template('admin_origens_mercadoria_list.html', origens=origens)
+
+@app.route('/admin/origens_mercadoria/add', methods=['GET', 'POST'])
+def admin_origens_mercadoria_add():
+    db = next(get_db())
+    form_data = request.form
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+
+        if not all([codigo, descricao]):
+            flash('Código e Descrição são campos obrigatórios para Origem de Mercadoria.', 'danger')
+            return render_template('admin_origens_mercadoria_form.html', form_data=form_data)
+        
+        try:
+            nova_origem = OrigemMercadoria(codigo=codigo, descricao=descricao)
+            db.add(nova_origem)
+            db.commit()
+            flash('Origem de Mercadoria adicionada com sucesso!', 'success')
+            return redirect(url_for('admin_origens_mercadoria_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código de Origem de Mercadoria já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar Origem de Mercadoria: {e}", 'danger')
+    return render_template('admin_origens_mercadoria_form.html', form_data=form_data)
+
+@app.route('/admin/origens_mercadoria/edit/<int:origem_id>', methods=['GET', 'POST'])
+def admin_origens_mercadoria_edit(origem_id):
+    db = next(get_db())
+    origem = db.query(OrigemMercadoria).get(origem_id)
+    if not origem:
+        abort(404)
+    form_data = request.form
+
+    if request.method == 'POST':
+        origem.codigo = request.form.get('codigo')
+        origem.descricao = request.form.get('descricao')
+
+        if not all([origem.codigo, origem.descricao]):
+            flash('Código e Descrição são campos obrigatórios para Origem de Mercadoria.', 'danger')
+            return render_template('admin_origens_mercadoria_form.html', origem=origem, form_data=form_data)
+        
+        try:
+            db.commit()
+            flash('Origem de Mercadoria atualizada com sucesso!', 'success')
+            return redirect(url_for('admin_origens_mercadoria_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código de Origem de Mercadoria já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar Origem de Mercadoria: {e}", 'danger')
+    return render_template('admin_origens_mercadoria_form.html', origem=origem, form_data=origem)
+
+@app.route('/admin/origens_mercadoria/delete/<int:origem_id>', methods=['POST'])
+def admin_origens_mercadoria_delete(origem_id):
+    db = next(get_db())
+    origem = db.query(OrigemMercadoria).get(origem_id)
+    if not origem:
+        abort(404)
+    try:
+        db.delete(origem)
+        db.commit()
+        flash('Origem de Mercadoria excluída com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir esta Origem de Mercadoria pois ela está vinculada a outros registros (ex: Produtos).', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir Origem de Mercadoria: {e}", 'danger')
+    return redirect(url_for('admin_origens_mercadoria_list'))
 
 # --- Configuração de Execução Local ---
 if __name__ == '__main__':
-    # Obtém a porta das variáveis de ambiente (necessário para Heroku e outros PaaS)
-    # ou usa 8080 como padrão para desenvolvimento local.
     port = int(os.environ.get('PORT', 8080))
-    # 'debug=True' permite o recarregamento automático e exibe erros detalhados.
-    # NUNCA use debug=True em produção.
-    # 'host='0.0.0.0'' torna a API acessível de qualquer IP na rede (útil em containers).
-    app.run(debug=True, host='localhost', port=port)
+    # host='0.0.0.0' permite que o servidor seja acessível de outras máquinas na rede local
+    # Para depuração local apenas, 'localhost' ou '127.0.0.1' pode ser suficiente.
+    app.run(debug=True, host='0.0.0.0', port=port)

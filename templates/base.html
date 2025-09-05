@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Painel de Administração{% endblock %}</title>
-    {# Inclua jQuery e jQuery Mask Plugin AQUI #}
+    
+    {# INCLUA jQuery e jQuery Mask Plugin AQUI, ANTES DO SEU CSS E DO SEU BLOCO DE SCRIPTS #}
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
     
     <style>
-        /* Seu CSS existente do base.html */
+        /* ... Seu CSS aqui ... */
         :root {
             --sj-teal-dark: #00A29C;
             --sj-teal-medium: #00877F;
@@ -19,7 +20,6 @@
             --sj-gray-light: #F8F9FA;
             --sj-gray-border: #CED4DA;
         }
-
         body { font-family: Arial, sans-serif; margin: 20px; background-color: var(--sj-gray-light); color: var(--sj-gray-dark); }
         .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h1, h2 { color: var(--sj-teal-dark); }
@@ -53,7 +53,6 @@
         }
         .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; }
         .alert-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-
         /* Estilo para o botão de buscar CEP */
         .btn-sm {
             padding: 5px 10px;
@@ -87,19 +86,17 @@
             height: 40px;
             animation: spin 1s linear infinite;
         }
-
         @keyframes spin {
             to {
                 transform: rotate(360deg);
             }
         }
-
-        /* NOVO CSS PARA ABAS - ADICIONADO AQUI! */
+        /* Novo CSS para abas */
         .tabs {
             display: flex;
-            margin-bottom: -2px; /* Puxa as abas um pouco para cima para sobrepor a borda */
+            margin-bottom: -2px; /* Pull tabs slightly up to overlap the border */
             border-bottom: 2px solid var(--sj-gray-border);
-            overflow-x: auto; /* Para muitas abas em telas pequenas */
+            overflow-x: auto; /* Para abas demais em telas pequenas */
             -webkit-overflow-scrolling: touch;
         }
         .tab-button {
@@ -124,25 +121,25 @@
             background-color: white;
             border-color: var(--sj-teal-dark);
             color: var(--sj-teal-dark);
-            border-bottom: 2px solid white; /* Sobrepõe a borda */
-            z-index: 1; /* Traz a aba ativa para a frente */
+            border-bottom: 2px solid white; /* Overlap border */
+            z-index: 1; /* Bring active tab to front */
         }
         .tab-content {
-            display: none; /* ESCONDE AS ABAS INATIVAS */
-            padding: 20px 0; /* Ajuste o padding conforme necessário */
-            border-top: 2px solid var(--sj-teal-dark); /* Cor da borda superior do conteúdo */
-            margin-top: 0; /* Alinha com a barra de abas */
+            display: none;
+            padding: 20px 0; /* Adjust padding as needed */
+            border-top: 2px solid var(--sj-teal-dark); /* Match active tab border */
+            margin-top: 0; /* Align with tab bar */
         }
         .tab-content.active {
-            display: block; /* MOSTRA A ABA ATIVA */
+            display: block;
         }
-        fieldset { /* Adaptações para fieldset dentro das abas */
+        fieldset {
             border: 1px solid var(--sj-gray-border);
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 5px;
         }
-        legend { /* Adaptações para legend dentro das abas */
+        legend {
             font-size: 1.1em;
             font-weight: bold;
             color: var(--sj-teal-dark);
@@ -154,7 +151,7 @@
         }
         .form-group.inline input[type="checkbox"] {
             margin-right: 10px;
-            width: auto; /* Anula o width: 100% dos inputs */
+            width: auto; /* override default width */
         }
     </style>
 </head>
@@ -163,7 +160,11 @@
         <div class="navbar">
             <a href="{{ url_for('admin_regimes_tributarios_list') }}">Regimes Tributários</a>
             <a href="{{ url_for('admin_clientes_list') }}">Clientes</a>
-            {# O link para 'Certificados Digitais' foi removido como solicitado anteriormente. #}
+            <a href="{{ url_for('admin_cfops_list') }}">CFOPs</a>
+            <a href="{{ url_for('admin_ncms_list') }}">NCMs</a>
+            <a href="{{ url_for('admin_cst_list') }}">CST ICMS</a>
+            <a href="{{ url_for('admin_csosn_list') }}">CSOSN ICMS</a>
+            <a href="{{ url_for('admin_origens_mercadoria_list') }}">Origem Mercadoria</a>
         </div>
         {% block content %}{% endblock %}
     </div>

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Origens de Mercadoria - Admin{% endblock %}
+
+{% block content %}
+    <h1>Administração de Origens de Mercadoria</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p><a href="{{ url_for('admin_origens_mercadoria_add') }}" class="btn">Adicionar Nova Origem</a></p>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Código</th>
+                <th scope="col">Descrição</th>
+                <th scope="col">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for origem in origens %}
+            <tr>
+                <td>{{ origem.origem_id }}</td>
+                <td>{{ origem.codigo }}</td>
+                <td>{{ origem.descricao }}</td>
+                <td>
+                    <a href="{{ url_for('admin_origens_mercadoria_edit', origem_id=origem.origem_id) }}" class="btn btn-warning btn-sm">Editar</a>
+                    <form action="{{ url_for('admin_origens_mercadoria_delete', origem_id=origem.origem_id) }}" method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir a Origem {{ origem.codigo }}?');">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4">Nenhuma Origem de Mercadoria cadastrada.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
