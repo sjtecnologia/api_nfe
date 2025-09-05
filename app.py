@@ -8,7 +8,7 @@ from decimal import Decimal # Para lidar com tipos Numeric do SQLAlchemy
 # Importe os modelos do seu arquivo models.py
 # Certifique-se de que todos os modelos necessários estejam aqui.
 # Ex: from database.models import Cliente, Produto, RegraTributacao, etc.
-from database.models import Base, Cfop, Ncm, Produto, Cliente, RegimeTributario, CertificadoDigital, NFeEmitidas, RegraTributacao, Csosnicms, Csticms, OrigemMercadoria, DestinatarioNFe, MotivoDesoneracao
+from database.models import Base, Cfop, Ncm, Produto, Cliente, RegimeTributario, CertificadoDigital, NFeEmitidas, RegraTributacao, Csosnicms, Csticms, OrigemMercadoria, MotivoDesoneracao
 
 # Imports para processar certificado
 from cryptography import x509
@@ -1122,7 +1122,6 @@ def admin_regras_tributacao_add():
 
     # Captura o cliente_id da URL se vier da tela do cliente
     return_client_id = request.args.get('cliente_id', type=int) 
-
     
 
     if request.method == 'POST':
@@ -1392,187 +1391,87 @@ def admin_origens_mercadoria_delete(origem_id):
         flash(f"Erro ao excluir Origem de Mercadoria: {e}", 'danger')
     return redirect(url_for('admin_origens_mercadoria_list'))
 
-# --- Rotas para DestinatarioNFe ---
-@app.route('/admin/destinatarios_nfe/list')
-def admin_destinatarios_nfe_list():
-    db = next(get_db())
-    destinatarios = db.query(DestinatarioNFe).all()
-    return render_template('destinatario/lista.html', destinatarios=destinatarios)
-
-@app.route('/admin/destinatarios_nfe/add', methods=['GET', 'POST'])
-def admin_destinatarios_nfe_add():
-    db = next(get_db())
-    form_data = request.form # Para manter dados do formulário em caso de erro
-
-    if request.method == 'POST':
-        # Mapeamento e validação dos campos
-        # Note que codigo_uf e nome_municipio são preenchidos pela busca CEP
-        data = {
-            'tipo_pessoa': request.form.get('tipo_pessoa'),
-            'nome_razao_social': request.form.get('nome_razao_social'),
-            'cpf_cnpj': request.form.get('cpf_cnpj').replace('.', '').replace('/', '').replace('-', ''), # Limpa máscara
-            'ie': request.form.get('ie'),
-            'ie_indicador_nfe': request.form.get('ie_indicador_nfe'),
-            'email': request.form.get('email'),
-            'telefone': request.form.get('telefone').replace('(', '').replace(')', '').replace(' ', '').replace('-', ''), # Limpa máscara
-            'logradouro': request.form.get('logradouro'),
-            'numero': request.form.get('numero'),
-            'complemento': request.form.get('complemento'),
-            'bairro': request.form.get('bairro'),
-            'cep': request.form.get('cep').replace('-', ''), # Limpa máscara
-            'codigo_municipio': request.form.get('codigo_municipio'),
-            'nome_municipio': request.form.get('nome_municipio'),
-            'uf': request.form.get('uf'),
-            'codigo_uf': request.form.get('codigo_uf'), # Campo para código IBGE da UF
-            'codigo_pais': request.form.get('codigo_pais') or '1058',
-            'nome_pais': request.form.get('nome_pais') or 'Brasil',
-        }
-
-        # Validação de campos obrigatórios (adapte conforme sua necessidade)
-        required_fields = ['tipo_pessoa', 'nome_razao_social', 'cpf_cnpj', 'ie_indicador_nfe',
-                           'logradouro', 'numero', 'bairro', 'cep', 'codigo_municipio',
-                           'nome_municipio', 'uf', 'codigo_uf']
-        
-        missing_fields = [f for f in required_fields if not data.get(f)]
-        if missing_fields:
-            flash(f"Preencha todos os campos obrigatórios. Faltando: {', '.join(missing_fields)}", 'danger')
-            return render_template('destinatario/cadastro.html', form_data=data)
-
-        try:
-            novo_destinatario = DestinatarioNFe(**data)
-            db.add(novo_destinatario)
-            db.commit()
-            flash('Destinatário cadastrado com sucesso!', 'success')
-            return redirect(url_for('admin_destinatarios_nfe_list'))
-        except IntegrityError:
-            db.rollback()
-            flash('CPF/CNPJ já cadastrado para outro destinatário.', 'danger')
-        except Exception as e:
-            db.rollback()
-            flash(f"Erro ao cadastrar destinatário: {e}", 'danger')
-
-    return render_template('destinatario/cadastro.html', form_data=form_data)
-
-@app.route('/admin/destinatarios_nfe/edit/<int:destinatario_id>', methods=['GET', 'POST'])
-def admin_destinatarios_nfe_edit(destinatario_id):
-    db = next(get_db())
-    destinatario = db.query(DestinatarioNFe).get(destinatario_id)
-    if not destinatario:
-        abort(404)
-    form_data = request.form # Para manter dados do formulário em caso de erro no POST
-
-    if request.method == 'POST':
-        destinatario.tipo_pessoa = request.form.get('tipo_pessoa')
-        destinatario.nome_razao_social = request.form.get('nome_razao_social')
-        destinatario.cpf_cnpj = request.form.get('cpf_cnpj').replace('.', '').replace('/', '').replace('-', '')
-        destinatario.ie = request.form.get('ie')
-        destinatario.ie_indicador_nfe = request.form.get('ie_indicador_nfe')
-        destinatario.email = request.form.get('email')
-        destinatario.telefone = request.form.get('telefone').replace('(', '').replace(')', '').replace(' ', '').replace('-', '')
-        destinatario.logradouro = request.form.get('logradouro')
-        destinatario.numero = request.form.get('numero')
-        destinatario.complemento = request.form.get('complemento')
-        destinatario.bairro = request.form.get('bairro')
-        destinatario.cep = request.form.get('cep').replace('-', '')
-        destinatario.codigo_municipio = request.form.get('codigo_municipio')
-        destinatario.nome_municipio = request.form.get('nome_municipio')
-        destinatario.uf = request.form.get('uf')
-        destinatario.codigo_uf = request.form.get('codigo_uf')
-        destinatario.codigo_pais = request.form.get('codigo_pais') or '1058'
-        destinatario.nome_pais = request.form.get('nome_pais') or 'Brasil'
-        destinatario.data_atualizacao = datetime.now()
-
-        required_fields = ['tipo_pessoa', 'nome_razao_social', 'cpf_cnpj', 'ie_indicador_nfe',
-                           'logradouro', 'numero', 'bairro', 'cep', 'codigo_municipio',
-                           'nome_municipio', 'uf', 'codigo_uf']
-        
-        missing_fields = [f for f in required_fields if not getattr(destinatario, f)]
-        if missing_fields:
-            flash(f"Preencha todos os campos obrigatórios. Faltando: {', '.join(missing_fields)}", 'danger')
-            return render_template('destinatario/editar.html', destinatario=destinatario, form_data=request.form)
-
-        try:
-            db.commit()
-            flash('Destinatário atualizado com sucesso!', 'success')
-            return redirect(url_for('admin_destinatarios_nfe_list'))
-        except IntegrityError:
-            db.rollback()
-            flash('CPF/CNPJ já cadastrado para outro destinatário.', 'danger')
-        except Exception as e:
-            db.rollback()
-            flash(f"Erro ao atualizar destinatário: {e}", 'danger')
-
-    return render_template('destinatario/editar.html', destinatario=destinatario, form_data=destinatario)
-
-@app.route('/admin/destinatarios_nfe/delete/<int:destinatario_id>', methods=['POST'])
-def admin_destinatarios_nfe_delete(destinatario_id):
-    db = next(get_db())
-    destinatario = db.query(DestinatarioNFe).get(destinatario_id)
-    if not destinatario:
-        abort(404)
-    try:
-        db.delete(destinatario)
-        db.commit()
-        flash('Destinatário excluído com sucesso!', 'success')
-    except IntegrityError:
-        db.rollback()
-        flash('Não é possível excluir este destinatário pois ele está vinculado a outros registros (ex: NF-e).', 'danger')
-    except Exception as e:
-        db.rollback()
-        flash(f"Erro ao excluir destinatário: {e}", 'danger')
-    return redirect(url_for('admin_destinatarios_nfe_list'))
-
 # --- Rotas para Motivos de Desoneração ICMS ---
+
+# IMPORTANTE: Altere a rota de listagem existente para usar o novo nome de template.
+# Localize a rota abaixo e MODOFIQUE A LINHA do 'return render_template'.
 @app.route('/admin/motivos_desoneracao/list')
 def admin_motivos_desoneracao_list():
     db = next(get_db())
     motivos = db.query(MotivoDesoneracao).order_by(MotivoDesoneracao.codigo).all()
-    return render_template('tributacao/motivos_desoneracao.html', motivos=motivos)
+    return render_template('tributacao/motivos_desoneracao_list.html', motivos=motivos)
 
-# --- Atualização de rota de Clientes para incluir o link para motivos de desoneração ---
-# (Certifique-se de que esta rota já está no seu app.py e a aba 'tab-client-rules' existe no admin_clientes_form.html)
-@app.route('/admin/clientes/edit/<int:cliente_id>', methods=['GET', 'POST'])
-def admin_clientes_edit(cliente_id):
+@app.route('/admin/motivos_desoneracao/add', methods=['GET', 'POST'])
+def admin_motivos_desoneracao_add():
     db = next(get_db())
-    cliente = db.query(Cliente).get(cliente_id)
-    if not cliente:
+    form_data = request.form
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+
+        if not all([codigo, descricao]):
+            flash('Código e Descrição são campos obrigatórios para Motivo de Desoneração.', 'danger')
+            return render_template('tributacao/motivos_desoneracao_form.html', form_data=form_data)
+
+        try:
+            novo_motivo = MotivoDesoneracao(codigo=codigo, descricao=descricao)
+            db.add(novo_motivo)
+            db.commit()
+            flash('Motivo de Desoneração adicionado com sucesso!', 'success')
+            return redirect(url_for('admin_motivos_desoneracao_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código de Motivo de Desoneração já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao adicionar Motivo de Desoneração: {e}", 'danger')
+    return render_template('tributacao/motivos_desoneracao_form.html', form_data=form_data)
+
+@app.route('/admin/motivos_desoneracao/edit/<int:motivo_id>', methods=['GET', 'POST'])
+def admin_motivos_desoneracao_edit(motivo_id):
+    db = next(get_db())
+    motivo = db.query(MotivoDesoneracao).get(motivo_id)
+    if not motivo:
         abort(404)
-    
-    # Dados para as abas
-    regimes_tributarios = db.query(RegimeTributario).all()
-    certificados_existentes = db.query(CertificadoDigital).filter_by(cliente_id=cliente_id).all()
-    produtos_existentes = db.query(Produto).filter_by(cliente_id=cliente_id).all()
-    regras_existentes = db.query(RegraTributacao).filter_by(cliente_id=cliente_id).all()
-
-    # Dados para os dropdowns dentro das abas de Produtos e Regras Tributárias
-    ncms = db.query(Ncm).all()
-    origens_mercadoria = db.query(OrigemMercadoria).all()
-    cfops = db.query(Cfop).all()
-    csts = db.query(Csticms).all()
-    csosns = db.query(Csosnicms).all()
-    
-    # Adicione a busca dos motivos de desoneração para o template
-    motivos_desoneracao = db.query(MotivoDesoneracao).order_by(MotivoDesoneracao.codigo).all()
-
-    form_data = request.form # Para manter dados do formulário em caso de erro
+    form_data = request.form
 
     if request.method == 'POST':
-        # ... (sua lógica de atualização de cliente existente, como já está) ...
-        # Se for um POST, você pode querer recarregar motivos_desoneracao também em caso de erro.
-        flash("Funcionalidade de atualização de cliente acionada.", "info") # Apenas para debug, remova
+        motivo.codigo = request.form.get('codigo')
+        motivo.descricao = request.form.get('descricao')
 
-    # Para GET, use o objeto cliente para pré-preencher o formulário
-    return render_template('admin_clientes_form.html',
-                           cliente=cliente,
-                           regimes_tributarios=regimes_tributarios,
-                           certificados_existentes=certificados_existentes,
-                           produtos_existentes=produtos_existentes, 
-                           regras_existentes=regras_existentes, 
-                           ncms=ncms, origens_mercadoria=origens_mercadoria, 
-                           cfops=cfops, csts=csts, csosns=csosns, 
-                           motivos_desoneracao=motivos_desoneracao, # PASSE PARA O TEMPLATE
-                           form_data=cliente)
+        if not all([motivo.codigo, motivo.descricao]):
+            flash('Código e Descrição são campos obrigatórios para Motivo de Desoneração.', 'danger')
+            return render_template('tributacao/motivos_desoneracao_form.html', motivo=motivo, form_data=form_data)
 
+        try:
+            db.commit()
+            flash('Motivo de Desoneração atualizado com sucesso!', 'success')
+            return redirect(url_for('admin_motivos_desoneracao_list'))
+        except IntegrityError:
+            db.rollback()
+            flash('Código de Motivo de Desoneração já existe.', 'danger')
+        except Exception as e:
+            db.rollback()
+            flash(f"Erro ao atualizar Motivo de Desoneração: {e}", 'danger')
+    return render_template('tributacao/motivos_desoneracao_form.html', motivo=motivo, form_data=motivo)
+
+@app.route('/admin/motivos_desoneracao/delete/<int:motivo_id>', methods=['POST'])
+def admin_motivos_desoneracao_delete(motivo_id):
+    db = next(get_db())
+    motivo = db.query(MotivoDesoneracao).get(motivo_id)
+    if not motivo:
+        abort(404)
+    try:
+        db.delete(motivo)
+        db.commit()
+        flash('Motivo de Desoneração excluído com sucesso!', 'success')
+    except IntegrityError:
+        db.rollback()
+        flash('Não é possível excluir este Motivo de Desoneração pois ele está vinculado a outros registros.', 'danger')
+    except Exception as e:
+        db.rollback()
+        flash(f"Erro ao excluir Motivo de Desoneração: {e}", 'danger')
+    return redirect(url_for('admin_motivos_desoneracao_list'))
 
 # --- Configuração de Execução Local ---
 if __name__ == '__main__':
