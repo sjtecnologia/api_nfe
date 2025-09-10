@@ -1,12 +1,12 @@
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Date, ForeignKey, Numeric, LargeBinary, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship # Adicionado relationship
-from sqlalchemy.dialects.postgresql import JSONB # Mantenha esta linha se usar PostgreSQL
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.dialects.postgresql import JSONB 
 
 from datetime import datetime, date
 import os
-import base64 # Importe para lidar com LargeBinary
-from decimal import Decimal # Importe para lidar com Numeric
+import base64 
+from decimal import Decimal 
 
 Base = declarative_base()
 
@@ -20,15 +20,97 @@ def serialize_sqla_object(obj):
         elif isinstance(value, date):
             data[column.name] = value.isoformat()
         elif isinstance(value, Decimal):
-            data[column.name] = float(value) # Ou str(value) se precisar de precisão total
-        elif isinstance(value, bytes): # Para LargeBinary
+            data[column.name] = float(value) 
+        elif isinstance(value, bytes): 
             try:
                 data[column.name] = base64.b64encode(value).decode('utf-8')
-            except TypeError: # Se value for None ou algo não passível de b64encode
+            except (TypeError, AttributeError): # Captura caso value seja None ou não tenha .encode()
                 data[column.name] = None
         else:
             data[column.name] = value
     return data
+
+# --- NOVAS TABELAS ---
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=True) 
+    
+    # MUDE ESTA LINHA: Remova 'name='is_active''
+    _is_active = Column(Boolean, default=True, nullable=False) # <--- CORREÇÃO AQUI
+
+    created_at = Column(DateTime, default=datetime.now, nullable=False) 
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False) 
+
+    # Relacionamentos
+    roles = relationship('UserRole', back_populates='user')
+    clients = relationship('UserClient', back_populates='user')
+
+    # Flask-Login integration (methods for UserMixin)
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_active(self):
+        return self._is_active 
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        return str(self.id)
+    
+    @is_active.setter
+    def is_active(self, value):
+        self._is_active = value
+
+class Role(Base):
+    __tablename__ = 'roles'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False) 
+    description = Column(Text, nullable=True) 
+
+    # Relacionamentos
+    users = relationship('UserRole', back_populates='role')
+    permissions = relationship('RolePermission', back_populates='role')
+
+class Permission(Base):
+    __tablename__ = 'permissions'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False) 
+    description = Column(Text, nullable=True) 
+
+    # Relacionamentos
+    roles = relationship('RolePermission', back_populates='permission')
+
+class UserRole(Base):
+    __tablename__ = 'user_roles'
+    user_id = Column(Integer, ForeignKey('users.id'), primary_key=True)
+    role_id = Column(Integer, ForeignKey('roles.id'), primary_key=True)
+
+    user = relationship('User', back_populates='roles')
+    role = relationship('Role', back_populates='users')
+
+class RolePermission(Base):
+    __tablename__ = 'role_permissions'
+    role_id = Column(Integer, ForeignKey('roles.id'), primary_key=True)
+    permission_id = Column(Integer, ForeignKey('permissions.id'), primary_key=True)
+
+    role = relationship('Role', back_populates='permissions')
+    permission = relationship('Permission', back_populates='roles')
+
+class UserClient(Base):
+    __tablename__ = 'user_clients'
+    user_id = Column(Integer, ForeignKey('users.id'), primary_key=True)
+    client_id = Column(Integer, ForeignKey('clientes.cliente_id'), primary_key=True)
+
+    user = relationship('User', back_populates='clients')
+    client = relationship('Cliente', back_populates='users_access')
 
 # --- Tabelas de Apoio / Configuração ---
 
@@ -36,7 +118,7 @@ class RegimeTributario(Base):
     __tablename__ = 'regimes_tributarios'
     regime_tributario_id = Column(Integer, primary_key=True)
     nome = Column(String(255), unique=True, nullable=False)
-    descricao = Column(String(255), nullable=True) # script db mostra varchar(255)
+    descricao = Column(String(255), nullable=True)
     
     # Relacionamento de volta para Cliente
     clientes = relationship('Cliente', back_populates='regime_tributario')
@@ -85,18 +167,20 @@ class OrigemMercadoria(Base):
 
 # --- Tabelas Principais de Negócio ---
 
-# --- Modelo para Destinatário da NFe ---
 class DestinatarioNFe(Base):
     __tablename__ = 'destinatarios_nfe'
 
     destinatario_id = Column(Integer, primary_key=True, autoincrement=True)
     
+    # cliente_id é NOT NULL no script db sjtnfe.txt
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False) 
+    
     # Dados Básicos
-    tipo_pessoa = Column(String(1), nullable=False) # 'F' para Física, 'J' para Jurídica
+    tipo_pessoa = Column(String(1), nullable=False)
     nome_razao_social = Column(String(255), nullable=False)
-    cpf_cnpj = Column(String(14), unique=True, nullable=False) # CPF (11) ou CNPJ (14)
-    ie = Column(String(14), nullable=True) # Inscrição Estadual
-    ie_indicador_nfe = Column(String(1), default='C', nullable=False) # 'C', 'I', 'N' (Contribuinte, Isento, Não Contribuinte)
+    cpf_cnpj = Column(String(14), unique=True, nullable=False)
+    ie = Column(String(14), nullable=True) 
+    ie_indicador_nfe = Column(String(1), default='C', nullable=False) 
     email = Column(String(255), nullable=True)
     telefone = Column(String(20), nullable=True)
 
@@ -106,25 +190,30 @@ class DestinatarioNFe(Base):
     complemento = Column(String(255), nullable=True)
     bairro = Column(String(255), nullable=False)
     cep = Column(String(8), nullable=False)
-    codigo_municipio = Column(String(7), nullable=False) # Código IBGE do município
+    codigo_municipio = Column(String(7), nullable=False)
     nome_municipio = Column(String(255), nullable=False)
-    uf = Column(String(2), nullable=False) # Sigla da UF
-    codigo_uf = Column(String(2), nullable=False) # Código IBGE da UF (ex: '35' para SP)
-    codigo_pais = Column(String(4), default='1058', nullable=False) # Padrão: 1058 (Brasil)
+    uf = Column(String(2), nullable=False)
+    codigo_uf = Column(String(2), nullable=False)
+    codigo_pais = Column(String(4), default='1058', nullable=False)
     nome_pais = Column(String(255), default='Brasil', nullable=False)
 
     data_cadastro = Column(DateTime, default=datetime.now, nullable=False)
     data_atualizacao = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+    
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    # Relacionamento com Cliente
+    cliente = relationship('Cliente', back_populates='destinatarios_nfe')
+    created_by_user = relationship('User')
 
     def to_dict(self):
-        # Adaptação do to_dict para incluir todos os campos e tratar datas
         data = {}
         for col in self.__table__.columns:
             value = getattr(self, col.name)
             if isinstance(value, (datetime, date)):
                 data[col.name] = value.isoformat()
             elif isinstance(value, Decimal):
-                data[col.name] = float(value) # Ou str(value) para precisão total
+                data[col.name] = float(value) 
             else:
                 data[col.name] = value
         return data
@@ -132,13 +221,12 @@ class DestinatarioNFe(Base):
     def __repr__(self):
         return f"<DestinatarioNFe(id={self.destinatario_id}, nome='{self.nome_razao_social}', cnpj='{self.cpf_cnpj}')>"
 
-# --- Modelo para Motivos de Desoneração ICMS ---
 class MotivoDesoneracao(Base):
     __tablename__ = 'motivos_desoneracao_icms'
 
     motivo_id = Column(Integer, primary_key=True, autoincrement=True)
-    codigo = Column(String(2), unique=True, nullable=False) # Código numérico do motivo
-    descricao = Column(String(255), nullable=False) # Descrição completa
+    codigo = Column(String(2), unique=True, nullable=False) 
+    descricao = Column(String(255), nullable=False) 
 
     def to_dict(self):
         data = {}
@@ -158,26 +246,28 @@ class MotivoDesoneracao(Base):
 class Cliente(Base):
     __tablename__ = 'clientes'
     cliente_id = Column(Integer, primary_key=True)
-    cnpj = Column(String(18), unique=True, nullable=False) # Ajustado para 18 caracteres conforme o script
-    razao_social = Column(String(255), nullable=True) # Removido NOT NULL conforme script
+    cnpj = Column(String(18), unique=True, nullable=False) 
+    razao_social = Column(String(255), nullable=False) 
     nome_fantasia = Column(String(255), nullable=True)
     inscricao_estadual = Column(String(14), nullable=True)
     inscricao_municipal = Column(String(14), nullable=True)
     regime_tributario_id = Column(Integer, ForeignKey('regimes_tributarios.regime_tributario_id'), nullable=False)
     cnae = Column(String(7), nullable=True)
-    logradouro = Column(String(255), nullable=True) # Removido NOT NULL conforme script
-    numero = Column(String(10), nullable=True) # Removido NOT NULL conforme script
+    logradouro = Column(String(255), nullable=False) 
+    numero = Column(String(10), nullable=False) 
     complemento = Column(String(100), nullable=True)
-    bairro = Column(String(100), nullable=True) # Removido NOT NULL conforme script
-    codigo_municipio = Column(String(7), nullable=True) # Removido NOT NULL conforme script
-    nome_municipio = Column(String(100), nullable=True) # Removido NOT NULL conforme script
-    uf = Column(String(2), nullable=True) # Removido NOT NULL conforme script
-    cep = Column(String(9), nullable=True) # Removido NOT NULL conforme script
+    bairro = Column(String(100), nullable=False) 
+    codigo_municipio = Column(String(7), nullable=False) 
+    nome_municipio = Column(String(100), nullable=False) 
+    uf = Column(String(2), nullable=False) 
+    cep = Column(String(9), nullable=False) 
     email_contato = Column(String(255), nullable=True)
     telefone_contato = Column(String(20), nullable=True)
-    ativo = Column(Boolean, default=True, nullable=True) # Removido NOT NULL conforme script
-    data_cadastro = Column(DateTime, default=datetime.now, nullable=True) # Removido NOT NULL conforme script
-    data_atualizacao = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=True) # Removido NOT NULL conforme script
+    ativo = Column(Boolean, default=True, nullable=False) 
+    data_cadastro = Column(DateTime, default=datetime.now, nullable=False) 
+    data_atualizacao = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False) 
+
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     # Relacionamentos
     regime_tributario = relationship('RegimeTributario', back_populates='clientes')
@@ -185,6 +275,13 @@ class Cliente(Base):
     nfes_emitidas = relationship('NFeEmitidas', back_populates='cliente', cascade='all, delete-orphan')
     produtos = relationship('Produto', back_populates='cliente', cascade='all, delete-orphan')
     regras_tributacao = relationship('RegraTributacao', back_populates='cliente', cascade='all, delete-orphan')
+    destinatarios_nfe = relationship('DestinatarioNFe', back_populates='cliente', cascade='all, delete-orphan')
+
+    # Novo relacionamento para multi-tenancy
+    users_access = relationship('UserClient', back_populates='client', cascade='all, delete-orphan')
+
+    # Relacionamento com o usuário que criou
+    created_by_user = relationship('User')
 
     def to_dict(self):
         return serialize_sqla_object(self)
@@ -196,25 +293,27 @@ class CertificadoDigital(Base):
     __tablename__ = 'certificados_digitais'
     certificado_digital_id = Column(Integer, primary_key=True)
     cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
-    fingerprint = Column(String(64), unique=True, nullable=True) # No script é unique, mas include(cliente_id, fingerprint)
-    conteudo_certificado = Column(LargeBinary, nullable=True) # No script é bytea, mas sem not null
-    senha_certificado = Column(LargeBinary, nullable=True) # No script é bytea, mas sem not null
-    validade_inicio = Column(DateTime, nullable=True) # No script é sem not null
-    validade_fim = Column(DateTime, nullable=True) # No script é sem not null
-    ativo = Column(Boolean, nullable=True) # No script é boolean, mas sem default
-    data_upload = Column(DateTime, nullable=True) # No script é sem not null
-    nome_arquivo_original = Column(String(255), nullable=True)
+    
+    # fingerprint é UNIQUE e NOT NULL no script db sjtnfe.txt
+    fingerprint = Column(String(64), unique=True, nullable=False) 
+    # conteudo_certificado e senha_certificado são bytea NOT NULL no script db sjtnfe.txt
+    conteudo_certificado = Column(LargeBinary, nullable=False) 
+    senha_certificado = Column(LargeBinary, nullable=False) 
+    # validade_inicio, validade_fim, ativo, data_upload são NOT NULL no script db sjtnfe.txt
+    validade_inicio = Column(DateTime, nullable=False) 
+    validade_fim = Column(DateTime, nullable=False) 
+    ativo = Column(Boolean, nullable=False, default=True) 
+    data_upload = Column(DateTime, nullable=False, default=datetime.now) 
+    nome_arquivo_original = Column(String(255), nullable=True) # Este pode ser nullable, pois o script não o marca como NOT NULL
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     __table_args__ = (
-        # A unique constraint no script é (fingerprint) INCLUDE (cliente_id, fingerprint),
-        # mas SQLAlchemy UniqueConstraint não suporta INCLUDE.
-        # Se precisar de unicidade composta por fingerprint e cliente_id, seria:
-        # UniqueConstraint('fingerprint', 'cliente_id', name='fingerprint_cliente_uc'),
-        # Mantenho apenas 'fingerprint' unique como no script para compatibilidade direta.
+        # UniqueConstraint('fingerprint', 'cliente_id', name='fingerprint_cliente_uc'), # Composto, se necessário
+        # Mantendo apenas 'fingerprint' unique como no script para compatibilidade direta.
     )
 
-    # Relacionamento
     cliente = relationship('Cliente', back_populates='certificados')
+    created_by_user = relationship('User')
 
     def to_dict(self):
         return serialize_sqla_object(self)
@@ -226,17 +325,18 @@ class NFeEmitidas(Base):
     __tablename__ = 'nfe_emitidas'
     nfe_emitida_id = Column(Integer, primary_key=True)
     cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
-    tipo_nfe = Column(String(10), nullable=True) # Removido NOT NULL conforme script
-    finalidade_emissao = Column(Integer, nullable=True) # Removido NOT NULL conforme script
-    natureza_operacao = Column(String(255), nullable=True) # Removido NOT NULL conforme script
-    informacoes_adicionais = Column(Text, nullable=True)
-    destinatario_razao_social = Column(String(255), nullable=True)
-    destinatario_cnpj_cpf = Column(String(14), nullable=True)
-    json_nfe = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True) # Removido NOT NULL conforme script
-    data_criacao = Column(DateTime, default=datetime.now, nullable=True) # Removido NOT NULL conforme script
+    # Estas colunas eram NOT NULL no script db sjtnfe.txt
+    tipo_nfe = Column(String(10), nullable=False) 
+    finalidade_emissao = Column(Integer, nullable=False) 
+    natureza_operacao = Column(String(255), nullable=False) 
+    informacoes_adicionais = Column(Text, nullable=True) # No script é Text, que pode ser NULL
+    destinatario_razao_social = Column(String(255), nullable=True) # No script é varchar(255), que pode ser NULL
+    destinatario_cnpj_cpf = Column(String(14), nullable=True) # No script é varchar(14), que pode ser NULL
+    json_nfe = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True) 
+    data_criacao = Column(DateTime, default=datetime.now, nullable=False) 
 
     __table_args__ = (
-        UniqueConstraint('nfe_emitida_id', 'cliente_id', name='nfe_cliente_pk'), # PK composta
+        UniqueConstraint('nfe_emitida_id', 'cliente_id', name='nfe_cliente_pk'), 
     )
 
     # Relacionamento
@@ -244,7 +344,6 @@ class NFeEmitidas(Base):
 
     def to_dict(self):
         data = serialize_sqla_object(self)
-        # JSONB é serializado diretamente, mas se for Text em outro DB, pode precisar de json.loads()
         return data
 
     def __repr__(self):
@@ -253,14 +352,14 @@ class NFeEmitidas(Base):
 class Cfop(Base):
     __tablename__ = 'cfops'
     cfop_id = Column(Integer, primary_key=True)
-    cfop = Column(String(5), unique=True, nullable=True) # Removido NOT NULL conforme script
-    descricao = Column(Text, nullable=True) # Removido NOT NULL conforme script
-    observacao = Column(Text, nullable=True) # Removido NOT NULL conforme script
+    cfop = Column(String(5), unique=True, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    descricao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    observacao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
     tipooperacao = Column(String(50), nullable=True)
     identificadordestinooperacao = Column(String(50), nullable=True)
 
     # Relacionamento
-    regras_tributacao = relationship('RegraTributacao', back_populates='cfop_obj') # Renomeado para cfop_obj para não conflitar com atributo 'cfop'
+    regras_tributacao = relationship('RegraTributacao', back_populates='cfop') 
 
     def to_dict(self):
         return serialize_sqla_object(self)
@@ -271,10 +370,10 @@ class Cfop(Base):
 class Ncm(Base):
     __tablename__ = 'ncms'
     ncm_id = Column(Integer, primary_key=True)
-    codigo = Column(String(20), unique=True, nullable=True) # Removido NOT NULL conforme script
-    descricao = Column(Text, nullable=True) # Removido NOT NULL conforme script
-    data_Fim = Column(DateTime, nullable=True) # No script é timestamp without time zone
-    data_Inicio = Column(DateTime, nullable=True) # No script é timestamp without time zone
+    codigo = Column(String(20), unique=True, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    descricao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    data_Fim = Column(DateTime, nullable=True) 
+    data_Inicio = Column(DateTime, nullable=True)
     tipo_ato = Column(Text, nullable=True)
     numero_ato = Column(String(20), nullable=True)
     ano_ato = Column(String(4), nullable=True)
@@ -294,22 +393,27 @@ class Produto(Base):
     produto_id = Column(Integer, primary_key=True)
     cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
     codigo_interno = Column(String(50), nullable=False)
-    descricao = Column(Text, nullable=True) # Removido NOT NULL conforme script
-    ncm_id = Column(Integer, ForeignKey('ncms.ncm_id'), nullable=True) # Removido NOT NULL conforme script
+    descricao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    ncm_id = Column(Integer, ForeignKey('ncms.ncm_id'), nullable=False) # No script db sjtnfe.txt é NOT NULL
     cest = Column(String(7), nullable=True)
-    unidade_comercial = Column(String(6), nullable=True) # Removido NOT NULL conforme script
-    preco_unitario_padrao = Column(Numeric(15, 2), nullable=True) # Removido NOT NULL conforme script
-    origem_mercadoria = Column(Integer, nullable=True) # Removido NOT NULL conforme script. No script é integer, que assume ser FK para codigo da origens_mercadoria, mas o tipo não indica isso diretamente.
-    tipo_item = Column(String(10), nullable=True) # Removido NOT NULL conforme script
-    ativo = Column(Boolean, default=True, nullable=True) # Removido NOT NULL conforme script
+    unidade_comercial = Column(String(6), nullable=False) # No script db sjtnfe.txt é NOT NULL
+    preco_unitario_padrao = Column(Numeric(15, 2), nullable=False) # No script db sjtnfe.txt é NOT NULL
+    # CORREÇÃO CRÍTICA: origem_mercadoria deve ser um ForeignKey
+    origem_mercadoria = Column(Integer, ForeignKey('origens_mercadoria.origem_id'), nullable=False) # No script db sjtnfe.txt é NOT NULL e FK
+    tipo_item = Column(String(10), nullable=False) # No script db sjtnfe.txt é NOT NULL
+    ativo = Column(Boolean, default=True, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     __table_args__ = (
-        UniqueConstraint('cliente_id', 'codigo_interno', name='codigo_interno_u'), # Ajustado nome
+        UniqueConstraint('cliente_id', 'codigo_interno', name='codigo_interno_u'),
     )
 
     # Relacionamentos
     cliente = relationship('Cliente', back_populates='produtos')
     ncm = relationship('Ncm', back_populates='produtos')
+    # Ajuste: origem agora é uma relação para OrigemMercadoria
+    origem = relationship('OrigemMercadoria')
+    created_by_user = relationship('User')
 
     def to_dict(self):
         return serialize_sqla_object(self)
@@ -320,35 +424,44 @@ class Produto(Base):
 class RegraTributacao(Base):
     __tablename__ = 'regras_tributacao'
     regra_tributacao_id = Column(Integer, primary_key=True)
+    
+    # cliente_id é NOT NULL no script db sjtnfe.txt
     cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
+    
     regime_tributario_id = Column(Integer, ForeignKey('regimes_tributarios.regime_tributario_id'), nullable=False)
     cfop_id = Column(Integer, ForeignKey('cfops.cfop_id'), nullable=False)
     ncm_id = Column(Integer, ForeignKey('ncms.ncm_id'), nullable=False) # No script é not null
     uf_origem = Column(String(2), nullable=True)
     uf_destino = Column(String(2), nullable=True)
     tipo_item = Column(String(10), nullable=True)
-    prioridade = Column(Integer, nullable=True) # No script é integer sem default
-    cst_icms = Column(String(2), nullable=True) # No script é varchar(2)
-    csosn_icms = Column(String(3), nullable=True) # No script é varchar(3)
+    prioridade = Column(Integer, nullable=True, default=100) 
+    cst_icms = Column(String(2), ForeignKey('cst_icms.codigo'), nullable=True) 
+    csosn_icms = Column(String(3), ForeignKey('csosn_icms.codigo'), nullable=True)  
     aliquota_icms = Column(Numeric(5, 2), nullable=True)
     reducao_base_icms = Column(Numeric(5, 2), nullable=True)
     modalidade_bc_icms = Column(Integer, nullable=True)
-    motivo_desoneracao_icms = Column(Integer, nullable=True)
-    cst_pis = Column(String(3), nullable=True) # No script é varchar(3)
+    # CORREÇÃO CRÍTICA: motivo_desoneracao_icms deve ser um ForeignKey
+    motivo_desoneracao_icms = Column(Integer, ForeignKey('motivos_desoneracao_icms.motivo_id'), nullable=True) 
+    cst_pis = Column(String(3), nullable=True)
     aliquota_pis = Column(Numeric(5, 2), nullable=True)
-    cst_cofins = Column(String(3), nullable=True) # No script é varchar(3)
+    cst_cofins = Column(String(3), nullable=True)
     aliquota_cofins = Column(Numeric(5, 2), nullable=True)
-    cst_ipi = Column(String(3), nullable=True) # No script é varchar(3)
+    cst_ipi = Column(String(3), nullable=True)
     aliquota_ipi = Column(Numeric(5, 2), nullable=True)
     descricao_regra = Column(Text, nullable=True)
-    data_criacao = Column(DateTime, nullable=True) # No script é timestamp sem default
-    ativo = Column(Boolean, nullable=True) # No script é boolean sem default
+    data_criacao = Column(DateTime, nullable=False, default=datetime.now) 
+    ativo = Column(Boolean, nullable=False, default=True) 
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
 
     # Relacionamentos
     cliente = relationship('Cliente', back_populates='regras_tributacao')
-    regime_tributario_obj = relationship('RegimeTributario') # Relacionamento para RegimeTributario
-    cfop_obj = relationship('Cfop', back_populates='regras_tributacao') # Renomeado para cfop_obj
-    ncm = relationship('Ncm', back_populates='regras_tributacao')
+    regime_tributario = relationship('RegimeTributario')
+    cfop = relationship('Cfop') # Ajustado para 'cfop' que é o nome da relação em Cfop
+    ncm = relationship('Ncm')
+    cst_icms_obj = relationship('Csticms', foreign_keys='RegraTributacao.cst_icms')
+    csosn_icms_obj = relationship('Csosnicms', foreign_keys='RegraTributacao.csosn_icms')
+    motivo_desoneracao = relationship('MotivoDesoneracao')
+    created_by_user = relationship('User')
 
     def to_dict(self):
         return serialize_sqla_object(self)

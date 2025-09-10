@@ -20,12 +20,58 @@
             --sj-gray-light: #F8F9FA;
             --sj-gray-border: #CED4DA;
         }
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: var(--sj-gray-light); color: var(--sj-gray-dark); }
-        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        body { font-family: Arial, sans-serif; margin: 0; background-color: var(--sj-gray-light); color: var(--sj-gray-dark); }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-top: 20px;} /* Ajustei margin-top aqui */
         h1, h2 { color: var(--sj-teal-dark); }
-        .navbar { background-color: var(--sj-teal-dark); padding: 10px; border-radius: 5px; margin-bottom: 20px; }
-        .navbar a { color: white; text-decoration: none; padding: 8px 15px; display: inline-block; }
-        .navbar a:hover { background-color: var(--sj-teal-medium); border-radius: 3px; }
+
+        /* Estilos da navegação (navbar) */
+        header {
+            background-color: var(--sj-teal-dark);
+            padding: 10px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        header nav {
+            max-width: 900px;
+            margin: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar-links a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            display: inline-block;
+            border-radius: 3px;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .navbar-links a:hover {
+            background-color: var(--sj-teal-medium);
+        }
+        .user-info {
+            color: white;
+            display: flex;
+            align-items: center;
+        }
+        .user-info span {
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        .user-info .btn {
+            background-color: #f8f9fa; /* Branco para o botão de sair */
+            color: var(--sj-teal-dark);
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .user-info .btn:hover {
+            background-color: #e2e6ea;
+        }
+
+        /* Estilos gerais do conteúdo */
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid var(--sj-gray-border); padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
@@ -35,6 +81,10 @@
         .btn-danger:hover { background-color: #c82333; }
         .btn-warning { background-color: #ffc107; color: var(--sj-gray-dark); }
         .btn-warning:hover { background-color: #e0a800; }
+        .btn-secondary { background-color: var(--sj-gray-medium); } /* Adicionei para o botão Cancelar */
+        .btn-secondary:hover { background-color: #5a6268; }
+
+
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input[type="text"],
@@ -51,8 +101,18 @@
             outline: none;
             box-shadow: 0 0 0 0.2rem rgba(0, 162, 156, 0.25);
         }
+        /* Mensagens Flash */
+        .flash-messages {
+            margin-top: 20px;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
         .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; }
         .alert-danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; } /* Novo */
+        .alert-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; } /* Novo */
+        
         /* Estilo para o botão de buscar CEP */
         .btn-sm {
             padding: 5px 10px;
@@ -156,19 +216,58 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="navbar">
-            <a href="{{ url_for('admin_regimes_tributarios_list') }}">Regimes Tributários</a>
-            <a href="{{ url_for('admin_clientes_list') }}">Clientes</a>
-            <a href="{{ url_for('admin_cfops_list') }}">CFOPs</a>
-            <a href="{{ url_for('admin_ncms_list') }}">NCMs</a>
-            <a href="{{ url_for('admin_cst_list') }}">CST ICMS</a>
-            <a href="{{ url_for('admin_csosn_list') }}">CSOSN ICMS</a>
-            <a href="{{ url_for('admin_origens_mercadoria_list') }}">Origem Mercadoria</a>
-            <a href="{{ url_for('admin_motivos_desoneracao_list') }}">Motivos Desoneração</a>
-        </div>
-        {% block content %}{% endblock %}
+    <header>
+        <nav>
+            <div class="navbar-links">
+                {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('home') }}">Home</a>
+                    {% if has_permission('clients.read') %}<a href="{{ url_for('admin_clientes_list') }}">Clientes</a>{% endif %}
+                    {% if has_permission('products.read') %}<a href="{{ url_for('admin_produtos_list') }}">Produtos</a>{% endif %}
+                    {% if has_permission('certificates.read') %}<a href="{{ url_for('admin_certificados_list') }}">Certificados</a>{% endif %}
+                    {% if has_permission('rules.read') %}<a href="{{ url_for('admin_regras_tributacao_list') }}">Regras Tributárias</a>{% endif %}
+                    {% if has_permission('destinatarios_nfe.read') %}<a href="{{ url_for('admin_destinatarios_nfe_list') }}">Destinatários</a>{% endif %}
+                    <a href="{{ url_for('admin_cfops_list') }}">CFOPs</a>
+                    <a href="{{ url_for('admin_ncms_list') }}">NCMs</a>
+                    <a href="{{ url_for('admin_cst_list') }}">CST ICMS</a>
+                    <a href="{{ url_for('admin_csosn_list') }}">CSOSN ICMS</a>
+                    <a href="{{ url_for('admin_origens_mercadoria_list') }}">Origem Mercadoria</a>
+                    <a href="{{ url_for('admin_motivos_desoneracao_list') }}">Motivos Desoneração</a>
+                    <a href="{{ url_for('admin_regimes_tributarios_list') }}">Regimes Tributários</a>
+                    
+                    {# NOVOS LINKS DE ADMINISTRAÇÃO DE USUÁRIOS #}
+                    {% if has_permission('users.read') %}<a href="{{ url_for('admin_users_list') }}">Usuários</a>{% endif %}
+                    {% if has_permission('roles.read') %}<a href="{{ url_for('admin_roles_list') }}">Papéis</a>{% endif %}
+                {% endif %}
+            </div>
+            <div class="user-info">
+                {% if current_user.is_authenticated %}
+                    <span>Olá, {{ current_user.username }}!</span>
+                    <a href="{{ url_for('logout') }}" class="btn">Sair</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="btn">Login</a>
+                {% endif %}
+            </div>
+        </nav>
+    </header>
+
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
     </div>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; {{ now.year }} SJT NFe Manager. Todos os direitos reservados.</p>
+    </footer>
+
     {# NOVO BLOCO: ADICIONE ISSO AO SEU base.html, BEM AQUI! #}
     {% block scripts %}{% endblock %}
 </body>
