@@ -1,0 +1,15 @@
+{# Este template é para ser carregado no MODAL de adição de destinatário. #}
+{# Ele contém a tag <form> e o botão de submit, pois o modal JS espera isso. #}
+
+<form id="destinatarioModalForm" action="{{ url_for('admin_destinatarios_nfe_add', modal=true) }}" method="post">
+    {# Input oculto para o cliente_id. Este campo é sempre enviado e contém o ID do cliente. #}
+    <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
+
+    {# Inclui os campos do formulário #}
+    {% include 'admin_destinatario_form_fields.html' %}
+    
+    {# Botão de submit para o modal #}
+    <div class="mt-3 text-end"> {# Adicionado text-end para alinhar à direita dentro do modal #}
+        <button type="submit" class="btn btn-success">Salvar Destinatário</button>
+    </div>
+</form>

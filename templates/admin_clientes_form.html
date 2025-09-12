@@ -1,505 +1,407 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}{% if cliente %}Editar Cliente{% else %}Novo Cliente{% endif %}{% endblock %}
+{% block title %}
+    {% if cliente.cliente_id %}Editar Cliente: {{ cliente.razao_social }}{% else %}Novo Cliente{% endif %}
+{% endblock %}
 
 {% block content %}
-    <h1>{% if cliente %}Editando Cliente ({{ cliente.razao_social }}){% else %}Novo Cliente{% endif %}</h1>
+    <h1 class="mb-4">
+        {% if cliente.cliente_id %}Editar Cliente: {{ cliente.razao_social }}{% else %}Novo Cliente{% endif %}
+    </h1>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    {# Adicionado enctype="multipart/form-data" para permitir upload de arquivos #}
-    <form method="POST" enctype="multipart/form-data">
-        {# ESTRUTURA DE ABAS AQUI #}
-        <div class="tabs">
-            <button type="button" class="tab-button active" data-tab-id="tab-client-details">Dados do Cliente</button>
-            <button type="button" class="tab-button" data-tab-id="tab-client-certificates">Certificados</button>
-            {% if cliente %} {# Abas de Produtos e Regras só aparecem se o cliente já existe (modo edição) #}
-                <button type="button" class="tab-button" data-tab-id="tab-client-products">Produtos</button>
-                <button type="button" class="tab-button" data-tab-id="tab-client-rules">Regras Tributárias</button>
-            {% endif %}
-        </div>
-
-        {# CONTEÚDO DA ABA: DADOS DO CLIENTE #}
-        <div id="tab-client-details" class="tab-content active">
-            <fieldset>
-                <legend>Dados Cadastrais do Cliente</legend>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="razao_social">Razão Social:</label>
-                        <input type="text" id="razao_social" name="razao_social" placeholder="Nome Completo ou Razão Social" value="{{ cliente.razao_social if cliente else (form_data.razao_social if form_data else '') }}" required>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="nome_fantasia">Nome Fantasia (Opcional):</label>
-                        <input type="text" id="nome_fantasia" name="nome_fantasia" placeholder="Nome Fantasia" value="{{ cliente.nome_fantasia if cliente else (form_data.nome_fantasia if form_data else '') }}">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="cnpj">CNPJ:</label>
-                        <input type="text" id="cnpj" name="cnpj" placeholder="Ex: 00.000.000/0001-00" value="{{ cliente.cnpj if cliente else (form_data.cnpj if form_data else '') }}" maxlength="18" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="inscricao_estadual">Inscrição Estadual (Opcional):</label>
-                        <input type="text" id="inscricao_estadual" name="inscricao_estadual" placeholder="Inscrição Estadual (Ex: Isento)" value="{{ cliente.inscricao_estadual if cliente else (form_data.inscricao_estadual if form_data else '') }}">
-                    </div>
-                    <div class="form-group">
-                        <label for="inscricao_municipal">Inscrição Municipal (Opcional):</label>
-                        <input type="text" id="inscricao_municipal" name="inscricao_municipal" placeholder="Inscrição Municipal" value="{{ cliente.inscricao_municipal if cliente else (form_data.inscricao_municipal if form_data else '') }}">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="regime_tributario_id">Regime Tributário:</label>
-                        <select id="regime_tributario_id" name="regime_tributario_id" required>
-                            <option value="">Selecione o Regime</option>
-                            {% for regime in regimes_tributarios %}
-                                <option value="{{ regime.regime_tributario_id }}"
-                                    {% if cliente and cliente.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}
-                                    {% if form_data and form_data.regime_tributario_id|string == regime.regime_tributario_id|string %}selected{% endif %}>
-                                    {{ regime.nome }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="cnae">CNAE (Opcional):</label>
-                        <input type="text" id="cnae" name="cnae" placeholder="CNAE principal" value="{{ cliente.cnae if cliente else (form_data.cnae if form_data else '') }}">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="email_contato">E-mail de Contato:</label>
-                        <input type="email" id="email_contato" name="email_contato" placeholder="email@exemplo.com" value="{{ cliente.email_contato if cliente else (form_data.email_contato if form_data else '') }}">
-                    </div>
-                    <div class="form-group">
-                        <label for="telefone_contato">Telefone de Contato (com DDD):</label>
-                        <input type="tel" id="telefone_contato" name="telefone_contato" placeholder="(XX) XXXXX-XXXX" value="{{ cliente.telefone_contato if cliente else (form_data.telefone_contato if form_data else '') }}" maxlength="15">
-                    </div>
-                </div>
-                
-                <div class="form-group inline">
-                    <input type="checkbox" id="ativo" name="ativo" {% if cliente and cliente.ativo %}checked{% endif %} {% if form_data and form_data.ativo %}checked{% endif %}>
-                    <label for="ativo">Cliente Ativo</label>
-                </div>
-            </fieldset>
-
-            <fieldset>
-                <legend>Endereço do Cliente</legend>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="cep">CEP:</label>
-                        <input type="text" id="cep" name="cep" placeholder="XXXXX-XXX" value="{{ cliente.cep if cliente else (form_data.cep if form_data else '') }}" maxlength="9" required>
-                        <button type="button" id="buscarCepBtn" class="btn btn-sm" style="margin-left: 10px;">Buscar CEP</button>
-                    </div>
-                    <div class="form-group">
-                        <label for="codigo_municipio">Código IBGE Município:</label>
-                        <input type="text" id="codigo_municipio" name="codigo_municipio" placeholder="Ex: 3550308 (São Paulo)" value="{{ cliente.codigo_municipio if cliente else (form_data.codigo_municipio if form_data else '') }}" required readonly>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="uf">UF:</label>
-                        <input type="text" id="uf" name="uf" placeholder="Ex: SP" value="{{ cliente.uf if cliente else (form_data.uf if form_data else '') }}" required readonly>
-                    </div>
-                    <div class="form-group">
-                        <label for="nome_municipio">Nome do Município:</label>
-                        <input type="text" id="nome_municipio" name="nome_municipio" placeholder="Ex: São Paulo" value="{{ cliente.nome_municipio if cliente else (form_data.nome_municipio if form_data else '') }}" required readonly>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="logradouro">Logradouro:</label>
-                        <input type="text" id="logradouro" name="logradouro" placeholder="Ex: Av. Paulista" value="{{ cliente.logradouro if cliente else (form_data.logradouro if form_data else '') }}" required readonly>
-                    </div>
-                    <div class="form-group" style="flex: 0.3;">
-                        <label for="numero">Número:</label>
-                        <input type="text" id="numero" name="numero" placeholder="Ex: 1000" value="{{ cliente.numero if cliente else (form_data.numero if form_data else '') }}" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="complemento">Complemento (Opcional):</label>
-                    <input type="text" id="complemento" name="complemento" placeholder="Ex: Apto 101, Bloco B" value="{{ cliente.complemento if cliente else (form_data.complemento if form_data else '') }}">
-                </div>
-
-                <div class="form-group">
-                    <label for="bairro">Bairro:</label>
-                    <input type="text" id="bairro" name="bairro" placeholder="Ex: Bela Vista" value="{{ cliente.bairro if cliente else (form_data.bairro if form_data else '') }}" required readonly>
-                </div>
-            </fieldset>
-        </div>
-
-        {# CONTEÚDO DA ABA: CERTIFICADOS #}
-        <div id="tab-client-certificates" class="tab-content">
-            <fieldset>
-                <legend>Certificados Digitais</legend>
-                {% if cliente %} {# Apenas mostra certificados existentes se estiver editando um cliente #}
-                    <h3>Certificados Existentes</h3>
-                    {% if certificados_existentes %}
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col">ID</th>
-                                    <th scope="col">Nome do Arquivo</th>
-                                    <th scope="col">Validade Fim</th>
-                                    <th scope="col">Ativo</th>
-                                    <th scope="col">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for cert_existente in certificados_existentes %}
-                                <tr>
-                                    <td>{{ cert_existente.certificado_digital_id }}</td>
-                                    <td>{{ cert_existente.nome_arquivo_original if cert_existente.nome_arquivo_original else 'Não Informado' }}</td>
-                                    <td>{{ cert_existente.validade_fim.strftime('%d/%m/%Y') if cert_existente.validade_fim else 'N/A' }}</td>
-                                    <td>{{ 'Sim' if cert_existente.ativo else 'Não' }}</td>
-                                    <td>
-                                        {# Manteremos as rotas separadas para editar/excluir um certificado existente #}
-                                        <a href="{{ url_for('admin_certificados_edit', certificado_digital_id=cert_existente.certificado_digital_id) }}" class="btn btn-warning btn-sm">Editar</a>
-                                        <form action="{{ url_for('admin_certificados_delete', certificado_digital_id=cert_existente.certificado_digital_id) }}" method="post" style="display:inline;">
-                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir este certificado?');">Excluir</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        <br>
-                    {% else %}
-                        <p>Nenhum certificado digital cadastrado para este cliente.</p>
-                    {% endif %}
+    <div class="card">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="clienteTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="cliente-tab" data-bs-toggle="tab" data-bs-target="#cliente-pane" type="button" role="tab" aria-controls="cliente-pane" aria-selected="true">Dados do Cliente</button>
+                </li>
+                {% if cliente.cliente_id %} {# Apenas mostra as abas de associação se for edição de cliente existente #}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos-pane" type="button" role="tab" aria-controls="produtos-pane" aria-selected="false">Produtos</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="certificados-tab" data-bs-toggle="tab" data-bs-target="#certificados-pane" type="button" role="tab" aria-controls="certificados-pane" aria-selected="false">Certificados</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="regras-tab" data-bs-toggle="tab" data-bs-target="#regras-pane" type="button" role="tab" aria-controls="regras-pane" aria-selected="false">Regras Tributárias</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="destinatarios-tab" data-bs-toggle="tab" data-bs-target="#destinatarios-pane" type="button" role="tab" aria-controls="destinatarios-pane" aria-selected="false">Destinatários NF-e</button>
+                </li>
                 {% endif %}
-
-                <h3>Adicionar Novo Certificado</h3>
-                <p><small>Preencha os campos abaixo para adicionar um novo certificado digital a este cliente.</small></p>
-
-                <div class="form-group">
-                    <label for="conteudo_certificado_file">Arquivo do Certificado (.PFX/.PEM):</label>
-                    <input type="file" id="conteudo_certificado_file" name="conteudo_certificado_file">
-                    <small>Selecione o arquivo .pfx ou .pem. **Apenas novos certificados podem ser enviados aqui.**</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="cert_nome_arquivo_original">Nome Descritivo do Arquivo (Opcional):</label>
-                    <input type="text" id="cert_nome_arquivo_original" name="cert_nome_arquivo_original" placeholder="Ex: Meu Certificado PJ 2024" value="{{ cert_data.nome_arquivo_original if cert_data else '' }}">
-                    <small>Será usado para identificar o arquivo. Se deixado em branco, será o nome do arquivo enviado.</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="cert_senha_certificado">Senha do Certificado:</label>
-                    <input type="password" id="cert_senha_certificado" name="cert_senha_certificado" placeholder="********" value="{{ cert_data.senha_certificado if cert_data else '' }}">
-                    <small>Campo obrigatório se um arquivo de certificado for selecionado.</small>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="cert_validade_inicio">Data de Validade Início:</label>
-                        <input type="date" id="cert_validade_inicio" name="cert_validade_inicio" value="{{ cert_data.validade_inicio if cert_data else '' }}">
-                        <small>Formato: AAAA-MM-DD. Campo obrigatório se um arquivo de certificado for selecionado.</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="cert_validade_fim">Data de Validade Fim:</label>
-                        <input type="date" id="cert_validade_fim" name="cert_validade_fim" value="{{ cert_data.validade_fim if cert_data else '' }}">
-                        <small>Formato: AAAA-MM-DD. Campo obrigatório se um arquivo de certificado for selecionado.</small>
-                    </div>
-                </div>
-
-                <div class="form-group inline">
-                    <input type="checkbox" id="cert_ativo" name="cert_ativo" {% if cert_data and cert_data.ativo %}checked{% endif %} checked> {# Novo certificado geralmente começa ativo #}
-                    <label for="cert_ativo">Certificado Ativo</label>
-                </div>
-                
-            </fieldset>
+            </ul>
         </div>
-
-        {# CONTEÚDO DA ABA: PRODUTOS #}
-        {% if cliente %} {# Esta aba só aparece em modo de edição #}
-            <div id="tab-client-products" class="tab-content">
-                <fieldset>
-                    <legend>Produtos do Cliente</legend>
-                    <h3>Produtos Cadastrados</h3>
-                    {% if produtos_existentes %}
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col">ID</th>
-                                    <th scope="col">Cód. Interno</th>
-                                    <th scope="col">Descrição</th>
-                                    <th scope="col">NCM</th>
-                                    <th scope="col">Preço Unit.</th>
-                                    <th scope="col">Ativo</th>
-                                    <th scope="col">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for produto in produtos_existentes %}
-                                <tr>
-                                    <td>{{ produto.produto_id }}</td>
-                                    <td>{{ produto.codigo_interno }}</td>
-                                    <td>{{ produto.descricao }}</td>
-                                    <td>{{ produto.ncm_id if produto.ncm_id else 'N/A' }}</td> {# Para exibir o código NCM, precisaria do objeto NCM #}
-                                    <td>{{ "%.2f"|format(produto.preco_unitario_padrao) }}</td>
-                                    <td>{{ 'Sim' if produto.ativo else 'Não' }}</td>
-                                    <td>
-                                        {# Manteremos as rotas separadas para editar/excluir um produto existente #}
-                                        {# PASSANDO O CLIENTE_ID PARA RETORNAR À TELA CORRETA #}
-                                        <a href="{{ url_for('admin_produtos_edit', produto_id=produto.produto_id, cliente_id=cliente.cliente_id) }}" class="btn btn-warning btn-sm">Editar</a>
-                                        <form action="{{ url_for('admin_produtos_delete', produto_id=produto.produto_id) }}?cliente_id={{ cliente.cliente_id }}" method="post" style="display:inline;">
-                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir este produto?');">Excluir</button>
-                                        </form>
-                                    </td>
-                                </tr>
+        <div class="card-body">
+            <div class="tab-content" id="clienteTabsContent">
+                <!-- Aba: Dados do Cliente -->
+                <div class="tab-pane fade show active" id="cliente-pane" role="tabpanel" aria-labelledby="cliente-tab" tabindex="0">
+                    <form action="{{ url_for('admin_clientes_edit', cliente_id=cliente.cliente_id) if cliente.cliente_id else url_for('admin_clientes_add') }}" method="post" enctype="multipart/form-data">
+                        {# Campos do Cliente #}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="razao_social" class="form-label">Razão Social</label>
+                                <input type="text" class="form-control" id="razao_social" name="razao_social" value="{{ form_data.razao_social | default('') }}" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="nome_fantasia" class="form-label">Nome Fantasia</label>
+                                <input type="text" class="form-control" id="nome_fantasia" name="nome_fantasia" value="{{ form_data.nome_fantasia | default('') }}">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="cnpj" class="form-label">CNPJ</label>
+                                <input type="text" class="form-control" id="cnpj" name="cnpj" value="{{ form_data.cnpj | default('') }}" placeholder="00.000.000/0000-00" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="inscricao_estadual" class="form-label">Inscrição Estadual</label>
+                                <input type="text" class="form-control" id="inscricao_estadual" name="inscricao_estadual" value="{{ form_data.inscricao_estadual | default('') }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="inscricao_municipal" class="form-label">Inscrição Municipal</label>
+                                <input type="text" class="form-control" id="inscricao_municipal" name="inscricao_municipal" value="{{ form_data.inscricao_municipal | default('') }}">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="regime_tributario_id" class="form-label">Regime Tributário</label>
+                            <select class="form-select" id="regime_tributario_id" name="regime_tributario_id" required>
+                                <option value="">Selecione...</option>
+                                {% for regime in regimes_tributarios %}
+                                    <option value="{{ regime.regime_tributario_id }}" {% if form_data.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}>{{ regime.nome }}</option>
                                 {% endfor %}
-                            </tbody>
-                        </table>
-                        <br>
-                    {% else %}
-                        <p>Nenhum produto cadastrado para este cliente.</p>
-                    {% endif %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="cnae" class="form-label">CNAE</label>
+                            <input type="text" class="form-control" id="cnae" name="cnae" value="{{ form_data.cnae | default('') }}">
+                        </div>
 
-                    <h3>Adicionar Novo Produto</h3>
-                    <p><small>Preencha os campos abaixo para adicionar um novo produto a este cliente.</small></p>
+                        <fieldset class="mb-3">
+                            <legend>Endereço</legend>
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="cep" class="form-label">CEP</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="cep" name="cep" value="{{ form_data.cep | default('') }}" placeholder="00000-000" required>
+                                        <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep">Buscar</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-7 mb-3">
+                                    <label for="logradouro" class="form-label">Logradouro</label>
+                                    <input type="text" class="form-control" id="logradouro" name="logradouro" value="{{ form_data.logradouro | default('') }}" required>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <label for="numero" class="form-label">Número</label>
+                                    <input type="text" class="form-control" id="numero" name="numero" value="{{ form_data.numero | default('') }}" required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="complemento" class="form-label">Complemento</label>
+                                    <input type="text" class="form-control" id="complemento" name="complemento" value="{{ form_data.complemento | default('') }}">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="bairro" class="form-label">Bairro</label>
+                                    <input type="text" class="form-control" id="bairro" name="bairro" value="{{ form_data.bairro | default('') }}" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="nome_municipio" class="form-label">Município</label>
+                                    <input type="text" class="form-control" id="nome_municipio" name="nome_municipio" value="{{ form_data.nome_municipio | default('') }}" required>
+                                    <input type="hidden" id="codigo_municipio" name="codigo_municipio" value="{{ form_data.codigo_municipio | default('') }}">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="uf" class="form-label">UF</label>
+                                    <input type="text" class="form-control" id="uf" name="uf" value="{{ form_data.uf | default('') }}" required>
+                                </div>
+                            </div>
+                        </fieldset>
 
-                    {# Formulário para Adicionar Produto #}
-                    {# ATENÇÃO: Este é apenas um formulário de *exibição*. A submissão dele será via AJAX ou através das rotas 'admin_produtos_add' #}
-                    {# Por simplicidade, os links "Adicionar" na aba apenas redirecionam para a tela de produto específica. #}
-                    <div class="button-group" style="text-align: left;">
-                        {# PASSANDO O CLIENTE_ID PARA A TELA DE ADIÇÃO #}
-                        <a href="{{ url_for('admin_produtos_add', cliente_id=cliente.cliente_id) }}" class="btn">Adicionar Produto</a>
-                    </div>
-                </fieldset>
+                        <fieldset class="mb-3">
+                            <legend>Contato</legend>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="email_contato" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="email_contato" name="email_contato" value="{{ form_data.email_contato | default('') }}">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="telefone_contato" class="form-label">Telefone</label>
+                                    <input type="text" class="form-control" id="telefone_contato" name="telefone_contato" value="{{ form_data.telefone_contato | default('') }}" placeholder="(00) 0000-0000">
+                                </div>
+                            </div>
+                        </fieldset>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
+                            <label class="form-check-label" for="ativo">
+                                Cliente Ativo
+                            </label>
+                        </div>
+                        
+                        {# Campos para upload de certificado no CADASTRO de Cliente, para o PRIMEIRO certificado #}
+                        {# No EDITAR, o upload de novo certificado será na aba de certificados #}
+                        {% if not cliente.cliente_id %}
+                        <fieldset class="mb-3">
+                            <legend>Certificado Digital (Opcional - Primeiro Certificado)</legend>
+                            <div class="mb-3">
+                                <label for="conteudo_certificado_file" class="form-label">Arquivo do Certificado (.pfx)</label>
+                                <input class="form-control" type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" accept=".pfx">
+                            </div>
+                            <div class="mb-3">
+                                <label for="cert_senha_certificado" class="form-label">Senha do Certificado</label>
+                                <input type="password" class="form-control" id="cert_senha_certificado" name="cert_senha_certificado">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="cert_ativo" name="cert_ativo" checked>
+                                <label class="form-check-label" for="cert_ativo">
+                                    Certificado Ativo (ao fazer upload)
+                                </label>
+                            </div>
+                            <input type="hidden" name="cert_nome_arquivo_original" value="Upload Inicial">
+                            {# Validade será extraída do arquivo #}
+                        </fieldset>
+                        {% endif %}
+
+                        <button type="submit" class="btn btn-success">Salvar Cliente</button>
+                        <a href="{{ url_for('admin_clientes_list') }}" class="btn btn-secondary">Cancelar</a>
+                    </form>
+                </div>
+
+                <!-- Aba: Produtos -->
+                {% if cliente.cliente_id %}
+                <div class="tab-pane fade" id="produtos-pane" role="tabpanel" aria-labelledby="produtos-tab" tabindex="0">
+                    <h5 class="mt-3">Produtos Associados</h5>
+                    <p>Gerencie os produtos específicos deste cliente.</p>
+                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin_produtos_add', cliente_id=cliente.cliente_id, modal=true) }}">
+                        Adicionar Novo Produto
+                    </button>
+                    
+                    {% include 'admin_produtos_list_partial.html' %}
+                </div>
+
+                <!-- Aba: Certificados -->
+                <div class="tab-pane fade" id="certificados-pane" role="tabpanel" aria-labelledby="certificados-tab" tabindex="0">
+                    <h5 class="mt-3">Certificados Associados</h5>
+                    <p>Gerencie os certificados digitais deste cliente.</p>
+                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin_certificados_add', cliente_id=cliente.cliente_id, modal=true) }}">
+                        Adicionar Novo Certificado
+                    </button>
+                    
+                    {# Formulário de Upload Rápido de Certificado - Pode ser feito no próprio modal #}
+                    {# Para simplificar, vou remover o "Upload Rápido" duplicado aqui, pois o modal já faz isso #}
+                    {# Se precisar, pode ser re-adicionado com AJAX POST direto para admin_clientes_edit #}
+
+                    {% include 'admin_certificados_list_partial.html' %}
+                </div>
+
+                <!-- Aba: Regras Tributárias -->
+                <div class="tab-pane fade" id="regras-pane" role="tabpanel" aria-labelledby="regras-tab" tabindex="0">
+                    <h5 class="mt-3">Regras Tributárias Associadas</h5>
+                    <p>Configure as regras tributárias específicas para este cliente.</p>
+                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Nova Regra Tributária" data-modal-url="{{ url_for('admin_regras_tributacao_add', cliente_id=cliente.cliente_id, modal=true) }}">
+                        Adicionar Nova Regra
+                    </button>
+                    
+                    {% include 'admin_regras_tributacao_list_partial.html' %}
+                </div>
+
+                <!-- Aba: Destinatários NF-e -->
+                <div class="tab-pane fade" id="destinatarios-pane" role="tabpanel" aria-labelledby="destinatarios-tab" tabindex="0">
+                    <h5 class="mt-3">Destinatários NF-e Associados</h5>
+                    <p>Gerencie os destinatários de NF-e para este cliente.</p>
+                    {# Por enquanto, manter o link para o formulário de destinatário, mas pode ser convertido para modal também #}
+                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary btn-sm mb-3">Adicionar Novo Destinatário</a>
+                    
+                    {% include 'admin_destinatario_list.html' %}
+                </div>
+                {% endif %}
             </div>
-        {% endif %}
-
-        {# CONTEÚDO DA ABA: REGRAS TRIBUTÁRIAS #}
-        {% if cliente %} {# Esta aba só aparece em modo de edição #}
-            <div id="tab-client-rules" class="tab-content">
-                <fieldset>
-                    <legend>Regras de Tributação do Cliente</legend>
-                    <h3>Regras Cadastradas</h3>
-                    {% if regras_existentes %}
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col">ID</th>
-                                    <th scope="col">Regime</th>
-                                    <th scope="col">CFOP</th>
-                                    <th scope="col">NCM</th>
-                                    <th scope="col">Descrição</th>
-                                    <th scope="col">Ativo</th>
-                                    <th scope="col">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for regra in regras_existentes %}
-                                <tr>
-                                    <td>{{ regra.regra_tributacao_id }}</td>
-                                    <td>{{ regra.regime_tributario_id }}</td> {# Exibir nome do regime #}
-                                    <td>{{ regra.cfop_id }}</td> {# Exibir código CFOP #}
-                                    <td>{{ regra.ncm_id if regra.ncm_id else 'N/A' }}</td> {# Exibir código NCM #}
-                                    <td>{{ regra.descricao_regra if regra.descricao_regra else 'N/A' }}</td>
-                                    <td>{{ 'Sim' if regra.ativo else 'Não' }}</td>
-                                    <td>
-                                        {# Manteremos as rotas separadas para editar/excluir uma regra existente #}
-                                        {# PASSANDO O CLIENTE_ID PARA RETORNAR À TELA CORRETA #}
-                                        <a href="{{ url_for('admin_regras_tributacao_edit', regra_tributacao_id=regra.regra_tributacao_id, cliente_id=cliente.cliente_id) }}" class="btn btn-warning btn-sm">Editar</a>
-                                        <form action="{{ url_for('admin_regras_tributacao_delete', regra_tributacao_id=regra.regra_tributacao_id) }}?cliente_id={{ cliente.cliente_id }}" method="post" style="display:inline;">
-                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir esta regra?');">Excluir</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        <br>
-                    {% else %}
-                        <p>Nenhuma regra de tributação cadastrada para este cliente.</p>
-                    {% endif %}
-
-                    <h3>Adicionar Nova Regra de Tributação</h3>
-                    <p><small>Preencha os campos abaixo para adicionar uma nova regra de tributação a este cliente.</small></p>
-                    <div class="button-group" style="text-align: left;">
-                        {# PASSANDO O CLIENTE_ID PARA A TELA DE ADIÇÃO #}
-                        <a href="{{ url_for('admin_regras_tributacao_add', cliente_id=cliente.cliente_id) }}" class="btn">Adicionar Regra</a>
-                    </div>
-                </fieldset>
-            </div>
-        {% endif %}
-        
-        <div class="button-group">
-            <button type="submit" class="btn">Salvar Cliente e Configurações</button>
-            <a href="{{ url_for('admin_clientes_list') }}" class="btn btn-secondary">Cancelar</a>
         </div>
-    </form>
+    </div>
 
-    {# Overlay de carregamento para o CEP #}
-    <div id="loadingOverlay" class="loading-overlay hidden">
+    {# Overlay de carregamento para a busca de CEP #}
+    <div class="loading-overlay hidden" id="loadingOverlay">
         <div class="spinner"></div>
-        <p>Buscando endereço...</p>
+        <p class="mt-3">Buscando CEP...</p>
+    </div>
+
+    {# MODAL GENÉRICO PARA ADIÇÃO DE PRODUTOS/CERTIFICADOS/REGRAS #}
+    <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addModalLabel"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- O conteúdo do formulário será carregado aqui via AJAX -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <!-- O botão de submit será parte do formulário carregado dinamicamente -->
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    $(document).ready(function(){
-        // Lógica para ativar abas baseada no hash da URL ao carregar a página
-        const urlHash = window.location.hash.substring(1); // Pega o hash sem o '#'
-        if (urlHash) {
-            // Desativa todas as abas e conteúdos
-            $('.tab-button').removeClass('active');
-            $('.tab-content').removeClass('active');
+    // Ativa a aba correta se houver um fragmento de URL (ancora)
+    document.addEventListener('DOMContentLoaded', function() {
+        const hash = window.location.hash;
+        if (hash) {
+            let tabId = hash.substring(1); // Remove o '#'
+            // Mapeia fragmentos para IDs de abas/botões de abas (com o "-pane" adicionado)
+            if (tabId === 'produtos') tabId = 'produtos-tab';
+            else if (tabId === 'certificados') tabId = 'certificados-tab';
+            else if (tabId === 'regras') tabId = 'regras-tab';
+            else if (tabId === 'destinatarios') tabId = 'destinatarios-tab';
+            else return; // Não faz nada se o fragmento não for reconhecido
 
-            // Ativa a aba e o conteúdo correspondente ao hash da URL
-            $(`.tab-button[data-tab-id="${urlHash}"]`).addClass('active');
-            $(`#${urlHash}`).addClass('active');
-        }
-
-        // Funcionalidade das Abas (já existente, para cliques)
-        $('.tab-button').on('click', function() {
-            $('.tab-button').removeClass('active');
-            $(this).addClass('active');
-            $('.tab-content').removeClass('active');
-            $(`#${$(this).data('tab-id')}`).addClass('active');
-        });
-
-        // Inicializa as máscaras com jQuery Mask Plugin
-        $('#cnpj').mask('00.000.000/0000-00', {reverse: true}); // CNPJ
-        
-        // Máscara para Telefone (com 8 ou 9 dígitos), usa a versão dinâmica
-        var spOptions = {
-            onKeyPress: function(val, e, field, options) {
-                var masks = ['(00) 0000-0000', '(00) 00000-0000'];
-                var currentValue = cleanDigits(val); // Use cleanDigits para o valor puro
-                var mask = (currentValue.length > 10) ? masks[1] : masks[0];
-                $(field).mask(mask, options);
+            const tabButton = document.getElementById(tabId);
+            if (tabButton) {
+                const tab = new bootstrap.Tab(tabButton);
+                tab.show();
             }
-        };
-        $('#telefone_contato').mask('(00) 0000-0000', spOptions); // Aplica máscara inicial de 8 dígitos
-
-        $('#cep').mask('00000-000'); // CEP
-
-        // --- Funções Auxiliares (mantidas e adaptadas) ---
-        function cleanDigits(value) {
-            return value.replace(/\D/g, ''); // Remove tudo que não for dígito
-        }
-
-        const cepInput = $('#cep');
-        const buscarCepBtn = $('#buscarCepBtn');
-        const logradouroInput = $('#logradouro');
-        const bairroInput = $('#bairro');
-        const cidadeInput = $('#nome_municipio'); // Use o ID correto do campo
-        const estadoInput = $('#uf'); // Use o ID correto do campo
-        const codigoMunicipioInput = $('#codigo_municipio');
-        const numeroInput = $('#numero');
-        const loadingOverlay = $('#loadingOverlay');
-
-        function showLoading() { loadingOverlay.removeClass('hidden'); }
-        function hideLoading() { loadingOverlay.addClass('hidden'); }
-
-        function clearAddressFields() {
-            logradouroInput.val('');
-            bairroInput.val('');
-            cidadeInput.val('');
-            estadoInput.val('');
-            codigoMunicipioInput.val('');
-            // Não limpa o número, pois ele é preenchido manualmente
-        }
-
-        function enableAddressFields() {
-            logradouroInput.prop('readonly', false);
-            bairroInput.prop('readonly', false);
-            cidadeInput.prop('readonly', false);
-            estadoInput.prop('readonly', false);
-            codigoMunicipioInput.prop('readonly', false);
-            numeroInput.prop('readonly', false);
-        }
-
-        function disableAddressFields() {
-            logradouroInput.prop('readonly', true);
-            bairroInput.prop('readonly', true);
-            cidadeInput.prop('readonly', true);
-            estadoInput.prop('readonly', true);
-            codigoMunicipioInput.prop('readonly', true);
-            numeroInput.prop('readonly', false); // O número sempre é editável
-        }
-
-        // --- Busca de Endereço pelo CEP (mantida e adaptada) ---
-        async function searchCep() {
-            const cep = cleanDigits(cepInput.val());
-
-            if (cep.length !== 8) {
-                clearAddressFields();
-                enableAddressFields();
-                if (cep.length > 0) {
-                    alert('O CEP deve conter 8 dígitos.');
-                }
-                return;
-            }
-
-            showLoading();
-            clearAddressFields();
-            disableAddressFields();
-
-            try {
-                const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-                const data = await response.json();
-
-                if (!data.erro) {
-                    logradouroInput.val(data.logradouro);
-                    bairroInput.val(data.bairro);
-                    cidadeInput.val(data.localidade);
-                    estadoInput.val(data.uf);
-                    codigoMunicipioInput.val(data.ibge);
-                    numeroInput.focus();
-                    enableAddressFields();
-                } else {
-                    alert('CEP não encontrado ou inválido. Por favor, preencha o endereço manualmente.');
-                    enableAddressFields();
-                }
-            } catch (error) {
-                console.error('Erro ao buscar CEP:', error);
-                alert('Erro ao buscar CEP. Por favor, tente novamente ou preencha manualmente.');
-                enableAddressFields();
-            } finally {
-                hideLoading();
-            }
-        }
-
-        // Disparar busca ao sair do campo CEP (blur) ou clicar no botão
-        cepInput.on('blur', searchCep);
-        buscarCepBtn.on('click', searchCep);
-
-        // Limpar campos de endereço se o CEP for modificado ou esvaziado, e reabilitar para digitação
-        cepInput.on('keyup', (e) => {
-            const currentCep = cleanDigits(cepInput.val());
-            if (currentCep.length !== 8) {
-                clearAddressFields();
-                enableAddressFields();
-            }
-        });
-
-        // Inicializa os campos de endereço como readonly apenas se estiverem vazios
-        if (logradouroInput.val() === '') {
-            disableAddressFields();
-        } else {
-            enableAddressFields();
         }
     });
+
+    // jQuery Mask
+    $(document).ready(function(){
+        $('#cnpj').mask('00.000.000/0000-00');
+        $('#cep').mask('00000-000');
+        $('#telefone_contato').mask('(00) 0000-0000'); // Adapte para 9 dígitos se necessário '(00) 00000-0000'
+    });
+
+    // Função de buscar CEP
+    document.getElementById('btn-buscar-cep').addEventListener('click', function() {
+        const cepInput = document.getElementById('cep');
+        const cep = cepInput.value.replace(/\D/g, ''); // Remove caracteres não numéricos
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        if (cep.length !== 8) {
+            alert('Por favor, digite um CEP válido com 8 dígitos.');
+            return;
+        }
+
+        loadingOverlay.classList.remove('hidden');
+
+        fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            .then(response => response.json())
+            .then(data => {
+                loadingOverlay.classList.add('hidden');
+                if (data.erro) {
+                    alert('CEP não encontrado.');
+                } else {
+                    document.getElementById('logradouro').value = data.logradouro;
+                    document.getElementById('complemento').value = data.complemento;
+                    document.getElementById('bairro').value = data.bairro;
+                    document.getElementById('nome_municipio').value = data.localidade;
+                    document.getElementById('codigo_municipio').value = data.ibge;
+                    document.getElementById('uf').value = data.uf;
+                    document.getElementById('numero').focus(); // Foca no campo número
+                }
+            })
+            .catch(error => {
+                loadingOverlay.classList.add('hidden');
+                console.error('Erro ao buscar CEP:', error);
+                alert('Ocorreu um erro ao buscar o CEP. Tente novamente mais tarde.');
+            });
+    });
+
+    // Lógica para carregar formulários via AJAX em um Modal
+    const addModal = document.getElementById('addModal');
+    const modalBody = addModal.querySelector('.modal-body');
+    const modalTitle = addModal.querySelector('.modal-title');
+    let currentModalForm = null; // Armazena a referência ao formulário atual no modal
+
+    addModal.addEventListener('show.bs.modal', function (event) {
+        // Botão que disparou o modal
+        const button = event.relatedTarget;
+        // Pega as informações dos atributos data-*
+        const url = button.getAttribute('data-modal-url');
+        const title = button.getAttribute('data-modal-title');
+
+        modalTitle.textContent = title;
+        modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Carregando formulário...</p></div>';
+
+        // Carrega o conteúdo do formulário via AJAX
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest' // Indica que é uma requisição AJAX
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            modalBody.innerHTML = html;
+            currentModalForm = modalBody.querySelector('form'); // Pega o formulário recém-carregado
+
+            if (currentModalForm) {
+                // Adiciona um listener para a submissão do formulário dentro do modal
+                currentModalForm.addEventListener('submit', function(e) {
+                    e.preventDefault(); // Impede a submissão padrão do formulário
+
+                    const form = this;
+                    const formData = new FormData(form);
+                    const formAction = form.action;
+
+                    // Desabilita o botão de submit e mostra um spinner (opcional)
+                    const submitButton = form.querySelector('button[type="submit"]');
+                    if(submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
+                    }
+
+                    fetch(formAction, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest' // Indica que é uma submissão AJAX
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message);
+                            bootstrap.Modal.getInstance(addModal).hide(); // Esconde o modal
+                            // Recarrega a página do cliente para atualizar as listas
+                            window.location.href = data.redirect_url || window.location.href; // Redireciona se houver URL no retorno
+                        } else {
+                            alert('Erro: ' + data.message);
+                            if(submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.innerHTML = 'Salvar';
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro na submissão AJAX:', error);
+                        alert('Ocorreu um erro ao salvar. Verifique o console para mais detalhes.');
+                        if(submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = 'Salvar';
+                        }
+                    });
+                });
+            }
+            // Re-aplicar máscaras se o formulário carregado tiver campos mascarados
+            $('#cnpj_modal').mask('00.000.000/0000-00'); // Exemplo: se houver um CNPJ no modal
+            $('#cep_modal').mask('00000-000');
+            $('#telefone_modal').mask('(00) 0000-0000');
+            // ... adicione outras máscaras conforme necessário
+        })
+        .catch(error => {
+            modalBody.innerHTML = '<p class="text-danger">Erro ao carregar o formulário: ' + error + '</p>';
+            console.error('Erro ao carregar formulário no modal:', error);
+        });
+    });
+
+    // Limpa o conteúdo do modal ao escondê-lo para evitar formulários duplicados
+    addModal.addEventListener('hidden.bs.modal', function () {
+        modalBody.innerHTML = '';
+        currentModalForm = null;
+    });
+
 </script>
 {% endblock %}

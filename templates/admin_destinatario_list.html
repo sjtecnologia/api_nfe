@@ -1,57 +1,33 @@
-{% extends 'base.html' %}
-
-{% block title %}Lista de Destinatários NFe{% endblock %}
-
-{% block content %}
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h2>Destinatários Cadastrados</h2>
-        <a href="{{ url_for('admin_destinatarios_nfe_add') }}" class="btn">Novo Destinatário</a>
-    </div>
-    <div class="card-body">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        {% if destinatarios %}
-        <div class="table-responsive">
-            <table class="table table-striped table-hover data-table">
-                <thead>
+<div class="table-responsive">
+    {% if destinatarios_existentes %}
+        <table class="table table-striped table-hover mt-3">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome/Razão Social</th>
+                    <th>CPF/CNPJ</th>
+                    <th>Município</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for destinatario in destinatarios_existentes %}
                     <tr>
-                        <th scope="col">Nome/Razão Social</th>
-                        <th scope="col">CPF/CNPJ</th>
-                        <th scope="col">UF</th>
-                        <th scope="col">Cidade</th>
-                        <th scope="col">E-mail</th>
-                        <th scope="col">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for dest in destinatarios %}
-                    <tr>
-                        <td>{{ dest.nome_razao_social }}</td>
-                        <td>{{ dest.cpf_cnpj }}</td>
-                        <td>{{ dest.uf }}</td>
-                        <td>{{ dest.nome_municipio }}</td>
-                        <td>{{ dest.email|default:"N/A" }}</td>
+                        <td>{{ destinatario.destinatario_id }}</td>
+                        <td>{{ destinatario.nome_razao_social | truncate(40, True, '...') }}</td>
+                        <td>{{ destinatario.cpf_cnpj }}</td>
+                        <td>{{ destinatario.nome_municipio }} ({{ destinatario.uf }})</td>
                         <td>
-                            <a href="{{ url_for('admin_destinatarios_nfe_edit', destinatario_id=dest.destinatario_id) }}" class="btn btn-sm btn-warning">Editar</a>
-                            <form action="{{ url_for('admin_destinatarios_nfe_delete', destinatario_id=dest.destinatario_id) }}" method="post" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Tem certeza que deseja excluir o destinatário {{ dest.nome_razao_social }}?');">Excluir</button>
+                            <a href="{{ url_for('admin_destinatarios_nfe_edit', destinatario_id=destinatario.destinatario_id, cliente_id=cliente.cliente_id) }}" class="btn btn-sm btn-info me-2">Editar</a>
+                            <form action="{{ url_for('admin_destinatarios_nfe_delete', destinatario_id=destinatario.destinatario_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este destinatário?');">
+                                <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
                             </form>
                         </td>
                     </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p>Nenhum destinatário cadastrado ainda.</p>
-        {% endif %}
-    </div>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="alert alert-info mt-3">Nenhum destinatário NF-e associado a este cliente ainda.</p>
+    {% endif %}
 </div>
-{% endblock %}
