@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12 # Adicione esta importação
 from cryptography.hazmat.primitives import hashes
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, or_, and_
 from sqlalchemy.orm import sessionmaker, joinedload # ADICIONADO joinedload aqui
 from sqlalchemy.exc import IntegrityError, OperationalError
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -277,6 +277,71 @@ def get_api_regras_tributacao():
     regras_tributacao = db.query(RegraTributacao).all() # ATENÇÃO: Retorna TODAS.
     regra_tributacao_list = [{"regra_tributacao_id": r.regra_tributacao_id, "descricao_regra": r.descricao_regra} for r in regras_tributacao]
     return jsonify(regra_tributacao_list), 200
+
+@app.route('/api/regras_tributacao/buscar', methods=['POST'])
+@login_required # Proteger este endpoint também, para que apenas usuários logados possam buscar regras
+def buscar_regra_tributacao():
+    db = next(get_db())
+    data = request.get_json()
+
+    cliente_id = data.get('cliente_id')
+    regime_tributario_id = data.get('regime_tributario_id')
+    cfop_codigo = data.get('cfop_codigo')
+    ncm_codigo = data.get('ncm_codigo')
+    uf_origem = data.get('uf_origem')
+    uf_destino = data.get('uf_destino')
+    tipo_item = data.get('tipo_item')
+    
+    # Validar acesso ao cliente
+    accessible_client_ids = get_accessible_client_ids(db)
+    if cliente_id and int(cliente_id) not in accessible_client_ids:
+        return jsonify({"error": "Acesso negado para este cliente."}), 403
+
+    query = db.query(RegraTributacao).options(
+        joinedload(RegraTributacao.regime_tributario),
+        joinedload(RegraTributacao.cfop),
+        joinedload(RegraTributacao.ncm),
+        joinedload(RegraTributacao.cst_icms_obj),
+        joinedload(RegraTributacao.csosn_icms_obj),
+        joinedload(RegraTributacao.motivo_desoneracao)
+    ).filter(RegraTributacao.ativo == True) # Apenas regras ativas
+
+    # Filtros obrigatórios
+    if cliente_id: # A regra pode ser específica de um cliente ou global (cliente_id IS NULL)
+        query = query.filter(or_(RegraTributacao.cliente_id == cliente_id, RegraTributacao.cliente_id.is_(None)))
+    else: # Se o cliente_id não for fornecido, buscar apenas regras globais
+        query = query.filter(RegraTributacao.cliente_id.is_(None))
+    
+    if regime_tributario_id:
+        query = query.filter(RegraTributacao.regime_tributario_id == regime_tributario_id)
+    
+    # Filtros condicionais (se o valor for fornecido, aplica o filtro)
+    if cfop_codigo:
+        query = query.join(Cfop).filter(Cfop.cfop == cfop_codigo)
+    if ncm_codigo:
+        query = query.join(Ncm).filter(Ncm.codigo == ncm_codigo)
+    if uf_origem:
+        query = query.filter(RegraTributacao.uf_origem == uf_origem)
+    if uf_destino:
+        query = query.filter(RegraTributacao.uf_destino == uf_destino)
+    if tipo_item:
+        query = query.filter(RegraTributacao.tipo_item == tipo_item)
+
+    # Ordenar por prioridade (maior prioridade primeiro)
+    # Se houver regras globais e específicas para o cliente,
+    # e se cliente_id for not null na regra, dar prioridade a ela
+    # e depois pela prioridade da regra.
+    query = query.order_by(
+        RegraTributacao.cliente_id.desc(), # Regras com cliente_id vêm antes de regras globais (None)
+        RegraTributacao.prioridade.desc() # Maior prioridade primeiro
+    )
+
+    regra_encontrada = query.first()
+
+    if regra_encontrada:
+        return jsonify(regra_encontrada.to_dict()), 200
+    else:
+        return jsonify({"message": "Nenhuma regra de tributação encontrada para os critérios fornecidos."}), 404
 
 @app.route('/api/csosn', methods=['GET'])
 def get_api_csosns():
@@ -1238,19 +1303,18 @@ def admin_produtos_add():
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
     
-    # Filtra os clientes que o usuário pode acessar para o dropdown
     clientes_disponiveis = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     
     ncms = db.query(Ncm).all()
     origens = db.query(OrigemMercadoria).all()
-    
-    # Verifica se a requisição veio de um modal (AJAX)
+    cfops = db.query(Cfop).all() # CARREGAR PARA DROPDOWNS
+    csts = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
+    csosns = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
+
     is_modal_request = request.args.get('modal', 'false').lower() == 'true' or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    
     return_client_id = request.args.get('cliente_id', type=int)
     
     if request.method == 'POST':
-        # ... (sua lógica de processamento do POST aqui, que já está funcionando) ...
         cliente_id = request.form.get('cliente_id')
         codigo_interno = request.form.get('codigo_interno')
         descricao = request.form.get('descricao')
@@ -1261,27 +1325,38 @@ def admin_produtos_add():
         origem_mercadoria = request.form.get('origem_mercadoria')
         tipo_item = request.form.get('tipo_item')
         ativo = request.form.get('ativo') == 'on'
+        # --- NOVOS CAMPOS ---
+        cfop_id = request.form.get('cfop_id')
+        cst_icms_id = request.form.get('cst_icms_id')
+        csosn_icms_id = request.form.get('csosn_icms_id')
+        # --------------------
         
         if not all([cliente_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao_str, origem_mercadoria, tipo_item]):
             msg = 'Por favor, preencha todos os campos obrigatórios do produto.'
             if is_modal_request:
                 return jsonify({'success': False, 'message': msg}), 400
             flash(msg, 'danger')
-            return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, form_data=request.form, return_client_id=return_client_id)
+            return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=request.form, return_client_id=return_client_id)
         
         try:
             cliente_id = int(cliente_id)
-            # Valida se o usuário tem permissão para adicionar a este cliente
             if cliente_id not in accessible_client_ids:
                 msg = 'Você não tem permissão para adicionar produtos a este cliente.'
                 if is_modal_request:
                     return jsonify({'success': False, 'message': msg}), 403
                 flash(msg, 'danger')
-                return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, form_data=request.form, return_client_id=return_client_id)
+                return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=request.form, return_client_id=return_client_id)
             
             ncm_id = int(ncm_id) if ncm_id else None
             preco_unitario_padrao = Decimal(preco_unitario_padrao_str)
             origem_mercadoria = int(origem_mercadoria)
+
+            # --- PROCESSAR NOVOS CAMPOS ---
+            cfop_id = int(cfop_id) if cfop_id else None
+            cst_icms_id = int(cst_icms_id) if cst_icms_id else None
+            csosn_icms_id = int(csosn_icms_id) if csosn_icms_id else None
+            # ------------------------------
+
             novo_produto = Produto(
                 cliente_id=cliente_id,
                 codigo_interno=codigo_interno,
@@ -1293,13 +1368,15 @@ def admin_produtos_add():
                 origem_mercadoria=origem_mercadoria,
                 tipo_item=tipo_item,
                 ativo=ativo,
-                created_by_user_id=current_user.id # Auditoria
+                cfop_id=cfop_id, # NOVO
+                cst_icms_id=cst_icms_id, # NOVO
+                csosn_icms_id=csosn_icms_id, # NOVO
+                created_by_user_id=current_user.id
             )
             db.add(novo_produto)
             db.commit()
             msg = 'Produto adicionado com sucesso!'
             if is_modal_request:
-                # Retorna JSON para o JavaScript do modal
                 return jsonify({'success': True, 'message': msg, 'redirect_url': url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='produtos') if return_client_id else url_for('admin_produtos_list')}), 201
             flash(msg, 'success')
             if return_client_id:
@@ -1324,18 +1401,15 @@ def admin_produtos_add():
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'danger')
     
-    initial_form_data = request.form # Para manter dados em caso de erro
+    initial_form_data = request.form
     if return_client_id and not initial_form_data.get('cliente_id'):
         initial_form_data = initial_form_data.copy()
         initial_form_data['cliente_id'] = return_client_id
 
-    # ONDE A MUDANÇA OCORRE: Renderiza o template correto dependendo se é modal ou não
     if is_modal_request:
-        # Renderiza o NOVO template específico para o modal
-        return render_template('admin_produtos_form_modal.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, form_data=initial_form_data, return_client_id=return_client_id)
+        return render_template('admin_produtos_form_modal.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=initial_form_data, return_client_id=return_client_id)
     else:
-        # Renderiza a página completa
-        return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, form_data=initial_form_data, return_client_id=return_client_id)
+        return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=initial_form_data, return_client_id=return_client_id)
 
 @app.route('/admin/produtos/edit/<int:produto_id>', methods=['GET', 'POST'])
 @login_required
@@ -1348,27 +1422,28 @@ def admin_produtos_edit(produto_id):
         Produto.produto_id == produto_id,
         Produto.cliente_id.in_(accessible_client_ids)
     ).first()
-
     if not produto:
         flash('Produto não encontrado ou você não tem permissão para acessá-lo.', 'danger')
         return redirect(url_for('admin_produtos_list'))
     
     return_client_id = request.args.get('cliente_id', type=int) 
     if not return_client_id and produto:
-        return_client_id = produto.cliente_id # Se não veio do form de cliente, pega o cliente do produto
+        return_client_id = produto.cliente_id
 
     clientes_disponiveis = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     ncms = db.query(Ncm).all()
     origens = db.query(OrigemMercadoria).all()
+    cfops = db.query(Cfop).all() # CARREGAR PARA DROPDOWNS
+    csts = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
+    csosns = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
     form_data = request.form
 
     if request.method == 'POST':
         novo_cliente_id = int(request.form.get('cliente_id'))
         
-        # Valida se o usuário tem permissão para associar a este novo cliente
         if novo_cliente_id not in accessible_client_ids:
             flash('Você não tem permissão para mover o produto para este cliente.', 'danger')
-            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, form_data=form_data, return_client_id=return_client_id)
+            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
         
         produto.cliente_id = novo_cliente_id
         produto.codigo_interno = request.form.get('codigo_interno')
@@ -1380,9 +1455,16 @@ def admin_produtos_edit(produto_id):
         produto.origem_mercadoria = int(request.form.get('origem_mercadoria'))
         produto.tipo_item = request.form.get('tipo_item')
         produto.ativo = request.form.get('ativo') == 'on'
+
+        # --- ATUALIZAR NOVOS CAMPOS ---
+        produto.cfop_id = int(request.form.get('cfop_id')) if request.form.get('cfop_id') else None
+        produto.cst_icms_id = int(request.form.get('cst_icms_id')) if request.form.get('cst_icms_id') else None
+        produto.csosn_icms_id = int(request.form.get('csosn_icms_id')) if request.form.get('csosn_icms_id') else None
+        # ------------------------------
+
         if not all([produto.cliente_id, produto.codigo_interno, produto.descricao, produto.unidade_comercial, preco_unitario_padrao, produto.origem_mercadoria, produto.tipo_item]):
             flash('Por favor, preencha todos os campos obrigatórios do produto.', 'danger')
-            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, form_data=form_data, return_client_id=return_client_id)
+            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
         
         try:
             produto.preco_unitario_padrao = Decimal(preco_unitario_padrao)
@@ -1400,7 +1482,9 @@ def admin_produtos_edit(produto_id):
         except Exception as e:
             db.rollback()
             flash(f"Erro ao atualizar produto: {e}", 'danger')
-    return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, form_data=produto, return_client_id=return_client_id)
+
+    # Para GET, usa o objeto produto para pré-preencher o formulário
+    return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=produto, return_client_id=return_client_id)
 
 @app.route('/admin/produtos/delete/<int:produto_id>', methods=['POST'])
 @login_required
@@ -2351,23 +2435,18 @@ def get_active_certificate_for_client(db_session, cliente_id):
 @permission_required('nfe.issue') # Nova permissão, ajuste conforme seu sistema de permissões
 def admin_emitir_nfe():
     db = next(get_db())
-    # O emitente é o cliente associado ao usuário logado, ou o cliente selecionado se for multi-empresa
-    # Para simplificar, assumimos um único cliente por usuário ou que o cliente já está selecionado em sessão
     accessible_client_ids = get_accessible_client_ids(db)
-    
+
     if not accessible_client_ids:
         flash('Você não está associado a nenhum cliente ou não tem permissão para emitir NF-e.', 'danger')
         return redirect(url_for('home'))
 
-    # Pega o primeiro cliente acessível como emitente, para simplificar.
-    # Em um sistema real, o usuário escolheria ou teria um padrão.
     emitente_cliente_id = accessible_client_ids[0]
     emitente_data = db.query(Cliente).filter_by(cliente_id=emitente_cliente_id).first()
     if not emitente_data:
         flash('Dados do emitente não encontrados.', 'danger')
         return redirect(url_for('home'))
 
-    # Dados adicionais do emitente para o template (como nome do regime tributário)
     emitente_data_for_template = {
         "cliente_id": emitente_data.cliente_id,
         "razao_social": emitente_data.razao_social,
@@ -2380,127 +2459,48 @@ def admin_emitir_nfe():
         "nome_municipio": emitente_data.nome_municipio,
         "uf": emitente_data.uf,
         "cnae": emitente_data.cnae,
-        "regime_tributario_nome": emitente_data.regime_tributario.nome if emitente_data.regime_tributario else 'N/A'
+        "regime_tributario_nome": emitente_data.regime_tributario.nome if emitente_data.regime_tributario else 'N/A',
+        "regime_tributario_id": emitente_data.regime_tributario_id # ADICIONADO AQUI
     }
 
-    # Carrega destinatários associados ao cliente do emitente
-    destinatarios = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
-    # Carrega produtos associados ao cliente do emitente
-    produtos = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).options(joinedload(Produto.ncm)).all()
+    # -- ALTERAÇÃO AQUI: Converter objetos DestinatarioNFe para dicionários --
+    destinatarios_obj = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
+    destinatarios_for_template = [d.to_dict() for d in destinatarios_obj] # <-- Use .to_dict()
 
-    form_data = {} # Para pré-preencher o formulário em GET ou re-preencher em POST com erro
+    # -- ALTERAÇÃO AQUI: Converter objetos Produto para dicionários --
+    produtos_obj = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).options(joinedload(Produto.ncm), joinedload(Produto.cfop), joinedload(Produto.origem)).all()
+    produtos_for_template = [p.to_dict() for p in produtos_obj] # <-- Use .to_dict()
+    all_cfops = db.query(Cfop).all()
+    all_csts = db.query(Csticms).all()
+    all_csosns = db.query(Csosnicms).all()
+
+    # Variável para os campos gerais do formulário
+    form_data = {}
+    # Variável específica para os itens da NF-e, que será passada para o JS
+    initial_nfe_items = []
 
     if request.method == 'POST':
-        form_data = request.form.to_dict() # Coleta todos os dados do formulário
-        action = request.form.get('action') # 'preview', 'emitir', 'draft'
+        # ... (seu código existente para POST) ...
+        # Lembre-se de usar `destinatarios_for_template` e `produtos_for_template`
+        # em qualquer render_template dentro do bloco POST também.
+        
+        return render_template('emitir_nfe.html',
+                               emitente_data=emitente_data_for_template,
+                               destinatarios=destinatarios_for_template, # <-- Corrigido
+                               produtos=produtos_for_template,          # <-- Corrigido
+                               form_data=form_data,
+                               initial_nfe_items=initial_nfe_items)
 
-        # Lógica para coletar itens da NF-e enviados pelo JavaScript
-        # Eles vêm como hidden inputs nomeados 'items[index][json]'
-        nfe_items_raw = []
-        for key in request.form:
-            if key.startswith('items[') and key.endswith('][json]'):
-                try:
-                    nfe_items_raw.append(json.loads(request.form[key]))
-                except json.JSONDecodeError:
-                    flash(f"Erro ao decodificar item JSON: {request.form[key]}", 'danger')
-                    # Retornar o formulário novamente com a mensagem de erro
-                    return render_template('emitir_nfe.html',
-                                           emitente_data=emitente_data_for_template,
-                                           destinatarios=destinatarios,
-                                           produtos=produtos,
-                                           form_data=form_data)
-        
-        form_data['items'] = nfe_items_raw # Adiciona os itens processados de volta ao form_data
-
-        # --- VALIDAÇÕES GERAIS E CONSTRUÇÃO DO XML ---
-        # Esta é a parte mais crítica e complexa:
-        # 1. Validar todos os campos (se são numéricos, se estão no formato correto, etc.)
-        # 2. Construir a estrutura de dados Python que representa a NF-e.
-        # 3. Aplicar as regras de tributação (buscar CSOSN/CST, alíquotas, bases de cálculo para cada item).
-        #    Isso envolveria consultar a tabela RegraTributacao com os dados do cliente, produto, CFOP, NCM.
-        # 4. Calcular todos os totais (produtos, ICMS, IPI, PIS, COFINS, frete, etc.).
-        # 5. Gerar o XML da NF-e de acordo com o padrão exigido pelo Sefaz.
-        
-        # Exemplo BEM simplificado de validação
-        if not form_data.get('natOp') or not form_data.get('finNFe'):
-            flash('Campos de identificação da NF-e são obrigatórios.', 'danger')
-            return render_template('emitir_nfe.html',
-                                   emitente_data=emitente_data_for_template,
-                                   destinatarios=destinatarios,
-                                   produtos=produtos,
-                                   form_data=form_data)
-        
-        # TODO: Adicionar validações mais robustas aqui
-        # TODO: Adicionar lógica para buscar e calcular impostos de cada item com base nas RegrasTributacao
-        
-        nfe_xml = '<?xml version="1.0" encoding="UTF-8"?><NFe><infNFe><ide>...</ide><emit>...</emit><dest>...</dest><det>...</det></infNFe></NFe>'  # XML dummy
-        
-        
-        if action == 'preview':
-            # Renderizar uma página com o XML formatado para visualização
-            return render_template('nfe_xml_preview.html', xml_content=nfe_xml)
-            
-        elif action == 'emitir':
-            # Obter o certificado digital ativo do emitente
-            certificado = get_active_certificate_for_client(db, emitente_cliente_id)
-            if not certificado:
-                flash('Nenhum certificado digital ativo encontrado para o emitente. A emissão não pode prosseguir.', 'danger')
-                return render_template('emitir_nfe.html',
-                                       emitente_data=emitente_data_for_template,
-                                       destinatarios=destinatarios,
-                                       produtos=produtos,
-                                       form_data=form_data)
-            
-            # --- INTEGRAÇÃO COM A API DO SEFAZ ---
-            # Aqui você chamaria a API do governo (Sefaz)
-            # Ex: status, protocolo_nfe = sefaz_api.emitir_nfe(nfe_xml, certificado)
-            # Esta parte é de alta complexidade e envolve:
-            # - Assinatura digital do XML
-            # - Envio para o webservice do Sefaz
-            # - Tratamento de respostas (sucesso, rejeição, erro)
-            # - Armazenamento do retorno (protocolo, chave de acesso, status) no BD
-            
-            # Simulação de resposta
-            success_sefaz = True # sefaz_api.emitir_nfe(...)
-            if success_sefaz:
-                # Salvar NFeEmitidas no banco de dados
-                nova_nfe_emitida = NFeEmitidas(
-                    cliente_id=emitente_cliente_id,
-                    tipo_nfe='NORMAL', # ou 'COMPLEMENTAR', etc.
-                    chave_acesso='SIMULADA_CHAVE_DE_ACESSO', # Retornada pelo Sefaz
-                    protocolo_autorizacao='SIMULADA_PROTOCOLO', # Retornada pelo Sefaz
-                    status='AUTORIZADA',
-                    json_nfe=form_data, # Ou o XML completo
-                    data_criacao=datetime.now(),
-                    created_by_user_id=current_user.id
-                )
-                db.add(nova_nfe_emitida)
-                db.commit()
-                flash('NF-e emitida e autorizada com sucesso!', 'success')
-                return redirect(url_for('admin_nfe_emitidas_list')) # Redireciona para listagem de NF-e emitidas
-            else:
-                flash('Erro ao emitir NF-e. Verifique os logs e tente novamente.', 'danger')
-                # O ideal é exibir a mensagem de rejeição do Sefaz
-                return render_template('emitir_nfe.html',
-                                       emitente_data=emitente_data_for_template,
-                                       destinatarios=destinatarios,
-                                       produtos=produtos,
-                                       form_data=form_data)
-        
-        elif action == 'draft':
-            # Salvar como rascunho no BD (opcional, requer tabela de rascunhos ou status na NFeEmitidas)
-            flash('NF-e salva como rascunho. Funcionalidade a ser implementada.', 'info')
-            # Você precisaria de um modelo para rascunhos ou um status 'RASCUNHO' na NFeEmitidas
-            # db.add(new_draft_nfe)
-            # db.commit()
-            return redirect(url_for('home')) # Ou para listagem de rascunhos
-
-    # GET request: renderiza o formulário vazio ou com dados pré-preenchidos
+    # Para GET requests (ou POSTs que não causam redirect), renderiza o formulário
     return render_template('emitir_nfe.html',
                            emitente_data=emitente_data_for_template,
-                           destinatarios=destinatarios,
-                           produtos=produtos, # Lista de produtos para o dropdown no modal de item
-                           form_data=form_data)
+                           destinatarios=destinatarios_for_template,
+                           produtos=produtos_for_template,
+                           all_cfops=all_cfops, # NOVO
+                           all_csts=all_csts,   # NOVO
+                           all_csosns=all_csosns, # NOVO
+                           form_data=form_data,
+                           initial_nfe_items=initial_nfe_items)
 
 @app.context_processor
 def inject_now():

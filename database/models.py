@@ -393,30 +393,59 @@ class Produto(Base):
     produto_id = Column(Integer, primary_key=True)
     cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
     codigo_interno = Column(String(50), nullable=False)
-    descricao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
-    ncm_id = Column(Integer, ForeignKey('ncms.ncm_id'), nullable=False) # No script db sjtnfe.txt é NOT NULL
+    descricao = Column(Text, nullable=False)
+    ncm_id = Column(Integer, ForeignKey('ncms.ncm_id'), nullable=False)
     cest = Column(String(7), nullable=True)
-    unidade_comercial = Column(String(6), nullable=False) # No script db sjtnfe.txt é NOT NULL
-    preco_unitario_padrao = Column(Numeric(15, 2), nullable=False) # No script db sjtnfe.txt é NOT NULL
-    # CORREÇÃO CRÍTICA: origem_mercadoria deve ser um ForeignKey
-    origem_mercadoria = Column(Integer, ForeignKey('origens_mercadoria.origem_id'), nullable=False) # No script db sjtnfe.txt é NOT NULL e FK
-    tipo_item = Column(String(10), nullable=False) # No script db sjtnfe.txt é NOT NULL
-    ativo = Column(Boolean, default=True, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    unidade_comercial = Column(String(6), nullable=False)
+    preco_unitario_padrao = Column(Numeric(15, 2), nullable=False)
+    origem_mercadoria = Column(Integer, ForeignKey('origens_mercadoria.origem_id'), nullable=False)
+    tipo_item = Column(String(10), nullable=False)
+    ativo = Column(Boolean, default=True, nullable=False)
     created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
-
     __table_args__ = (
         UniqueConstraint('cliente_id', 'codigo_interno', name='codigo_interno_u'),
     )
 
+    # --- CAMPOS ADICIONADOS AQUI ---
+    cfop_id = Column(Integer, ForeignKey('cfops.cfop_id'), nullable=True) # Pode ser nulo se não houver um CFOP padrão
+    cst_icms_id = Column(Integer, ForeignKey('cst_icms.cst_id'), nullable=True) # Pode ser nulo
+    csosn_icms_id = Column(Integer, ForeignKey('csosn_icms.csosn_id'), nullable=True) # Pode ser nulo
+    # -------------------------------
+
     # Relacionamentos
     cliente = relationship('Cliente', back_populates='produtos')
     ncm = relationship('Ncm', back_populates='produtos')
-    # Ajuste: origem agora é uma relação para OrigemMercadoria
+    cfop = relationship('Cfop', foreign_keys=[cfop_id]) # Adicionado foreign_keys para evitar ambiguidade com a RegraTributacao
     origem = relationship('OrigemMercadoria')
+    cst_icms = relationship('Csticms', foreign_keys=[cst_icms_id]) # Novo relacionamento para CST
+    csosn_icms = relationship('Csosnicms', foreign_keys=[csosn_icms_id]) # Novo relacionamento para CSOSN
     created_by_user = relationship('User')
 
     def to_dict(self):
-        return serialize_sqla_object(self)
+        data = serialize_sqla_object(self)
+        # Adiciona dados dos relacionamentos necessários para o frontend
+        if self.ncm:
+            data['ncm'] = {'codigo': self.ncm.codigo, 'descricao': self.ncm.descricao}
+        else:
+            data['ncm'] = None
+        if self.cfop: # AGORA PEGA DO PRODUTO
+            data['cfop'] = {'cfop': self.cfop.cfop, 'descricao': self.cfop.descricao}
+        else:
+            data['cfop'] = None
+        if self.origem:
+            data['origem'] = {'codigo': self.origem.codigo, 'descricao': self.origem.descricao}
+        else:
+            data['origem'] = None
+        if self.cst_icms: # NOVO
+            data['cst_icms'] = {'codigo': self.cst_icms.codigo, 'descricao': self.cst_icms.descricao}
+        else:
+            data['cst_icms'] = None
+        if self.csosn_icms: # NOVO
+            data['csosn_icms'] = {'codigo': self.csosn_icms.codigo, 'descricao': self.csosn_icms.descricao}
+        else:
+            data['csosn_icms'] = None
+
+        return data
 
     def __repr__(self):
         return f"<Produto(id={self.produto_id}, codigo='{self.codigo_interno}', descricao='{self.descricao[:30]}...')>"
@@ -464,7 +493,35 @@ class RegraTributacao(Base):
     created_by_user = relationship('User')
 
     def to_dict(self):
-        return serialize_sqla_object(self)
+        data = {
+            # Serializa todas as colunas diretas
+            column.name: getattr(self, column.name)
+            for column in self.__table__.columns
+        }
+        # Converter tipos específicos para JSON-serializáveis
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+            elif isinstance(value, date):
+                data[key] = value.isoformat()
+            elif isinstance(value, Decimal):
+                data[key] = float(value)
+
+        # Adicionar dados de relacionamentos
+        if self.regime_tributario:
+            data['regime_tributario_nome'] = self.regime_tributario.nome
+        if self.cfop:
+            data['cfop_codigo'] = self.cfop.cfop
+        if self.ncm:
+            data['ncm_codigo'] = self.ncm.codigo
+        if self.cst_icms_obj:
+            data['cst_icms_codigo'] = self.cst_icms_obj.codigo
+        if self.csosn_icms_obj:
+            data['csosn_icms_codigo'] = self.csosn_icms_obj.codigo
+        if self.motivo_desoneracao:
+            data['motivo_desoneracao_codigo'] = self.motivo_desoneracao.codigo
+        
+        return data
 
     def __repr__(self):
         return f"<RegraTributacao(id={self.regra_tributacao_id}, cliente_id={self.cliente_id}, cfop_id={self.cfop_id}, ncm_id={self.ncm_id}, prioridade={self.prioridade})>"

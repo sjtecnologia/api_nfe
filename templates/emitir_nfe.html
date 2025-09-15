@@ -4,7 +4,6 @@
 
 {% block content %}
     <h1 class="mb-4">Emissão de Nota Fiscal</h1>
-
     <div class="card shadow-lg">
         <div class="card-header">
             <ul class="nav nav-tabs card-header-tabs" id="nfeTabs" role="tablist">
@@ -31,13 +30,13 @@
         <div class="card-body">
             <form action="{{ url_for('admin_emitir_nfe') }}" method="post" id="nfeForm">
                 <div class="tab-content" id="nfeTabsContent">
-
                     {# ABA: IDENTIFICAÇÃO NF-e #}
                     <div class="tab-pane fade show active" id="identificacao-pane" role="tabpanel" aria-labelledby="identificacao-tab" tabindex="0">
                         <h5 class="mb-3 text-primary">Dados Gerais da Nota Fiscal</h5>
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label for="natOp" class="form-label">Natureza da Operação</label>
+                                {# NatOp será preenchida pelo JS, inicialmente com base no CFOP padrão do produto #}
                                 <input type="text" class="form-control" id="natOp" name="natOp" value="{{ form_data.natOp | default('') }}" required>
                             </div>
                             <div class="col-md-3 mb-3">
@@ -67,7 +66,7 @@
                                     <option value="3" {% if form_data.indPres == '3' %}selected{% endif %}>3 - Operação não presencial, Teleatendimento</option>
                                     <option value="4" {% if form_data.indPres == '4' %}selected{% endif %}>4 - NF-e em site de vendas</option>
                                     <option value="5" {% if form_data.indPres == '5' %}selected{% endif %}>5 - Operação presencial, fora do estabelecimento</option>
-                                    <option value="9" {% if form_data.indPres == '9' %}selected{% endif %}>9 - Operação não presencial, outros</option>
+                                    <option value="9" {% if form_data.indPres == '9' %}selected{% endif %}>9 - Outros</option>
                                 </select>
                             </div>
                         </div>
@@ -92,13 +91,12 @@
                                 <label for="dataSaidaEntrada" class="form-label">Data de Saída/Entrada</label>
                                 <input type="date" class="form-control" id="dataSaidaEntrada" name="dataSaidaEntrada" value="{{ form_data.dataSaidaEntrada | default(now.strftime('%Y-%m-%d')) }}" required>
                             </div>
-                             <div class="col-md-3 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="horaSaidaEntrada" class="form-label">Hora de Saída/Entrada</label>
                                 <input type="time" class="form-control" id="horaSaidaEntrada" name="horaSaidaEntrada" value="{{ form_data.horaSaidaEntrada | default(now.strftime('%H:%M')) }}">
                             </div>
                         </div>
                     </div>
-
                     {# ABA: EMITENTE #}
                     <div class="tab-pane fade" id="emitente-pane" role="tabpanel" aria-labelledby="emitente-tab" tabindex="0">
                         <h5 class="mb-3 text-primary">Dados do Emitente (Sua Empresa)</h5>
@@ -119,7 +117,7 @@
                             </div>
                         </div>
                         <div class="row">
-                             <div class="col-md-9 mb-3">
+                            <div class="col-md-9 mb-3">
                                 <label class="form-label">Endereço</label>
                                 <input type="text" class="form-control" value="{{ emitente_data.logradouro | default('N/A') }}, {{ emitente_data.numero | default('') }} - {{ emitente_data.bairro | default('') }}" readonly>
                             </div>
@@ -133,18 +131,17 @@
                                 <label class="form-label">Município</label>
                                 <input type="text" class="form-control" value="{{ emitente_data.nome_municipio | default('N/A') }} - {{ emitente_data.uf | default('N/A') }}" readonly>
                             </div>
-                             <div class="col-md-4 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Regime Tributário</label>
                                 <input type="text" class="form-control" value="{{ emitente_data.regime_tributario_nome | default('N/A') }}" readonly>
                             </div>
-                             <div class="col-md-4 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">CNAE</label>
                                 <input type="text" class="form-control" value="{{ emitente_data.cnae | default('N/A') }}" readonly>
                             </div>
                         </div>
                         {# Adicione aqui outros campos do emitente se necessário, todos readonly #}
                     </div>
-
                     {# ABA: DESTINATÁRIO #}
                     <div class="tab-pane fade" id="destinatario-pane" role="tabpanel" aria-labelledby="destinatario-tab" tabindex="0">
                         <h5 class="mb-3 text-primary">Dados do Destinatário</h5>
@@ -160,11 +157,11 @@
                                     {% endfor %}
                                 </select>
                                 <small class="form-text text-muted">
-                                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=emitente_data.cliente_id) }}" target="_blank">Adicionar novo destinatário</a> ou
+                                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=emitente_data.cliente_id) }}" >Adicionar novo destinatário</a> ou
                                     <a href="#" id="clearDestinatario">Limpar seleção</a>
                                 </small>
                             </div>
-                             <div class="col-md-6 mb-3">
+                            <div class="col-md-6 mb-3">
                                 <label for="dest_cnpj_cpf" class="form-label">CPF/CNPJ Destinatário</label>
                                 <input type="text" class="form-control" id="dest_cnpj_cpf" name="dest_cnpj_cpf" value="{{ form_data.dest_cnpj_cpf | default('') }}" readonly>
                             </div>
@@ -179,7 +176,7 @@
                                 <input type="text" class="form-control" id="dest_ie" name="dest_ie" value="{{ form_data.dest_ie | default('') }}" readonly>
                             </div>
                         </div>
-                         <div class="row">
+                        <div class="row">
                             <div class="col-md-9 mb-3">
                                 <label for="dest_endereco" class="form-label">Endereço</label>
                                 <input type="text" class="form-control" id="dest_endereco" name="dest_endereco" value="{{ form_data.dest_endereco | default('') }}" readonly>
@@ -189,7 +186,7 @@
                                 <input type="text" class="form-control" id="dest_cep" name="dest_cep" value="{{ form_data.dest_cep | default('') }}" readonly>
                             </div>
                         </div>
-                         <div class="row">
+                        <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="dest_municipio" class="form-label">Município</label>
                                 <input type="text" class="form-control" id="dest_municipio" name="dest_municipio" value="{{ form_data.dest_municipio | default('') }}" readonly>
@@ -205,7 +202,6 @@
                         <input type="hidden" id="dest_ie_indicador" name="dest_ie_indicador" value="{{ form_data.dest_ie_indicador | default('') }}">
                         <input type="hidden" id="dest_telefone" name="dest_telefone" value="{{ form_data.dest_telefone | default('') }}">
                     </div>
-
                     {# ABA: PRODUTOS/SERVIÇOS #}
                     <div class="tab-pane fade" id="produtos-pane" role="tabpanel" aria-labelledby="produtos-tab" tabindex="0">
                         <h5 class="mb-3 text-primary">Itens da Nota Fiscal</h5>
@@ -226,30 +222,10 @@
                                     </tr>
                                 </thead>
                                 <tbody id="nfe_items_table_body">
-                                    {# Os itens serão adicionados aqui via JavaScript #}
-                                    {% if form_data.items %}
-                                        {% for item in form_data.items() %}
-                                        <tr>
-                                            <td>{{ item.cProd }}</td>
-                                            <td>{{ item.xProd }}</td>
-                                            <td>{{ item.CFOP }}</td>
-                                            <td>{{ item.NCM }}</td>
-                                            <td>{{ item.qCom }}</td>
-                                            <td>R$ {{ "%.2f"|format(item.vUnCom) }}</td>
-                                            <td>R$ {{ "%.2f"|format(item.vProd) }}</td>
-                                            <td>
-                                                <button type="button" class="btn btn-sm btn-info edit-item-btn" data-item-id="{{ loop.index0 }}">Editar</button>
-                                                <button type="button" class="btn btn-sm btn-danger remove-item-btn" data-item-id="{{ loop.index0 }}">Remover</button>
-                                            </td>
-                                            {# Hidden fields for each item to be sent in POST #}
-                                            <input type="hidden" name="items[{{ loop.index0 }}][json]" value="{{ item | tojson }}">
-                                        </tr>
-                                        {% endfor %}
-                                    {% endif %}
+                                    {# Os itens serão renderizados aqui via JavaScript. #}
                                 </tbody>
                             </table>
                         </div>
-
                         <div class="row mt-4">
                             <div class="col-md-6 offset-md-6">
                                 <div class="card bg-light">
@@ -272,7 +248,6 @@
                             </div>
                         </div>
                     </div>
-
                     {# ABA: TRANSPORTE #}
                     <div class="tab-pane fade" id="transporte-pane" role="tabpanel" aria-labelledby="transporte-tab" tabindex="0">
                         <h5 class="mb-3 text-primary">Dados de Transporte</h5>
@@ -291,7 +266,7 @@
                             </div>
                         </div>
                         <div class="row">
-                             <div class="col-md-4 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label for="veiculo_placa" class="form-label">Veículo (Placa)</label>
                                 <input type="text" class="form-control" id="veiculo_placa" name="veiculo_placa" value="{{ form_data.veiculo_placa | default('') }}">
                             </div>
@@ -324,7 +299,6 @@
                             </div>
                         </div>
                     </div>
-
                     {# ABA: PAGAMENTO & OUTRAS INFORMAÇÕES #}
                     <div class="tab-pane fade" id="pagamento-pane" role="tabpanel" aria-labelledby="pagamento-tab" tabindex="0">
                         <h5 class="mb-3 text-primary">Dados de Pagamento</h5>
@@ -391,7 +365,6 @@
                 <div class="modal-body">
                     <form id="itemForm">
                         <input type="hidden" id="item_index" name="item_index" value=""> {# Para identificar o item sendo editado #}
-
                         <h6 class="text-secondary">Dados do Produto/Serviço</h6>
                         <div class="row">
                             <div class="col-md-4 mb-3">
@@ -400,7 +373,16 @@
                                     <option value="">Selecione um produto...</option>
                                     {# Produtos serão carregados via AJAX ou passados do backend #}
                                     {% for prod in produtos %}
-                                        <option value="{{ prod.produto_id }}" data-ncm="{{ prod.ncm.codigo }}" data-cfop="{{ prod.cfop.cfop }}" data-uncom="{{ prod.unidade_comercial }}" data-vuncom="{{ prod.preco_unitario_padrao | default(0) }}" data-origem="{{ prod.origem_mercadoria.codigo }}">
+                                        <option value="{{ prod.produto_id }}" 
+                                                data-ncm="{{ prod.ncm.codigo }}" 
+                                                data-cfop-code="{{ prod.cfop.cfop if prod.cfop else '' }}" 
+                                                data-cfop-desc="{{ prod.cfop.descricao if prod.cfop else '' }}" 
+                                                data-uncom="{{ prod.unidade_comercial }}" 
+                                                data-vuncom="{{ prod.preco_unitario_padrao | default(0) }}" 
+                                                data-origem="{{ prod.origem.codigo if prod.origem else '' }}"
+                                                data-cst-icms-code="{{ prod.cst_icms.codigo if prod.cst_icms else '' }}" {# NOVO #}
+                                                data-csosn-icms-code="{{ prod.csosn_icms.codigo if prod.csosn_icms else '' }}" {# NOVO #}
+                                        >
                                             {{ prod.descricao }} ({{ prod.codigo_interno }})
                                         </option>
                                     {% endfor %}
@@ -411,13 +393,13 @@
                                 <label for="item_cProd" class="form-label">Cód. Interno</label>
                                 <input type="text" class="form-control" id="item_cProd" name="item_cProd" required>
                             </div>
-                             <div class="col-md-6 mb-3">
+                            <div class="col-md-6 mb-3">
                                 <label for="item_xProd" class="form-label">Descrição do Produto</label>
                                 <input type="text" class="form-control" id="item_xProd" name="item_xProd" required>
                             </div>
                         </div>
                         <div class="row">
-                             <div class="col-md-3 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="item_NCM" class="form-label">NCM</label>
                                 <input type="text" class="form-control" id="item_NCM" name="item_NCM" required>
                             </div>
@@ -425,11 +407,11 @@
                                 <label for="item_CFOP" class="form-label">CFOP</label>
                                 <input type="text" class="form-control" id="item_CFOP" name="item_CFOP" required>
                             </div>
-                             <div class="col-md-2 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label for="item_uCom" class="form-label">Unid. Comercial</label>
                                 <input type="text" class="form-control" id="item_uCom" name="item_uCom" required>
                             </div>
-                             <div class="col-md-2 mb-3">
+                            <div class="col-md-2 mb-3">
                                 <label for="item_qCom" class="form-label">Quantidade</label>
                                 <input type="number" step="0.001" class="form-control" id="item_qCom" name="item_qCom" value="1" required>
                             </div>
@@ -438,7 +420,6 @@
                                 <input type="number" step="0.01" class="form-control" id="item_vUnCom" name="item_vUnCom" required>
                             </div>
                         </div>
-
                         <h6 class="mt-4 text-secondary">Dados de Imposto (ICMS)</h6>
                         <div class="row">
                             <div class="col-md-3 mb-3">
@@ -448,16 +429,18 @@
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="item_CST_CSOSN" class="form-label">CST / CSOSN</label>
-                                <input type="text" class="form-control" id="item_CST_CSOSN" name="item_CST_CSOSN" placeholder="00 ou 101" required>
-                                <small class="form-text text-muted">Definido pela Regra de Tributação.</small>
+                                {# Removido 'required' temporariamente. Será preenchido por regra de tributação. #}
+                                <input type="text" class="form-control" id="item_CST_CSOSN" name="item_CST_CSOSN" placeholder="00 ou 101">
+                                <small class="form-text text-muted">Preenchido pela Regra de Tributação ou padrão do produto.</small>
                             </div>
-                             <div class="col-md-3 mb-3">
+                            <div class="col-md-3 mb-3">
                                 <label for="item_vICMS" class="form-label">Valor ICMS</label>
                                 <input type="number" step="0.01" class="form-control" id="item_vICMS" name="item_vICMS" readonly>
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="item_pICMS" class="form-label">Alíquota ICMS (%)</label>
-                                <input type="number" step="0.01" class="form-control" id="item_pICMS" name="item_pICMS" readonly>
+                                {# Removido 'readonly' temporariamente. Será preenchido por regra de tributação. #}
+                                <input type="number" step="0.01" class="form-control" id="item_pICMS" name="item_pICMS">
                             </div>
                         </div>
                         {# Outros Impostos (IPI, PIS, COFINS) - Simplificado por agora #}
@@ -489,7 +472,6 @@
                                 <input type="number" step="0.01" class="form-control" id="item_pCOFINS" name="item_pCOFINS">
                             </div>
                         </div>
-
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -504,23 +486,39 @@
 {% block scripts %}
     {{ super() }} {# Mantém os scripts do base.html, como jQuery e máscaras #}
 
-    <script>
-        let nfeItems = []; // Array para armazenar os itens da NF-e
+    {# Variáveis passadas do Flask, convertidas para JSON strings seguras para JS #}
+    {% set nfe_items_json = initial_nfe_items | tojson | safe if initial_nfe_items is defined and initial_nfe_items is not none else '[]' %}
+    {% set destinatarios_json = destinatarios | tojson | safe if destinatarios is defined and destinatarios is not none else '[]' %}
+    {% set produtos_json = produtos | tojson | safe if produtos is defined and produtos is not none else '[]' %}
+    {% set emitente_client_id_json = emitente_data.cliente_id | tojson | safe if emitente_data.cliente_id is defined and emitente_data.cliente_id is not none else 'null' %}
+    {% set emitente_uf_json = emitente_data.uf | tojson | safe if emitente_data.uf is defined and emitente_data.uf is not none else 'null' %}
+    {% set emitente_regime_tributario_id_json = emitente_data.regime_tributario_id | tojson | safe if emitente_data.regime_tributario_id is defined and emitente_data.regime_tributario_id is not none else 'null' %}
+    {# NOVO: Passar listas completas de CFOPs, CSTs, CSOSNs para uso em mapeamento #}
+    {% set all_cfops_json = all_cfops | tojson | safe if all_cfops is defined and all_cfops is not none else '[]' %}
+    {% set all_csts_json = all_csts | tojson | safe if all_csts is defined and all_csts is not none else '[]' %}
+    {% set all_csosns_json = all_csosns | tojson | safe if all_csosns is defined and all_csosns is not none else '[]' %}
 
-        // Se houver itens pré-existentes (vindo de rascunho, por exemplo)
-        nfeItems = JSON.parse('{{ form_data.items | tojson | safe }}');
-        if (nfeItems && nfeItems.length > 0) {
-            renderItemsTable();
-            calculateTotals();
-        } else {
+
+    <script>
+        // Inicializa o array de itens da NF-e a partir do backend (se houver)
+        var nfeItems = JSON.parse('{{ nfe_items_json | safe }}');
+        
+        // Failsafe: garante que nfeItems é um array, mesmo que o JSON.parse falhe em um caso raro
+        if (!Array.isArray(nfeItems)) {
+            console.warn("nfeItems não era um array após JSON.parse, redefinindo para array vazio. Valor original:", nfeItems);
             nfeItems = [];
         }
 
         // Dados para os dropdowns (Destinatários e Produtos) são passados do Flask para JS
-        // Garante que são JSON válidos e seguros para o JS
-        const allDestinatarios = JSON.parse('{{ destinatarios | tojson | safe }}'); // CORREÇÃO AQUI
-        const allProdutos = JSON.parse('{{ produtos | tojson | safe }}'); // CORREÇÃO AQUI
-        const emitenteClientId = '{{ emitente_data.cliente_id | tojson | safe }}'; // CORREÇÃO AQUI
+        const allDestinatarios = JSON.parse('{{ destinatarios_json | safe }}');
+        const allProdutos = JSON.parse('{{ produtos_json | safe }}');
+        const emitenteClientId = JSON.parse('{{ emitente_client_id_json | safe }}');
+        const emitenteUf = JSON.parse('{{ emitente_uf_json | safe }}');
+        const emitenteRegimeTributarioId = JSON.parse('{{ emitente_regime_tributario_id_json | safe }}'); // ADICIONADO
+        // NOVO: Listas completas para lookup
+        const allCfops = JSON.parse('{{ all_cfops_json | safe }}');
+        const allCsts = JSON.parse('{{ all_csts_json | safe }}');
+        const allCsosns = JSON.parse('{{ all_csosns_json | safe }}');
 
 
         $(document).ready(function() {
@@ -533,7 +531,6 @@
             $('#destinatario_id').change(function() {
                 const destinatarioId = $(this).val();
                 if (destinatarioId) {
-                    // Busca os dados do destinatário no array 'allDestinatarios'
                     const selectedDest = allDestinatarios.find(d => d.destinatario_id == destinatarioId);
                     
                     if (selectedDest) {
@@ -544,7 +541,6 @@
                         $('#dest_cep').val(selectedDest.cep);
                         $('#dest_municipio').val(`${selectedDest.nome_municipio} - ${selectedDest.uf}`);
                         $('#dest_email').val(selectedDest.email || '');
-
                         // Campos Hidden
                         $('#dest_codigo_municipio').val(selectedDest.codigo_municipio);
                         $('#dest_uf').val(selectedDest.uf);
@@ -555,7 +551,9 @@
                     // Limpar campos se "Selecione..." for escolhido
                     $('#dest_cnpj_cpf, #dest_razao_social, #dest_ie, #dest_endereco, #dest_cep, #dest_municipio, #dest_email, #dest_codigo_municipio, #dest_uf, #dest_ie_indicador, #dest_telefone').val('');
                 }
-            }).trigger('change'); // Dispara no carregamento para preencher se houver destinatario_id em form_data
+                // Chamar a busca de regra ao mudar o destinatário
+                fetchTaxRuleForCurrentItem(); 
+            }).trigger('change'); // Chamada inicial para carregar se houver um destinatário pré-selecionado
 
             // Lógica para limpar seleção do destinatário
             $('#clearDestinatario').click(function(e) {
@@ -566,54 +564,43 @@
             // Lógica para preencher dados do produto no modal ao selecionar
             $('#item_produto_id').change(function() {
                 const selectedOptionValue = $(this).val();
+                let cfopDesc = ''; // Para preencher a natureza da operação
                 if (selectedOptionValue) {
-                    // Encontra o produto completo no array 'allProdutos'
                     const selectedProd = allProdutos.find(p => p.produto_id == selectedOptionValue);
-
                     if (selectedProd) {
                         $('#item_cProd').val(selectedProd.codigo_interno);
                         $('#item_xProd').val(selectedProd.descricao);
                         $('#item_NCM').val(selectedProd.ncm ? selectedProd.ncm.codigo : '');
-                        $('#item_CFOP').val(selectedProd.cfop ? selectedProd.cfop.cfop : ''); // Assuming cfop is directly on product or fetched
+                        $('#item_CFOP').val(selectedProd.cfop ? selectedProd.cfop.cfop : ''); 
                         $('#item_uCom').val(selectedProd.unidade_comercial);
-                        $('#item_qCom').val(1); // Default quantity
+                        $('#item_qCom').val(1);
                         $('#item_vUnCom').val(selectedProd.preco_unitario_padrao);
-                        $('#item_orig').val(selectedProd.origem_mercadoria ? selectedProd.origem_mercadoria.codigo : '');
+                        $('#item_orig').val(selectedProd.origem ? selectedProd.origem.codigo : '');
 
-                        // Chamada AJAX para buscar Regra de Tributação para este produto/cliente/destinatario/CFOP
-                        // Isso é complexo e vital para calcular impostos.
-                        // Para fins de UI, vamos simular ou deixar em branco
-                        // No backend, essa regra seria aplicada e retornaria CSTs e alíquotas.
-                        // Ex:
-                        // $.ajax({
-                        //     url: '/api/get_regra_tributacao',
-                        //     method: 'GET',
-                        //     data: {
-                        //         cliente_id: emitenteClientId, // Usar a variável JS
-                        //         destinatario_id: $('#destinatario_id').val(),
-                        //         produto_id: selectedOptionValue,
-                        //         cfop: $('#item_CFOP').val(),
-                        //         uf_origem: '{{ emitente_data.uf | safe }}', // Passar UF do emitente de forma segura
-                        //         uf_destino: $('#dest_uf').val()
-                        //     },
-                        //     success: function(regra) {
-                        //         $('#item_CST_CSOSN').val(regra.cst_csosn);
-                        //         $('#item_pICMS').val(regra.aliquota_icms);
-                        //         calculateItemTotal(); // Recalcular após obter a regra
-                        //         // Preencher IPI, PIS, COFINS com base na regra
-                        //     }
-                        // });
-
-                        // Apenas para demonstração de cálculo básico (ICMS)
+                        // Preencher CST/CSOSN padrão do produto
+                        if (emitenteRegimeTributarioId === 1) { // Supondo 1 para Simples Nacional
+                            $('#item_CST_CSOSN').val(selectedProd.csosn_icms ? selectedProd.csosn_icms.codigo : '');
+                        } else { // Regime Normal
+                            $('#item_CST_CSOSN').val(selectedProd.cst_icms ? selectedProd.cst_icms.codigo : '');
+                        }
+                        
+                        // Preencher Natureza da Operação com base no CFOP padrão do produto
+                        cfopDesc = selectedProd.cfop ? selectedProd.cfop.descricao : '';
+                        
+                        // Recalcular o total do item inicialmente com base nos valores preenchidos
                         calculateItemTotal();
                     }
                 } else {
                     $('#item_cProd, #item_xProd, #item_NCM, #item_CFOP, #item_uCom, #item_qCom, #item_vUnCom, #item_orig, #item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
                 }
+                // Preenche o campo NatOp principal da NF-e
+                $('#natOp').val(cfopDesc);
+                // Chamar a busca de regra ao mudar o produto
+                fetchTaxRuleForCurrentItem(); 
             });
 
-            // Recalcular total do item ao mudar Qtd ou Valor Unitário
-            $('#item_qCom, #item_vUnCom, #item_pICMS').on('input', calculateItemTotal); // Adicionado #item_pICMS para recalcular
+            // Recalcular total do item ao mudar Qtd, Valor Unitário ou Alíquota ICMS
+            $('#item_qCom, #item_vUnCom, #item_pICMS').on('input', calculateItemTotal);
 
             // Botão Salvar Item no Modal
             $('#saveItemBtn').click(function() {
@@ -627,7 +614,7 @@
                         uCom: $('#item_uCom').val(),
                         qCom: parseFloat($('#item_qCom').val()),
                         vUnCom: parseFloat($('#item_vUnCom').val()),
-                        vProd: parseFloat($('#item_qCom').val()) * parseFloat($('#item_vUnCom').val()), // Total do produto
+                        vProd: parseFloat($('#item_qCom').val()) * parseFloat($('#item_vUnCom').val()),
                         orig: $('#item_orig').val(),
                         CST_CSOSN: $('#item_CST_CSOSN').val(),
                         vICMS: parseFloat($('#item_vICMS').val() || 0),
@@ -638,9 +625,7 @@
                         pPIS: parseFloat($('#item_pPIS').val() || 0),
                         CST_COFINS: $('#item_CST_COFINS').val(),
                         pCOFINS: parseFloat($('#item_pCOFINS').val() || 0),
-                        // Adicionar outros campos de imposto aqui
                     };
-
                     const itemIndex = $('#item_index').val();
                     if (itemIndex !== '') {
                         nfeItems[parseInt(itemIndex)] = item;
@@ -651,7 +636,7 @@
                     calculateTotals();
                     $('#addItemModal').modal('hide');
                 } else {
-                    itemForm[0].reportValidity(); // Mostra mensagens de validação HTML5
+                    itemForm[0].reportValidity();
                 }
             });
 
@@ -659,9 +644,8 @@
             $('#nfe_items_table_body').on('click', '.edit-item-btn', function() {
                 const index = $(this).data('item-id');
                 const item = nfeItems[index];
-
                 $('#item_index').val(index);
-                $('#item_produto_id').val(''); // Limpa a seleção do produto base
+                $('#item_produto_id').val(''); // Limpa a seleção do produto para que o usuário possa selecionar outro se quiser editar
                 $('#item_cProd').val(item.cProd);
                 $('#item_xProd').val(item.xProd);
                 $('#item_NCM').val(item.NCM);
@@ -671,7 +655,7 @@
                 $('#item_vUnCom').val(item.vUnCom);
                 $('#item_orig').val(item.orig);
                 $('#item_CST_CSOSN').val(item.CST_CSOSN);
-                $('#item_vICMS').val(item.vICMS.toFixed(2)); // Formata para 2 casas
+                $('#item_vICMS').val(item.vICMS.toFixed(2));
                 $('#item_pICMS').val(item.pICMS);
                 $('#item_CST_IPI').val(item.CST_IPI);
                 $('#item_pIPI').val(item.pIPI);
@@ -679,8 +663,6 @@
                 $('#item_pPIS').val(item.pPIS);
                 $('#item_CST_COFINS').val(item.CST_COFINS);
                 $('#item_pCOFINS').val(item.pCOFINS);
-                // Preencher outros campos de imposto
-
                 $('#addItemModalLabel').text('Editar Item da Nota');
                 $('#addItemModal').modal('show');
             });
@@ -702,28 +684,157 @@
                 $('#addItemModalLabel').text('Adicionar/Editar Item da Nota');
             });
 
+            // Chamada da função de busca de regras quando o modal de item é aberto
+            // para um NOVO item. Para edição, não queremos sobrescrever os valores já salvos.
+            $('#addItemModal').on('show.bs.modal', function (e) {
+                // Se for um novo item (item_index está vazio), tente buscar a regra
+                if ($('#item_index').val() === '') {
+                    // Pequeno delay para garantir que os campos de produto/destinatário estejam carregados
+                    // (especialmente se o modal for aberto antes de um 'change' ter sido processado)
+                    setTimeout(fetchTaxRuleForCurrentItem, 100); 
+                }
+            });
+
             // Intercepta o submit do formulário principal para adicionar os itens como hidden inputs
             $('#nfeForm').submit(function(e) {
-                // Remove hidden inputs antigos para evitar duplicação em múltiplos submits
+                // Remove qualquer input oculto de itens anterior para evitar duplicação
                 $('input[name^="items["]').remove(); 
 
+                // Adiciona os itens como inputs ocultos, cada um contendo o JSON do item
                 nfeItems.forEach((item, index) => {
                     const hiddenInput = $('<input>')
                         .attr('type', 'hidden')
-                        .attr('name', `items[${index}][json]`)
-                        .val(JSON.stringify(item)); // Converte o objeto item para JSON
+                        .attr('name', `items[${index}][json]`) // Nomeia para ser um array de objetos JSON
+                        .val(JSON.stringify(item));
                     $('#nfeForm').append(hiddenInput);
                 });
-                // Permite que o formulário continue a submissão normal
-                return true; 
+                return true; // Permite que o formulário seja enviado
             });
 
+            // Renderiza os itens iniciais (se houver) e calcula os totais ao carregar a página
+            renderItemsTable();
+            calculateTotals();
         });
 
         // Funções auxiliares
+
+        // Função para buscar e aplicar a regra de tributação via AJAX
+        function fetchTaxRuleForCurrentItem() {
+            const selectedProductId = $('#item_produto_id').val();
+            const selectedDestinatarioId = $('#destinatario_id').val();
+
+            // Limpar campos de imposto antes de buscar uma nova regra
+            $('#item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
+
+            // Se nenhum produto for selecionado no modal, não há regra para buscar
+            if (!selectedProductId) {
+                return;
+            }
+
+            const selectedProduct = allProdutos.find(p => p.produto_id == selectedProductId);
+            let selectedDestinatario = null;
+            if (selectedDestinatarioId) {
+                selectedDestinatario = allDestinatarios.find(d => d.destinatario_id == selectedDestinatarioId);
+            }
+
+            // Validações básicas: precisa ter produto, cliente do emitente e regime tributário
+            if (!selectedProduct || !emitenteClientId || emitenteRegimeTributarioId === null) {
+                console.warn("Dados insuficientes para buscar regra de tributação. Verifique se o produto está selecionado, se o emitente tem ID e regime tributário.");
+                return;
+            }
+
+            const requestData = {
+                cliente_id: emitenteClientId,
+                regime_tributario_id: emitenteRegimeTributarioId,
+                cfop_codigo: selectedProduct.cfop ? selectedProduct.cfop.cfop : null, // CFOP do produto
+                ncm_codigo: selectedProduct.ncm ? selectedProduct.ncm.codigo : null,
+                uf_origem: emitenteUf,
+                uf_destino: selectedDestinatario ? selectedDestinatario.uf : null,
+                tipo_item: selectedProduct.tipo_item || null, // Se tipo_item for um campo no seu modelo Produto
+            };
+
+            console.log("Buscando regra com dados:", requestData); // Para depuração
+
+            $.ajax({
+                url: '/api/regras_tributacao/buscar',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(requestData),
+                success: function(response) {
+                    console.log("Regra de tributação encontrada:", response);
+                    // Preencher os campos do modal com a regra encontrada
+                    // Verifica se é Simples Nacional ou Regime Normal para CST/CSOSN
+                    if (emitenteRegimeTributarioId === 1) { // Supondo 1 para Simples Nacional
+                        $('#item_CST_CSOSN').val(response.csosn_icms_codigo || '');
+                    } else { // Regime Normal
+                        $('#item_CST_CSOSN').val(response.cst_icms_codigo || '');
+                    }
+                    
+                    $('#item_pICMS').val(response.aliquota_icms || 0);
+                    
+                    // Outros impostos:
+                    $('#item_CST_IPI').val(response.cst_ipi || '');
+                    $('#item_pIPI').val(response.aliquota_ipi || 0);
+                    $('#item_CST_PIS').val(response.cst_pis || '');
+                    $('#item_pPIS').val(response.aliquota_pis || 0);
+                    $('#item_CST_COFINS').val(response.cst_cofins || '');
+                    $('#item_pCOFINS').val(response.aliquota_cofins || 0);
+
+                    // Atualiza a Natureza da Operação principal da NF-e
+                    // Idealmente, a regra de tributação traria uma descrição de NatOp, mas se não, usa a do CFOP.
+                    const cfopEncontrado = allCfops.find(c => c.cfop == response.cfop_codigo);
+                    if (cfopEncontrado) {
+                        $('#natOp').val(cfopEncontrado.descricao);
+                    } else if (selectedProduct.cfop) {
+                        $('#natOp').val(selectedProduct.cfop.descricao); // Fallback para o CFOP do produto
+                    }
+                    
+                    // Recalcular o total do item após aplicar a regra
+                    calculateItemTotal();
+                },
+                error: function(xhr, status, error) {
+                    const errorMessage = xhr.responseJSON ? xhr.responseJSON.message : "Erro desconhecido ao buscar regra de tributação.";
+                    console.error("Erro na busca de regra de tributação:", errorMessage);
+                    // Mostrar uma mensagem de erro ou aviso ao usuário no modal
+                    // Exemplo: $('#modalAlertPlaceholder').html('<div class="alert alert-warning">' + errorMessage + '</div>');
+                    // Ou, se preferir, limpar os campos de imposto se a busca falhar
+                    // E voltar para os valores padrão do produto, se existirem
+                    const selectedProductId = $('#item_produto_id').val();
+                    if (selectedProductId) {
+                        const selectedProd = allProdutos.find(p => p.produto_id == selectedProductId);
+                        if (selectedProd) {
+                            if (emitenteRegimeTributarioId === 1) {
+                                $('#item_CST_CSOSN').val(selectedProd.csosn_icms ? selectedProd.csosn_icms.codigo : '');
+                            } else {
+                                $('#item_CST_CSOSN').val(selectedProd.cst_icms ? selectedProd.cst_icms.codigo : '');
+                            }
+                            // Também resetar alíquotas para 0 ou padrão se a regra falhou
+                            $('#item_pICMS').val(0); 
+                            $('#item_CST_IPI').val(''); $('#item_pIPI').val(0);
+                            $('#item_CST_PIS').val(''); $('#item_pPIS').val(0);
+                            $('#item_CST_COFINS').val(''); $('#item_pCOFINS').val(0);
+                        }
+                    } else {
+                         // Se não houver produto selecionado, ou se a regra falhar e não houver padrão, limpa tudo.
+                        $('#item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
+                    }
+                     // Garante que a natureza da operação é preenchida pelo CFOP padrão do produto se a busca de regra falhar
+                    if (selectedProductId) {
+                        const selectedProd = allProdutos.find(p => p.produto_id == selectedProductId);
+                        $('#natOp').val(selectedProd.cfop ? selectedProd.cfop.descricao : '');
+                    } else {
+                        $('#natOp').val('');
+                    }
+
+                    calculateItemTotal(); // Recalcula o total com os valores redefinidos
+                }
+            });
+        }
+
+        // Renderiza a tabela de itens da NF-e com os dados atuais
         function renderItemsTable() {
             const tbody = $('#nfe_items_table_body');
-            tbody.empty();
+            tbody.empty(); // Limpa a tabela antes de redesenhar
             if (nfeItems.length === 0) {
                 tbody.append('<tr><td colspan="8" class="text-center">Nenhum item adicionado ainda.</td></tr>');
                 return;
@@ -748,34 +859,33 @@
             });
         }
 
+        // Calcula o valor do ICMS e o valor total do produto no modal
         function calculateItemTotal() {
             const qCom = parseFloat($('#item_qCom').val()) || 0;
             const vUnCom = parseFloat($('#item_vUnCom').val()) || 0;
             const vProd = qCom * vUnCom;
-            // Exemplo básico de cálculo de ICMS: alíquota sobre o valor do produto
-            const pICMS = parseFloat($('#item_pICMS').val() || 0); // Alíquota ICMS (pode vir de uma regra)
+            const pICMS = parseFloat($('#item_pICMS').val() || 0); // Pega a alíquota do campo
             const vICMS = vProd * (pICMS / 100);
 
-            $('#item_vICMS').val(vICMS.toFixed(2));
-            // Adicione aqui a lógica para outros impostos (IPI, PIS, COFINS)
+            $('#item_vICMS').val(vICMS.toFixed(2)); // Atualiza o campo de valor do ICMS
         }
 
+        // Calcula os totais gerais da nota fiscal (produtos e NF-e)
         function calculateTotals() {
             let totalProdutos = 0;
-            let totalNFE = 0; // Pode incluir frete, seguro, etc.
+            let totalNFE = 0;
 
             nfeItems.forEach(item => {
                 totalProdutos += item.vProd;
-                totalNFE += item.vProd + (item.vICMS || 0) + (item.vIPI || 0); // Exemplo simplificado de total NF-e
-                // Somar outros impostos e despesas
+                // Para simplificar, totalNFE considera vProd + vICMS + vIPI. Ajuste conforme sua necessidade.
+                totalNFE += item.vProd + (item.vICMS || 0) + (item.vIPI || 0);
             });
 
             $('#total_produtos').text(`R$ ${totalProdutos.toFixed(2)}`);
-            $('#total_produtos_input').val(totalProdutos.toFixed(2));
-
+            $('#total_produtos_input').val(totalProdutos.toFixed(2)); // Atualiza hidden input
+            
             $('#total_nfe').text(`R$ ${totalNFE.toFixed(2)}`);
-            $('#total_nfe_input').val(totalNFE.toFixed(2));
-            // Atualizar outros totais no UI e nos hidden inputs
+            $('#total_nfe_input').val(totalNFE.toFixed(2)); // Atualiza hidden input
         }
     </script>
 {% endblock %}
