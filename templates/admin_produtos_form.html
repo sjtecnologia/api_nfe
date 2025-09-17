@@ -18,8 +18,7 @@
     <form action="{{ url_for('admin_produtos_edit', produto_id=produto.produto_id) if produto and produto.produto_id else url_for('admin_produtos_add') }}" method="post">
         {# Input oculto para o cliente_id - Garante que o cliente_id seja enviado pelo formulário principal #}
         <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
-        {# Inclui APENAS os campos do formulário, sem a tag <form> ou botões #}
-        {# Passa as novas variáveis para o template incluído #}
+        {# ATUALIZADO: Inclui o parcial com o contexto completo #}
         {% include 'admin_produtos_form_fields.html' with context %}
         
         {# Botões de ação da página completa #}

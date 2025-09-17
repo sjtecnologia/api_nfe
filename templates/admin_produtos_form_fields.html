@@ -76,11 +76,12 @@
         <small class="form-text text-muted">CFOP padrão para operações com este produto. Será utilizado como sugestão.</small>
     </div>
     <div class="col-md-4 mb-3">
-        <label for="cst_icms_id" class="form-label">CST ICMS Padrão (Regime Normal)</label>
-        <select class="form-select" id="cst_icms_id" name="cst_icms_id">
+        {# AJUSTADO: Usando csts_icms que é passado pelo app.txt #}
+        <label for="cst_id" class="form-label">CST ICMS Padrão (Regime Normal)</label>
+        <select class="form-select" id="cst_id" name="cst_id">
             <option value="">Selecione um CST...</option>
             {% for cst_item in csts_icms %}
-                <option value="{{ cst_item.cst_id }}" {% if (form_data.cst_icms_id | string) == (cst_item.cst_id | string) %}selected{% endif %}>
+                <option value="{{ cst_item.cst_id }}" {% if (form_data.cst_id | string) == (cst_item.cst_id | string) %}selected{% endif %}>
                     {{ cst_item.codigo }} - {{ cst_item.descricao }}
                 </option>
             {% endfor %}
@@ -88,11 +89,12 @@
         <small class="form-text text-muted">CST ICMS padrão se o emitente for de Regime Normal (sugestão).</small>
     </div>
     <div class="col-md-4 mb-3">
-        <label for="csosn_icms_id" class="form-label">CSOSN ICMS Padrão (Simples Nacional)</label>
-        <select class="form-select" id="csosn_icms_id" name="csosn_icms_id">
+        {# AJUSTADO: Usando csosns_icms que é passado pelo app.txt #}
+        <label for="csosn_id" class="form-label">CSOSN ICMS Padrão (Simples Nacional)</label>
+        <select class="form-select" id="csosn_id" name="csosn_id">
             <option value="">Selecione um CSOSN...</option>
             {% for csosn_item in csosns_icms %}
-                <option value="{{ csosn_item.csosn_id }}" {% if (form_data.csosn_icms_id | string) == (csosn_item.csosn_id | string) %}selected{% endif %}>
+                <option value="{{ csosn_item.csosn_id }}" {% if (form_data.csosn_id | string) == (csosn_item.csosn_id | string) %}selected{% endif %}>
                     {{ csosn_item.codigo }} - {{ csosn_item.descricao }}
                 </option>
             {% endfor %}

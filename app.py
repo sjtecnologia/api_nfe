@@ -227,6 +227,7 @@ def get_api_cfops():
     cfops = db.query(Cfop).all()
     cfop_list = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in cfops]
     return jsonify(cfop_list), 200
+
 @app.route('/api/ncms', methods=['GET'])
 def get_api_ncms():
     db = next(get_db())
@@ -1294,8 +1295,8 @@ def admin_produtos_add():
         ativo = request.form.get('ativo') == 'on'
         # --- NOVOS CAMPOS ---
         cfop_id = request.form.get('cfop_id')
-        cst_icms_id = request.form.get('cst_icms_id')
-        csosn_icms_id = request.form.get('csosn_icms_id')
+        cst_id = request.form.get('cst_id')
+        csosn_id = request.form.get('csosn_id')
         # --------------------
         
         if not all([cliente_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao_str, origem_mercadoria, tipo_item]):
@@ -1320,8 +1321,8 @@ def admin_produtos_add():
 
             # --- PROCESSAR NOVOS CAMPOS ---
             cfop_id = int(cfop_id) if cfop_id else None
-            cst_icms_id = int(cst_icms_id) if cst_icms_id else None
-            csosn_icms_id = int(csosn_icms_id) if csosn_icms_id else None
+            cst_id = int(cst_id) if cst_id else None
+            csosn_id = int(csosn_id) if csosn_id else None
             # ------------------------------
 
             novo_produto = Produto(
@@ -1336,8 +1337,8 @@ def admin_produtos_add():
                 tipo_item=tipo_item,
                 ativo=ativo,
                 cfop_id=cfop_id, # NOVO
-                cst_icms_id=cst_icms_id, # NOVO
-                csosn_icms_id=csosn_icms_id, # NOVO
+                cst_id=cst_id, # NOVO
+                csosn_id=csosn_id, # NOVO
                 created_by_user_id=current_user.id
             )
             db.add(novo_produto)
@@ -1422,8 +1423,8 @@ def admin_produtos_edit(produto_id):
         produto.ativo = request.form.get('ativo') == 'on'
         # --- ATUALIZAR NOVOS CAMPOS ---
         produto.cfop_id = int(request.form.get('cfop_id')) if request.form.get('cfop_id') else None
-        produto.cst_icms_id = int(request.form.get('cst_icms_id')) if request.form.get('cst_icms_id') else None
-        produto.csosn_icms_id = int(request.form.get('csosn_icms_id')) if request.form.get('csosn_icms_id') else None
+        produto.cst_id = int(request.form.get('cst_id')) if request.form.get('cst_id') else None
+        produto.csosn_id = int(request.form.get('csosn_id')) if request.form.get('csosn_id') else None
         # ------------------------------
         if not all([produto.cliente_id, produto.codigo_interno, produto.descricao, produto.unidade_comercial, preco_unitario_padrao, produto.origem_mercadoria, produto.tipo_item]):
             flash('Por favor, preencha todos os campos obrigatórios do produto.', 'danger')
@@ -2461,153 +2462,7 @@ def admin_emitir_nfe():
                            form_data=form_data,
                            initial_nfe_items=initial_nfe_items)
 
-# @app.route('/admin/users/list')
-# @login_required
-# @permission_required('users.read')
-# def admin_users_list():
-#     db = next(get_db())
-#     users = db.query(User).all()
-#     return render_template('admin_users_list.html', users=users)
-# @app.route('/admin/users/add', methods=['GET', 'POST'])
-# @login_required
-# @permission_required('users.create')
-# def admin_users_add():
-#     db = next(get_db())
-#     roles = db.query(Role).all()
-#     accessible_client_ids = get_accessible_client_ids(db)
-#     clients = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
-#     if request.method == 'POST':
-#         username = request.form.get('username')
-#         email = request.form.get('email')
-#         password = request.form.get('password')
-#         password_confirm = request.form.get('password_confirm')
-#         selected_roles_ids = request.form.getlist('roles')
-#         selected_clients_ids = request.form.getlist('clients')
-#         is_active = request.form.get('is_active') == 'on'
-#         if not (username and password and password_confirm):
-#             flash('Nome de usuário, senha e confirmação de senha são obrigatórios.', 'danger')
-#             return render_template('admin_users_form.html', roles=roles, clients=clients, form_data=request.form)
-#         if password != password_confirm:
-#             flash('As senhas não coincidem.', 'danger')
-#             return render_template('admin_users_form.html', roles=roles, clients=clients, form_data=request.form)
-#         try:
-#             hashed_password = generate_password_hash(password)
-#             new_user = User(username=username, email=email, password_hash=hashed_password, is_active=is_active)
-#             db.add(new_user)
-#             db.flush()
-#             for role_id_str in selected_roles_ids:
-#                 user_role = UserRole(user_id=new_user.id, role_id=int(role_id_str))
-#                 db.add(user_role)
-            
-#             for client_id_str in selected_clients_ids:
-#                 client_id = int(client_id_str)
-#                 # Dupla checagem: o admin só pode vincular usuários a clientes que ele mesmo acessa
-#                 if client_id not in accessible_client_ids:
-#                     flash(f'Você não tem permissão para vincular o usuário ao cliente com ID {client_id}.', 'danger')
-#                     raise Exception('Permissão negada para vincular cliente.')
-#                 user_client = UserClient(user_id=new_user.id, client_id=client_id)
-#                 db.add(user_client)
-#             db.commit()
-#             flash('Usuário criado com sucesso!', 'success')
-#             return redirect(url_for('admin_users_list'))
-#         except IntegrityError:
-#             db.rollback()
-#             flash('Nome de usuário ou e-mail já existe.', 'danger')
-#         except Exception as e:
-#             db.rollback()
-#             flash(f"Erro ao criar usuário: {e}", 'danger')
-#     return render_template('admin_users_form.html', roles=roles, clients=clients, form_data={})
 
-# @app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
-# @login_required
-# @permission_required('users.edit')
-# def admin_users_edit(user_id):
-#     db = next(get_db())
-#     user = db.query(User).get(user_id)
-#     if not user:
-#         abort(404)
-    
-#     roles = db.query(Role).all()
-    
-#     # Clientes que o *admin atual* pode acessar para vincular ao *usuário que está sendo editado*
-#     accessible_client_ids_by_admin = get_accessible_client_ids(db)
-#     clients_for_dropdown = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids_by_admin)).all()
-#     user_roles_ids = {ur.role_id for ur in user.roles}
-#     user_clients_ids = {uc.client_id for uc in user.clients}
-#     if request.method == 'POST':
-#         user.username = request.form.get('username')
-#         user.email = request.form.get('email')
-#         new_password = request.form.get('password')
-#         password_confirm = request.form.get('password_confirm')
-#         selected_roles_ids = {int(id) for id in request.form.getlist('roles')}
-#         selected_clients_ids = {int(id) for id in request.form.getlist('clients')}
-#         user.is_active = request.form.get('is_active') == 'on'
-#         if new_password:
-#             if new_password != password_confirm:
-#                 flash('As senhas não coincidem.', 'danger')
-#                 return render_template('admin_users_form.html', user=user, roles=roles, clients=clients_for_dropdown, user_roles_ids=user_roles_ids, user_clients_ids=user_clients_ids)
-#             user.password_hash = generate_password_hash(new_password)
-#         try:
-#             # Atualiza roles do usuário
-#             for ur in list(user.roles): # Usar list() para evitar "collection was modified"
-#                 if ur.role_id not in selected_roles_ids:
-#                     db.delete(ur)
-#             for role_id in selected_roles_ids:
-#                 if role_id not in user_roles_ids:
-#                     user_role = UserRole(user_id=user.id, role_id=role_id)
-#                     db.add(user_role)
-            
-#             # Atualiza clientes do usuário
-#             for uc in list(user.clients): # Usar list()
-#                 if uc.client_id not in selected_clients_ids:
-#                     db.delete(uc)
-#             for client_id in selected_clients_ids:
-#                 # Dupla checagem: o admin só pode vincular usuários a clientes que ele mesmo acessa
-#                 if client_id not in accessible_client_ids_by_admin:
-#                     flash(f'Você não tem permissão para vincular o usuário ao cliente com ID {client_id}.', 'danger')
-#                     raise Exception('Permissão negada para vincular cliente.')
-#                 if client_id not in user_clients_ids:
-#                     user_client = UserClient(user_id=user.id, client_id=client_id)
-#                     db.add(user_client)
-#             db.commit()
-#             flash('Usuário atualizado com sucesso!', 'success')
-#             return redirect(url_for('admin_users_list'))
-#         except IntegrityError:
-#             db.rollback()
-#             flash('Nome de usuário ou e-mail já existe.', 'danger')
-#         except Exception as e:
-#             db.rollback()
-#             flash(f"Erro ao atualizar usuário: {e}", 'danger')
-#     return render_template('admin_users_form.html', user=user, roles=roles, clients=clients_for_dropdown, user_roles_ids=user_roles_ids, user_clients_ids=user_clients_ids)
-
-# @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
-# @login_required
-# @permission_required('users.delete')
-# def admin_users_delete(user_id):
-#     db = next(get_db())
-#     user = db.query(User).get(user_id)
-#     if not user:
-#         abort(404)
-#     if user.id == current_user.id:
-#         flash('Você não pode excluir a si mesmo.', 'danger')
-#         return redirect(url_for('admin_users_list'))
-#     try:
-#         db.delete(user)
-#         db.commit()
-#         flash('Usuário excluído com sucesso!', 'success')
-#     except Exception as e:
-#         db.rollback()
-#         flash(f"Erro ao excluir usuário: {e}", 'danger')
-    
-#     return redirect(url_for('admin_users_list'))
-# # --- Rotas para Gerenciamento de Papéis (Roles) ---
-# @app.route('/admin/roles/list')
-# @login_required
-# @permission_required('roles.read')
-# def admin_roles_list():
-#     db = next(get_db())
-#     roles = db.query(Role).all()
-#     return render_template('admin_roles_list.html', roles=roles)
 
 
 if __name__ == '__main__':
