@@ -5,8 +5,8 @@
     {# Input oculto para o cliente_id #}
     <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
 
-    {# Inclui os campos do formulário #}
-    {% include 'admin_produtos_form_fields.html' %}
+    {# Inclui os campos do formulário e passa as novas variáveis para ele #}
+    {% include 'admin_produtos_form_fields.html' with context %}
     
     {# Botão de submit para o modal #}
     <div class="mt-3 text-end"> {# Adicionado text-end para alinhar à direita dentro do modal #}

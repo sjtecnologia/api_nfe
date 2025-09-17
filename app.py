@@ -1,4 +1,3 @@
-# No início do seu app.py, certifique-se de ter as seguintes importações:
 from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, abort, current_app, get_flashed_messages
 import json
 import os
@@ -19,7 +18,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12 # Adicione esta importação
 from cryptography.hazmat.primitives import hashes
-
 from sqlalchemy import create_engine, or_, and_
 from sqlalchemy.orm import sessionmaker, joinedload # ADICIONADO joinedload aqui
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -34,6 +32,8 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'sua_chave_secreta_padrao_muito_c
 # ATENÇÃO: Verifique se o host e o nome do banco de dados estão corretos para o seu ambiente.
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo2505@localhost:5432/sjtnfe")
 
+if "postgresql" in SQLALCHEMY_DATABASE_URL:
+    os.environ['DB_TYPE'] = 'postgresql'
 if "postgresql" in SQLALCHEMY_DATABASE_URL:
     os.environ['DB_TYPE'] = 'postgresql'
 
@@ -61,7 +61,6 @@ login_manager.init_app(app)
 login_manager.login_view = 'login' # Rota para onde o usuário é redirecionado se não estiver logado
 login_manager.login_message = "Por favor, faça login para acessar esta página."
 login_manager.login_message_category = "info"
-
 @login_manager.user_loader
 def load_user(user_id):
     # Esta função é chamada pelo Flask-Login para carregar um usuário a partir do ID
@@ -73,7 +72,6 @@ def load_user(user_id):
         db.close() # Fecha a sessão
 
 # --- Funções Auxiliares ---
-
 # Função para obter os IDs dos clientes que o usuário logado tem acesso
 def get_accessible_client_ids(db_session):
     if not current_user.is_authenticated:
@@ -92,12 +90,12 @@ def has_permission(permission_name):
         return False
     
     # Super-admin (com permissão 'admin.full_access') sempre tem todas as permissões
+# Super-admin (com permissão 'admin.full_access') sempre tem todas as permissões
     # Verifique se o usuário tem a permissão 'admin.full_access'
     db = SessionLocal() # Nova sessão para esta verificação
     user_permissions_query = db.query(Permission.name).join(RolePermission).join(Role).join(UserRole).filter(UserRole.user_id == current_user.id).distinct()
     user_permissions_names = [p[0] for p in user_permissions_query.all()]
     db.close()
-
     if 'admin.full_access' in user_permissions_names:
         return True
     
@@ -131,15 +129,17 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
             private_key = None
             cert_x509_obj = None 
             try:
-                p12 = pkcs12.load_key_and_certificates( # <--- pkcs12 é o correto
+                # CORREÇÃO AQUI: pkcs12 é um módulo, e load_key_and_certificates é um método que retorna uma tupla
+                p12_tuple = pkcs12.load_key_and_certificates( 
                     file_content,
                     cert_password.encode('utf-8'), 
                     default_backend()
                 )
-                private_key = p12[0]
-                cert_x509_obj = p12[1] 
+                private_key = p12_tuple[0] # A chave privada é o primeiro elemento da tupla
+                cert_x509_obj = p12_tuple[1] # O certificado X.509 é o segundo elemento da tupla
             except ValueError:
                 try:
+                    # Fallback para certificado PEM (se for o caso)
                     cert_x509_obj = x509.load_pem_x509_certificate(file_content, default_backend())
                 except ValueError:
                     flash(f'Erro ao carregar o certificado: Formato de arquivo ou senha inválidos para {cert_file.filename}.', 'danger')
@@ -152,13 +152,11 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
             fingerprint = cert_x509_obj.fingerprint(hashes.SHA256()).hex()
             validade_inicio_final = cert_x509_obj.not_valid_before_utc.replace(tzinfo=None)
             validade_fim_final = cert_x509_obj.not_valid_after_utc.replace(tzinfo=None)
-
-            # Aqui você pode verificar se já existe um certificado com o mesmo fingerprint para o cliente
+# Aqui você pode verificar se já existe um certificado com o mesmo fingerprint para o cliente
             # existente_cert = db_session.query(CertificadoDigital).filter_by(cliente_id=cliente_id, fingerprint=fingerprint).first()
             # if existente_cert:
             #    flash('Já existe um certificado com este fingerprint para este cliente.', 'warning')
             #    return False, None
-
             encrypted_cert_password = cert_password.encode('utf-8')
             
             cert_obj = CertificadoDigital(
@@ -181,7 +179,6 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
             return False, None
     return True, None # Nenhum arquivo de certificado enviado, sem erro
 # --- Rotas de Autenticação ---
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -209,7 +206,6 @@ def logout():
     flash('Você foi desconectado.', 'info')
     return redirect(url_for('login'))
 # --- Rotas Principais ---
-
 @app.route('/')
 @login_required
 def home():
@@ -225,7 +221,6 @@ def health_check():
 # Essas rotas geralmente não são expostas diretamente para usuários finais,
 # mas podem ser consumidas pela interface web do seu próprio aplicativo já logado.
 # Para API externa, considere autenticação por API Key/Token.
-
 @app.route('/api/cfops', methods=['GET'])
 def get_api_cfops():
     db = next(get_db())
@@ -238,7 +233,6 @@ def get_api_ncms():
     ncms = db.query(Ncm).all()
     ncm_list = [{"ncm_id": n.ncm_id, "codigo": n.codigo, "descricao": n.descricao} for n in ncms]
     return jsonify(ncm_list), 200
-
 @app.route('/api/produtos', methods=['GET'])
 def get_api_produtos():
     db = next(get_db())
@@ -251,7 +245,6 @@ def get_api_clientes():
     clientes = db.query(Cliente).all() # ATENÇÃO: Retorna TODOS os clientes. Para API específica por usuário/cliente, adicione filtros.
     cliente_list = [{"cliente_id": c.cliente_id, "cnpj": c.cnpj, "razao_social": c.razao_social} for c in clientes]
     return jsonify(cliente_list), 200
-
 @app.route('/api/certificados', methods=['GET'])
 def get_api_certificados():
     db = next(get_db())
@@ -264,7 +257,6 @@ def get_api_nfes():
     nfes = db.query(NFeEmitidas).all()
     nfe_list = [{"nfe_emitida_id": n.nfe_emitida_id, "tipo_nfe": n.tipo_nfe, "data_criacao": n.data_criacao.isoformat()} for n in nfes]
     return jsonify(nfe_list), 200
-
 @app.route('/api/regimes_tributarios', methods=['GET'])
 def get_api_regimes_tributarios():
     db = next(get_db())
@@ -277,7 +269,6 @@ def get_api_regras_tributacao():
     regras_tributacao = db.query(RegraTributacao).all() # ATENÇÃO: Retorna TODAS.
     regra_tributacao_list = [{"regra_tributacao_id": r.regra_tributacao_id, "descricao_regra": r.descricao_regra} for r in regras_tributacao]
     return jsonify(regra_tributacao_list), 200
-
 @app.route('/api/regras_tributacao/buscar', methods=['POST'])
 @login_required # Proteger este endpoint também, para que apenas usuários logados possam buscar regras
 def buscar_regra_tributacao():
@@ -296,7 +287,6 @@ def buscar_regra_tributacao():
     accessible_client_ids = get_accessible_client_ids(db)
     if cliente_id and int(cliente_id) not in accessible_client_ids:
         return jsonify({"error": "Acesso negado para este cliente."}), 403
-
     query = db.query(RegraTributacao).options(
         joinedload(RegraTributacao.regime_tributario),
         joinedload(RegraTributacao.cfop),
@@ -305,8 +295,7 @@ def buscar_regra_tributacao():
         joinedload(RegraTributacao.csosn_icms_obj),
         joinedload(RegraTributacao.motivo_desoneracao)
     ).filter(RegraTributacao.ativo == True) # Apenas regras ativas
-
-    # Filtros obrigatórios
+# Filtros obrigatórios
     if cliente_id: # A regra pode ser específica de um cliente ou global (cliente_id IS NULL)
         query = query.filter(or_(RegraTributacao.cliente_id == cliente_id, RegraTributacao.cliente_id.is_(None)))
     else: # Se o cliente_id não for fornecido, buscar apenas regras globais
@@ -326,8 +315,7 @@ def buscar_regra_tributacao():
         query = query.filter(RegraTributacao.uf_destino == uf_destino)
     if tipo_item:
         query = query.filter(RegraTributacao.tipo_item == tipo_item)
-
-    # Ordenar por prioridade (maior prioridade primeiro)
+# Ordenar por prioridade (maior prioridade primeiro)
     # Se houver regras globais e específicas para o cliente,
     # e se cliente_id for not null na regra, dar prioridade a ela
     # e depois pela prioridade da regra.
@@ -349,7 +337,6 @@ def get_api_csosns():
     csosns = db.query(Csosnicms).all()
     csosn_list = [{"csosn_id": c.csosn_id, "codigo": c.codigo, "descricao": c.descricao} for c in csosns]
     return jsonify(csosn_list), 200
-
 @app.route('/api/cst', methods=['GET'])
 def get_api_csts():
     db = next(get_db())
@@ -365,6 +352,7 @@ def get_api_origens_mercadoria():
 
 
 # --- Rotas de Administração (Front-end Rendering - Protegidas com Login e Permissões) ---
+# --- Rotas de Administração (Front-end Rendering - Protegidas com Login e Permissões) ---
 
 # Rotas para Certificados (A listagem geral continua aqui, mas não no menu)
 @app.route('/admin/certificados')
@@ -378,7 +366,6 @@ def admin_certificados_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_certificados_list.html', certificados=certificados, cliente_map=cliente_map)
-
 # Rota de Adição de Certificado - Suporta requisição normal e AJAX para modal
 @app.route('/admin/certificados/add', methods=['GET', 'POST'])
 @login_required
@@ -443,14 +430,12 @@ def admin_certificados_add():
     if return_client_id and not initial_form_data.get('cliente_id'):
         initial_form_data = initial_form_data.copy()
         initial_form_data['cliente_id'] = return_client_id
-
     if is_modal_request:
         # Renderiza apenas o conteúdo do formulário para o modal
         return render_template('admin_certificados_form_content.html', clientes=clientes_disponiveis, form_data=initial_form_data, return_client_id=return_client_id)
     else:
         # Renderiza a página completa se não for requisição de modal
         return render_template('admin_certificados_form.html', clientes=clientes_disponiveis, form_data=initial_form_data, return_client_id=return_client_id)
-
 @app.route('/admin/certificados/edit/<int:certificado_digital_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('certificates.edit')
@@ -470,14 +455,12 @@ def admin_certificados_edit(certificado_digital_id):
     return_client_id = request.args.get('cliente_id', type=int) 
     if not return_client_id and certificado:
         return_client_id = certificado.cliente_id # Se não veio do form de cliente, pega o cliente do certificado
-
     clientes_disponiveis = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
 
     if request.method == 'POST':
         # Permite alterar o cliente associado ao certificado, mas valida a permissão
         novo_cliente_id_form = request.form.get('cliente_id')
         novo_cliente_id = int(novo_cliente_id_form) if novo_cliente_id_form else None
-
         if novo_cliente_id is None or novo_cliente_id not in accessible_client_ids:
             flash('Você não tem permissão para associar o certificado a este cliente.', 'danger')
             # Retorna para o form, pré-preenchendo com os dados atuais e mensagens de erro
@@ -519,7 +502,6 @@ def admin_certificados_edit(certificado_digital_id):
         'cliente_id': certificado.cliente_id # Necessário para o dropdown
     }
     return render_template('admin_certificados_form.html', certificado=certificado, clientes=clientes_disponiveis, form_data=cert_data, return_client_id=return_client_id)
-
 @app.route('/admin/certificados/delete/<int:certificado_digital_id>', methods=['POST'])
 @login_required
 @permission_required('certificates.delete')
@@ -531,7 +513,6 @@ def admin_certificados_delete(certificado_digital_id):
         CertificadoDigital.certificado_digital_id == certificado_digital_id,
         CertificadoDigital.cliente_id.in_(accessible_client_ids)
     ).first()
-
     if not certificado:
         flash('Certificado não encontrado ou você não tem permissão para excluí-lo.', 'danger')
         return redirect(url_for('admin_clientes_list'))
@@ -548,7 +529,6 @@ def admin_certificados_delete(certificado_digital_id):
     if cliente_id_redirect: # Se o certificado estava associado a um cliente, volta para a aba do cliente
         return redirect(url_for('admin_clientes_edit', cliente_id=cliente_id_redirect, _anchor='certificados'))
     return redirect(url_for('admin_certificados_list'))
-
 # Rotas para Regimes Tributários (dados globais, não dependem de cliente_id)
 @app.route('/admin/regimes_tributarios/list')
 @login_required
@@ -630,7 +610,6 @@ def admin_regimes_tributarios_delete(regime_tributario_id):
     except Exception as e:
         db.rollback()
         flash(f"Erro ao excluir regime tributário: {e}", 'danger')
-
     return redirect(url_for('admin_regimes_tributarios_list'))
 
 # Rotas para Clientes
@@ -642,7 +621,6 @@ def admin_clientes_list():
     accessible_client_ids = get_accessible_client_ids(db)
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     return render_template('admin_clientes_list.html', clientes=clientes)
-
 @app.route('/admin/clientes/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('clients.create')
@@ -656,7 +634,6 @@ def admin_clientes_add():
     csts = db.query(Csticms).all()
     csosns = db.query(Csosnicms).all()
     form_data = request.form # Para manter dados do formulário em caso de erro
-
     if request.method == 'POST':
         cnpj = request.form.get('cnpj')
         razao_social = request.form.get('razao_social')
@@ -720,8 +697,7 @@ def admin_clientes_add():
             # Vincula o usuário atual ao cliente recém-criado
             user_client = UserClient(user_id=current_user.id, client_id=novo_cliente.cliente_id)
             db.add(user_client)
-
-            # Processa o upload do certificado, se houver (apenas para o primeiro certificado na criação)
+# Processa o upload do certificado, se houver (apenas para o primeiro certificado na criação)
             success_cert, cert_obj = process_certificate_upload(db, novo_cliente.cliente_id, request.form, request.files)
             if not success_cert:
                 db.rollback() 
@@ -751,14 +727,12 @@ def admin_clientes_add():
                            form_data=form_data, # Passa os dados do form para re-preencher
                            cliente={}, # Cliente vazio para novo cadastro
                            )
-
 @app.route('/admin/clientes/edit/<int:cliente_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('clients.edit')
 def admin_clientes_edit(cliente_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     cliente = db.query(Cliente).filter(
         Cliente.cliente_id == cliente_id,
         Cliente.cliente_id.in_(accessible_client_ids)
@@ -770,11 +744,17 @@ def admin_clientes_edit(cliente_id):
     # Dados para as abas
     regimes_tributarios = db.query(RegimeTributario).all()
     certificados_existentes = db.query(CertificadoDigital).filter_by(cliente_id=cliente_id).all()
-    produtos_existentes = db.query(Produto).filter_by(cliente_id=cliente_id).all()
+    # ATUALIZADO: Carregar novos relacionamentos para Produtos para o template
+    produtos_existentes = db.query(Produto).filter_by(cliente_id=cliente_id).options(
+        joinedload(Produto.ncm), 
+        joinedload(Produto.cfop),
+        joinedload(Produto.origem),
+        joinedload(Produto.cst_icms),
+        joinedload(Produto.csosn_icms)
+    ).all()
     regras_existentes = db.query(RegraTributacao).filter_by(cliente_id=cliente_id).all()
     destinatarios_existentes = db.query(DestinatarioNFe).filter_by(cliente_id=cliente_id).all()
-
-    # Dados para os dropdowns dentro das abas de Produtos e Regras Tributárias
+# Dados para os dropdowns dentro das abas de Produtos e Regras Tributárias
     ncms = db.query(Ncm).all()
     origens_mercadoria = db.query(OrigemMercadoria).all()
     cfops = db.query(Cfop).all()
@@ -782,7 +762,6 @@ def admin_clientes_edit(cliente_id):
     csosns = db.query(Csosnicms).all()
     motivos_desoneracao = db.query(MotivoDesoneracao).order_by(MotivoDesoneracao.codigo).all()
     form_data = request.form # Para manter dados do formulário em caso de erro
-
     if request.method == 'POST':
         # Atualiza os dados do cliente
         cliente.cnpj = request.form.get('cnpj')
@@ -872,7 +851,6 @@ def admin_clientes_edit(cliente_id):
                            cfops=cfops, csts=csts, csosns=csosns, 
                            motivos_desoneracao=motivos_desoneracao,
                            form_data=cliente) # Usa o objeto cliente para preencher o formulário na carga inicial
-
 @app.route('/admin/clientes/delete/<int:cliente_id>', methods=['POST'])
 @login_required
 @permission_required('clients.delete')
@@ -888,7 +866,6 @@ def admin_clientes_delete(cliente_id):
     if not cliente:
         flash('Cliente não encontrado ou você não tem permissão para excluí-lo.', 'danger')
         return redirect(url_for('admin_clientes_list'))
-
     try:
         # Primeiro, excluímos registros dependentes (se não houver cascade delete configurado no DB)
         # SQLAlchemy pode fazer isso automaticamente com cascade, mas explicitamente é mais seguro
@@ -899,7 +876,6 @@ def admin_clientes_delete(cliente_id):
         db.query(UserClient).filter_by(client_id=cliente_id).delete() # Remove a associação do cliente com usuários
         # Cuidado: NFeEmitidas também depende de cliente_id. Se quiser excluir tudo, deve ser feito aqui ou via cascade.
         # db.query(NFeEmitidas).filter_by(cliente_id=cliente_id).delete()
-
         db.delete(cliente)
         db.commit()
         flash('Cliente e dados associados excluídos com sucesso!', 'success')
@@ -919,7 +895,6 @@ def admin_ncms_list():
     db = next(get_db())
     ncms = db.query(Ncm).all()
     return render_template('admin_ncms_list.html', ncms=ncms)
-
 @app.route('/admin/ncms/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('ncms.create')
@@ -975,7 +950,6 @@ def admin_ncms_edit(ncm_id):
     if not ncm:
         abort(404)
     form_data = request.form
-
     if request.method == 'POST':
         ncm.codigo = request.form.get('codigo')
         ncm.descricao = request.form.get('descricao')
@@ -1023,7 +997,6 @@ def admin_ncms_delete(ncm_id):
         db.rollback()
         flash(f"Erro ao excluir NCM: {e}", 'danger')
     return redirect(url_for('admin_ncms_list'))
-
 # --- Rotas para CST ICMS (dados globais) ---
 @app.route('/admin/cst/list')
 @login_required
@@ -1067,7 +1040,6 @@ def admin_cst_edit(cst_id):
     if not cst:
         abort(404)
     form_data = request.form
-
     if request.method == 'POST':
         cst.codigo = request.form.get('codigo')
         cst.descricao = request.form.get('descricao')
@@ -1105,7 +1077,6 @@ def admin_cst_delete(cst_id):
         db.rollback()
         flash(f"Erro ao excluir CST ICMS: {e}", 'danger')
     return redirect(url_for('admin_cst_list'))
-
 # --- Rotas para CFOP (dados globais) ---
 @app.route('/admin/cfops/list')
 @login_required
@@ -1158,7 +1129,6 @@ def admin_cfops_edit(cfop_id):
     if not cfop_obj:
         abort(404)
     form_data = request.form
-
     if request.method == 'POST':
         cfop_obj.cfop = request.form.get('cfop')
         cfop_obj.descricao = request.form.get('descricao')
@@ -1199,7 +1169,6 @@ def admin_cfops_delete(cfop_id):
         db.rollback()
         flash(f"Erro ao excluir CFOP: {e}", 'danger')
     return redirect(url_for('admin_cfops_list'))
-
 # --- Rotas para CSOSN ICMS (dados globais) ---
 @app.route('/admin/csosn/list')
 @login_required
@@ -1243,7 +1212,6 @@ def admin_csosn_edit(csosn_id):
     if not csosn:
         abort(404)
     form_data = request.form
-
     if request.method == 'POST':
         csosn.codigo = request.form.get('codigo')
         csosn.descricao = request.form.get('descricao')
@@ -1294,7 +1262,6 @@ def admin_produtos_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_produtos_list.html', produtos=produtos, cliente_map=cliente_map)
-
 # Rota de Adição de Produto - Suporta requisição normal e AJAX para modal
 @app.route('/admin/produtos/add', methods=['GET', 'POST'])
 @login_required
@@ -1405,7 +1372,6 @@ def admin_produtos_add():
     if return_client_id and not initial_form_data.get('cliente_id'):
         initial_form_data = initial_form_data.copy()
         initial_form_data['cliente_id'] = return_client_id
-
     if is_modal_request:
         return render_template('admin_produtos_form_modal.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=initial_form_data, return_client_id=return_client_id)
     else:
@@ -1437,7 +1403,6 @@ def admin_produtos_edit(produto_id):
     csts = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
     csosns = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
     form_data = request.form
-
     if request.method == 'POST':
         novo_cliente_id = int(request.form.get('cliente_id'))
         
@@ -1455,13 +1420,11 @@ def admin_produtos_edit(produto_id):
         produto.origem_mercadoria = int(request.form.get('origem_mercadoria'))
         produto.tipo_item = request.form.get('tipo_item')
         produto.ativo = request.form.get('ativo') == 'on'
-
         # --- ATUALIZAR NOVOS CAMPOS ---
         produto.cfop_id = int(request.form.get('cfop_id')) if request.form.get('cfop_id') else None
         produto.cst_icms_id = int(request.form.get('cst_icms_id')) if request.form.get('cst_icms_id') else None
         produto.csosn_icms_id = int(request.form.get('csosn_icms_id')) if request.form.get('csosn_icms_id') else None
         # ------------------------------
-
         if not all([produto.cliente_id, produto.codigo_interno, produto.descricao, produto.unidade_comercial, preco_unitario_padrao, produto.origem_mercadoria, produto.tipo_item]):
             flash('Por favor, preencha todos os campos obrigatórios do produto.', 'danger')
             return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
@@ -1478,21 +1441,17 @@ def admin_produtos_edit(produto_id):
             flash('Código Interno do produto já existe para este cliente.', 'danger')
         except ValueError as e:
             db.rollback()
-            flash(f'Erro de formato: {e}. Verifique os campos numéricos e de IDs.', 'danger')
+            flash(f"Erro de formato: {e}. Verifique os campos numéricos e de IDs.", 'danger')
         except Exception as e:
             db.rollback()
             flash(f"Erro ao atualizar produto: {e}", 'danger')
-
-    # Para GET, usa o objeto produto para pré-preencher o formulário
     return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=produto, return_client_id=return_client_id)
-
 @app.route('/admin/produtos/delete/<int:produto_id>', methods=['POST'])
 @login_required
 @permission_required('products.delete')
 def admin_produtos_delete(produto_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     produto = db.query(Produto).filter(
         Produto.produto_id == produto_id,
         Produto.cliente_id.in_(accessible_client_ids)
@@ -1516,7 +1475,6 @@ def admin_produtos_delete(produto_id):
     if return_client_id: # Se o produto estava associado a um cliente, volta para a aba do cliente
         return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='produtos'))
     return redirect(url_for('admin_produtos_list'))
-
 # --- Rotas para Regras de Tributação ---
 # A listagem geral continua aqui, mas não no menu
 @app.route('/admin/regras_tributacao/list')
@@ -1534,7 +1492,6 @@ def admin_regras_tributacao_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_regras_tributacao_list.html', regras=regras, cliente_map=cliente_map)
-
 # Rota de Adição de Regra Tributária - Suporta requisição normal e AJAX para modal
 @app.route('/admin/regras_tributacao/add', methods=['GET', 'POST'])
 @login_required
@@ -1637,14 +1594,17 @@ def admin_regras_tributacao_add():
             db.commit()
             msg = 'Regra de Tributação adicionada com sucesso!'
             if is_modal_request:
-                return jsonify({'success': True, 'message': msg, 'redirect_url': url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='regras-pane') if return_client_id else url_for('admin_regras_tributacao_list')}), 201
+                return jsonify({'success': True, 'message': msg, 'redirect_url': url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='regras') if return_client_id else url_for('admin_regras_tributacao_list')}), 201
             flash(msg, 'success')
             if return_client_id:
                 return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='regras'))
             return redirect(url_for('admin_regras_tributacao_list'))
         except IntegrityError as e:
             db.rollback()
+            # Captura a mensagem de erro original do banco de dados para melhor depuração
+            # e.orig contém o objeto de exceção do banco de dados subjacente (ex: psycopg2.IntegrityError)
             db_error_message = str(e.orig)
+            # Tenta extrair uma mensagem mais amigável se for um erro comum de duplicidade
             if "duplicate key value violates unique constraint" in db_error_message:
                 error_msg = f"Erro: Uma regra idêntica já existe. Detalhes: {db_error_message}"
             elif "violates foreign key constraint" in db_error_message:
@@ -1670,12 +1630,12 @@ def admin_regras_tributacao_add():
                 return jsonify({'success': False, 'message': error_msg}), 400
             flash(error_msg, 'danger')
     
+    # Renderiza o formulário (seja para o modal ou para a página completa)
     initial_form_data = request.form # Para manter dados em caso de erro
     if return_client_id and not initial_form_data.get('cliente_id'):
         initial_form_data = initial_form_data.copy()
         initial_form_data['cliente_id'] = return_client_id
-
-    # ONDE A MUDANÇA OCORRE: Renderiza o template correto dependendo se é modal ou não
+# ONDE A MUDANÇA OCORRE: Renderiza o template correto dependendo se é modal ou não
     if is_modal_request:
         # Renderiza o NOVO template específico para o modal
         return render_template('admin_regras_tributacao_form_modal.html', clientes=clientes_disponiveis, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, motivos_desoneracao=motivos_desoneracao, form_data=initial_form_data, return_client_id=return_client_id)
@@ -1689,7 +1649,6 @@ def admin_regras_tributacao_add():
 def admin_regras_tributacao_edit(regra_tributacao_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     regra = db.query(RegraTributacao).filter(
         RegraTributacao.regra_tributacao_id == regra_tributacao_id,
         (RegraTributacao.cliente_id.is_(None)) | (RegraTributacao.cliente_id.in_(accessible_client_ids))
@@ -1702,7 +1661,6 @@ def admin_regras_tributacao_edit(regra_tributacao_id):
     return_client_id = request.args.get('cliente_id', type=int) 
     if not return_client_id and regra:
         return_client_id = regra.cliente_id # Se não veio do form de cliente, pega o cliente da regra
-
     clientes_disponiveis = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     regimes_tributarios = db.query(RegimeTributario).all()
     cfops = db.query(Cfop).all()
@@ -1711,7 +1669,6 @@ def admin_regras_tributacao_edit(regra_tributacao_id):
     csosns = db.query(Csosnicms).all()
     motivos_desoneracao = db.query(MotivoDesoneracao).order_by(MotivoDesoneracao.codigo).all()
     form_data = request.form
-
     if request.method == 'POST':
         novo_cliente_id_form = request.form.get('cliente_id')
         novo_cliente_id = int(novo_cliente_id_form) if novo_cliente_id_form else None
@@ -1763,7 +1720,7 @@ def admin_regras_tributacao_edit(regra_tributacao_id):
             return redirect(url_for('admin_regras_tributacao_list'))
         except ValueError as e:
             db.rollback()
-            flash(f'Erro de formato: {e}. Verifique os campos numéricos e de IDs.', 'danger')
+            flash(f"Erro de formato: {e}. Verifique os campos numéricos e de IDs.", 'danger')
         except IntegrityError:
             db.rollback()
             flash('Erro de integridade ao atualizar regra. Verifique se os IDs existem ou se há duplicatas.', 'danger')
@@ -1771,14 +1728,12 @@ def admin_regras_tributacao_edit(regra_tributacao_id):
             db.rollback()
             flash(f"Erro ao atualizar Regra de Tributação: {e}", 'danger')
     return render_template('admin_regras_tributacao_form.html', regra=regra, clientes=clientes_disponiveis, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, motivos_desoneracao=motivos_desoneracao, form_data=regra, return_client_id=return_client_id)
-
 @app.route('/admin/regras_tributacao/delete/<int:regra_tributacao_id>', methods=['POST'])
 @login_required
 @permission_required('rules.delete')
 def admin_regras_tributacao_delete(regra_tributacao_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     regra = db.query(RegraTributacao).filter(
         RegraTributacao.regra_tributacao_id == regra_tributacao_id,
         (RegraTributacao.cliente_id.is_(None)) | (RegraTributacao.cliente_id.in_(accessible_client_ids))
@@ -1802,7 +1757,6 @@ def admin_regras_tributacao_delete(regra_tributacao_id):
     if return_client_id: # Se a regra estava associada a um cliente, volta para a aba do cliente
         return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='regras'))
     return redirect(url_for('admin_regras_tributacao_list'))
-
 # --- Rotas para OrigemMercadoria (dados globais) ---
 @app.route('/admin/origens_mercadoria/list')
 @login_required
@@ -1811,7 +1765,6 @@ def admin_origens_mercadoria_list():
     db = next(get_db())
     origens = db.query(OrigemMercadoria).all()
     return render_template('admin_origens_mercadoria_list.html', origens=origens)
-
 @app.route('/admin/origens_mercadoria/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('origens_mercadoria.create')
@@ -1847,7 +1800,6 @@ def admin_origens_mercadoria_edit(origem_id):
     if not origem:
         abort(404)
     form_data = request.form
-
     if request.method == 'POST':
         origem.codigo = request.form.get('codigo')
         origem.descricao = request.form.get('descricao')
@@ -1885,7 +1837,6 @@ def admin_origens_mercadoria_delete(origem_id):
         db.rollback()
         flash(f"Erro ao excluir Origem de Mercadoria: {e}", 'danger')
     return redirect(url_for('admin_origens_mercadoria_list'))
-
 # --- Rotas para DestinatarioNFe ---
 @app.route('/admin/destinatarios_nfe/list')
 @login_required
@@ -1898,7 +1849,6 @@ def admin_destinatarios_nfe_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('destinatario/lista.html', destinatarios=destinatarios, cliente_map=cliente_map)
-
 @app.route('/admin/destinatarios_nfe/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('destinatarios_nfe.create')
@@ -1913,7 +1863,6 @@ def admin_destinatarios_nfe_add():
     # Objeto dummy para 'Novo' destinatário e para o título do template
     destinatario_obj = {} 
     form_data = {} # Para preencher em caso de POST com erro
-
     return_client_id = request.args.get('cliente_id', type=int)
     
     if request.method == 'POST':
@@ -1927,8 +1876,6 @@ def admin_destinatarios_nfe_add():
             if is_modal_request:
                 return jsonify({'success': False, 'message': msg}), 403
             flash(msg, 'danger')
-            # Renderiza o template de página completa em caso de erro no POST se não for modal
-            # O modal lida com o JSON.
             return render_template(
                 'admin_destinatario_form.html',
                 destinatario=destinatario_obj, # Objeto vazio, para o título 'Novo Destinatário'
@@ -1984,11 +1931,9 @@ def admin_destinatarios_nfe_add():
             db.commit()
             msg = 'Destinatário cadastrado com sucesso!'
             if is_modal_request:
-                # CORREÇÃO AQUI: _anchor='destinatarios'
                 return jsonify({'success': True, 'message': msg, 'redirect_url': url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='destinatarios') if return_client_id else url_for('admin_destinatarios_nfe_list')}), 201
             flash(msg, 'success')
             if return_client_id:
-                # CORREÇÃO AQUI: _anchor='destinatarios'
                 return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='destinatarios'))
             return redirect(url_for('admin_destinatarios_nfe_list'))
         except IntegrityError as e:
@@ -2017,8 +1962,6 @@ def admin_destinatarios_nfe_add():
     initial_form_data = form_data # Para manter dados em caso de erro
     if return_client_id and not initial_form_data.get('cliente_id'):
         initial_form_data['cliente_id'] = return_client_id
-
-    # ONDE A MUDANÇA OCORRE: Renderiza o template correto dependendo se é modal ou não
     if is_modal_request:
         # Renderiza o NOVO template específico para o modal
         return render_template(
@@ -2036,14 +1979,12 @@ def admin_destinatarios_nfe_add():
             clientes=clientes_disponiveis,
             return_client_id=return_client_id
         )
-
 @app.route('/admin/destinatarios_nfe/edit/<int:destinatario_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('destinatarios_nfe.edit')
 def admin_destinatarios_nfe_edit(destinatario_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     destinatario_obj = db.query(DestinatarioNFe).filter(
         DestinatarioNFe.destinatario_id == destinatario_id,
         DestinatarioNFe.cliente_id.in_(accessible_client_ids)
@@ -2058,7 +1999,6 @@ def admin_destinatarios_nfe_edit(destinatario_id):
     return_client_id = request.args.get('cliente_id', type=int) 
     if not return_client_id:
         return_client_id = destinatario_obj.cliente_id # Sempre pega do objeto se não vier da URL
-
     form_data = {} # Usado para repopular em caso de POST com erro
     
     if request.method == 'POST':
@@ -2117,7 +2057,6 @@ def admin_destinatarios_nfe_edit(destinatario_id):
             db.commit()
             flash('Destinatário atualizado com sucesso!', 'success')
             if return_client_id:
-                # CORREÇÃO AQUI: _anchor='destinatarios'
                 return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='destinatarios'))
             return redirect(url_for('admin_destinatarios_nfe_list'))
         except IntegrityError as e:
@@ -2129,7 +2068,6 @@ def admin_destinatarios_nfe_edit(destinatario_id):
                 error_msg = f"Erro de chave estrangeira. Um dos IDs de referência não existe. Detalhes: {db_error_message}"
             else:
                 error_msg = f"Erro de integridade ao atualizar destinatário: {db_error_message}"
-            
             current_app.logger.error(f"Erro ao atualizar destinatário: {db_error_message}", exc_info=True)
             flash(error_msg, 'danger')
         except Exception as e:
@@ -2147,7 +2085,6 @@ def admin_destinatarios_nfe_edit(destinatario_id):
         clientes=clientes_disponiveis,
         return_client_id=return_client_id
     )
-
 @app.route('/admin/destinatarios_nfe/delete/<int:destinatario_id>', methods=['POST'])
 @login_required
 @permission_required('destinatarios_nfe.delete')
@@ -2159,7 +2096,6 @@ def admin_destinatarios_nfe_delete(destinatario_id):
         DestinatarioNFe.destinatario_id == destinatario_id,
         DestinatarioNFe.cliente_id.in_(accessible_client_ids)
     ).first()
-
     if not destinatario:
         flash('Destinatário não encontrado ou você não tem permissão para excluí-lo.', 'danger')
         return redirect(url_for('admin_destinatarios_nfe_list'))
@@ -2179,7 +2115,6 @@ def admin_destinatarios_nfe_delete(destinatario_id):
     if client_id_for_redirect:
         return redirect(url_for('admin_clientes_edit', cliente_id=client_id_for_redirect, _anchor='destinatarios'))
     return redirect(url_for('admin_destinatarios_nfe_list'))
-
 # --- Rotas para Motivos de Desoneração ICMS (dados globais) ---
 # **CORREÇÃO DE DUPLICAÇÃO:** Esta é a ÚNICA definição para esta rota.
 @app.route('/admin/motivos_desoneracao/list')
@@ -2189,7 +2124,6 @@ def admin_motivos_desoneracao_list():
     db = next(get_db())
     motivos = db.query(MotivoDesoneracao).order_by(MotivoDesoneracao.codigo).all()
     return render_template('tributacao/motivos_desoneracao_list.html', motivos=motivos)
-
 @app.route('/admin/motivos_desoneracao/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('motivos_desoneracao.create')
@@ -2202,7 +2136,6 @@ def admin_motivos_desoneracao_add():
         if not all([codigo, descricao]):
             flash('Código e Descrição são campos obrigatórios para Motivo de Desoneração.', 'danger')
             return render_template('tributacao/motivos_desoneracao_form.html', form_data=form_data)
-
         try:
             novo_motivo = MotivoDesoneracao(codigo=codigo, descricao=descricao)
             db.add(novo_motivo)
@@ -2225,11 +2158,9 @@ def admin_motivos_desoneracao_edit(motivo_id):
     if not motivo:
         abort(404)
     form_data = request.form
-
     if request.method == 'POST':
         motivo.codigo = request.form.get('codigo')
         motivo.descricao = request.form.get('descricao')
-
         if not all([motivo.codigo, motivo.descricao]):
             flash('Código e Descrição são campos obrigatórios para Motivo de Desoneração.', 'danger')
             return render_template('tributacao/motivos_desoneracao_form.html', motivo=motivo, form_data=form_data)
@@ -2263,7 +2194,6 @@ def admin_motivos_desoneracao_delete(motivo_id):
         db.rollback()
         flash(f"Erro ao excluir Motivo de Desoneração: {e}", 'danger')
     return redirect(url_for('admin_motivos_desoneracao_list'))
-
 # --- Rotas para Gerenciamento de Usuários ---
 
 @app.route('/admin/users/list')
@@ -2273,7 +2203,6 @@ def admin_users_list():
     db = next(get_db())
     users = db.query(User).all()
     return render_template('admin_users_list.html', users=users)
-
 @app.route('/admin/users/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('users.create')
@@ -2290,7 +2219,6 @@ def admin_users_add():
         selected_roles_ids = request.form.getlist('roles')
         selected_clients_ids = request.form.getlist('clients')
         is_active = request.form.get('is_active') == 'on'
-
         if not (username and password and password_confirm):
             flash('Nome de usuário, senha e confirmação de senha são obrigatórios.', 'danger')
             return render_template('admin_users_form.html', roles=roles, clients=clients, form_data=request.form)
@@ -2323,7 +2251,6 @@ def admin_users_add():
         except Exception as e:
             db.rollback()
             flash(f"Erro ao criar usuário: {e}", 'danger')
-
     return render_template('admin_users_form.html', roles=roles, clients=clients, form_data={})
 
 @app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
@@ -2340,7 +2267,6 @@ def admin_users_edit(user_id):
     # Clientes que o *admin atual* pode acessar para vincular ao *usuário que está sendo editado*
     accessible_client_ids_by_admin = get_accessible_client_ids(db)
     clients_for_dropdown = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids_by_admin)).all()
-
     user_roles_ids = {ur.role_id for ur in user.roles}
     user_clients_ids = {uc.client_id for uc in user.clients}
     if request.method == 'POST':
@@ -2351,7 +2277,6 @@ def admin_users_edit(user_id):
         selected_roles_ids = {int(id) for id in request.form.getlist('roles')}
         selected_clients_ids = {int(id) for id in request.form.getlist('clients')}
         user.is_active = request.form.get('is_active') == 'on'
-
         if new_password:
             if new_password != password_confirm:
                 flash('As senhas não coincidem.', 'danger')
@@ -2388,7 +2313,6 @@ def admin_users_edit(user_id):
         except Exception as e:
             db.rollback()
             flash(f"Erro ao atualizar usuário: {e}", 'danger')
-
     return render_template('admin_users_form.html', user=user, roles=roles, clients=clients_for_dropdown, user_roles_ids=user_roles_ids, user_clients_ids=user_clients_ids)
 
 @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
@@ -2411,8 +2335,6 @@ def admin_users_delete(user_id):
         flash(f"Erro ao excluir usuário: {e}", 'danger')
     
     return redirect(url_for('admin_users_list'))
-
-
 # --- Rotas para Gerenciamento de Papéis (Roles) ---
 @app.route('/admin/roles/list')
 @login_required
@@ -2435,14 +2357,16 @@ def get_active_certificate_for_client(db_session, cliente_id):
 @permission_required('nfe.issue') # Nova permissão, ajuste conforme seu sistema de permissões
 def admin_emitir_nfe():
     db = next(get_db())
+    # O emitente é o cliente associado ao usuário logado, ou o cliente selecionado se for multi-empresa
+    # Para simplificar, assumimos um único cliente por usuário ou que o cliente já está selecionado em sessão
     accessible_client_ids = get_accessible_client_ids(db)
-
+    
     if not accessible_client_ids:
         flash('Você não está associado a nenhum cliente ou não tem permissão para emitir NF-e.', 'danger')
         return redirect(url_for('home'))
 
     emitente_cliente_id = accessible_client_ids[0]
-    emitente_data = db.query(Cliente).filter_by(cliente_id=emitente_cliente_id).first()
+    emitente_data = db.query(Cliente).options(joinedload(Cliente.regime_tributario)).filter_by(cliente_id=emitente_cliente_id).first()
     if not emitente_data:
         flash('Dados do emitente não encontrados.', 'danger')
         return redirect(url_for('home'))
@@ -2462,53 +2386,230 @@ def admin_emitir_nfe():
         "regime_tributario_nome": emitente_data.regime_tributario.nome if emitente_data.regime_tributario else 'N/A',
         "regime_tributario_id": emitente_data.regime_tributario_id # ADICIONADO AQUI
     }
-
-    # -- ALTERAÇÃO AQUI: Converter objetos DestinatarioNFe para dicionários --
+    
     destinatarios_obj = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
-    destinatarios_for_template = [d.to_dict() for d in destinatarios_obj] # <-- Use .to_dict()
+    destinatarios_for_template = [d.to_dict() for d in destinatarios_obj]
 
-    # -- ALTERAÇÃO AQUI: Converter objetos Produto para dicionários --
-    produtos_obj = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).options(joinedload(Produto.ncm), joinedload(Produto.cfop), joinedload(Produto.origem)).all()
-    produtos_for_template = [p.to_dict() for p in produtos_obj] # <-- Use .to_dict()
+    # --- ATUALIZADO: Usar joinedload para os novos relacionamentos do Produto ---
+    produtos_obj = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).options(
+        joinedload(Produto.ncm), 
+        joinedload(Produto.cfop), # CARREGA O CFOP PADRÃO DO PRODUTO
+        joinedload(Produto.origem),
+        joinedload(Produto.cst_icms), # CARREGA O CST ICMS PADRÃO DO PRODUTO
+        joinedload(Produto.csosn_icms) # CARREGA O CSOSN ICMS PADRÃO DO PRODUTO
+    ).all()
+    produtos_for_template = [p.to_dict() for p in produtos_obj]
+
+    # --- NOVO: Buscar listas completas para CFOPs, CSTs e CSOSNs ---
     all_cfops = db.query(Cfop).all()
-    all_csts = db.query(Csticms).all()
-    all_csosns = db.query(Csosnicms).all()
+    all_csts_icms = db.query(Csticms).all()
+    all_csosns_icms = db.query(Csosnicms).all()
+    # ----------------------------------------------------------------
 
-    # Variável para os campos gerais do formulário
-    form_data = {}
-    # Variável específica para os itens da NF-e, que será passada para o JS
-    initial_nfe_items = []
+    form_data = {} 
+    initial_nfe_items = [] 
 
     if request.method == 'POST':
-        # ... (seu código existente para POST) ...
-        # Lembre-se de usar `destinatarios_for_template` e `produtos_for_template`
-        # em qualquer render_template dentro do bloco POST também.
-        
-        return render_template('emitir_nfe.html',
-                               emitente_data=emitente_data_for_template,
-                               destinatarios=destinatarios_for_template, # <-- Corrigido
-                               produtos=produtos_for_template,          # <-- Corrigido
-                               form_data=form_data,
-                               initial_nfe_items=initial_nfe_items)
+        form_data = request.form.to_dict()
+        action = request.form.get('action')
 
-    # Para GET requests (ou POSTs que não causam redirect), renderiza o formulário
+        nfe_items_raw = []
+        for key in request.form:
+            if key.startswith('items[') and key.endswith('][json]'):
+                try:
+                    nfe_items_raw.append(json.loads(request.form[key]))
+                except json.JSONDecodeError:
+                    flash(f"Erro ao decodificar item JSON: {request.form[key]}", 'danger')
+                    initial_nfe_items = nfe_items_raw 
+                    return render_template('emitir_nfe.html',
+                                           emitente_data=emitente_data_for_template,
+                                           destinatarios=destinatarios_for_template,
+                                           produtos=produtos_for_template,
+                                           all_cfops=all_cfops,
+                                           all_csts=all_csts_icms,
+                                           all_csosns=all_csosns_icms,
+                                           form_data=form_data,
+                                           initial_nfe_items=initial_nfe_items)
+        
+        initial_nfe_items = nfe_items_raw
+
+        # --- VALIDAÇÕES E CONSTRUÇÃO DO XML (incluindo natOp agora como dropdown) ---
+        if not form_data.get('natOp') or not form_data.get('finNFe'): # 'natOp' é o CFOP
+            flash('Campos de identificação da NF-e são obrigatórios.', 'danger')
+            return render_template('emitir_nfe.html',
+                                   emitente_data=emitente_data_for_template,
+                                   destinatarios=destinatarios_for_template,
+                                   produtos=produtos_for_template,
+                                   all_cfops=all_cfops,
+                                   all_csts=all_csts_icms,
+                                   all_csosns=all_csosns_icms,
+                                   form_data=form_data,
+                                   initial_nfe_items=initial_nfe_items)
+        
+        # ... (restante da lógica de POST) ...
+        flash('Lógica de emissão/pré-visualização/rascunho ainda não implementada para este formulário.', 'info')
+        # AQUI VOCÊ ADICIONARIA A LÓGICA DE GERAÇÃO DO XML
+        # EXEMPLO: return render_template('xml_preview.html', xml_content=generated_xml)
+        
     return render_template('emitir_nfe.html',
                            emitente_data=emitente_data_for_template,
                            destinatarios=destinatarios_for_template,
                            produtos=produtos_for_template,
-                           all_cfops=all_cfops, # NOVO
-                           all_csts=all_csts,   # NOVO
-                           all_csosns=all_csosns, # NOVO
+                           all_cfops=all_cfops, # NOVO: Passar cfops para o cabeçalho
+                           all_csts=all_csts_icms,
+                           all_csosns=all_csosns_icms,
                            form_data=form_data,
                            initial_nfe_items=initial_nfe_items)
 
-@app.context_processor
-def inject_now():
-    return {'now': datetime.now()}
+# @app.route('/admin/users/list')
+# @login_required
+# @permission_required('users.read')
+# def admin_users_list():
+#     db = next(get_db())
+#     users = db.query(User).all()
+#     return render_template('admin_users_list.html', users=users)
+# @app.route('/admin/users/add', methods=['GET', 'POST'])
+# @login_required
+# @permission_required('users.create')
+# def admin_users_add():
+#     db = next(get_db())
+#     roles = db.query(Role).all()
+#     accessible_client_ids = get_accessible_client_ids(db)
+#     clients = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
+#     if request.method == 'POST':
+#         username = request.form.get('username')
+#         email = request.form.get('email')
+#         password = request.form.get('password')
+#         password_confirm = request.form.get('password_confirm')
+#         selected_roles_ids = request.form.getlist('roles')
+#         selected_clients_ids = request.form.getlist('clients')
+#         is_active = request.form.get('is_active') == 'on'
+#         if not (username and password and password_confirm):
+#             flash('Nome de usuário, senha e confirmação de senha são obrigatórios.', 'danger')
+#             return render_template('admin_users_form.html', roles=roles, clients=clients, form_data=request.form)
+#         if password != password_confirm:
+#             flash('As senhas não coincidem.', 'danger')
+#             return render_template('admin_users_form.html', roles=roles, clients=clients, form_data=request.form)
+#         try:
+#             hashed_password = generate_password_hash(password)
+#             new_user = User(username=username, email=email, password_hash=hashed_password, is_active=is_active)
+#             db.add(new_user)
+#             db.flush()
+#             for role_id_str in selected_roles_ids:
+#                 user_role = UserRole(user_id=new_user.id, role_id=int(role_id_str))
+#                 db.add(user_role)
+            
+#             for client_id_str in selected_clients_ids:
+#                 client_id = int(client_id_str)
+#                 # Dupla checagem: o admin só pode vincular usuários a clientes que ele mesmo acessa
+#                 if client_id not in accessible_client_ids:
+#                     flash(f'Você não tem permissão para vincular o usuário ao cliente com ID {client_id}.', 'danger')
+#                     raise Exception('Permissão negada para vincular cliente.')
+#                 user_client = UserClient(user_id=new_user.id, client_id=client_id)
+#                 db.add(user_client)
+#             db.commit()
+#             flash('Usuário criado com sucesso!', 'success')
+#             return redirect(url_for('admin_users_list'))
+#         except IntegrityError:
+#             db.rollback()
+#             flash('Nome de usuário ou e-mail já existe.', 'danger')
+#         except Exception as e:
+#             db.rollback()
+#             flash(f"Erro ao criar usuário: {e}", 'danger')
+#     return render_template('admin_users_form.html', roles=roles, clients=clients, form_data={})
+
+# @app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
+# @login_required
+# @permission_required('users.edit')
+# def admin_users_edit(user_id):
+#     db = next(get_db())
+#     user = db.query(User).get(user_id)
+#     if not user:
+#         abort(404)
+    
+#     roles = db.query(Role).all()
+    
+#     # Clientes que o *admin atual* pode acessar para vincular ao *usuário que está sendo editado*
+#     accessible_client_ids_by_admin = get_accessible_client_ids(db)
+#     clients_for_dropdown = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids_by_admin)).all()
+#     user_roles_ids = {ur.role_id for ur in user.roles}
+#     user_clients_ids = {uc.client_id for uc in user.clients}
+#     if request.method == 'POST':
+#         user.username = request.form.get('username')
+#         user.email = request.form.get('email')
+#         new_password = request.form.get('password')
+#         password_confirm = request.form.get('password_confirm')
+#         selected_roles_ids = {int(id) for id in request.form.getlist('roles')}
+#         selected_clients_ids = {int(id) for id in request.form.getlist('clients')}
+#         user.is_active = request.form.get('is_active') == 'on'
+#         if new_password:
+#             if new_password != password_confirm:
+#                 flash('As senhas não coincidem.', 'danger')
+#                 return render_template('admin_users_form.html', user=user, roles=roles, clients=clients_for_dropdown, user_roles_ids=user_roles_ids, user_clients_ids=user_clients_ids)
+#             user.password_hash = generate_password_hash(new_password)
+#         try:
+#             # Atualiza roles do usuário
+#             for ur in list(user.roles): # Usar list() para evitar "collection was modified"
+#                 if ur.role_id not in selected_roles_ids:
+#                     db.delete(ur)
+#             for role_id in selected_roles_ids:
+#                 if role_id not in user_roles_ids:
+#                     user_role = UserRole(user_id=user.id, role_id=role_id)
+#                     db.add(user_role)
+            
+#             # Atualiza clientes do usuário
+#             for uc in list(user.clients): # Usar list()
+#                 if uc.client_id not in selected_clients_ids:
+#                     db.delete(uc)
+#             for client_id in selected_clients_ids:
+#                 # Dupla checagem: o admin só pode vincular usuários a clientes que ele mesmo acessa
+#                 if client_id not in accessible_client_ids_by_admin:
+#                     flash(f'Você não tem permissão para vincular o usuário ao cliente com ID {client_id}.', 'danger')
+#                     raise Exception('Permissão negada para vincular cliente.')
+#                 if client_id not in user_clients_ids:
+#                     user_client = UserClient(user_id=user.id, client_id=client_id)
+#                     db.add(user_client)
+#             db.commit()
+#             flash('Usuário atualizado com sucesso!', 'success')
+#             return redirect(url_for('admin_users_list'))
+#         except IntegrityError:
+#             db.rollback()
+#             flash('Nome de usuário ou e-mail já existe.', 'danger')
+#         except Exception as e:
+#             db.rollback()
+#             flash(f"Erro ao atualizar usuário: {e}", 'danger')
+#     return render_template('admin_users_form.html', user=user, roles=roles, clients=clients_for_dropdown, user_roles_ids=user_roles_ids, user_clients_ids=user_clients_ids)
+
+# @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
+# @login_required
+# @permission_required('users.delete')
+# def admin_users_delete(user_id):
+#     db = next(get_db())
+#     user = db.query(User).get(user_id)
+#     if not user:
+#         abort(404)
+#     if user.id == current_user.id:
+#         flash('Você não pode excluir a si mesmo.', 'danger')
+#         return redirect(url_for('admin_users_list'))
+#     try:
+#         db.delete(user)
+#         db.commit()
+#         flash('Usuário excluído com sucesso!', 'success')
+#     except Exception as e:
+#         db.rollback()
+#         flash(f"Erro ao excluir usuário: {e}", 'danger')
+    
+#     return redirect(url_for('admin_users_list'))
+# # --- Rotas para Gerenciamento de Papéis (Roles) ---
+# @app.route('/admin/roles/list')
+# @login_required
+# @permission_required('roles.read')
+# def admin_roles_list():
+#     db = next(get_db())
+#     roles = db.query(Role).all()
+#     return render_template('admin_roles_list.html', roles=roles)
 
 
-
-# --- Configuração de Execução Local ---
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(debug=True, host='0.0.0.0', port=port)

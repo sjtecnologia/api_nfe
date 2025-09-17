@@ -13,7 +13,6 @@
         {% endfor %}
     </select>
 </div>
-
 <div class="mb-3">
     <label for="codigo_interno" class="form-label">Código Interno</label>
     <input type="text" class="form-control" id="codigo_interno" name="codigo_interno" value="{{ form_data.codigo_interno | default('') }}" required>
@@ -27,7 +26,7 @@
     <select class="form-select" id="ncm_id" name="ncm_id">
         <option value="">Selecione um NCM...</option>
         {% for ncm_item in ncms %}
-            <option value="{{ ncm_item.ncm_id }}" {% if form_data.ncm_id == ncm_item.ncm_id %}selected{% endif %}>
+            <option value="{{ ncm_item.ncm_id }}" {% if (form_data.ncm_id | string) == (ncm_item.ncm_id | string) %}selected{% endif %}>
                 {{ ncm_item.codigo }} - {{ ncm_item.descricao | truncate(50, True, '...') }}
             </option>
         {% endfor %}
@@ -50,7 +49,7 @@
     <select class="form-select" id="origem_mercadoria" name="origem_mercadoria" required>
         <option value="">Selecione a origem...</option>
         {% for origem_item in origens %}
-            <option value="{{ origem_item.origem_id }}" {% if form_data.origem_mercadoria == origem_item.origem_id %}selected{% endif %}>
+            <option value="{{ origem_item.origem_id }}" {% if (form_data.origem_mercadoria | string) == (origem_item.origem_id | string) %}selected{% endif %}>
                 {{ origem_item.codigo }} - {{ origem_item.descricao }}
             </option>
         {% endfor %}
@@ -60,6 +59,49 @@
     <label for="tipo_item" class="form-label">Tipo de Item</label>
     <input type="text" class="form-control" id="tipo_item" name="tipo_item" value="{{ form_data.tipo_item | default('') }}" required>
 </div>
+
+{# --- NOVOS CAMPOS PARA CFOP, CST e CSOSN NO CADASTRO DE PRODUTOS --- #}
+<h5 class="mt-4 text-primary">Configurações Tributárias Padrão do Produto</h5>
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <label for="cfop_id" class="form-label">CFOP Padrão</label>
+        <select class="form-select" id="cfop_id" name="cfop_id">
+            <option value="">Selecione um CFOP...</option>
+            {% for cfop_item in cfops %}
+                <option value="{{ cfop_item.cfop_id }}" {% if (form_data.cfop_id | string) == (cfop_item.cfop_id | string) %}selected{% endif %}>
+                    {{ cfop_item.cfop }} - {{ cfop_item.descricao }}
+                </option>
+            {% endfor %}
+        </select>
+        <small class="form-text text-muted">CFOP padrão para operações com este produto. Será utilizado como sugestão.</small>
+    </div>
+    <div class="col-md-4 mb-3">
+        <label for="cst_icms_id" class="form-label">CST ICMS Padrão (Regime Normal)</label>
+        <select class="form-select" id="cst_icms_id" name="cst_icms_id">
+            <option value="">Selecione um CST...</option>
+            {% for cst_item in csts_icms %}
+                <option value="{{ cst_item.cst_id }}" {% if (form_data.cst_icms_id | string) == (cst_item.cst_id | string) %}selected{% endif %}>
+                    {{ cst_item.codigo }} - {{ cst_item.descricao }}
+                </option>
+            {% endfor %}
+        </select>
+        <small class="form-text text-muted">CST ICMS padrão se o emitente for de Regime Normal (sugestão).</small>
+    </div>
+    <div class="col-md-4 mb-3">
+        <label for="csosn_icms_id" class="form-label">CSOSN ICMS Padrão (Simples Nacional)</label>
+        <select class="form-select" id="csosn_icms_id" name="csosn_icms_id">
+            <option value="">Selecione um CSOSN...</option>
+            {% for csosn_item in csosns_icms %}
+                <option value="{{ csosn_item.csosn_id }}" {% if (form_data.csosn_icms_id | string) == (csosn_item.csosn_id | string) %}selected{% endif %}>
+                    {{ csosn_item.codigo }} - {{ csosn_item.descricao }}
+                </option>
+            {% endfor %}
+        </select>
+        <small class="form-text text-muted">CSOSN ICMS padrão se o emitente for do Simples Nacional (sugestão).</small>
+    </div>
+</div>
+{# --- FIM NOVOS CAMPOS --- #}
+
 <div class="form-check mb-3">
     <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
     <label class="form-check-label" for="ativo">

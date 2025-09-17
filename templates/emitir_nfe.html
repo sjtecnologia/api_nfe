@@ -35,9 +35,17 @@
                         <h5 class="mb-3 text-primary">Dados Gerais da Nota Fiscal</h5>
                         <div class="row">
                             <div class="col-md-3 mb-3">
+                                {# ALTERADO: de input text para select dropdown de CFOPs #}
                                 <label for="natOp" class="form-label">Natureza da Operação</label>
-                                {# NatOp será preenchida pelo JS, inicialmente com base no CFOP padrão do produto #}
-                                <input type="text" class="form-control" id="natOp" name="natOp" value="{{ form_data.natOp | default('') }}" required>
+                                <select class="form-select" id="natOp" name="natOp" required>
+                                    <option value="">Selecione a Natureza da Operação...</option>
+                                    {% for cfop_item in all_cfops %}
+                                        <option value="{{ cfop_item.cfop }}" {% if form_data.natOp == (cfop_item.cfop | string) %}selected{% endif %}>
+                                            {{ cfop_item.cfop }} - {{ cfop_item.descricao }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                {# FIM ALTERAÇÃO #}
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="finNFe" class="form-label">Finalidade da Emissão</label>
@@ -157,7 +165,7 @@
                                     {% endfor %}
                                 </select>
                                 <small class="form-text text-muted">
-                                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=emitente_data.cliente_id) }}" >Adicionar novo destinatário</a> ou
+                                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=emitente_data.cliente_id) }}" target="_blank">Adicionar novo destinatário</a> ou
                                     <a href="#" id="clearDestinatario">Limpar seleção</a>
                                 </small>
                             </div>
@@ -371,7 +379,7 @@
                                 <label for="item_produto_id" class="form-label">Produto Cadastrado</label>
                                 <select class="form-select" id="item_produto_id" name="item_produto_id">
                                     <option value="">Selecione um produto...</option>
-                                    {# Produtos serão carregados via AJAX ou passados do backend #}
+                                    {# ATUALIZADO: Adicionando data-attributes para CFOP, CST e CSOSN padrão do produto #}
                                     {% for prod in produtos %}
                                         <option value="{{ prod.produto_id }}" 
                                                 data-ncm="{{ prod.ncm.codigo }}" 
@@ -429,7 +437,6 @@
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="item_CST_CSOSN" class="form-label">CST / CSOSN</label>
-                                {# Removido 'required' temporariamente. Será preenchido por regra de tributação. #}
                                 <input type="text" class="form-control" id="item_CST_CSOSN" name="item_CST_CSOSN" placeholder="00 ou 101">
                                 <small class="form-text text-muted">Preenchido pela Regra de Tributação ou padrão do produto.</small>
                             </div>
@@ -439,7 +446,6 @@
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="item_pICMS" class="form-label">Alíquota ICMS (%)</label>
-                                {# Removido 'readonly' temporariamente. Será preenchido por regra de tributação. #}
                                 <input type="number" step="0.01" class="form-control" id="item_pICMS" name="item_pICMS">
                             </div>
                         </div>
@@ -495,21 +501,18 @@
     {% set emitente_regime_tributario_id_json = emitente_data.regime_tributario_id | tojson | safe if emitente_data.regime_tributario_id is defined and emitente_data.regime_tributario_id is not none else 'null' %}
     {# NOVO: Passar listas completas de CFOPs, CSTs, CSOSNs para uso em mapeamento #}
     {% set all_cfops_json = all_cfops | tojson | safe if all_cfops is defined and all_cfops is not none else '[]' %}
-    {% set all_csts_json = all_csts | tojson | safe if all_csts is defined and all_csts is not none else '[]' %}
-    {% set all_csosns_json = all_csosns | tojson | safe if all_csosns is defined and all_csosns is not none else '[]' %}
+    {% set all_csts_icms_json = all_csts | tojson | safe if all_csts is defined and all_csts is not none else '[]' %}
+    {% set all_csosns_icms_json = all_csosns | tojson | safe if all_csosns is defined and all_csosns is not none else '[]' %}
 
 
     <script>
-        // Inicializa o array de itens da NF-e a partir do backend (se houver)
         var nfeItems = JSON.parse('{{ nfe_items_json | safe }}');
         
-        // Failsafe: garante que nfeItems é um array, mesmo que o JSON.parse falhe em um caso raro
         if (!Array.isArray(nfeItems)) {
             console.warn("nfeItems não era um array após JSON.parse, redefinindo para array vazio. Valor original:", nfeItems);
             nfeItems = [];
         }
 
-        // Dados para os dropdowns (Destinatários e Produtos) são passados do Flask para JS
         const allDestinatarios = JSON.parse('{{ destinatarios_json | safe }}');
         const allProdutos = JSON.parse('{{ produtos_json | safe }}');
         const emitenteClientId = JSON.parse('{{ emitente_client_id_json | safe }}');
@@ -517,9 +520,11 @@
         const emitenteRegimeTributarioId = JSON.parse('{{ emitente_regime_tributario_id_json | safe }}'); // ADICIONADO
         // NOVO: Listas completas para lookup
         const allCfops = JSON.parse('{{ all_cfops_json | safe }}');
-        const allCsts = JSON.parse('{{ all_csts_json | safe }}');
-        const allCsosns = JSON.parse('{{ all_csosns_json | safe }}');
+        const allCsts = JSON.parse('{{ all_csts_icms_json | safe }}'); // Renomeado para consistência
+        const allCsosns = JSON.parse('{{ all_csosns_icms_json | safe }}'); // Renomeado para consistência
 
+        // ID do Regime Tributário "Simples Nacional". Ajuste conforme o ID real no seu BD.
+        const SIMPLES_NACIONAL_REGIME_ID = 1; // Exemplo: Substitua pelo ID correto do seu BD
 
         $(document).ready(function() {
             // Máscaras (se necessário para campos específicos da NF-e)
@@ -551,7 +556,7 @@
                     // Limpar campos se "Selecione..." for escolhido
                     $('#dest_cnpj_cpf, #dest_razao_social, #dest_ie, #dest_endereco, #dest_cep, #dest_municipio, #dest_email, #dest_codigo_municipio, #dest_uf, #dest_ie_indicador, #dest_telefone').val('');
                 }
-                // Chamar a busca de regra ao mudar o destinatário
+                // Chamar a busca de regra ao mudar o destinatário. Isso pode afetar o CFOP e tributação
                 fetchTaxRuleForCurrentItem(); 
             }).trigger('change'); // Chamada inicial para carregar se houver um destinatário pré-selecionado
 
@@ -564,28 +569,27 @@
             // Lógica para preencher dados do produto no modal ao selecionar
             $('#item_produto_id').change(function() {
                 const selectedOptionValue = $(this).val();
-                let cfopDesc = ''; // Para preencher a natureza da operação
+                let cfopCode = ''; // Para preencher o CFOP do item
                 if (selectedOptionValue) {
                     const selectedProd = allProdutos.find(p => p.produto_id == selectedOptionValue);
                     if (selectedProd) {
                         $('#item_cProd').val(selectedProd.codigo_interno);
                         $('#item_xProd').val(selectedProd.descricao);
                         $('#item_NCM').val(selectedProd.ncm ? selectedProd.ncm.codigo : '');
-                        $('#item_CFOP').val(selectedProd.cfop ? selectedProd.cfop.cfop : ''); 
+                        $('#item_CFOP').val(selectedProd.cfop ? selectedProd.cfop.cfop : ''); // Usa o CFOP padrão do produto
                         $('#item_uCom').val(selectedProd.unidade_comercial);
                         $('#item_qCom').val(1);
                         $('#item_vUnCom').val(selectedProd.preco_unitario_padrao);
                         $('#item_orig').val(selectedProd.origem ? selectedProd.origem.codigo : '');
 
                         // Preencher CST/CSOSN padrão do produto
-                        if (emitenteRegimeTributarioId === 1) { // Supondo 1 para Simples Nacional
+                        if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) { // Se emitente é Simples Nacional
                             $('#item_CST_CSOSN').val(selectedProd.csosn_icms ? selectedProd.csosn_icms.codigo : '');
-                        } else { // Regime Normal
+                        } else { // Se emitente é Regime Normal
                             $('#item_CST_CSOSN').val(selectedProd.cst_icms ? selectedProd.cst_icms.codigo : '');
                         }
                         
-                        // Preencher Natureza da Operação com base no CFOP padrão do produto
-                        cfopDesc = selectedProd.cfop ? selectedProd.cfop.descricao : '';
+                        cfopCode = selectedProd.cfop ? selectedProd.cfop.cfop : '';
                         
                         // Recalcular o total do item inicialmente com base nos valores preenchidos
                         calculateItemTotal();
@@ -593,8 +597,8 @@
                 } else {
                     $('#item_cProd, #item_xProd, #item_NCM, #item_CFOP, #item_uCom, #item_qCom, #item_vUnCom, #item_orig, #item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
                 }
-                // Preenche o campo NatOp principal da NF-e
-                $('#natOp').val(cfopDesc);
+                // Preenche o campo NatOp principal da NF-e (o dropdown)
+                $('#natOp').val(cfopCode).trigger('change'); // Trigger change para que o formulário registre a seleção
                 // Chamar a busca de regra ao mudar o produto
                 fetchTaxRuleForCurrentItem(); 
             });
@@ -697,18 +701,16 @@
 
             // Intercepta o submit do formulário principal para adicionar os itens como hidden inputs
             $('#nfeForm').submit(function(e) {
-                // Remove qualquer input oculto de itens anterior para evitar duplicação
                 $('input[name^="items["]').remove(); 
 
-                // Adiciona os itens como inputs ocultos, cada um contendo o JSON do item
                 nfeItems.forEach((item, index) => {
                     const hiddenInput = $('<input>')
                         .attr('type', 'hidden')
-                        .attr('name', `items[${index}][json]`) // Nomeia para ser um array de objetos JSON
+                        .attr('name', `items[${index}][json]`)
                         .val(JSON.stringify(item));
                     $('#nfeForm').append(hiddenInput);
                 });
-                return true; // Permite que o formulário seja enviado
+                return true; 
             });
 
             // Renderiza os itens iniciais (se houver) e calcula os totais ao carregar a página
@@ -726,7 +728,6 @@
             // Limpar campos de imposto antes de buscar uma nova regra
             $('#item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
 
-            // Se nenhum produto for selecionado no modal, não há regra para buscar
             if (!selectedProductId) {
                 return;
             }
@@ -737,7 +738,6 @@
                 selectedDestinatario = allDestinatarios.find(d => d.destinatario_id == selectedDestinatarioId);
             }
 
-            // Validações básicas: precisa ter produto, cliente do emitente e regime tributário
             if (!selectedProduct || !emitenteClientId || emitenteRegimeTributarioId === null) {
                 console.warn("Dados insuficientes para buscar regra de tributação. Verifique se o produto está selecionado, se o emitente tem ID e regime tributário.");
                 return;
@@ -762,9 +762,10 @@
                 data: JSON.stringify(requestData),
                 success: function(response) {
                     console.log("Regra de tributação encontrada:", response);
+                    
                     // Preencher os campos do modal com a regra encontrada
                     // Verifica se é Simples Nacional ou Regime Normal para CST/CSOSN
-                    if (emitenteRegimeTributarioId === 1) { // Supondo 1 para Simples Nacional
+                    if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) { // Supondo 1 para Simples Nacional
                         $('#item_CST_CSOSN').val(response.csosn_icms_codigo || '');
                     } else { // Regime Normal
                         $('#item_CST_CSOSN').val(response.cst_icms_codigo || '');
@@ -780,13 +781,13 @@
                     $('#item_CST_COFINS').val(response.cst_cofins || '');
                     $('#item_pCOFINS').val(response.aliquota_cofins || 0);
 
-                    // Atualiza a Natureza da Operação principal da NF-e
-                    // Idealmente, a regra de tributação traria uma descrição de NatOp, mas se não, usa a do CFOP.
-                    const cfopEncontrado = allCfops.find(c => c.cfop == response.cfop_codigo);
-                    if (cfopEncontrado) {
-                        $('#natOp').val(cfopEncontrado.descricao);
-                    } else if (selectedProduct.cfop) {
-                        $('#natOp').val(selectedProduct.cfop.descricao); // Fallback para o CFOP do produto
+                    // Atualiza o CFOP do item no modal (se a regra sobrescreveu)
+                    $('#item_CFOP').val(response.cfop_codigo || selectedProduct.cfop.cfop || '');
+
+                    // Atualiza a Natureza da Operação principal da NF-e (o dropdown)
+                    const cfopToSelect = response.cfop_codigo || selectedProduct.cfop.cfop;
+                    if (cfopToSelect) {
+                         $('#natOp').val(cfopToSelect).trigger('change');
                     }
                     
                     // Recalcular o total do item após aplicar a regra
@@ -795,33 +796,31 @@
                 error: function(xhr, status, error) {
                     const errorMessage = xhr.responseJSON ? xhr.responseJSON.message : "Erro desconhecido ao buscar regra de tributação.";
                     console.error("Erro na busca de regra de tributação:", errorMessage);
-                    // Mostrar uma mensagem de erro ou aviso ao usuário no modal
-                    // Exemplo: $('#modalAlertPlaceholder').html('<div class="alert alert-warning">' + errorMessage + '</div>');
-                    // Ou, se preferir, limpar os campos de imposto se a busca falhar
-                    // E voltar para os valores padrão do produto, se existirem
+                    // Se a busca falhar, tentamos voltar aos valores padrão do produto ou limpar.
                     const selectedProductId = $('#item_produto_id').val();
                     if (selectedProductId) {
                         const selectedProd = allProdutos.find(p => p.produto_id == selectedProductId);
                         if (selectedProd) {
-                            if (emitenteRegimeTributarioId === 1) {
+                            if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) {
                                 $('#item_CST_CSOSN').val(selectedProd.csosn_icms ? selectedProd.csosn_icms.codigo : '');
                             } else {
                                 $('#item_CST_CSOSN').val(selectedProd.cst_icms ? selectedProd.cst_icms.codigo : '');
                             }
-                            // Também resetar alíquotas para 0 ou padrão se a regra falhou
                             $('#item_pICMS').val(0); 
                             $('#item_CST_IPI').val(''); $('#item_pIPI').val(0);
                             $('#item_CST_PIS').val(''); $('#item_pPIS').val(0);
                             $('#item_CST_COFINS').val(''); $('#item_pCOFINS').val(0);
+                            $('#item_CFOP').val(selectedProd.cfop ? selectedProd.cfop.cfop : '');
                         }
                     } else {
-                         // Se não houver produto selecionado, ou se a regra falhar e não houver padrão, limpa tudo.
-                        $('#item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
+                         $('#item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
+                         $('#item_CFOP').val('');
                     }
-                     // Garante que a natureza da operação é preenchida pelo CFOP padrão do produto se a busca de regra falhar
+                    // Garante que a natureza da operação é preenchida pelo CFOP padrão do produto se a busca de regra falhar
                     if (selectedProductId) {
                         const selectedProd = allProdutos.find(p => p.produto_id == selectedProductId);
-                        $('#natOp').val(selectedProd.cfop ? selectedProd.cfop.descricao : '');
+                        const cfopCode = selectedProd.cfop ? selectedProd.cfop.cfop : '';
+                        $('#natOp').val(cfopCode).trigger('change');
                     } else {
                         $('#natOp').val('');
                     }
@@ -831,10 +830,9 @@
             });
         }
 
-        // Renderiza a tabela de itens da NF-e com os dados atuais
         function renderItemsTable() {
             const tbody = $('#nfe_items_table_body');
-            tbody.empty(); // Limpa a tabela antes de redesenhar
+            tbody.empty();
             if (nfeItems.length === 0) {
                 tbody.append('<tr><td colspan="8" class="text-center">Nenhum item adicionado ainda.</td></tr>');
                 return;
@@ -859,33 +857,30 @@
             });
         }
 
-        // Calcula o valor do ICMS e o valor total do produto no modal
         function calculateItemTotal() {
             const qCom = parseFloat($('#item_qCom').val()) || 0;
             const vUnCom = parseFloat($('#item_vUnCom').val()) || 0;
             const vProd = qCom * vUnCom;
-            const pICMS = parseFloat($('#item_pICMS').val() || 0); // Pega a alíquota do campo
+            const pICMS = parseFloat($('#item_pICMS').val() || 0);
             const vICMS = vProd * (pICMS / 100);
 
-            $('#item_vICMS').val(vICMS.toFixed(2)); // Atualiza o campo de valor do ICMS
+            $('#item_vICMS').val(vICMS.toFixed(2));
         }
 
-        // Calcula os totais gerais da nota fiscal (produtos e NF-e)
         function calculateTotals() {
             let totalProdutos = 0;
             let totalNFE = 0;
 
             nfeItems.forEach(item => {
                 totalProdutos += item.vProd;
-                // Para simplificar, totalNFE considera vProd + vICMS + vIPI. Ajuste conforme sua necessidade.
                 totalNFE += item.vProd + (item.vICMS || 0) + (item.vIPI || 0);
             });
 
             $('#total_produtos').text(`R$ ${totalProdutos.toFixed(2)}`);
-            $('#total_produtos_input').val(totalProdutos.toFixed(2)); // Atualiza hidden input
-            
+            $('#total_produtos_input').val(totalProdutos.toFixed(2));
+
             $('#total_nfe').text(`R$ ${totalNFE.toFixed(2)}`);
-            $('#total_nfe_input').val(totalNFE.toFixed(2)); // Atualiza hidden input
+            $('#total_nfe_input').val(totalNFE.toFixed(2));
         }
     </script>
 {% endblock %}
