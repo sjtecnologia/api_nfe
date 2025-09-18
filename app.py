@@ -19,11 +19,12 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12 # Adicione esta importação
 from cryptography.hazmat.primitives import hashes
 from sqlalchemy import create_engine, or_, and_
+from cryptography.hazmat.primitives import hashes
+from sqlalchemy import create_engine, or_, and_
 from sqlalchemy.orm import sessionmaker, joinedload # ADICIONADO joinedload aqui
 from sqlalchemy.exc import IntegrityError, OperationalError
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-
 app = Flask(__name__)
 # Chave secreta para mensagens flash (SUBSTITUA POR UMA CHAVE SEGURA EM PRODUÇÃO)
 # Mantenha essa chave segura! Use algo como os.urandom(24) ou uma string complexa.
@@ -39,7 +40,6 @@ if "postgresql" in SQLALCHEMY_DATABASE_URL:
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 @app.context_processor
 def inject_template_globals():
     return {
@@ -47,7 +47,6 @@ def inject_template_globals():
         'current_user': current_user, # Já deve estar disponível pelo Flask-Login, mas garante
         'now': datetime.now() # Para o footer, se ainda não tiver
     }
-
 # Dependência para obter a sessão do DB em cada requisição
 def get_db():
     db = SessionLocal()
@@ -70,7 +69,6 @@ def load_user(user_id):
         return user
     finally:
         db.close() # Fecha a sessão
-
 # --- Funções Auxiliares ---
 # Função para obter os IDs dos clientes que o usuário logado tem acesso
 def get_accessible_client_ids(db_session):
@@ -90,7 +88,6 @@ def has_permission(permission_name):
         return False
     
     # Super-admin (com permissão 'admin.full_access') sempre tem todas as permissões
-# Super-admin (com permissão 'admin.full_access') sempre tem todas as permissões
     # Verifique se o usuário tem a permissão 'admin.full_access'
     db = SessionLocal() # Nova sessão para esta verificação
     user_permissions_query = db.query(Permission.name).join(RolePermission).join(Role).join(UserRole).filter(UserRole.user_id == current_user.id).distinct()
@@ -198,7 +195,6 @@ def login():
             flash('Nome de usuário ou senha inválidos.', 'danger')
             
     return render_template('login.html')
-
 @app.route('/logout')
 @login_required
 def logout():
@@ -216,7 +212,6 @@ def home():
 def health_check():
     """Endpoint para verificar a saúde da API."""
     return jsonify({"status": "UP", "timestamp": datetime.now().isoformat()}), 200
-
 # --- Rotas de API para listagem geral (retornam JSON - sem proteção por login) ---
 # Essas rotas geralmente não são expostas diretamente para usuários finais,
 # mas podem ser consumidas pela interface web do seu próprio aplicativo já logado.
@@ -227,7 +222,6 @@ def get_api_cfops():
     cfops = db.query(Cfop).all()
     cfop_list = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in cfops]
     return jsonify(cfop_list), 200
-
 @app.route('/api/ncms', methods=['GET'])
 def get_api_ncms():
     db = next(get_db())
@@ -275,7 +269,6 @@ def get_api_regras_tributacao():
 def buscar_regra_tributacao():
     db = next(get_db())
     data = request.get_json()
-
     cliente_id = data.get('cliente_id')
     regime_tributario_id = data.get('regime_tributario_id')
     cfop_codigo = data.get('cfop_codigo')
@@ -296,7 +289,7 @@ def buscar_regra_tributacao():
         joinedload(RegraTributacao.csosn_icms_obj),
         joinedload(RegraTributacao.motivo_desoneracao)
     ).filter(RegraTributacao.ativo == True) # Apenas regras ativas
-# Filtros obrigatórios
+    # Filtros obrigatórios
     if cliente_id: # A regra pode ser específica de um cliente ou global (cliente_id IS NULL)
         query = query.filter(or_(RegraTributacao.cliente_id == cliente_id, RegraTributacao.cliente_id.is_(None)))
     else: # Se o cliente_id não for fornecido, buscar apenas regras globais
@@ -316,7 +309,7 @@ def buscar_regra_tributacao():
         query = query.filter(RegraTributacao.uf_destino == uf_destino)
     if tipo_item:
         query = query.filter(RegraTributacao.tipo_item == tipo_item)
-# Ordenar por prioridade (maior prioridade primeiro)
+    # Ordenar por prioridade (maior prioridade primeiro)
     # Se houver regras globais e específicas para o cliente,
     # e se cliente_id for not null na regra, dar prioridade a ela
     # e depois pela prioridade da regra.
@@ -324,14 +317,12 @@ def buscar_regra_tributacao():
         RegraTributacao.cliente_id.desc(), # Regras com cliente_id vêm antes de regras globais (None)
         RegraTributacao.prioridade.desc() # Maior prioridade primeiro
     )
-
     regra_encontrada = query.first()
 
     if regra_encontrada:
         return jsonify(regra_encontrada.to_dict()), 200
     else:
         return jsonify({"message": "Nenhuma regra de tributação encontrada para os critérios fornecidos."}), 404
-
 @app.route('/api/csosn', methods=['GET'])
 def get_api_csosns():
     db = next(get_db())
@@ -350,11 +341,7 @@ def get_api_origens_mercadoria():
     origens = db.query(OrigemMercadoria).all()
     origens_list = [{"origem_id": o.origem_id, "codigo": o.codigo, "descricao": o.descricao} for o in origens]
     return jsonify(origens_list), 200
-
-
 # --- Rotas de Administração (Front-end Rendering - Protegidas com Login e Permissões) ---
-# --- Rotas de Administração (Front-end Rendering - Protegidas com Login e Permissões) ---
-
 # Rotas para Certificados (A listagem geral continua aqui, mas não no menu)
 @app.route('/admin/certificados')
 @login_required
@@ -457,7 +444,6 @@ def admin_certificados_edit(certificado_digital_id):
     if not return_client_id and certificado:
         return_client_id = certificado.cliente_id # Se não veio do form de cliente, pega o cliente do certificado
     clientes_disponiveis = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
-
     if request.method == 'POST':
         # Permite alterar o cliente associado ao certificado, mas valida a permissão
         novo_cliente_id_form = request.form.get('cliente_id')
@@ -509,7 +495,6 @@ def admin_certificados_edit(certificado_digital_id):
 def admin_certificados_delete(certificado_digital_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     certificado = db.query(CertificadoDigital).filter(
         CertificadoDigital.certificado_digital_id == certificado_digital_id,
         CertificadoDigital.cliente_id.in_(accessible_client_ids)
@@ -612,7 +597,6 @@ def admin_regimes_tributarios_delete(regime_tributario_id):
         db.rollback()
         flash(f"Erro ao excluir regime tributário: {e}", 'danger')
     return redirect(url_for('admin_regimes_tributarios_list'))
-
 # Rotas para Clientes
 @app.route('/admin/clientes/list')
 @login_required
@@ -632,8 +616,10 @@ def admin_clientes_add():
     ncms = db.query(Ncm).all()
     origens_mercadoria = db.query(OrigemMercadoria).all()
     cfops = db.query(Cfop).all()
-    csts = db.query(Csticms).all()
-    csosns = db.query(Csosnicms).all()
+    # --- CORREÇÃO AQUI: Renomeando 'csts' para 'csts_icms' e 'csosns' para 'csosns_icms' ---
+    csts_icms = db.query(Csticms).all()
+    csosns_icms = db.query(Csosnicms).all()
+    # --- FIM CORREÇÃO ---
     form_data = request.form # Para manter dados do formulário em caso de erro
     if request.method == 'POST':
         cnpj = request.form.get('cnpj')
@@ -662,7 +648,7 @@ def admin_clientes_add():
                                    regimes_tributarios=regimes_tributarios, 
                                    ncms=ncms, 
                                    origens_mercadoria=origens_mercadoria, 
-                                   cfops=cfops, csts=csts, csosns=csosns, 
+                                   cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, # CORRIGIDO AQUI
                                    form_data=form_data, # Passa os dados do form para re-preencher
                                    cliente={}, # Cliente vazio para novo cadastro
                                    # Não passa os *_existentes para novo cliente
@@ -698,11 +684,11 @@ def admin_clientes_add():
             # Vincula o usuário atual ao cliente recém-criado
             user_client = UserClient(user_id=current_user.id, client_id=novo_cliente.cliente_id)
             db.add(user_client)
-# Processa o upload do certificado, se houver (apenas para o primeiro certificado na criação)
+            # Processa o upload do certificado, se houver (apenas para o primeiro certificado na criação)
             success_cert, cert_obj = process_certificate_upload(db, novo_cliente.cliente_id, request.form, request.files)
             if not success_cert:
                 db.rollback() 
-                return render_template('admin_clientes_form.html', regimes_tributarios=regimes_tributarios, ncms=ncms, origens_mercadoria=origens_mercadoria, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data, cliente={}) # Volta com os dados preenchidos
+                return render_template('admin_clientes_form.html', regimes_tributarios=regimes_tributarios, ncms=ncms, origens_mercadoria=origens_mercadoria, cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, form_data=form_data, cliente={}) # Volta com os dados preenchidos # CORRIGIDO AQUI
             
             db.commit()
             flash('Cliente e configurações iniciais cadastrados com sucesso!', 'success')
@@ -724,7 +710,7 @@ def admin_clientes_add():
                            regimes_tributarios=regimes_tributarios, 
                            ncms=ncms,
                            origens_mercadoria=origens_mercadoria,
-                           cfops=cfops, csts=csts, csosns=csosns,
+                           cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, # CORRIGIDO AQUI
                            form_data=form_data, # Passa os dados do form para re-preencher
                            cliente={}, # Cliente vazio para novo cadastro
                            )
@@ -759,8 +745,10 @@ def admin_clientes_edit(cliente_id):
     ncms = db.query(Ncm).all()
     origens_mercadoria = db.query(OrigemMercadoria).all()
     cfops = db.query(Cfop).all()
-    csts = db.query(Csticms).all()
-    csosns = db.query(Csosnicms).all()
+    # --- CORREÇÃO AQUI: Renomeando 'csts' para 'csts_icms' e 'csosns' para 'csosns_icms' ---
+    csts_icms = db.query(Csticms).all()
+    csosns_icms = db.query(Csosnicms).all()
+    # --- FIM CORREÇÃO ---
     motivos_desoneracao = db.query(MotivoDesoneracao).order_by(MotivoDesoneracao.codigo).all()
     form_data = request.form # Para manter dados do formulário em caso de erro
     if request.method == 'POST':
@@ -791,11 +779,11 @@ def admin_clientes_edit(cliente_id):
                                    cliente=cliente, 
                                    regimes_tributarios=regimes_tributarios, 
                                    certificados_existentes=certificados_existentes, # Passa para re-renderizar abas
-                                   produtos_existentes=produtos_existentes, 
+                                   produtos_existentes=produtos_existentes,
                                    regras_existentes=regras_existentes, 
                                    destinatarios_existentes=destinatarios_existentes,
                                    ncms=ncms, origens_mercadoria=origens_mercadoria,
-                                   cfops=cfops, csts=csts, csosns=csosns, 
+                                   cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, # CORRIGIDO AQUI
                                    motivos_desoneracao=motivos_desoneracao,
                                    form_data=request.form # Usa request.form para manter o que o usuário digitou
                                    )
@@ -814,12 +802,12 @@ def admin_clientes_edit(cliente_id):
                 return render_template('admin_clientes_form.html', 
                                        cliente=cliente, 
                                        regimes_tributarios=regimes_tributarios, 
-                                       certificados_existentes=certificados_existentes, 
+                                       certificados_existentes=certificados_existentes,
                                        produtos_existentes=produtos_existentes, 
                                        regras_existentes=regras_existentes, 
                                        destinatarios_existentes=destinatarios_existentes,
                                        ncms=ncms, origens_mercadoria=origens_mercadoria, 
-                                       cfops=cfops, csts=csts, csosns=csosns, 
+                                       cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, # CORRIGIDO AQUI
                                        motivos_desoneracao=motivos_desoneracao,
                                        form_data=request.form)
             
@@ -849,7 +837,7 @@ def admin_clientes_edit(cliente_id):
                            regras_existentes=regras_existentes, 
                            destinatarios_existentes=destinatarios_existentes,
                            ncms=ncms, origens_mercadoria=origens_mercadoria, 
-                           cfops=cfops, csts=csts, csosns=csosns, 
+                           cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, # CORRIGIDO AQUI
                            motivos_desoneracao=motivos_desoneracao,
                            form_data=cliente) # Usa o objeto cliente para preencher o formulário na carga inicial
 @app.route('/admin/clientes/delete/<int:cliente_id>', methods=['POST'])
@@ -858,12 +846,10 @@ def admin_clientes_edit(cliente_id):
 def admin_clientes_delete(cliente_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     cliente = db.query(Cliente).filter(
         Cliente.cliente_id == cliente_id,
         Cliente.cliente_id.in_(accessible_client_ids)
     ).first()
-
     if not cliente:
         flash('Cliente não encontrado ou você não tem permissão para excluí-lo.', 'danger')
         return redirect(url_for('admin_clientes_list'))
@@ -887,7 +873,6 @@ def admin_clientes_delete(cliente_id):
         db.rollback()
         flash(f"Erro ao excluir cliente: {e}", 'danger')
     return redirect(url_for('admin_clientes_list'))
-
 # --- Rotas para NCM (dados globais) ---
 @app.route('/admin/ncms/list')
 @login_required
@@ -1263,7 +1248,6 @@ def admin_produtos_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_produtos_list.html', produtos=produtos, cliente_map=cliente_map)
-
 # Rota de Adição de Produto - Suporta requisição normal e AJAX para modal
 @app.route('/admin/produtos/add', methods=['GET', 'POST'])
 @login_required
@@ -1279,7 +1263,6 @@ def admin_produtos_add():
     cfops = db.query(Cfop).all() # CARREGAR PARA DROPDOWNS
     csts_icms = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
     csosns_icms = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
-
     is_modal_request = request.args.get('modal', 'false').lower() == 'true' or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     return_client_id = request.args.get('cliente_id', type=int)
     
@@ -1321,13 +1304,11 @@ def admin_produtos_add():
             ncm_id = int(ncm_id) if ncm_id else None
             preco_unitario_padrao = Decimal(preco_unitario_padrao_str)
             origem_mercadoria = int(origem_mercadoria)
-
             # --- PROCESSAR NOVOS CAMPOS ---
             cfop_id = int(cfop_id) if cfop_id else None
             cst_id = int(cst_id) if cst_id else None
             csosn_id = int(csosn_id) if csosn_id else None
             # ------------------------------
-
             novo_produto = Produto(
                 cliente_id=cliente_id,
                 codigo_interno=codigo_interno,
@@ -1383,8 +1364,8 @@ def admin_produtos_add():
                             ncms=ncms, 
                             origens=origens, 
                             cfops=cfops, 
-                            csts_icms=csts_icms,  # Alterado aqui
-                            csosns_icms=csosns_icms,  # Alterado aqui
+                            csts_icms=csts_icms,  # Já estava correto
+                            csosns_icms=csosns_icms,  # Já estava correto
                             form_data=initial_form_data, 
                             return_client_id=return_client_id)
     else:
@@ -1393,11 +1374,10 @@ def admin_produtos_add():
                             ncms=ncms, 
                             origens=origens, 
                             cfops=cfops, 
-                            csts_icms=csts_icms,  # Alterado aqui
-                            csosns_icms=csosns_icms,  # Alterado aqui
+                            csts_icms=csts_icms,  # Já estava correto
+                            csosns_icms=csosns_icms,  # Já estava correto
                             form_data=initial_form_data, 
                             return_client_id=return_client_id)
-
 @app.route('/admin/produtos/edit/<int:produto_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('products.edit')
@@ -1416,21 +1396,21 @@ def admin_produtos_edit(produto_id):
     return_client_id = request.args.get('cliente_id', type=int) 
     if not return_client_id and produto:
         return_client_id = produto.cliente_id
-
     clientes_disponiveis = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     ncms = db.query(Ncm).all()
     origens = db.query(OrigemMercadoria).all()
     cfops = db.query(Cfop).all() # CARREGAR PARA DROPDOWNS
-    csts_icms = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
-    csosns_icms = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
+    # --- CORREÇÃO AQUI: Renomeando 'csts' para 'csts_icms' e 'csosns' para 'csosns_icms' ---
+    csts_icms = db.query(Csticms).all()
+    csosns_icms = db.query(Csosnicms).all()
+    # --- FIM CORREÇÃO ---
     form_data = request.form
     if request.method == 'POST':
         novo_cliente_id = int(request.form.get('cliente_id'))
         
         if novo_cliente_id not in accessible_client_ids:
             flash('Você não tem permissão para mover o produto para este cliente.', 'danger')
-            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms,  # Alterado aqui
-                            csosns_icms=csosns_icms, form_data=form_data, return_client_id=return_client_id)
+            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, form_data=form_data, return_client_id=return_client_id) # CORRIGIDO AQUI
         
         produto.cliente_id = novo_cliente_id
         produto.codigo_interno = request.form.get('codigo_interno')
@@ -1449,8 +1429,7 @@ def admin_produtos_edit(produto_id):
         # ------------------------------
         if not all([produto.cliente_id, produto.codigo_interno, produto.descricao, produto.unidade_comercial, preco_unitario_padrao, produto.origem_mercadoria, produto.tipo_item]):
             flash('Por favor, preencha todos os campos obrigatórios do produto.', 'danger')
-            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms,  # Alterado aqui
-                            csosns_icms=csosns_icms, form_data=form_data, return_client_id=return_client_id)
+            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, form_data=form_data, return_client_id=return_client_id) # CORRIGIDO AQUI
         
         try:
             produto.preco_unitario_padrao = Decimal(preco_unitario_padrao)
@@ -1468,8 +1447,7 @@ def admin_produtos_edit(produto_id):
         except Exception as e:
             db.rollback()
             flash(f"Erro ao atualizar produto: {e}", 'danger')
-    return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms,  # Alterado aqui
-                            csosns_icms=csosns_icms, form_data=produto, return_client_id=return_client_id)
+    return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, form_data=produto, return_client_id=return_client_id) # CORRIGIDO AQUI
 @app.route('/admin/produtos/delete/<int:produto_id>', methods=['POST'])
 @login_required
 @permission_required('products.delete')
@@ -1643,23 +1621,17 @@ def admin_regras_tributacao_add():
             flash(error_msg, 'danger')
         except ValueError as e:
             db.rollback()
-            error_msg = f'Erro de formato: {e}. Verifique os campos numéricos e de IDs.'
-            if is_modal_request:
-                return jsonify({'success': False, 'message': error_msg}), 400
-            flash(error_msg, 'danger')
+            flash(f"Erro de formato: {e}. Verifique os campos numéricos e de IDs.", 'danger')
         except Exception as e:
             db.rollback()
-            error_msg = f"Erro ao adicionar Regra de Tributação: {e}"
-            if is_modal_request:
-                return jsonify({'success': False, 'message': error_msg}), 400
-            flash(error_msg, 'danger')
+            flash(f"Erro ao adicionar Regra de Tributação: {e}", 'danger')
     
     # Renderiza o formulário (seja para o modal ou para a página completa)
     initial_form_data = request.form # Para manter dados em caso de erro
     if return_client_id and not initial_form_data.get('cliente_id'):
         initial_form_data = initial_form_data.copy()
         initial_form_data['cliente_id'] = return_client_id
-# ONDE A MUDANÇA OCORRE: Renderiza o template correto dependendo se é modal ou não
+    # ONDE A MUDANÇA OCORRE: Renderiza o template correto dependendo se é modal ou não
     if is_modal_request:
         # Renderiza o NOVO template específico para o modal
         return render_template('admin_regras_tributacao_form_modal.html', clientes=clientes_disponiveis, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, motivos_desoneracao=motivos_desoneracao, form_data=initial_form_data, return_client_id=return_client_id)
@@ -1677,7 +1649,6 @@ def admin_regras_tributacao_edit(regra_tributacao_id):
         RegraTributacao.regra_tributacao_id == regra_tributacao_id,
         (RegraTributacao.cliente_id.is_(None)) | (RegraTributacao.cliente_id.in_(accessible_client_ids))
     ).first()
-
     if not regra:
         flash('Regra de Tributação não encontrada ou você não tem permissão para acessá-la.', 'danger')
         return redirect(url_for('admin_regras_tributacao_list'))
@@ -2115,7 +2086,6 @@ def admin_destinatarios_nfe_edit(destinatario_id):
 def admin_destinatarios_nfe_delete(destinatario_id):
     db = next(get_db())
     accessible_client_ids = get_accessible_client_ids(db)
-
     destinatario = db.query(DestinatarioNFe).filter(
         DestinatarioNFe.destinatario_id == destinatario_id,
         DestinatarioNFe.cliente_id.in_(accessible_client_ids)
@@ -2219,7 +2189,6 @@ def admin_motivos_desoneracao_delete(motivo_id):
         flash(f"Erro ao excluir Motivo de Desoneração: {e}", 'danger')
     return redirect(url_for('admin_motivos_desoneracao_list'))
 # --- Rotas para Gerenciamento de Usuários ---
-
 @app.route('/admin/users/list')
 @login_required
 @permission_required('users.read')
@@ -2276,7 +2245,6 @@ def admin_users_add():
             db.rollback()
             flash(f"Erro ao criar usuário: {e}", 'danger')
     return render_template('admin_users_form.html', roles=roles, clients=clients, form_data={})
-
 @app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('users.edit')
@@ -2338,7 +2306,6 @@ def admin_users_edit(user_id):
             db.rollback()
             flash(f"Erro ao atualizar usuário: {e}", 'danger')
     return render_template('admin_users_form.html', user=user, roles=roles, clients=clients_for_dropdown, user_roles_ids=user_roles_ids, user_clients_ids=user_clients_ids)
-
 @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
 @login_required
 @permission_required('users.delete')
@@ -2367,17 +2334,35 @@ def admin_roles_list():
     db = next(get_db())
     roles = db.query(Role).all()
     return render_template('admin_roles_list.html', roles=roles)
-
-
 def get_active_certificate_for_client(db_session, cliente_id):
     # Lógica para buscar o certificado ativo do cliente_id
     # Exemplo:
     cert = db_session.query(CertificadoDigital).filter_by(cliente_id=cliente_id, ativo=True).first()
     return cert # Retorna o objeto CertificadoDigital (com conteudo_certificado, senha_certificado, etc.)
 
-# Nova rota para a tela de emissão de NF-e
-# ... (código anterior) ...
+# --- NOVA FUNÇÃO AUXILIAR PARA SERIALIZAÇÃO DE PRODUTOS ---
+def produto_to_dict_for_template(produto_obj):
+    return {
+        "produto_id": produto_obj.produto_id,
+        "codigo_interno": produto_obj.codigo_interno,
+        "descricao": produto_obj.descricao,
+        # Acessa os atributos dos objetos relacionados (NCM, CFOP, Origem)
+        # e verifica se eles existem antes de tentar acessar seus atributos
+        "ncm": {"codigo": produto_obj.ncm.codigo, "descricao": produto_obj.ncm.descricao} if produto_obj.ncm else None,
+        "cest": produto_obj.cest,
+        "unidade_comercial": produto_obj.unidade_comercial,
+        "preco_unitario_padrao": float(produto_obj.preco_unitario_padrao) if produto_obj.preco_unitario_padrao is not None else 0.0,
+        "origem": {"codigo": produto_obj.origem.codigo, "descricao": produto_obj.origem.descricao} if produto_obj.origem else None,
+        "tipo_item": produto_obj.tipo_item,
+        "ativo": produto_obj.ativo,
+        "cfop": {"cfop": produto_obj.cfop.cfop, "descricao": produto_obj.cfop.descricao} if produto_obj.cfop else None,
+        # Incluir CST/CSOSN padrão do produto
+        "csts_icms": {"codigo": produto_obj.csts_icms.codigo, "descricao": produto_obj.csts_icms.descricao} if produto_obj.csts_icms else None,
+        "csosns_icms": {"codigo": produto_obj.csosns_icms.codigo, "descricao": produto_obj.csosns_icms.descricao} if produto_obj.csosns_icms else None,
+    }
+# --- FIM DA NOVA FUNÇÃO AUXILIAR ---
 
+# Nova rota para a tela de emissão de NF-e
 @app.route('/admin/emitir_nfe', methods=['GET', 'POST'])
 @login_required
 @permission_required('nfe.issue') # Nova permissão, ajuste conforme seu sistema de permissões
@@ -2413,7 +2398,8 @@ def admin_emitir_nfe():
     
     destinatarios_obj = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
     destinatarios_for_template = [d.to_dict() for d in destinatarios_obj] # Já convertido para dicionário
-    # --- ATUALIZADO: Usar joinedload para os novos relacionamentos do Produto ---
+    
+    # --- AJUSTE AQUI: Preparar a lista de produtos como dicionários ---
     produtos_obj = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).options(
         joinedload(Produto.ncm), 
         joinedload(Produto.cfop), # CARREGA O CFOP PADRÃO DO PRODUTO
@@ -2421,21 +2407,19 @@ def admin_emitir_nfe():
         joinedload(Produto.csts_icms), # CARREGA O CST ICMS PADRÃO DO PRODUTO
         joinedload(Produto.csosns_icms) # CARREGA O CSOSN ICMS PADRÃO DO PRODUTO
     ).all()
-    produtos_for_template = [p.to_dict() for p in produtos_obj] # Já convertido para dicionário
+    
+    # Converte cada objeto Produto para um dicionário serializável para JSON
+    # Esta lista será usada tanto pelo loop Jinja quanto pelo filtro `tojson` para JavaScript
+    produtos_for_template_and_js = [produto_to_dict_for_template(p) for p in produtos_obj]
+    # --- FIM DO AJUSTE PARA PRODUTOS ---
 
-    # --- CORREÇÃO AQUI: Converter objetos SQLAlchemy para listas de dicionários ---
-    # --- NOVO: Buscar listas completas para CFOPs, CSTs e CSOSNs ---
-    # all_cfops = db.query(Cfop).all() # LINHA ORIGINAL
-    all_cfops_raw = db.query(Cfop).all()
-    all_cfops_for_template = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in all_cfops_raw]
-
-    # all_csts_icms = db.query(Csticms).all() # LINHA ORIGINAL
-    all_csts_icms_raw = db.query(Csticms).all()
-    all_csts_icms_for_template = [{"cst_id": c.cst_id, "codigo": c.codigo, "descricao": c.descricao} for c in all_csts_icms_raw]
-
-    # all_csosns_icms = db.query(Csosnicms).all() # LINHA ORIGINAL
-    all_csosns_icms_raw = db.query(Csosnicms).all()
-    all_csosns_icms_for_template = [{"csosn_id": c.csosn_id, "codigo": c.codigo, "descricao": c.descricao} for c in all_csosns_icms_raw]
+    # --- ATENÇÃO: Ajustei as variáveis passadas para `all_cfops`, `all_csts`, `all_csosns` para que
+    #              o filtro `tojson` funcione corretamente com listas de dicionários.
+    #              Esses nomes de variáveis (all_cfops, all_csts, all_csosns) devem corresponder
+    #              aos nomes usados no `emitir_nfe.html` dentro do `{% set VAR_JSON = VAR | tojson %}`.
+    all_cfops_data = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in db.query(Cfop).all()]
+    all_csts_data = [{"cst_id": c.cst_id, "codigo": c.codigo, "descricao": c.descricao} for c in db.query(Csticms).all()]
+    all_csosns_data = [{"csosn_id": c.csosn_id, "codigo": c.codigo, "descricao": c.descricao} for c in db.query(Csosnicms).all()]
     # ----------------------------------------------------------------
 
     form_data = {} 
@@ -2455,10 +2439,10 @@ def admin_emitir_nfe():
                     return render_template('emitir_nfe.html',
                                            emitente_data=emitente_data_for_template,
                                            destinatarios=destinatarios_for_template,
-                                           produtos=produtos_for_template,
-                                           all_cfops=all_cfops_for_template, # CORRIGIDO AQUI
-                                           all_csts=all_csts_icms_for_template, # CORRIGIDO AQUI
-                                           all_csosns=all_csosns_icms_for_template, # CORRIGIDO AQUI
+                                           produtos=produtos_for_template_and_js, # AJUSTADO AQUI
+                                           all_cfops=all_cfops_data, # AJUSTADO AQUI
+                                           all_csts=all_csts_data, # AJUSTADO AQUI
+                                           all_csosns=all_csosns_data, # AJUSTADO AQUI
                                            form_data=form_data,
                                            initial_nfe_items=initial_nfe_items)
         
@@ -2469,10 +2453,10 @@ def admin_emitir_nfe():
             return render_template('emitir_nfe.html',
                                    emitente_data=emitente_data_for_template,
                                    destinatarios=destinatarios_for_template,
-                                   produtos=produtos_for_template,
-                                   all_cfops=all_cfops_for_template, # CORRIGIDO AQUI
-                                   all_csts=all_csts_icms_for_template, # CORRIGIDO AQUI
-                                   all_csosns=all_csosns_icms_for_template, # CORRIGIDO AQUI
+                                   produtos=produtos_for_template_and_js, # AJUSTADO AQUI
+                                   all_cfops=all_cfops_data, # AJUSTADO AQUI
+                                   all_csts=all_csts_data, # AJUSTADO AQUI
+                                   all_csosns=all_csosns_data, # AJUSTADO AQUI
                                    form_data=form_data,
                                    initial_nfe_items=initial_nfe_items)
         
@@ -2484,15 +2468,12 @@ def admin_emitir_nfe():
     return render_template('emitir_nfe.html',
                            emitente_data=emitente_data_for_template,
                            destinatarios=destinatarios_for_template,
-                           produtos=produtos_for_template,
-                           all_cfops=all_cfops_for_template, # CORRIGIDO AQUI
-                           all_csts=all_csts_icms_for_template, # CORRIGIDO AQUI
-                           all_csosns=all_csosns_icms_for_template, # CORRIGIDO AQUI
+                           produtos=produtos_for_template_and_js, # AJUSTADO AQUI
+                           all_cfops=all_cfops_data, # AJUSTADO AQUI
+                           all_csts=all_csts_data, # AJUSTADO AQUI
+                           all_csosns=all_csosns_data, # AJUSTADO AQUI
                            form_data=form_data,
                            initial_nfe_items=initial_nfe_items)
-
-
-
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
