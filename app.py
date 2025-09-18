@@ -750,8 +750,8 @@ def admin_clientes_edit(cliente_id):
         joinedload(Produto.ncm), 
         joinedload(Produto.cfop),
         joinedload(Produto.origem),
-        joinedload(Produto.cst_icms),
-        joinedload(Produto.csosn_icms)
+        joinedload(Produto.csts_icms),
+        joinedload(Produto.csosns_icms)
     ).all()
     regras_existentes = db.query(RegraTributacao).filter_by(cliente_id=cliente_id).all()
     destinatarios_existentes = db.query(DestinatarioNFe).filter_by(cliente_id=cliente_id).all()
@@ -1263,6 +1263,7 @@ def admin_produtos_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_produtos_list.html', produtos=produtos, cliente_map=cliente_map)
+
 # Rota de Adição de Produto - Suporta requisição normal e AJAX para modal
 @app.route('/admin/produtos/add', methods=['GET', 'POST'])
 @login_required
@@ -1276,8 +1277,8 @@ def admin_produtos_add():
     ncms = db.query(Ncm).all()
     origens = db.query(OrigemMercadoria).all()
     cfops = db.query(Cfop).all() # CARREGAR PARA DROPDOWNS
-    csts = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
-    csosns = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
+    csts_icms = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
+    csosns_icms = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
 
     is_modal_request = request.args.get('modal', 'false').lower() == 'true' or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     return_client_id = request.args.get('cliente_id', type=int)
@@ -1304,7 +1305,8 @@ def admin_produtos_add():
             if is_modal_request:
                 return jsonify({'success': False, 'message': msg}), 400
             flash(msg, 'danger')
-            return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=request.form, return_client_id=return_client_id)
+            print("CSTs disponíveis1:", [(c.cst_id, c.codigo, c.descricao) for c in csts_icms])
+            return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, form_data=request.form, return_client_id=return_client_id)
         
         try:
             cliente_id = int(cliente_id)
@@ -1313,7 +1315,8 @@ def admin_produtos_add():
                 if is_modal_request:
                     return jsonify({'success': False, 'message': msg}), 403
                 flash(msg, 'danger')
-                return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=request.form, return_client_id=return_client_id)
+                print("CSTs disponíveis2:", [(c.cst_id, c.codigo, c.descricao) for c in csts_icms])
+                return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, form_data=request.form, return_client_id=return_client_id)
             
             ncm_id = int(ncm_id) if ncm_id else None
             preco_unitario_padrao = Decimal(preco_unitario_padrao_str)
@@ -1373,10 +1376,27 @@ def admin_produtos_add():
     if return_client_id and not initial_form_data.get('cliente_id'):
         initial_form_data = initial_form_data.copy()
         initial_form_data['cliente_id'] = return_client_id
+    print("CSTs disponíveis3:", [(c.cst_id, c.codigo, c.descricao) for c in csts_icms])
     if is_modal_request:
-        return render_template('admin_produtos_form_modal.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=initial_form_data, return_client_id=return_client_id)
+        return render_template('admin_produtos_form_modal.html', 
+                            clientes=clientes_disponiveis, 
+                            ncms=ncms, 
+                            origens=origens, 
+                            cfops=cfops, 
+                            csts_icms=csts_icms,  # Alterado aqui
+                            csosns_icms=csosns_icms,  # Alterado aqui
+                            form_data=initial_form_data, 
+                            return_client_id=return_client_id)
     else:
-        return render_template('admin_produtos_form.html', clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=initial_form_data, return_client_id=return_client_id)
+        return render_template('admin_produtos_form.html', 
+                            clientes=clientes_disponiveis, 
+                            ncms=ncms, 
+                            origens=origens, 
+                            cfops=cfops, 
+                            csts_icms=csts_icms,  # Alterado aqui
+                            csosns_icms=csosns_icms,  # Alterado aqui
+                            form_data=initial_form_data, 
+                            return_client_id=return_client_id)
 
 @app.route('/admin/produtos/edit/<int:produto_id>', methods=['GET', 'POST'])
 @login_required
@@ -1401,15 +1421,16 @@ def admin_produtos_edit(produto_id):
     ncms = db.query(Ncm).all()
     origens = db.query(OrigemMercadoria).all()
     cfops = db.query(Cfop).all() # CARREGAR PARA DROPDOWNS
-    csts = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
-    csosns = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
+    csts_icms = db.query(Csticms).all() # CARREGAR PARA DROPDOWNS
+    csosns_icms = db.query(Csosnicms).all() # CARREGAR PARA DROPDOWNS
     form_data = request.form
     if request.method == 'POST':
         novo_cliente_id = int(request.form.get('cliente_id'))
         
         if novo_cliente_id not in accessible_client_ids:
             flash('Você não tem permissão para mover o produto para este cliente.', 'danger')
-            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
+            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms,  # Alterado aqui
+                            csosns_icms=csosns_icms, form_data=form_data, return_client_id=return_client_id)
         
         produto.cliente_id = novo_cliente_id
         produto.codigo_interno = request.form.get('codigo_interno')
@@ -1428,7 +1449,8 @@ def admin_produtos_edit(produto_id):
         # ------------------------------
         if not all([produto.cliente_id, produto.codigo_interno, produto.descricao, produto.unidade_comercial, preco_unitario_padrao, produto.origem_mercadoria, produto.tipo_item]):
             flash('Por favor, preencha todos os campos obrigatórios do produto.', 'danger')
-            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=form_data, return_client_id=return_client_id)
+            return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms,  # Alterado aqui
+                            csosns_icms=csosns_icms, form_data=form_data, return_client_id=return_client_id)
         
         try:
             produto.preco_unitario_padrao = Decimal(preco_unitario_padrao)
@@ -1446,7 +1468,8 @@ def admin_produtos_edit(produto_id):
         except Exception as e:
             db.rollback()
             flash(f"Erro ao atualizar produto: {e}", 'danger')
-    return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts=csts, csosns=csosns, form_data=produto, return_client_id=return_client_id)
+    return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms,  # Alterado aqui
+                            csosns_icms=csosns_icms, form_data=produto, return_client_id=return_client_id)
 @app.route('/admin/produtos/delete/<int:produto_id>', methods=['POST'])
 @login_required
 @permission_required('products.delete')
@@ -1522,8 +1545,8 @@ def admin_regras_tributacao_add():
         uf_destino = request.form.get('uf_destino')
         tipo_item = request.form.get('tipo_item')
         prioridade_str = request.form.get('prioridade')
-        cst_icms = request.form.get('cst_icms')
-        csosn_icms = request.form.get('csosn_icms')
+        # csts_icms = request.form.get('csts_icms')
+        # csosns_icms = request.form.get('csosns_icms')
         aliquota_icms_str = request.form.get('aliquota_icms')
         reducao_base_icms_str = request.form.get('reducao_base_icms')
         modalidade_bc_icms_str = request.form.get('modalidade_bc_icms')
@@ -1574,8 +1597,8 @@ def admin_regras_tributacao_add():
                 uf_destino=uf_destino,
                 tipo_item=tipo_item,
                 prioridade=prioridade,
-                cst_icms=cst_icms,
-                csosn_icms=csosn_icms,
+                # cst_icms=csts_icms,
+                # csosn_icms=csosn_icms,
                 aliquota_icms=aliquota_icms,
                 reducao_base_icms=reducao_base_icms,
                 modalidade_bc_icms=modalidade_bc_icms,
@@ -2353,6 +2376,8 @@ def get_active_certificate_for_client(db_session, cliente_id):
     return cert # Retorna o objeto CertificadoDigital (com conteudo_certificado, senha_certificado, etc.)
 
 # Nova rota para a tela de emissão de NF-e
+# ... (código anterior) ...
+
 @app.route('/admin/emitir_nfe', methods=['GET', 'POST'])
 @login_required
 @permission_required('nfe.issue') # Nova permissão, ajuste conforme seu sistema de permissões
@@ -2365,13 +2390,11 @@ def admin_emitir_nfe():
     if not accessible_client_ids:
         flash('Você não está associado a nenhum cliente ou não tem permissão para emitir NF-e.', 'danger')
         return redirect(url_for('home'))
-
     emitente_cliente_id = accessible_client_ids[0]
     emitente_data = db.query(Cliente).options(joinedload(Cliente.regime_tributario)).filter_by(cliente_id=emitente_cliente_id).first()
     if not emitente_data:
         flash('Dados do emitente não encontrados.', 'danger')
         return redirect(url_for('home'))
-
     emitente_data_for_template = {
         "cliente_id": emitente_data.cliente_id,
         "razao_social": emitente_data.razao_social,
@@ -2389,22 +2412,30 @@ def admin_emitir_nfe():
     }
     
     destinatarios_obj = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
-    destinatarios_for_template = [d.to_dict() for d in destinatarios_obj]
-
+    destinatarios_for_template = [d.to_dict() for d in destinatarios_obj] # Já convertido para dicionário
     # --- ATUALIZADO: Usar joinedload para os novos relacionamentos do Produto ---
     produtos_obj = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).options(
         joinedload(Produto.ncm), 
         joinedload(Produto.cfop), # CARREGA O CFOP PADRÃO DO PRODUTO
         joinedload(Produto.origem),
-        joinedload(Produto.cst_icms), # CARREGA O CST ICMS PADRÃO DO PRODUTO
-        joinedload(Produto.csosn_icms) # CARREGA O CSOSN ICMS PADRÃO DO PRODUTO
+        joinedload(Produto.csts_icms), # CARREGA O CST ICMS PADRÃO DO PRODUTO
+        joinedload(Produto.csosns_icms) # CARREGA O CSOSN ICMS PADRÃO DO PRODUTO
     ).all()
-    produtos_for_template = [p.to_dict() for p in produtos_obj]
+    produtos_for_template = [p.to_dict() for p in produtos_obj] # Já convertido para dicionário
 
+    # --- CORREÇÃO AQUI: Converter objetos SQLAlchemy para listas de dicionários ---
     # --- NOVO: Buscar listas completas para CFOPs, CSTs e CSOSNs ---
-    all_cfops = db.query(Cfop).all()
-    all_csts_icms = db.query(Csticms).all()
-    all_csosns_icms = db.query(Csosnicms).all()
+    # all_cfops = db.query(Cfop).all() # LINHA ORIGINAL
+    all_cfops_raw = db.query(Cfop).all()
+    all_cfops_for_template = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in all_cfops_raw]
+
+    # all_csts_icms = db.query(Csticms).all() # LINHA ORIGINAL
+    all_csts_icms_raw = db.query(Csticms).all()
+    all_csts_icms_for_template = [{"cst_id": c.cst_id, "codigo": c.codigo, "descricao": c.descricao} for c in all_csts_icms_raw]
+
+    # all_csosns_icms = db.query(Csosnicms).all() # LINHA ORIGINAL
+    all_csosns_icms_raw = db.query(Csosnicms).all()
+    all_csosns_icms_for_template = [{"csosn_id": c.csosn_id, "codigo": c.codigo, "descricao": c.descricao} for c in all_csosns_icms_raw]
     # ----------------------------------------------------------------
 
     form_data = {} 
@@ -2413,7 +2444,6 @@ def admin_emitir_nfe():
     if request.method == 'POST':
         form_data = request.form.to_dict()
         action = request.form.get('action')
-
         nfe_items_raw = []
         for key in request.form:
             if key.startswith('items[') and key.endswith('][json]'):
@@ -2426,14 +2456,13 @@ def admin_emitir_nfe():
                                            emitente_data=emitente_data_for_template,
                                            destinatarios=destinatarios_for_template,
                                            produtos=produtos_for_template,
-                                           all_cfops=all_cfops,
-                                           all_csts=all_csts_icms,
-                                           all_csosns=all_csosns_icms,
+                                           all_cfops=all_cfops_for_template, # CORRIGIDO AQUI
+                                           all_csts=all_csts_icms_for_template, # CORRIGIDO AQUI
+                                           all_csosns=all_csosns_icms_for_template, # CORRIGIDO AQUI
                                            form_data=form_data,
                                            initial_nfe_items=initial_nfe_items)
         
         initial_nfe_items = nfe_items_raw
-
         # --- VALIDAÇÕES E CONSTRUÇÃO DO XML (incluindo natOp agora como dropdown) ---
         if not form_data.get('natOp') or not form_data.get('finNFe'): # 'natOp' é o CFOP
             flash('Campos de identificação da NF-e são obrigatórios.', 'danger')
@@ -2441,9 +2470,9 @@ def admin_emitir_nfe():
                                    emitente_data=emitente_data_for_template,
                                    destinatarios=destinatarios_for_template,
                                    produtos=produtos_for_template,
-                                   all_cfops=all_cfops,
-                                   all_csts=all_csts_icms,
-                                   all_csosns=all_csosns_icms,
+                                   all_cfops=all_cfops_for_template, # CORRIGIDO AQUI
+                                   all_csts=all_csts_icms_for_template, # CORRIGIDO AQUI
+                                   all_csosns=all_csosns_icms_for_template, # CORRIGIDO AQUI
                                    form_data=form_data,
                                    initial_nfe_items=initial_nfe_items)
         
@@ -2456,9 +2485,9 @@ def admin_emitir_nfe():
                            emitente_data=emitente_data_for_template,
                            destinatarios=destinatarios_for_template,
                            produtos=produtos_for_template,
-                           all_cfops=all_cfops, # NOVO: Passar cfops para o cabeçalho
-                           all_csts=all_csts_icms,
-                           all_csosns=all_csosns_icms,
+                           all_cfops=all_cfops_for_template, # CORRIGIDO AQUI
+                           all_csts=all_csts_icms_for_template, # CORRIGIDO AQUI
+                           all_csosns=all_csosns_icms_for_template, # CORRIGIDO AQUI
                            form_data=form_data,
                            initial_nfe_items=initial_nfe_items)
 

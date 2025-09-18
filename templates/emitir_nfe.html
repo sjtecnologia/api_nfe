@@ -388,8 +388,8 @@
                                                 data-uncom="{{ prod.unidade_comercial }}" 
                                                 data-vuncom="{{ prod.preco_unitario_padrao | default(0) }}" 
                                                 data-origem="{{ prod.origem.codigo if prod.origem else '' }}"
-                                                data-cst-icms-code="{{ prod.cst_icms.codigo if prod.cst_icms else '' }}" {# NOVO #}
-                                                data-csosn-icms-code="{{ prod.csosn_icms.codigo if prod.csosn_icms else '' }}" {# NOVO #}
+                                                data-cst-icms-code="{{ prod.csts_icms.codigo if prod.csts_icms else '' }}" {# NOVO #}
+                                                data-csosn-icms-code="{{ prod.csosns_icms.codigo if prod.csosns_icms else '' }}" {# NOVO #}
                                         >
                                             {{ prod.descricao }} ({{ prod.codigo_interno }})
                                         </option>
@@ -584,9 +584,9 @@
 
                         // Preencher CST/CSOSN padrão do produto
                         if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) { // Se emitente é Simples Nacional
-                            $('#item_CST_CSOSN').val(selectedProd.csosn_icms ? selectedProd.csosn_icms.codigo : '');
+                            $('#item_CST_CSOSN').val(selectedProd.csosns_icms ? selectedProd.csosns_icms.codigo : '');
                         } else { // Se emitente é Regime Normal
-                            $('#item_CST_CSOSN').val(selectedProd.cst_icms ? selectedProd.cst_icms.codigo : '');
+                            $('#item_CST_CSOSN').val(selectedProd.csts_icms ? selectedProd.csts_icms.codigo : '');
                         }
                         
                         cfopCode = selectedProd.cfop ? selectedProd.cfop.cfop : '';
@@ -802,9 +802,9 @@
                         const selectedProd = allProdutos.find(p => p.produto_id == selectedProductId);
                         if (selectedProd) {
                             if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) {
-                                $('#item_CST_CSOSN').val(selectedProd.csosn_icms ? selectedProd.csosn_icms.codigo : '');
+                                $('#item_CST_CSOSN').val(selectedProd.csosns_icms ? selectedProd.csosns_icms.codigo : '');
                             } else {
-                                $('#item_CST_CSOSN').val(selectedProd.cst_icms ? selectedProd.cst_icms.codigo : '');
+                                $('#item_CST_CSOSN').val(selectedProd.csts_icms ? selectedProd.csts_icms.codigo : '');
                             }
                             $('#item_pICMS').val(0); 
                             $('#item_CST_IPI').val(''); $('#item_pIPI').val(0);

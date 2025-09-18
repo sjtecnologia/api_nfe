@@ -147,11 +147,31 @@ class Csticms(Base):
     codigo = Column(String(2), unique=True, nullable=False)
     descricao = Column(Text, nullable=False)
 
+    
+
     def to_dict(self):
         return serialize_sqla_object(self)
 
     def __repr__(self):
         return f"<Csticms(id={self.cst_id}, codigo='{self.codigo}', descricao='{self.descricao[:30]}...')>"
+    
+class Cfop(Base):
+    __tablename__ = 'cfops'
+    cfop_id = Column(Integer, primary_key=True)
+    cfop = Column(String(5), unique=True, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    descricao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    observacao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
+    tipooperacao = Column(String(50), nullable=True)
+    identificadordestinooperacao = Column(String(50), nullable=True)
+
+    # Relacionamento
+    regras_tributacao = relationship('RegraTributacao', back_populates='cfop') 
+
+    def to_dict(self):
+        return serialize_sqla_object(self)
+
+    def __repr__(self):
+        return f"<Cfop(id={self.cfop_id}, codigo='{self.cfop}', descricao='{self.descricao[:30]}...')>"
 
 class OrigemMercadoria(Base):
     __tablename__ = 'origens_mercadoria'
@@ -349,23 +369,7 @@ class NFeEmitidas(Base):
     def __repr__(self):
         return f"<NFeEmitidas(id={self.nfe_emitida_id}, tipo_nfe='{self.tipo_nfe}', cliente_id={self.cliente_id})>"
 
-class Cfop(Base):
-    __tablename__ = 'cfops'
-    cfop_id = Column(Integer, primary_key=True)
-    cfop = Column(String(5), unique=True, nullable=False) # No script db sjtnfe.txt é NOT NULL
-    descricao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
-    observacao = Column(Text, nullable=False) # No script db sjtnfe.txt é NOT NULL
-    tipooperacao = Column(String(50), nullable=True)
-    identificadordestinooperacao = Column(String(50), nullable=True)
 
-    # Relacionamento
-    regras_tributacao = relationship('RegraTributacao', back_populates='cfop') 
-
-    def to_dict(self):
-        return serialize_sqla_object(self)
-
-    def __repr__(self):
-        return f"<Cfop(id={self.cfop_id}, codigo='{self.cfop}', descricao='{self.descricao[:30]}...')>"
 
 class Ncm(Base):
     __tablename__ = 'ncms'
@@ -408,8 +412,8 @@ class Produto(Base):
 
     # --- CAMPOS ADICIONADOS AQUI ---
     cfop_id = Column(Integer, ForeignKey('cfops.cfop_id'), nullable=True) # Pode ser nulo se não houver um CFOP padrão
-    cst_icms_id = Column(Integer, ForeignKey('cst_icms.cst_id'), nullable=True) # Pode ser nulo
-    csosn_icms_id = Column(Integer, ForeignKey('csosn_icms.csosn_id'), nullable=True) # Pode ser nulo
+    cst_id = Column(Integer, ForeignKey('cst_icms.cst_id'), nullable=True) # Pode ser nulo
+    csosn_id = Column(Integer, ForeignKey('csosn_icms.csosn_id'), nullable=True) # Pode ser nulo
     # -------------------------------
 
     # Relacionamentos
@@ -417,8 +421,8 @@ class Produto(Base):
     ncm = relationship('Ncm', back_populates='produtos')
     cfop = relationship('Cfop', foreign_keys=[cfop_id]) # Adicionado foreign_keys para evitar ambiguidade com a RegraTributacao
     origem = relationship('OrigemMercadoria')
-    cst_icms = relationship('Csticms', foreign_keys=[cst_icms_id]) # Novo relacionamento para CST
-    csosn_icms = relationship('Csosnicms', foreign_keys=[csosn_icms_id]) # Novo relacionamento para CSOSN
+    csts_icms = relationship('Csticms', foreign_keys=[cst_id]) # Novo relacionamento para CST
+    csosns_icms = relationship('Csosnicms', foreign_keys=[csosn_id]) # Novo relacionamento para CSOSN
     created_by_user = relationship('User')
 
     def to_dict(self):
@@ -436,14 +440,14 @@ class Produto(Base):
             data['origem'] = {'codigo': self.origem.codigo, 'descricao': self.origem.descricao}
         else:
             data['origem'] = None
-        if self.cst_icms: # NOVO
-            data['cst_icms'] = {'codigo': self.cst_icms.codigo, 'descricao': self.cst_icms.descricao}
+        if self.csts_icms: # NOVO
+            data['csts_icms'] = {'codigo': self.csts_icms.codigo, 'descricao': self.csts_icms.descricao}
         else:
-            data['cst_icms'] = None
-        if self.csosn_icms: # NOVO
-            data['csosn_icms'] = {'codigo': self.csosn_icms.codigo, 'descricao': self.csosn_icms.descricao}
+            data['csts_icms'] = None
+        if self.csosns_icms: # NOVO
+            data['csosns_icms'] = {'codigo': self.csosns_icms.codigo, 'descricao': self.csosns_icms.descricao}
         else:
-            data['csosn_icms'] = None
+            data['csosns_icms'] = None
 
         return data
 
