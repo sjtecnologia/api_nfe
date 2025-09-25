@@ -17,7 +17,6 @@ from database.models import (
     DestinatarioNFe, MotivoDesoneracao, User, Role, Permission, UserRole,
     RolePermission, UserClient
 )
-
 # Imports para processar certificado (ainda podem ser necessários para carregar o PKCS12 inicial)
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -29,7 +28,6 @@ from sqlalchemy.orm import sessionmaker, joinedload
 from sqlalchemy.exc import IntegrityError, OperationalError
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-
 # --- IMPORTS PADRÃO DE XML (SEMPRE DISPONÍVEIS) ---
 import xml.etree.ElementTree as ET               # Para manipulação de XML
 from xml.dom import minidom                      # Para pretty print XML
@@ -43,9 +41,7 @@ try:
     from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe as NFeBase
     # NfeProc vem de proc_nfe_v4_00.py (CORRIGIDO)
     from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
-
     # Classes de Enums e Tipos Específicos (de leiaute_nfe_v4_00.py)
-    # E AGORA, TODAS AS CLASSES DE IMPOSTOS (CONTAINERS E ESPECÍFICAS)
     from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import (
         TenderEmi, # <--- TenderEmi permanece aqui
         DetPagIndPag, # Para indPag na Ide e DetPag (Enum)
@@ -61,16 +57,9 @@ try:
         TranspModFrete, # Enum para modFrete
         TenderEmiCPais, TenderEmiXPais, # Enums para País do emitente
         Tipi, # Classe para IPI (top-level, conforme como usar nfelib.txt)
-
-        # AGORA SIM: Classes de impostos (containers e específicas) importadas de leiaute_nfe_v4_00.py
-       
-        Ipi, # Classe container para IPI
-        Pis, # Classe container para PIS
-        Cofins, # Classe container para COFINS
-        ICMSSN102, ICMSSN900, ICMS00, ICMS90, # Classes específicas de ICMS
-        IPITrib, IPINT, # Classes específicas de IPI
-        PISAliq, PISNT, # Classes específicas de PIS
-        COFINSAliq, COFINSNT # Classes específicas de COFINS
+    # As classes de impostos (containers e específicas) NÃO são importadas diretamente.
+    # Elas são acessadas através da hierarquia de NFeBase.InfNfe.Det.Imposto.
+    # Portanto, removemos as importações diretas de Icms, Ipi, Pis, Cofins, ICMSSN102, etc.
     )
     
     # Tuf (UF) vem de tipos_basico_v4_00.py
@@ -104,6 +93,45 @@ except ImportError as e:
                         self.IPI = None
                         self.PIS = None
                         self.COFINS = None
+                    # --- Classes de Impostos Aninhadas (Simulação) ---
+                    class Icms: # Container para tipos específicos de ICMS
+                        def __init__(self):
+                            self.ICMSSN102 = None
+                            self.ICMSSN900 = None
+                            self.ICMS00 = None
+                            self.ICMS90 = None
+                        class ICMSSN102:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
+                        class ICMSSN900:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
+                        class ICMS00:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
+                        class ICMS90:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
+                    class Pis: # Container para tipos específicos de PIS
+                        def __init__(self):
+                            self.PISAliq = None
+                            self.PISNT = None
+                        class PISAliq:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
+                        class PISNT:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
+                    class Cofins: # Container para tipos específicos de COFINS
+                        def __init__(self):
+                            self.COFINSAliq = None
+                            self.COFINSNT = None
+                        class COFINSAliq:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
+                        class COFINSNT:
+                            def __init__(self, **kwargs):
+                                for k, v in kwargs.items(): setattr(self, k, v)
             class Total:
                 def __init__(self, **kwargs): pass
                 class ICMSTot:
@@ -166,55 +194,16 @@ except ImportError as e:
         def __new__(cls, value): return value
     class Tuf: # Simulação para Tuf
         def __new__(cls, value): return value
-    class Tipi: # Simulação para Tipi
-        def __init__(self, **kwargs): pass
-    # Simulações de classes de impostos (containers e específicas)
-    class Icms:
-        def __init__(self):
-            self.ICMSSN102 = None
-            self.ICMSSN900 = None
-            self.ICMS00 = None
-            self.ICMS90 = None
-        class ICMSSN102:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-        class ICMSSN900:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-        class ICMS00:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-        class ICMS90:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-    class Ipi:
-        def __init__(self):
-            self.IPITrib = None
-            self.IPINT = None
+    class Tipi: # Simulação para Tipi (agora com as classes aninhadas IPITrib e IPINT)
+        def __init__(self, cEnq=None, IPITrib=None, IPINT=None, **kwargs):
+            self.cEnq = cEnq
+            self.IPITrib = IPITrib
+            self.IPINT = IPINT
+            for k, v in kwargs.items(): setattr(self, k, v) # Para flexibilidade
         class IPITrib:
             def __init__(self, **kwargs):
                 for k, v in kwargs.items(): setattr(self, k, v)
         class IPINT:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-    class Pis:
-        def __init__(self):
-            self.PISAliq = None
-            self.PISNT = None
-        class PISAliq:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-        class PISNT:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-    class Cofins:
-        def __init__(self):
-            self.COFINSAliq = None
-            self.COFINSNT = None
-        class COFINSAliq:
-            def __init__(self, **kwargs):
-                for k, v in kwargs.items(): setattr(self, k, v)
-        class COFINSNT:
             def __init__(self, **kwargs):
                 for k, v in kwargs.items(): setattr(self, k, v)
 # --- IMPORTS DE ASSINATURA (via erpbrasil.assinatura, conforme README da nfelib) ---
@@ -225,7 +214,6 @@ try:
 except ImportError as e:
     print(f"AVISO: erpbrasil.assinatura não encontrada ou erro de importação: {e}. Funções de assinatura e gestão de certificados serão simuladas.")
     ASSINATURA_AVAILABLE = False
-
 # --- FIM IMPORTS DE BIBLIOTECAS ESPECÍFICAS ---
 
 # NOVO: Adicione esta função auxiliar para obter o código IBGE da UF
@@ -238,7 +226,6 @@ def get_uf_ibge_code(uf_abbr):
         "RR": 14, "RS": 43, "SC": 42, "SE": 28, "SP": 35, "TO": 17
     }
     return uf_codes.get(uf_abbr.upper(), 99) # Retorna 99 se a UF não for encontrada (erro)
-
 app = Flask(__name__)
 # Chave secreta para mensagens flash (SUBSTITUA POR UMA CHAVE SEGURA EM PRODUÇÃO)
 # Mantenha essa chave segura! Use algo como os.urandom(24) ou uma string complexa.
@@ -251,7 +238,6 @@ if "postgresql" in SQLALCHEMY_DATABASE_URL:
     os.environ['DB_TYPE'] = 'postgresql'
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 @app.context_processor
 def inject_template_globals():
     return {
@@ -274,7 +260,6 @@ login_manager.init_app(app)
 login_manager.login_view = 'login' # Rota para onde o usuário é redirecionado se não estiver logado
 login_manager.login_message = "Por favor, faça login para acessar esta página."
 login_manager.login_message_category = "info"
-
 @login_manager.user_loader
 def load_user(user_id):
     # Esta função é chamada pelo Flask-Login para carregar um usuário a partir do ID
@@ -284,7 +269,6 @@ def load_user(user_id):
         return user
     finally:
         db.close() # Fecha a sessão
-
 # --- Funções Auxiliares ---
 # Função para obter os IDs dos clientes que o usuário logado tem acesso
 def get_accessible_client_ids(db_session):
@@ -298,7 +282,6 @@ def get_accessible_client_ids(db_session):
     # Caso contrário, filtra pelos clientes explicitamente vinculados
     accessible_client_ids = db_session.query(UserClient.client_id).filter_by(user_id=current_user.id).all()
     return [c[0] for c in accessible_client_ids]
-
 # Função para verificar se o usuário atual tem uma permissão específica
 def has_permission(permission_name):
     if not current_user.is_authenticated:
@@ -314,7 +297,6 @@ def has_permission(permission_name):
         return True
     
     return permission_name in user_permissions_names
-
 # Decorator Personalizado para Checagem de Permissão
 def permission_required(permission_name):
     def decorator(f):
@@ -329,7 +311,6 @@ def permission_required(permission_name):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
-
 # Função auxiliar para processar upload de certificado
 def process_certificate_upload(db_session, cliente_id, request_form, request_files):
     cert_file = request_files.get('conteudo_certificado_file')
@@ -359,7 +340,7 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
             private_key = None
             cert_x509_obj = None 
             try:
-                # Ao carregar para validação interna, usamos o conteúdo original (não o encoded)
+                # Ao carregar para validação interna, usamos o conteúdo original (não o Base64)
                 p12_tuple = pkcs12.load_key_and_certificates( 
                     file_content, # Valida o conteúdo original, não o Base64
                     cert_password.encode('utf-8'), 
@@ -401,7 +382,6 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
             current_app.logger.error(f"Certificate processing error: {e}", exc_info=True) # Log para depuração
             return False, None
     return True, None # Nenhum arquivo de certificado enviado, sem erro
-
 # --- Rotas de Autenticação ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -429,7 +409,6 @@ def logout():
     logout_user()
     flash('Você foi desconectado.', 'info')
     return redirect(url_for('login'))
-
 # --- Rotas Principais ---
 @app.route('/')
 @login_required
@@ -441,7 +420,6 @@ def home():
 def health_check():
     """Endpoint para verificar a saúde da API."""
     return jsonify({"status": "UP", "timestamp": datetime.now().isoformat()}), 200
-
 # --- Rotas de API para listagem geral (retornam JSON - sem proteção por login) ---
 # Essas rotas geralmente não são expostas diretamente para usuários finais,
 # mas podem ser consumidas pela interface web do seu próprio aplicativo já logado.
@@ -458,7 +436,6 @@ def get_api_ncms():
     ncms = db.query(Ncm).all()
     ncm_list = [{"ncm_id": n.ncm_id, "codigo": n.codigo, "descricao": n.descricao} for n in ncms]
     return jsonify(ncm_list), 200
-
 @app.route('/api/produtos', methods=['GET'])
 def get_api_produtos():
     db = next(get_db())
@@ -471,7 +448,6 @@ def get_api_clientes():
     clientes = db.query(Cliente).all() # ATENÇÃO: Retorna TODOS os clientes. Para API específica por usuário/cliente, adicione filtros.
     cliente_list = [{"cliente_id": c.cliente_id, "cnpj": c.cnpj, "razao_social": c.razao_social} for c in clientes]
     return jsonify(cliente_list), 200
-
 @app.route('/api/certificados', methods=['GET'])
 def get_api_certificados():
     db = next(get_db())
@@ -484,7 +460,6 @@ def get_api_nfes():
     nfes = db.query(NFeEmitidas).all()
     nfe_list = [{"nfe_emitida_id": n.nfe_emitida_id, "tipo_nfe": n.tipo_nfe, "data_criacao": n.data_criacao.isoformat()} for n in nfes]
     return jsonify(nfe_list), 200
-
 @app.route('/api/regimes_tributarios', methods=['GET'])
 def get_api_regimes_tributarios():
     db = next(get_db())
@@ -561,7 +536,6 @@ def get_api_csosns():
     csosns = db.query(Csosnicms).all()
     csosn_list = [{"csosn_id": c.csosn_id, "codigo": c.codigo, "descricao": c.descricao} for c in csosns]
     return jsonify(csosn_list), 200
-
 @app.route('/api/cst', methods=['GET'])
 def get_api_csts():
     db = next(get_db())
@@ -575,7 +549,6 @@ def get_api_origens_mercadoria():
     origens = db.query(OrigemMercadoria).all()
     origens_list = [{"origem_id": o.origem_id, "codigo": o.codigo, "descricao": o.descricao} for o in origens]
     return jsonify(origens_list), 200
-
 # --- Rotas de Administração (Front-end Rendering - Protegidas com Login e Permissões) ---
 # Rotas para Certificados (A listagem geral continua aqui, mas não no menu)
 @app.route('/admin/certificados')
@@ -589,7 +562,6 @@ def admin_certificados_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_certificados_list.html', certificados=certificados, cliente_map=cliente_map)
-
 # Rota de Adição de Certificado - Suporta requisição normal e AJAX para modal
 @app.route('/admin/certificados/add', methods=['GET', 'POST'])
 @login_required
@@ -660,7 +632,6 @@ def admin_certificados_add():
     else:
         # Renderiza a página completa se não for requisição de modal
         return render_template('admin_certificados_form.html', clientes=clientes_disponiveis, form_data=initial_form_data, return_client_id=return_client_id)
-
 @app.route('/admin/certificados/edit/<int:certificado_digital_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('certificates.edit')
@@ -727,7 +698,6 @@ def admin_certificados_edit(certificado_digital_id):
         'cliente_id': certificado.cliente_id # Necessário para o dropdown
     }
     return render_template('admin_certificados_form.html', certificado=certificado, clientes=clientes_disponiveis, form_data=cert_data, return_client_id=return_client_id)
-
 @app.route('/admin/certificados/delete/<int:certificado_digital_id>', methods=['POST'])
 @login_required
 @permission_required('certificates.delete')
@@ -754,7 +724,6 @@ def admin_certificados_delete(certificado_digital_id):
     if cliente_id_redirect: # Se o certificado estava associado a um cliente, volta para a aba do cliente
         return redirect(url_for('admin_clientes_edit', cliente_id=cliente_id_redirect, _anchor='certificados'))
     return redirect(url_for('admin_certificados_list'))
-
 # Rotas para Regimes Tributários (dados globais, não dependem de cliente_id)
 @app.route('/admin/regimes_tributarios/list')
 @login_required
@@ -763,7 +732,6 @@ def admin_regimes_tributarios_list():
     db = next(get_db())
     regimes = db.query(RegimeTributario).all()
     return render_template('admin_regimes_tributarios_list.html', regimes=regimes)
-
 @app.route('/admin/regimes_tributarios/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('regimes_tributarios.create')
@@ -791,7 +759,6 @@ def admin_regimes_tributarios_add():
             flash(f"Erro ao adicionar regime tributário: {e}", 'danger')
     
     return render_template('admin_regimes_tributarios_form.html', form_data=form_data)
-
 @app.route('/admin/regimes_tributarios/edit/<int:regime_tributario_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('regimes_tributarios.edit')
@@ -820,7 +787,6 @@ def admin_regimes_tributarios_edit(regime_tributario_id):
             flash(f"Erro ao atualizar regime tributário: {e}", 'danger')
             
     return render_template('admin_regimes_tributarios_form.html', regime=regime, form_data=form_data)
-
 @app.route('/admin/regimes_tributarios/delete/<int:regime_tributario_id>', methods=['POST'])
 @login_required
 @permission_required('regimes_tributarios.delete')
@@ -840,7 +806,6 @@ def admin_regimes_tributarios_delete(regime_tributario_id):
         db.rollback()
         flash(f"Erro ao excluir regime tributário: {e}", 'danger')
     return redirect(url_for('admin_regimes_tributarios_list'))
-
 # Rotas para Clientes
 @app.route('/admin/clientes/list')
 @login_required
@@ -850,7 +815,6 @@ def admin_clientes_list():
     accessible_client_ids = get_accessible_client_ids(db)
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     return render_template('admin_clientes_list.html', clientes=clientes)
-
 @app.route('/admin/clientes/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('clients.create')
@@ -959,7 +923,6 @@ def admin_clientes_add():
                            form_data=form_data, # Passa os dados do form para re-preencher
                            cliente={}, # Cliente vazio para novo cadastro
                            )
-
 @app.route('/admin/clientes/edit/<int:cliente_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('clients.edit')
@@ -1085,7 +1048,6 @@ def admin_clientes_edit(cliente_id):
                            cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, # CORRIGIDO AQUI
                            motivos_desoneracao=motivos_desoneracao,
                            form_data=cliente) # Usa o objeto cliente para preencher o formulário na carga inicial
-
 @app.route('/admin/clientes/delete/<int:cliente_id>', methods=['POST'])
 @login_required
 @permission_required('clients.delete')
@@ -1119,7 +1081,6 @@ def admin_clientes_delete(cliente_id):
         db.rollback()
         flash(f"Erro ao excluir cliente: {e}", 'danger')
     return redirect(url_for('admin_clientes_list'))
-
 # --- Rotas para NCM (dados globais) ---
 @app.route('/admin/ncms/list')
 @login_required
@@ -1128,7 +1089,6 @@ def admin_ncms_list():
     db = next(get_db())
     ncms = db.query(Ncm).all()
     return render_template('admin_ncms_list.html', ncms=ncms)
-
 @app.route('/admin/ncms/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('ncms.create')
@@ -1175,7 +1135,6 @@ def admin_ncms_add():
             db.rollback()
             flash(f"Erro ao adicionar NCM: {e}", 'danger')
     return render_template('admin_ncms_form.html', form_data=form_data)
-
 @app.route('/admin/ncms/edit/<int:ncm_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('ncms.edit')
@@ -1213,7 +1172,6 @@ def admin_ncms_edit(ncm_id):
             db.rollback()
             flash(f"Erro ao atualizar NCM: {e}", 'danger')
     return render_template('admin_ncms_form.html', ncm=ncm, form_data=ncm)
-
 @app.route('/admin/ncms/delete/<int:ncm_id>', methods=['POST'])
 @login_required
 @permission_required('ncms.delete')
@@ -1242,7 +1200,6 @@ def admin_cst_list():
     db = next(get_db())
     csts = db.query(Csticms).all()
     return render_template('admin_cst_list.html', csts=csts)
-
 @app.route('/admin/cst/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('cst.create')
@@ -1269,7 +1226,6 @@ def admin_cst_add():
             db.rollback()
             flash(f"Erro ao adicionar CST ICMS: {e}", 'danger')
     return render_template('admin_cst_form.html', form_data=form_data)
-
 @app.route('/admin/cst/edit/<int:cst_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('cst.edit')
@@ -1297,7 +1253,6 @@ def admin_cst_edit(cst_id):
             db.rollback()
             flash(f"Erro ao atualizar CST ICMS: {e}", 'danger')
     return render_template('admin_cst_form.html', cst=cst, form_data=cst)
-
 @app.route('/admin/cst/delete/<int:cst_id>', methods=['POST'])
 @login_required
 @permission_required('cst.delete')
@@ -1326,7 +1281,6 @@ def admin_cfops_list():
     db = next(get_db())
     cfops = db.query(Cfop).all()
     return render_template('admin_cfops_list.html', cfops=cfops)
-
 @app.route('/admin/cfops/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('cfops.create')
@@ -1362,7 +1316,6 @@ def admin_cfops_add():
             db.rollback()
             flash(f"Erro ao adicionar CFOP: {e}", 'danger')
     return render_template('admin_cfops_form.html', form_data=form_data)
-
 @app.route('/admin/cfops/edit/<int:cfop_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('cfops.edit')
@@ -1393,7 +1346,6 @@ def admin_cfops_edit(cfop_id):
             db.rollback()
             flash(f"Erro ao atualizar CFOP: {e}", 'danger')
     return render_template('admin_cfops_form.html', cfop=cfop_obj, form_data=cfop_obj)
-
 @app.route('/admin/cfops/delete/<int:cfop_id>', methods=['POST'])
 @login_required
 @permission_required('cfops.delete')
@@ -1421,7 +1373,6 @@ def admin_csosn_list():
     db = next(get_db())
     csosns = db.query(Csosnicms).all()
     return render_template('admin_csosn_list.html', csosns=csosns)
-
 @app.route('/admin/csosn/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('csosn.create')
@@ -1448,7 +1399,6 @@ def admin_csosn_add():
             db.rollback()
             flash(f"Erro ao adicionar CSOSN ICMS: {e}", 'danger')
     return render_template('admin_csosn_form.html', form_data=form_data)
-
 @app.route('/admin/csosn/edit/<int:csosn_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('csosn.edit')
@@ -1476,7 +1426,6 @@ def admin_csosn_edit(csosn_id):
             db.rollback()
             flash(f"Erro ao atualizar CSOSN ICMS: {e}", 'danger')
     return render_template('admin_csosn_form.html', csosn=csosn, form_data=csosn)
-
 @app.route('/admin/csosn/delete/<int:csosn_id>', methods=['POST'])
 @login_required
 @permission_required('csosn.delete')
@@ -1496,7 +1445,6 @@ def admin_csosn_delete(csosn_id):
         db.rollback()
         flash(f"Erro ao excluir CSOSN ICMS: {e}", 'danger')
     return redirect(url_for('admin_csosn_list'))
-
 # --- Rotas para Produtos ---
 # A listagem geral continua aqui, mas não no menu
 @app.route('/admin/produtos/list')
@@ -1510,7 +1458,6 @@ def admin_produtos_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_produtos_list.html', produtos=produtos, cliente_map=cliente_map)
-
 # Rota de Adição de Produto - Suporta requisição normal e AJAX para modal
 @app.route('/admin/produtos/add', methods=['GET', 'POST'])
 @login_required
@@ -1629,7 +1576,7 @@ def admin_produtos_add():
                             cfops=cfops, 
                             csts_icms=csts_icms,  # Já estava correto
                             csosns_icms=csosns_icms,  # Já estava correto
-                            form_data=initial_form_data, 
+                            form_data=initial_form_data,
                             return_client_id=return_client_id)
     else:
         return render_template('admin_produtos_form.html', 
@@ -1641,7 +1588,6 @@ def admin_produtos_add():
                             csosns_icms=csosns_icms,  # Já estava correto
                             form_data=initial_form_data, 
                             return_client_id=return_client_id)
-
 @app.route('/admin/produtos/edit/<int:produto_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('products.edit')
@@ -1711,7 +1657,6 @@ def admin_produtos_edit(produto_id):
             db.rollback()
             flash(f"Erro ao atualizar produto: {e}", 'danger')
     return render_template('admin_produtos_form.html', produto=produto, clientes=clientes_disponiveis, ncms=ncms, origens=origens, cfops=cfops, csts_icms=csts_icms, csosns_icms=csosns_icms, form_data=produto, return_client_id=return_client_id) # CORRIGIDO AQUI
-
 @app.route('/admin/produtos/delete/<int:produto_id>', methods=['POST'])
 @login_required
 @permission_required('products.delete')
@@ -1741,7 +1686,6 @@ def admin_produtos_delete(produto_id):
     if return_client_id: # Se o produto estava associado a um cliente, volta para a aba do cliente
         return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='produtos'))
     return redirect(url_for('admin_produtos_list'))
-
 # --- Rotas para Regras de Tributação ---
 # A listagem geral continua aqui, mas não no menu
 @app.route('/admin/regras_tributacao/list')
@@ -1757,7 +1701,6 @@ def admin_regras_tributacao_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_regras_tributacao_list.html', regras=regras, cliente_map=cliente_map)
-
 # Rota de Adição de Regra Tributária - Suporta requisição normal e AJAX para modal
 @app.route('/admin/regras_tributacao/add', methods=['GET', 'POST'])
 @login_required
@@ -1895,7 +1838,6 @@ def admin_regras_tributacao_add():
         return render_template('admin_regras_tributacao_form_modal.html', clientes=clientes_disponiveis, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, motivos_desoneracao=motivos_desoneracao, form_data=initial_form_data, return_client_id=request.args.get('cliente_id', type=int))
     else:
         return render_template('admin_regras_tributacao_form.html', clientes=clientes_disponiveis, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, motivos_desoneracao=motivos_desoneracao, form_data=initial_form_data, return_client_id=request.args.get('cliente_id', type=int))
-
 @app.route('/admin/regras_tributacao/edit/<int:regra_tributacao_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('rules.edit')
@@ -1980,7 +1922,6 @@ def admin_regras_tributacao_edit(regra_tributacao_id):
             db.rollback()
             flash(f"Erro ao atualizar Regra de Tributação: {e}", 'danger')
     return render_template('admin_regras_tributacao_form.html', regra=regra, clientes=clientes_disponiveis, regimes_tributarios=regimes_tributarios, cfops=cfops, ncms=ncms, csts=csts, csosns=csosns, motivos_desoneracao=motivos_desoneracao, form_data=regra, return_client_id=return_client_id)
-
 @app.route('/admin/regras_tributacao/delete/<int:regra_tributacao_id>', methods=['POST'])
 @login_required
 @permission_required('rules.delete')
@@ -2010,7 +1951,6 @@ def admin_regras_tributacao_delete(regra_tributacao_id):
     if return_client_id: # Se a regra estava associada a um cliente, volta para a aba do cliente
         return redirect(url_for('admin_clientes_edit', cliente_id=return_client_id, _anchor='regras'))
     return redirect(url_for('admin_regras_tributacao_list'))
-
 # --- Rotas para OrigemMercadoria (dados globais) ---
 @app.route('/admin/origens_mercadoria/list')
 @login_required
@@ -2019,7 +1959,6 @@ def admin_origens_mercadoria_list():
     db = next(get_db())
     origens = db.query(OrigemMercadoria).all()
     return render_template('admin_origens_mercadoria_list.html', origens=origens)
-
 @app.route('/admin/origens_mercadoria/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('origens_mercadoria.create')
@@ -2046,7 +1985,6 @@ def admin_origens_mercadoria_add():
             db.rollback()
             flash(f"Erro ao adicionar Origem de Mercadoria: {e}", 'danger')
     return render_template('admin_origens_mercadoria_form.html', form_data=form_data)
-
 @app.route('/admin/origens_mercadoria/edit/<int:origem_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('origens_mercadoria.edit')
@@ -2074,7 +2012,6 @@ def admin_origens_mercadoria_edit(origem_id):
             db.rollback()
             flash(f"Erro ao atualizar Origem de Mercadoria: {e}", 'danger')
     return render_template('admin_origens_mercadoria_form.html', origem=origem, form_data=origem)
-
 @app.route('/admin/origens_mercadoria/delete/<int:origem_id>', methods=['POST'])
 @login_required
 @permission_required('origens_mercadoria.delete')
@@ -2094,7 +2031,6 @@ def admin_origens_mercadoria_delete(origem_id):
         db.rollback()
         flash(f"Erro ao excluir Origem de Mercadoria: {e}", 'danger')
     return redirect(url_for('admin_origens_mercadoria_list'))
-
 # --- Rotas para DestinatarioNFe ---
 @app.route('/admin/destinatarios_nfe/list')
 @login_required
@@ -2107,7 +2043,6 @@ def admin_destinatarios_nfe_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('destinatario/lista.html', destinatarios=destinatarios, cliente_map=cliente_map)
-
 @app.route('/admin/destinatarios_nfe/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('destinatarios_nfe.create')
@@ -2237,7 +2172,6 @@ def admin_destinatarios_nfe_add():
             clientes=clientes_disponiveis,
             return_client_id=return_client_id
         )
-
 @app.route('/admin/destinatarios_nfe/edit/<int:destinatario_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('destinatarios_nfe.edit')
@@ -2344,7 +2278,6 @@ def admin_destinatarios_nfe_edit(destinatario_id):
         clientes=clientes_disponiveis,
         return_client_id=return_client_id
     )
-
 @app.route('/admin/destinatarios_nfe/delete/<int:destinatario_id>', methods=['POST'])
 @login_required
 @permission_required('destinatarios_nfe.delete')
@@ -2374,7 +2307,6 @@ def admin_destinatarios_nfe_delete(destinatario_id):
     if client_id_for_redirect:
         return redirect(url_for('admin_clientes_edit', cliente_id=client_id_for_redirect, _anchor='destinatarios'))
     return redirect(url_for('admin_destinatarios_nfe_list'))
-
 # --- Rotas para Motivos de Desoneração ICMS (dados globais) ---
 # **CORREÇÃO DE DUPLICAÇÃO:** Esta é a ÚNICA definição para esta rota.
 @app.route('/admin/motivos_desoneracao/list')
@@ -2384,7 +2316,6 @@ def admin_motivos_desoneracao_list():
     db = next(get_db())
     motivos = db.query(MotivoDesoneracao).order_by(MotivoDesoneracao.codigo).all()
     return render_template('tributacao/motivos_desoneracao_list.html', motivos=motivos)
-
 @app.route('/admin/motivos_desoneracao/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('motivos_desoneracao.create')
@@ -2411,7 +2342,6 @@ def admin_motivos_desoneracao_add():
             db.rollback()
             flash(f"Erro ao adicionar Motivo de Desoneração: {e}", 'danger')
     return render_template('tributacao/motivos_desoneracao_form.html', form_data=form_data)
-
 @app.route('/admin/motivos_desoneracao/edit/<int:motivo_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('motivos_desoneracao.edit')
@@ -2439,7 +2369,6 @@ def admin_motivos_desoneracao_edit(motivo_id):
             db.rollback()
             flash(f"Erro ao atualizar Motivo de Desoneração: {e}", 'danger')
     return render_template('tributacao/motivos_desoneracao_form.html', motivo=motivo, form_data=motivo)
-
 @app.route('/admin/motivos_desoneracao/delete/<int:motivo_id>', methods=['POST'])
 @login_required
 @permission_required('motivos_desoneracao.delete')
@@ -2459,7 +2388,6 @@ def admin_motivos_desoneracao_delete(motivo_id):
         db.rollback()
         flash(f"Erro ao excluir Motivo de Desoneração: {e}", 'danger')
     return redirect(url_for('admin_motivos_desoneracao_list'))
-
 # --- Rotas para Gerenciamento de Usuários ---
 @app.route('/admin/users/list')
 @login_required
@@ -2468,7 +2396,6 @@ def admin_users_list():
     db = next(get_db())
     users = db.query(User).all()
     return render_template('admin_users_list.html', users=users)
-
 @app.route('/admin/users/add', methods=['GET', 'POST'])
 @login_required
 @permission_required('users.create')
@@ -2518,7 +2445,6 @@ def admin_users_add():
             db.rollback()
             flash(f"Erro ao criar usuário: {e}", 'danger')
     return render_template('admin_users_form.html', roles=roles, clients=clients, form_data={})
-
 @app.route('/admin/users/edit/<int:user_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('users.edit')
@@ -2580,7 +2506,6 @@ def admin_users_edit(user_id):
             db.rollback()
             flash(f"Erro ao atualizar usuário: {e}", 'danger')
     return render_template('admin_users_form.html', user=user, roles=roles, clients=clients_for_dropdown, user_roles_ids=user_roles_ids, user_clients_ids=user_clients_ids)
-
 @app.route('/admin/users/delete/<int:user_id>', methods=['POST'])
 @login_required
 @permission_required('users.delete')
@@ -2610,7 +2535,6 @@ def admin_roles_list():
     db = next(get_db())
     roles = db.query(Role).all()
     return render_template('admin_roles_list.html', roles=roles)
-
 def get_active_certificate_for_client(db_session, cliente_id):
     # Lógica para buscar o certificado ativo do cliente_id
     cert = db_session.query(CertificadoDigital).filter_by(cliente_id=cliente_id, ativo=True).first()
@@ -2630,21 +2554,17 @@ def get_active_certificate_for_client(db_session, cliente_id):
     
     # --- CORREÇÃO BASE64: DECODIFICAÇÃO APÓS RECUPERAR ---
     if cert and cert.conteudo_certificado:
-        # Recupera a string literal do DB
-        db_string_content = cert.conteudo_certificado
-        db_string_password = cert.senha_certificado
-
         # Logica para lidar com a representação hexadecimal ' que vem do PostgreSQL
-        if isinstance(db_string_content, bytes) and db_string_content.startswith(r'\x'): # Se a string *literalmente* começa com '\ (bytes)
-            hex_part_content = db_string_content[3:].decode('utf-8') # Remove '\ e decodifica para string
+        if isinstance(cert.conteudo_certificado, bytes) and cert.conteudo_certificado.startswith(b'\): # Se a string *literalmente* começa com ' (bytes)
+            hex_part_content = cert.conteudo_certificado[2:].decode('utf-8') # Remove ' e decodifica para string
             try:
                 decoded_bytes_from_db_content = binascii.unhexlify(hex_part_content)
             except binascii.Error as e:
                 print(f"ERRO CRÍTICO: binascii.unhexlify falhou para conteudo_certificado: {e}")
                 print(f"STRING HEX CONTEÚDO: {hex_part_content[:100]}...")
                 raise Exception(f"Falha ao decodificar hex do conteúdo do certificado: {e}")
-        elif isinstance(db_string_content, str) and db_string_content.startswith(r'\x'): # Se a string *literalmente* começa com ' (string)
-            hex_part_content = db_string_content[2:]
+        elif isinstance(cert.conteudo_certificado, str) and cert.conteudo_certificado.startswith('\): # Se a string *literalmente* começa com ' (string)
+            hex_part_content = cert.conteudo_certificado[2:]
             try:
                 decoded_bytes_from_db_content = binascii.unhexlify(hex_part_content)
             except binascii.Error as e:
@@ -2652,19 +2572,19 @@ def get_active_certificate_for_client(db_session, cliente_id):
                 print(f"STRING HEX CONTEÚDO: {hex_part_content[:100]}...")
                 raise Exception(f"Falha ao decodificar hex do conteúdo do certificado: {e}")
         else: # Assume que já é Base64 encodado em bytes ou string
-            decoded_bytes_from_db_content = db_string_content if isinstance(db_string_content, bytes) else db_string_content.encode('utf-8')
+            decoded_bytes_from_db_content = cert.conteudo_certificado if isinstance(cert.conteudo_certificado, bytes) else cert.conteudo_certificado.encode('utf-8')
         
         # Logica para lidar com a representação hexadecimal ' para a senha
-        if isinstance(db_string_password, bytes) and db_string_password.startswith(r'\x'): # Se a string *literalmente* começa com '\ (bytes)
-            hex_part_password = db_string_password[3:].decode('utf-8') # Remove '\ e decodifica para string
+        if isinstance(cert.senha_certificado, bytes) and cert.senha_certificado.startswith(b'\): # Se a string *literalmente* começa com ' (bytes)
+            hex_part_password = cert.senha_certificado[2:].decode('utf-8') # Remove ' e decodifica para string
             try:
                 decoded_bytes_from_db_password = binascii.unhexlify(hex_part_password)
             except binascii.Error as e:
                 print(f"ERRO CRÍTICO: binascii.unhexlify falhou para senha_certificado: {e}")
                 print(f"STRING HEX SENHA: {hex_part_password}")
                 raise Exception(f"Falha ao decodificar hex da senha do certificado: {e}")
-        elif isinstance(db_string_password, str) and db_string_password.startswith(r'\x'): # Se a string *literalmente* começa com ' (string)
-            hex_part_password = db_string_password[2:]
+        elif isinstance(cert.senha_certificado, str) and cert.senha_certificado.startswith('\): # Se a string *literalmente* começa com ' (string)
+            hex_part_password = cert.senha_certificado[2:]
             try:
                 decoded_bytes_from_db_password = binascii.unhexlify(hex_part_password)
             except binascii.Error as e:
@@ -2672,7 +2592,7 @@ def get_active_certificate_for_client(db_session, cliente_id):
                 print(f"STRING HEX SENHA: {hex_part_password}")
                 raise Exception(f"Falha ao decodificar hex da senha do certificado: {e}")
         else: # Assume que já é Base64 encodado em bytes ou string
-            decoded_bytes_from_db_password = db_string_password if isinstance(db_string_password, bytes) else db_string_password.encode('utf-8')
+            decoded_bytes_from_db_password = cert.senha_certificado if isinstance(cert.senha_certificado, bytes) else cert.senha_certificado.encode('utf-8')
         
         # --- NOVOS PRINTS DE DEBUG PARA ACOMPANHAR A SENHA ---
         print(f"DEBUG: decoded_bytes_from_db_content (repr): {repr(decoded_bytes_from_db_content)}")
@@ -2694,7 +2614,6 @@ def get_active_certificate_for_client(db_session, cliente_id):
             raise
     
     return cert
-
 # --- NOVA FUNÇÃO AUXILIAR PARA SERIALIZAÇÃO DE PRODUTOS ---
 def produto_to_dict_for_template(produto_obj):
     return {
@@ -2716,7 +2635,6 @@ def produto_to_dict_for_template(produto_obj):
         "csosns_icms": {"codigo": produto_obj.csosns_icms.codigo, "descricao": produto_obj.csosns_icms.descricao} if produto_obj.csosns_icms else None,
     }
 # --- FIM DA NOVA FUNÇÃO AUXILIAR ---
-
 # --- FUNÇÕES PARA GERAÇÃO E ENVIO DA NF-E (CONCEITUALMENTE USANDO NFELIB) ---
 def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_data, tp_amb, action):
     """
@@ -2753,7 +2671,6 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
         form_data['nNF'] = str(uuid.uuid4().int % 100000000).zfill(9)
     if not emitente_data.get('codigo_municipio'):
         raise Exception("Código do município do emitente é obrigatório e não foi encontrado.")
-
     # Gerar XML simulado se for preview/draft OU se nfelib não estiver disponível (e suas classes)
     if action != 'emitir' or not NFELIB_BINDINGS_AVAILABLE:
         current_app.logger.warning("Gerando XML SIMULADO (para preview/draft ou nfelib não disponível).")
@@ -2773,7 +2690,6 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
         rough_string = ET.tostring(root, 'utf-8')
         reparsed = minidom.parseString(rough_string)
         return reparsed.toprettyxml(indent="  ", encoding="utf-8").decode('utf-8')
-
     # --- ABAIXO: Lógica para gerar XML REAL com nfelib ---
     current_app.logger.info("Gerando XML REAL da NF-e com nfelib...")
     try:
@@ -2790,7 +2706,6 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
         tz_offset = "-03:00" # Exemplo: Fuso horário de Brasília
         dhEmi = dhEmi_dt.strftime(f'%Y-%m-%dT%H:%M:%S{tz_offset}')
         dhSaiEnt = dhSaiEnt_dt.strftime(f'%Y-%m-%dT%H:%M:%S{tz_offset}')
-
         # --- Variáveis para Totais ---
         vProd_total = Decimal('0.00')
         vICMS_total = Decimal('0.00')
@@ -2798,7 +2713,6 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
         vPIS_total = Decimal('0.00')
         vCOFINS_total = Decimal('0.00')
         # vNf_total será calculado no final para refletir todos os itens e impostos.
-
         # Instancia a NFe base e seu InfNfe (com 'I' maiúsculo)
         nfe = NFeBase()
         nfe.InfNfe = NFeBase.InfNfe( # Corrigido para InfNfe (capital 'I')
@@ -2870,7 +2784,6 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
                 email=destinatario_data.get('email') # Campo opcional
             )
             nfe.InfNfe.dest = dest # Corrigido para InfNfe (capital 'I')
-
         # --- Itens da NF-e (População com Impostos BÁSICOS para Teste) ---
         det_list = []
         for i, item_data in enumerate(nfe_items_data):
@@ -2887,26 +2800,26 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
             vICMS = Decimal(item_data.get('vICMS', '0.00'))
             vBC_ICMS = vProd
             
-            # Instancia os containers de impostos
-            icms_container = Icms() # Instancia o container Icms
-            ipi_container = Ipi() # Instancia o container Ipi
-            pis_container = Pis() # Instancia o container Pis
-            cofins_container = Cofins() # Instancia o container Cofins
+            # Instancia os containers de impostos, acessando-os através da hierarquia de NFeBase
+            icms_container = NFeBase.InfNfe.Det.Imposto.Icms()
+            ipi_container = Tipi() # <-- CORRIGIDO AQUI: Tipi é a classe correta para o container IPI
+            pis_container = NFeBase.InfNfe.Det.Imposto.Pis()
+            cofins_container = NFeBase.InfNfe.Det.Imposto.Cofins()
 
             if emitente_data['regime_tributario_id'] == 1: # Simples Nacional
                 if cst_csosn == '102': # Simples Nacional Tributada sem permissão de crédito
-                    icms_container.ICMSSN102 = ICMSSN102(Orig=orig_enum, CSOSN=Icmssn102Csosn.VALUE_102)
+                    icms_container.ICMSSN102 = NFeBase.InfNfe.Det.Imposto.Icms.ICMSSN102(Orig=orig_enum, CSOSN=Icmssn102Csosn.VALUE_102)
                 elif cst_csosn == '900': # Outros
-                    icms_container.ICMSSN900 = ICMSSN900(Orig=orig_enum, CSOSN=Icmssn900Csosn.VALUE_900, vBCSN=f"{vBC_ICMS:.2f}", pICMSSN=f"{pICMS:.2f}", vICMSSN=f"{vICMS:.2f}")
+                    icms_container.ICMSSN900 = NFeBase.InfNfe.Det.Imposto.Icms.ICMSSN900(Orig=orig_enum, CSOSN=Icmssn900Csosn.VALUE_900, vBCSN=f"{vBC_ICMS:.2f}", pICMSSN=f"{pICMS:.2f}", vICMSSN=f"{vICMS:.2f}")
                 else: # Fallback para outros CSOSN Simples Nacional
-                     icms_container.ICMSSN900 = ICMSSN900(Orig=orig_enum, CSOSN=Icmssn900Csosn.VALUE_900, vBCSN=f"{vBC_ICMS:.2f}", pICMSSN=f"{pICMS:.2f}", vICMSSN=f"{vICMS:.2f}")
+                     icms_container.ICMSSN900 = NFeBase.InfNfe.Det.Imposto.Icms.ICMSSN900(Orig=orig_enum, CSOSN=Icmssn900Csosn.VALUE_900, vBCSN=f"{vBC_ICMS:.2f}", pICMSSN=f"{pICMS:.2f}", vICMSSN=f"{vICMS:.2f}")
             else: # Regime Normal
                 if cst_csosn == '00': # Tributada Integralmente
-                    icms_container.ICMS00 = ICMS00(Orig=orig_enum, CST=Icms00Cst.VALUE_00, modBC=Icms00ModBc.VALUE_3, vBC=f"{vBC_ICMS:.2f}", pICMS=f"{pICMS:.2f}", vICMS=f"{vICMS:.2f}")
+                    icms_container.ICMS00 = NFeBase.InfNfe.Det.Imposto.Icms.ICMS00(Orig=orig_enum, CST=Icms00Cst.VALUE_00, modBC=Icms00ModBc.VALUE_3, vBC=f"{vBC_ICMS:.2f}", pICMS=f"{pICMS:.2f}", vICMS=f"{vICMS:.2f}")
                 elif cst_csosn == '90': # Outros
-                    icms_container.ICMS90 = ICMS90(Orig=orig_enum, CST=Icms90Cst.VALUE_90, vBC=f"{vBC_ICMS:.2f}", pICMS=f"{pICMS:.2f}", vICMS=f"{vICMS:.2f}")
+                    icms_container.ICMS90 = NFeBase.InfNfe.Det.Imposto.Icms.ICMS90(Orig=orig_enum, CST=Icms90Cst.VALUE_90, vBC=f"{vBC_ICMS:.2f}", pICMS=f"{pICMS:.2f}", vICMS=f"{vICMS:.2f}")
                 else: # Fallback para outros CST Regime Normal
-                    icms_container.ICMS90 = ICMS90(Orig=orig_enum, CST=Icms90Cst.VALUE_90, vBC=f"{vBC_ICMS:.2f}", pICMS=f"{pICMS:.2f}", vICMS=f"{vICMS:.2f}")
+                    icms_container.ICMS90 = NFeBase.InfNfe.Det.Imposto.Icms.ICMS90(Orig=orig_enum, CST=Icms90Cst.VALUE_90, vBC=f"{vBC_ICMS:.2f}", pICMS=f"{pICMS:.2f}", vICMS=f"{vICMS:.2f}")
             
             imposto_item.ICMS = icms_container # Atribui o container ICMS instanciado
             
@@ -2916,36 +2829,33 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
             vIPI = vProd * (pIPI / Decimal('100.00'))
             vBC_IPI = vProd
             if cst_ipi and pIPI > Decimal('0.00'):
-                ipi_container.IPITrib = IPITrib(CST=IpitribCst(cst_ipi), vBC=f"{vBC_IPI:.2f}", pIPI=f"{pIPI:.2f}", vIPI=f"{vIPI:.2f}")
-                imposto_item.IPI = Tipi(cEnq="999", IPITrib=ipi_container.IPITrib) # Tipi é top-level
+                ipi_container.IPITrib = Tipi.IPITrib(CST=IpitribCst(cst_ipi), vBC=f"{vBC_IPI:.2f}", pIPI=f"{pIPI:.2f}", vIPI=f"{vIPI:.2f}") # <-- CORRIGIDO AQUI
+                imposto_item.IPI = ipi_container # Atribui o container Tipi instanciado
             else:
-                ipi_container.IPINT = IPINT(CST=IpintCst.VALUE_53)
-                imposto_item.IPI = Tipi(cEnq="999", IPINT=ipi_container.IPINT) # Tipi é top-level
-
+                ipi_container.IPINT = Tipi.IPINT(CST=IpintCst.VALUE_53) # <-- CORRIGIDO AQUI
+                imposto_item.IPI = ipi_container # Atribui o container Tipi instanciado
             # PIS
             cst_pis = item_data.get('CST_PIS')
             pPIS = Decimal(item_data.get('pPIS', '0.00'))
             vBC_PIS = vProd
             vPIS_calc = vProd * (pPIS / Decimal('100.00'))
             if cst_pis and pPIS > Decimal('0.00'):
-                pis_container.PISAliq = PISAliq(CST=PisaliqCst(cst_pis), vBC=f"{vBC_PIS:.2f}", pPIS=f"{pPIS:.2f}", vPIS=f"{vPIS_calc:.2f}")
+                pis_container.PISAliq = NFeBase.InfNfe.Det.Imposto.Pis.PISAliq(CST=PisaliqCst(cst_pis), vBC=f"{vBC_PIS:.2f}", pPIS=f"{pPIS:.2f}", vPIS=f"{vPIS_calc:.2f}")
                 imposto_item.PIS = pis_container
             else:
-                pis_container.PISNT = PISNT(CST=PisntCst.VALUE_07)
+                pis_container.PISNT = NFeBase.InfNfe.Det.Imposto.Pis.PISNT(CST=PisntCst.VALUE_07)
                 imposto_item.PIS = pis_container
-
             # COFINS
             cst_cofins = item_data.get('CST_COFINS')
             pCOFINS = Decimal(item_data.get('pCOFINS', '0.00'))
             vBC_COFINS = vProd
             vCOFINS_calc = vProd * (pCOFINS / Decimal('100.00'))
             if cst_cofins and pCOFINS > Decimal('0.00'):
-                cofins_container.COFINSAliq = COFINSAliq(CST=CofinsaliqCst(cst_cofins), vBC=f"{vBC_COFINS:.2f}", pCOFINS=f"{pCOFINS:.2f}", vCOFINS=f"{vCOFINS_calc:.2f}")
+                cofins_container.COFINSAliq = NFeBase.InfNfe.Det.Imposto.Cofins.COFINSAliq(CST=CofinsaliqCst(cst_cofins), vBC=f"{vBC_COFINS:.2f}", pCOFINS=f"{pCOFINS:.2f}", vCOFINS=f"{vCOFINS_calc:.2f}")
                 imposto_item.COFINS = cofins_container
             else:
-                cofins_container.COFINSNT = COFINSNT(CST=CofinsntCst.VALUE_07)
+                cofins_container.COFINSNT = NFeBase.InfNfe.Det.Imposto.Cofins.COFINSNT(CST=CofinsntCst.VALUE_07)
                 imposto_item.COFINS = cofins_container
-
             det = NFeBase.InfNfe.Det(
                 nItem=str(i+1),
                 prod=NFeBase.InfNfe.Det.Prod(
@@ -2974,9 +2884,7 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
             vIPI_total += vIPI
             vPIS_total += vPIS_calc
             vCOFINS_total += vCOFINS_calc
-
         nfe.InfNfe.det = det_list # Corrigido para InfNfe (capital 'I')
-
         # --- Totais da NF-e ---
         # Calculamos o vNF_total (Total da NF) somando os valores dos itens, IPI, frete, seguro, outras despesas e subtraindo descontos.
         vNf_total = vProd_total + vIPI_total + Decimal(form_data.get('vFrete', '0.00')) + Decimal(form_data.get('vSeg', '0.00')) + Decimal(form_data.get('vOutro', '0.00')) - Decimal(form_data.get('vDesc', '0.00'))
@@ -3063,7 +2971,6 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
         infAdic_text = form_data.get('infAdic')
         if infAdic_text:
             nfe.InfNfe.infAdic = NFeBase.InfNfe.InfAdic(infCpl=infAdic_text) # Corrigido para InfNfe (capital 'I')
-
         # Finalmente, obter o XML
         xml_string = nfe.to_xml(pretty_print=True, encoding="UTF-8", xml_declaration=True)
         return xml_string
@@ -3072,7 +2979,6 @@ def _generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_dat
         current_app.logger.error(f"Erro na geração do XML REAL com nfelib: {e}", exc_info=True)
         # Captura o erro e re-lança uma exceção mais amigável
         raise Exception(f"Falha na geração do XML REAL: {e}. Verifique o mapeamento dos dados do formulário para a NF-e.")
-
 def _sign_xml(xml_content_string, certificado_digital_obj):
     """
     Função para assinar o XML. Tenta usar erpbrasil.assinatura.
@@ -3151,7 +3057,7 @@ def _sign_xml(xml_content_string, certificado_digital_obj):
             if root.tag == "NFe_Simulada_Sem_NFeLib" or root.tag == "NFe_Simulada_NFeLib_Conceitual" or root.tag == "NFe_Simulada_APP":
                  root.set("assinado_simulado", "true")
             else: # Se for um XML com uma estrutura mais "real" (mesmo que simulado)
-                InfNfe_node = root.find(".//infNFe") # Corrigido para 'infNFe' minúsculo
+                InfNfe_node = root.find(".//infNFe") # Corrigido para 'infNfe' minúsculo
                 if InfNfe_node is not None:
                     InfNfe_node.set("assinado_simulado", "true") # Apenas para simular a assinatura
             
@@ -3159,7 +3065,6 @@ def _sign_xml(xml_content_string, certificado_digital_obj):
         except Exception as e:
             current_app.logger.error(f"Erro ao simular assinatura XML: {e}", exc_info=True)
             return xml_content_string # Retorna original em caso de erro
-
 def _send_nfe_to_sefaz(signed_xml_string, tp_amb):
     """
     Função para enviar o XML assinado à Sefaz. Aqui ainda usaremos uma simulação,
@@ -3203,7 +3108,6 @@ def _send_nfe_to_sefaz(signed_xml_string, tp_amb):
         "data_autorizacao": datetime.now().isoformat() if protocolo else None
     }
 # --- FIM DAS FUNÇÕES AUXILIARES DE NF-E ---
-
 # Nova rota para a tela de emissão de NF-e
 @app.route('/admin/emitir_nfe', methods=['GET', 'POST'])
 @login_required
@@ -3257,7 +3161,6 @@ def admin_emitir_nfe():
     # Esta lista será usada tanto pelo loop Jinja quanto pelo filtro `tojson` para JavaScript
     produtos_for_template_and_js = [produto_to_dict_for_template(p) for p in produtos_obj]
     # --- FIM DO AJUSTE PARA PRODUTOS ---
-
     # --- ATENÇÃO: Ajustei as variáveis passadas para `all_cfops`, `all_csts`, `all_csosns` para que
     #              o filtro `tojson` funcione corretamente com listas de dicionários.
     #              Esses nomes de variáveis (all_cfops, all_csts, all_csosns) devem corresponder
@@ -3268,8 +3171,7 @@ def admin_emitir_nfe():
     # ----------------------------------------------------------------
 
     form_data_initial = {} # Dados para pré-preencher o formulário GET
-    initial_nfe_items = [] 
-
+    initial_nfe_items = []
     # Se houver dados de um POST anterior (ex: validação falhou), eles são mantidos
     if request.method == 'POST':
         form_data_initial = request.form.to_dict()
@@ -3294,7 +3196,6 @@ def admin_emitir_nfe():
                                            form_data=form_data_initial,
                                            initial_nfe_items=initial_nfe_items)
         initial_nfe_items = nfe_items_raw # Atualiza a lista de itens para processamento
-
     # --- Lógica Principal de Emissão/Pré-visualização/Rascunho ---
     action = request.form.get('action')
     
@@ -3352,7 +3253,6 @@ def admin_emitir_nfe():
                                all_csosns=all_csosns_data,
                                form_data=form_data_initial,
                                initial_nfe_items=initial_nfe_items)
-
     generated_xml = None
     try:
         # Passa o tipo de ambiente para a geração do XML
@@ -3369,7 +3269,6 @@ def admin_emitir_nfe():
                                all_csosns=all_csosns_data,
                                form_data=form_data_initial,
                                initial_nfe_items=initial_nfe_items)
-
     if action == 'preview':
         return render_template('xml_preview.html', xml_content=generated_xml)
     elif action == 'draft':
@@ -3537,7 +3436,6 @@ def admin_emitir_nfe():
                            all_csosns=all_csosns_data,
                            form_data=form_data_initial, # Para manter dados do formulário preenchidos
                            initial_nfe_items=initial_nfe_items) # Para manter os itens do JS
-
 @app.route('/admin/nfes/list')
 @login_required
 @permission_required('nfe.read') # Nova permissão: usuários precisam ter 'nfe.read' para acessar esta lista
@@ -3558,7 +3456,6 @@ def admin_nfes_list():
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
     return render_template('admin_nfes_list.html', nfes=nfes, cliente_map=cliente_map)
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(debug=True, host='0.0.0.0', port=port)
