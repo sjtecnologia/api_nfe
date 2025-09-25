@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime, Date, ForeignKey, Numeric, LargeBinary, UniqueConstraint
+from sqlalchemy import BigInteger, create_engine, Column, Integer, String, Boolean, Text, DateTime, Date, ForeignKey, Numeric, LargeBinary, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import JSONB 
@@ -311,14 +311,14 @@ class Cliente(Base):
 
 class CertificadoDigital(Base):
     __tablename__ = 'certificados_digitais'
-    certificado_digital_id = Column(Integer, primary_key=True)
-    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
+    certificado_digital_id = Column(BigInteger, primary_key=True, index=True)
+    cliente_id = Column(BigInteger, ForeignKey('clientes.cliente_id'), nullable=False)
     
     # fingerprint é UNIQUE e NOT NULL no script db sjtnfe.txt
     fingerprint = Column(String(64), unique=True, nullable=False) 
     # conteudo_certificado e senha_certificado são bytea NOT NULL no script db sjtnfe.txt
-    conteudo_certificado = Column(LargeBinary, nullable=False) 
-    senha_certificado = Column(LargeBinary, nullable=False) 
+    conteudo_certificado = Column(Text, nullable=False)
+    senha_certificado = Column(Text, nullable=False)
     # validade_inicio, validade_fim, ativo, data_upload são NOT NULL no script db sjtnfe.txt
     validade_inicio = Column(DateTime, nullable=False) 
     validade_fim = Column(DateTime, nullable=False) 
@@ -343,8 +343,8 @@ class CertificadoDigital(Base):
 
 class NFeEmitidas(Base):
     __tablename__ = 'nfe_emitidas'
-    nfe_emitida_id = Column(Integer, primary_key=True)
-    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
+    nfe_emitida_id = Column(BigInteger, primary_key=True, index=True)
+    cliente_id = Column(BigInteger, ForeignKey('clientes.cliente_id'), nullable=False)
     # Estas colunas eram NOT NULL no script db sjtnfe.txt
     tipo_nfe = Column(String(10), nullable=False) 
     finalidade_emissao = Column(Integer, nullable=False) 
@@ -354,6 +354,14 @@ class NFeEmitidas(Base):
     destinatario_cnpj_cpf = Column(String(14), nullable=True) # No script é varchar(14), que pode ser NULL
     json_nfe = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True) 
     data_criacao = Column(DateTime, default=datetime.now, nullable=False) 
+    created_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True) # Auditoria
+
+    status = Column(String(50), default='RASCUNHO') # Ex: 'RASCUNHO', 'AUTORIZADA', 'REJEITADA', 'CANCELADA'
+    chave_acesso = Column(String(44)) # Chave de acesso da NF-e (44 dígitos)
+    protocolo_sefaz = Column(String(15)) # Protocolo de autorização da SEFAZ
+    data_autorizacao = Column(DateTime) # Data e hora da autorização pela SEFAZ
+    mensagem_sefaz = Column(Text) # Mensagem de retorno da SEFAZ (em caso de rejeição, por exemplo)
+
 
     __table_args__ = (
         UniqueConstraint('nfe_emitida_id', 'cliente_id', name='nfe_cliente_pk'), 

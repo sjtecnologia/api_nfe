@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Emissão de Nota Fiscal{% endblock %}
+
 {% block content %}
     <h1 class="mb-4">Emissão de Nota Fiscal</h1>
     <div class="card shadow-lg">
@@ -13,8 +14,6 @@
                     <button class="nav-link" id="emitente-tab" data-bs-toggle="tab" data-bs-target="#emitente-pane" type="button" role="tab" aria-controls="emitente-pane" aria-selected="false">Emitente</button>
                 </li>
                 <li class="nav-item" role="presentation">
-</li>
-                <li class="nav-item" role="presentation">
                     <button class="nav-link" id="destinatario-tab" data-bs-toggle="tab" data-bs-target="#destinatario-pane" type="button" role="tab" aria-controls="destinatario-pane" aria-selected="false">Destinatário</button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -23,8 +22,6 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="transporte-tab" data-bs-toggle="tab" data-bs-target="#transporte-pane" type="button" role="tab" aria-controls="transporte-pane" aria-selected="false">Transporte</button>
                 </li>
-                <li class="nav-item" role="presentation">
-</li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="pagamento-tab" data-bs-toggle="tab" data-bs-target="#pagamento-pane" type="button" role="tab" aria-controls="pagamento-pane" aria-selected="false">Pagamento & Outros</button>
                 </li>
@@ -40,7 +37,7 @@
                             <div class="col-md-3 mb-3">
                                 {# ALTERADO: de input text para select dropdown de CFOPs #}
                                 <label for="natOp" class="form-label">Natureza da Operação</label>
-                                <select class="form-select" id="natOp" name="natOp" required>
+                                <select class="form-select select2-searchable" id="natOp" name="natOp" required> {# Adicionado select2-searchable #}
                                     <option value="">Selecione a Natureza da Operação...</option>
                                     {% for cfop_item in all_cfops %}
                                         <option value="{{ cfop_item.cfop }}" {% if form_data.natOp == (cfop_item.cfop | string) %}selected{% endif %}>
@@ -151,7 +148,6 @@
                                 <input type="text" class="form-control" value="{{ emitente_data.cnae | default('N/A') }}" readonly>
                             </div>
                         </div>
-                        {# Adicione aqui outros campos do emitente se necessário, todos readonly #}
                     </div>
                     {# ABA: DESTINATÁRIO #}
                     <div class="tab-pane fade" id="destinatario-pane" role="tabpanel" aria-labelledby="destinatario-tab" tabindex="0">
@@ -159,7 +155,7 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="destinatario_id" class="form-label">Selecionar Destinatário Cadastrado</label>
-                                <select class="form-select" id="destinatario_id" name="destinatario_id">
+                                <select class="form-select select2-searchable" id="destinatario_id" name="destinatario_id"> {# Adicionado select2-searchable #}
                                     <option value="">Selecione um destinatário...</option>
                                     {% for dest in destinatarios %}
                                         <option value="{{ dest.destinatario_id }}" {% if form_data.destinatario_id == dest.destinatario_id %}selected{% endif %}>
@@ -336,7 +332,7 @@
                                     <option value="12" {% if form_data.tPag == '12' %}selected{% endif %}>12 - Vale Presente</option>
                                     <option value="13" {% if form_data.tPag == '13' %}selected{% endif %}>13 - Vale Combustível</option>
                                     <option value="14" {% if form_data.tPag == '14' %}selected{% endif %}>14 - Duplicata Mercantil</option>
-                                    <option value="15" {% if form_data.tPag == "15" %}selected{% endif %}>15 - Boleto Bancário</option>
+                                    <option value="15" {% if form_data.tPag == '15' %}selected{% endif %}>15 - Boleto Bancário</option>
                                     <option value="90" {% if form_data.tPag == '90' %}selected{% endif %}>90 - Sem pagamento</option>
                                     <option value="99" {% if form_data.tPag == '99' %}selected{% endif %}>99 - Outros</option>
                                 </select>
@@ -364,6 +360,7 @@
             </form>
         </div>
     </div>
+
 {# MODAL PARA ADICIONAR/EDITAR ITEM DA NF-e #}
     <div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl"> {# modal-xl para telas grandes #}
@@ -490,6 +487,7 @@
         </div>
     </div>
 {% endblock %}
+
 {% block scripts %}
     {{ super() }} {# Mantém os scripts do base.html, como jQuery e máscaras #}
 {# Variáveis passadas do Flask, convertidas para JSON strings seguras para JS #}
@@ -505,6 +503,7 @@
     {% set all_cfops_json = all_cfops | tojson | safe if all_cfops is defined and all_cfops is not none else '[]' %}
     {% set all_csts_icms_json = all_csts | tojson | safe if all_csts is defined and all_csts is not none else '[]' %}
     {% set all_csosns_icms_json = all_csosns | tojson | safe if all_csosns is defined and all_csosns is not none else '[]' %}
+
 <script>
         var nfeItems = JSON.parse('{{ nfe_items_json | safe }}');
         
@@ -524,11 +523,13 @@
 
         // ID do Regime Tributário "Simples Nacional". Ajuste conforme o ID real no seu BD.
         const SIMPLES_NACIONAL_REGIME_ID = 1; // Exemplo: Substitua pelo ID correto do seu BD
+
         $(document).ready(function() {
             // Máscaras (se necessário para campos específicos da NF-e)
             $('#transportadora_cnpj_cpf').mask('00.000.000/0000-00', {reverse: true});
             $('#veiculo_placa').mask('AAA-0000');
             // ... outras máscaras ...
+
             // Lógica para carregar destinatário ao selecionar no dropdown
             $('#destinatario_id').change(function() {
                 const destinatarioId = $(this).val();
@@ -556,11 +557,13 @@
                 // Chamar a busca de regra ao mudar o destinatário. Isso pode afetar o CFOP e tributação
                 fetchTaxRuleForCurrentItem(); 
             }).trigger('change'); // Chamada inicial para carregar se houver um destinatário pré-selecionado
+
             // Lógica para limpar seleção do destinatário
             $('#clearDestinatario').click(function(e) {
                 e.preventDefault();
                 $('#destinatario_id').val('').trigger('change');
             });
+
             // Lógica para preencher dados do produto no modal ao selecionar
             $('#item_produto_id').change(function() {
                 const selectedOptionValue = $(this).val();
@@ -596,8 +599,10 @@
                 // Chamar a busca de regra ao mudar o produto
                 fetchTaxRuleForCurrentItem(); 
             });
+
             // Recalcular total do item ao mudar Qtd, Valor Unitário ou Alíquota ICMS
             $('#item_qCom, #item_vUnCom, #item_pICMS').on('input', calculateItemTotal);
+
             // Botão Salvar Item no Modal
             $('#saveItemBtn').click(function() {
                 const itemForm = $('#itemForm');
@@ -635,6 +640,7 @@
                     itemForm[0].reportValidity();
                 }
             });
+
             // Botão Editar Item na Tabela
             $('#nfe_items_table_body').on('click', '.edit-item-btn', function() {
                 const index = $(this).data('item-id');
@@ -661,6 +667,7 @@
                 $('#addItemModalLabel').text('Editar Item da Nota');
                 $('#addItemModal').modal('show');
             });
+
             // Botão Remover Item da Tabela
             $('#nfe_items_table_body').on('click', '.remove-item-btn', function() {
                 const index = $(this).data('item-id');
@@ -677,6 +684,7 @@
                 $('#item_index').val('');
                 $('#addItemModalLabel').text('Adicionar/Editar Item da Nota');
             });
+
             // Chamada da função de busca de regras quando o modal de item é aberto
             // para um NOVO item. Para edição, não queremos sobrescrever os valores já salvos.
             $('#addItemModal').on('show.bs.modal', function (e) {
@@ -690,7 +698,7 @@
 
             // Intercepta o submit do formulário principal para adicionar os itens como hidden inputs
             $('#nfeForm').submit(function(e) {
-                $('input[name^="items["').remove();
+                $('input[name^="items["]').remove();
                 nfeItems.forEach((item, index) => {
                     const hiddenInput = $('<input>')
                         .attr('type', 'hidden')
@@ -738,7 +746,6 @@
                 uf_destino: selectedDestinatario ? selectedDestinatario.uf : null,
                 tipo_item: selectedProduct.tipo_item || null, // Se tipo_item for um campo no seu modelo Produto
             };
-
             console.log("Buscando regra com dados:", requestData); // Para depuração
             $.ajax({
                 url: '/api/regras_tributacao/buscar',
@@ -811,6 +818,7 @@
                 }
             });
         }
+
         function renderItemsTable() {
             const tbody = $('#nfe_items_table_body');
             tbody.empty();
@@ -837,6 +845,7 @@
                 tbody.append(row);
             });
         }
+
         function calculateItemTotal() {
             const qCom = parseFloat($('#item_qCom').val()) || 0;
             const vUnCom = parseFloat($('#item_vUnCom').val()) || 0;

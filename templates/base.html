@@ -11,6 +11,11 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <!-- Select2 Bootstrap 5 Theme CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+
     <style>
         /* Suas variáveis de cor (SJ Teal) */
         :root {
@@ -26,7 +31,6 @@
         /* Aumentei a largura máxima do container para acomodar melhor os formulários */
         .container { max-width: 1100px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); margin-top: 20px;}
         h1, h2 { color: var(--sj-teal-dark); }
-
         /* Estilos da navegação (navbar) - Adaptação para Bootstrap */
         .navbar-dark .navbar-nav .nav-link {
             color: rgba(255, 255, 255, 0.85); /* Cor padrão para links da navbar escura */
@@ -53,7 +57,6 @@
         .user-info .btn-light:hover {
             background-color: #e2e6ea;
         }
-
         /* Estilos gerais do conteúdo */
         .table-responsive {
             margin-top: 15px; /* Espaçamento para tabelas */
@@ -143,6 +146,41 @@
             max-height: 70vh; /* Limita a altura do corpo do modal */
             overflow-y: auto; /* Adiciona scroll se o conteúdo for maior que a altura */
         }
+
+        /* Ajustes Select2 para integrar melhor com Bootstrap 5 */
+        .select2-container .select2-selection--single {
+            height: calc(1.5em + 0.75rem + 2px); /* Altura do input padrão do Bootstrap */
+            border: 1px solid #ced4da; /* Borda padrão do Bootstrap */
+            border-radius: 0.25rem; /* Raio da borda padrão do Bootstrap */
+            padding: 0.375rem 0.75rem; /* Padding padrão do Bootstrap */
+            display: flex;
+            align-items: center;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            top: 50%;
+            transform: translateY(-50%);
+            right: 1rem;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: inherit; /* Garante que o texto se alinhe verticalmente */
+            padding-left: 0; /* Remove padding extra se houver */
+        }
+        .select2-container--default .select2-dropdown {
+            border: 1px solid #ced4da; /* Borda padrão do Bootstrap para o dropdown */
+            border-radius: 0.25rem;
+        }
+        .select2-container--default .select2-search--dropdown .select2-search__field {
+            border: 1px solid #ced4da;
+            border-radius: 0.25rem;
+            padding: 0.375rem 0.75rem;
+        }
+        /* Foco personalizado do Select2 */
+        .select2-container--default .select2-selection--single:focus,
+        .select2-container--default .select2-selection--single.select2-selection--focus {
+            border-color: var(--sj-teal-dark) !important;
+            box-shadow: 0 0 0 0.25rem rgba(0, 162, 156, 0.25) !important;
+            outline: 0;
+        }
     </style>
     {% block head_extras %}{% endblock %}
 </head>
@@ -164,6 +202,13 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('admin_emitir_nfe') }}">Emitir NF-e</a>
                         </li>
+                        {# NOVO LINK PARA A LISTA DE NF-e EMITIDAS #}
+                        {% if has_permission('nfe.read') %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_nfes_list') }}">NF-es Emitidas</a>
+                        </li>
+                        {% endif %}
+                        {# FIM NOVO LINK #}
                         {% endif %}
                         {# REMOVIDOS DO MENU PRINCIPAL: PRODUTOS, CERTIFICADOS, REGRAS TRIBUTÁRIAS #}
                         {# if has_permission('products.read') %}
@@ -229,7 +274,6 @@
             </div>
         </div>
     </nav>
-
     <div class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -252,9 +296,10 @@
     <footer class="text-center mt-5 py-3 text-muted">
         <p>&copy; {{ now.year }} SJ Tecnologia e Desenvolvimento de Sistemas Ltda. Todos os direitos reservados.</p>
     </footer>
-
     <!-- Bootstrap 5 JS CDN - DEVE VIR NO FINAL DO BODY PARA FUNCIONAMENTO DE COMPONENTES JS (ex: Tabs) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

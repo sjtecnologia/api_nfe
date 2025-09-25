@@ -63,10 +63,12 @@
                         </div>
                         <div class="mb-3">
                             <label for="regime_tributario_id" class="form-label">Regime Tributário</label>
-                            <select class="form-select" id="regime_tributario_id" name="regime_tributario_id" required>
-                                <option value="">Selecione...</option>
+                            <select class="form-select select2-searchable" id="regime_tributario_id" name="regime_tributario_id" required> {# Adicionado select2-searchable #}
+                                <option value="">Selecione um Regime Tributário...</option>
                                 {% for regime in regimes_tributarios %}
-                                    <option value="{{ regime.regime_tributario_id }}" {% if form_data.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}>{{ regime.nome }}</option>
+                                    <option value="{{ regime.regime_tributario_id }}" {% if form_data.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}>
+                                        {{ regime.nome }}
+                                    </option>
                                 {% endfor %}
                             </select>
                         </div>

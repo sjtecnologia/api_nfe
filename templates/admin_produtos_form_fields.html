@@ -23,14 +23,14 @@
 </div>
 <div class="mb-3">
     <label for="ncm_id" class="form-label">NCM</label>
-    <select class="form-select" id="ncm_id" name="ncm_id">
-        <option value="">Selecione um NCM...</option>
+    <select class="form-select select2-searchable" id="ncm_id" name="ncm_id" required></select>
+    <option value="">Selecione um NCM...</option>
         {% for ncm_item in ncms %}
-            <option value="{{ ncm_item.ncm_id }}" {% if (form_data.ncm_id | string) == (ncm_item.ncm_id | string) %}selected{% endif %}>
-                {{ ncm_item.codigo }} - {{ ncm_item.descricao | truncate(50, True, '...') }}
+            <option value="{{ ncm_item.ncm_id }}" {% if form_data.ncm_id | string == ncm_item.ncm_id | string %}selected{% endif %}>
+                    {{ ncm_item.codigo }} - {{ ncm_item.descricao | truncate(50, True, '...') }}
             </option>
         {% endfor %}
-    </select>
+    </select>    
 </div>
 <div class="mb-3">
     <label for="cest" class="form-label">CEST</label>
