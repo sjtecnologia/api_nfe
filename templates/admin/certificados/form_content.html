@@ -1,0 +1,44 @@
+{# Este template contém apenas o formulário para ser incluído em um modal ou outra parte da página #}
+<form id="certificadoModalForm" action="{{ url_for('admin.create_certificado', modal=true) }}" method="post" enctype="multipart/form-data">
+    {# Input oculto para o cliente_id #}
+    <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
+
+    <div class="mb-3">
+        <label for="cliente_id_select" class="form-label">Cliente Associado</label>
+        <select class="form-select" id="cliente_id_select" name="cliente_id_display" disabled> 
+            <option value="">Selecione um cliente...</option>
+            {% for cliente_item in clientes %}
+                <option value="{{ cliente_item.cliente_id }}" {% if (form_data.cliente_id | default(return_client_id)) == cliente_item.cliente_id %}selected{% endif %}>
+                    {{ cliente_item.razao_social }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="nome_arquivo_original" class="form-label">Nome do Arquivo (ou Descrição)</label>
+        <input type="text" class="form-control" id="nome_arquivo_original" name="cert_nome_arquivo_original" value="{{ form_data.nome_arquivo_original | default('') }}" required>
+    </div>
+    
+    <div class="mb-3">
+        <label for="conteudo_certificado_file" class="form-label">Arquivo do Certificado (.pfx)</label>
+        <input class="form-control" type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" accept=".pfx" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="cert_senha_certificado" class="form-label">Senha do Certificado</label>
+        <input type="password" class="form-control" id="cert_senha_certificado" name="cert_senha_certificado" required>
+    </div>
+    
+    {# Validade será extraída do arquivo no backend, não preenchida aqui #}
+    {# Campos de validade só são relevantes para edição de certificado existente #}
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="ativo" name="cert_ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
+        <label class="form-check-label" for="ativo">
+            Certificado Ativo
+        </label>
+    </div>
+
+    <button type="submit" class="btn btn-success">Salvar Certificado</button>
+</form>

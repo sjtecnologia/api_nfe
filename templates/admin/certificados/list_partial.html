@@ -1,0 +1,43 @@
+<div class="table-responsive">
+    {% if certificados_existentes %}
+        <table class="table table-striped table-hover mt-3">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nome do Arquivo</th>
+                    <th>Fingerprint</th>
+                    <th>Validade Início</th>
+                    <th>Validade Fim</th>
+                    <th>Ativo</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for certificado in certificados_existentes %}
+                    <tr>
+                        <td>{{ certificado.certificado_digital_id }}</td>
+                        <td>{{ certificado.nome_arquivo_original | truncate(30, True, '...') }}</td>
+                        <td>{{ certificado.fingerprint[:10] }}...</td>
+                        <td>{{ certificado.validade_inicio.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ certificado.validade_fim.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            {% if certificado.ativo %}
+                                <span class="badge bg-success">Sim</span>
+                            {% else %}
+                                <span class="badge bg-danger">Não</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('admin.edit_certificado', certificado_digital_id=certificado.certificado_digital_id, cliente_id=cliente.cliente_id) }}" class="btn btn-sm btn-info me-2">Editar</a>
+                            <form action="{{ url_for('admin.delete_certificado', certificado_digital_id=certificado.certificado_digital_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este certificado?');">
+                                <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="alert alert-info mt-3">Nenhum certificado associado a este cliente ainda.</p>
+    {% endif %}
+</div>

@@ -1,0 +1,875 @@
+{% extends "base.html" %}
+
+{% block title %}Emissão de Nota Fiscal{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">Emissão de Nota Fiscal</h1>
+    <div class="card shadow-lg">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="nfeTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="identificacao-tab" data-bs-toggle="tab" data-bs-target="#identificacao-pane" type="button" role="tab" aria-controls="identificacao-pane" aria-selected="true">Identificação NF-e</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="emitente-tab" data-bs-toggle="tab" data-bs-target="#emitente-pane" type="button" role="tab" aria-controls="emitente-pane" aria-selected="false">Emitente</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="destinatario-tab" data-bs-toggle="tab" data-bs-target="#destinatario-pane" type="button" role="tab" aria-controls="destinatario-pane" aria-selected="false">Destinatário</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos-pane" type="button" role="tab" aria-controls="produtos-pane" aria-selected="false">Produtos/Serviços</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="transporte-tab" data-bs-toggle="tab" data-bs-target="#transporte-pane" type="button" role="tab" aria-controls="transporte-pane" aria-selected="false">Transporte</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pagamento-tab" data-bs-toggle="tab" data-bs-target="#pagamento-pane" type="button" role="tab" aria-controls="pagamento-pane" aria-selected="false">Pagamento & Outros</button>
+                </li>
+            </ul>
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('nfe.emitir_nfe') }}" method="post" id="nfeForm">
+                <div class="tab-content" id="nfeTabsContent">
+                    {# ABA: IDENTIFICAÇÃO NF-e #}
+                    <div class="tab-pane fade show active" id="identificacao-pane" role="tabpanel" aria-labelledby="identificacao-tab" tabindex="0">
+                        <h5 class="mb-3 text-primary">Dados Gerais da Nota Fiscal</h5>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                {# ALTERADO: de input text para select dropdown de CFOPs #}
+                                <label for="natOp" class="form-label">Natureza da Operação</label>
+                                <select class="form-select select2-searchable" id="natOp" name="natOp" required> {# Adicionado select2-searchable #}
+                                    <option value="">Selecione a Natureza da Operação...</option>
+                                    {% for cfop_item in all_cfops %}
+                                        <option value="{{ cfop_item.cfop }}" {% if form_data.natOp == (cfop_item.cfop | string) %}selected{% endif %}>
+                                            {{ cfop_item.cfop }} - {{ cfop_item.descricao }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                {# FIM ALTERAÇÃO #}
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="finNFe" class="form-label">Finalidade da Emissão</label>
+                                <select class="form-select" id="finNFe" name="finNFe" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="1" {% if form_data.finNFe == '1' %}selected{% endif %}>1 - NF-e normal</option>
+                                    <option value="2" {% if form_data.finNFe == '2' %}selected{% endif %}>2 - NF-e complementar</option>
+                                    <option value="3" {% if form_data.finNFe == '3' %}selected{% endif %}>3 - NF-e de ajuste</option>
+                                    <option value="4" {% if form_data.finNFe == '4' %}selected{% endif %}>4 - Devolução de mercadoria</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="tpAmb" class="form-label">Tipo de Ambiente</label>
+                                <select class="form-select" id="tpAmb" name="tpAmb" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="1" {% if form_data.tpAmb == '1' %}selected{% endif %}>1 - Produção</option>
+                                    <option value="2" {% if form_data.tpAmb == '2' %}selected{% endif %}>2 - Homologação</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="indPres" class="form-label">Indicador de Presença</label>
+                                <select class="form-select" id="indPres" name="indPres" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="1" {% if form_data.indPres == '1' %}selected{% endif %}>1 - Operação presencial</option>
+                                    <option value="2" {% if form_data.indPres == '2' %}selected{% endif %}>2 - Operação não presencial, pela Internet</option>
+                                    <option value="3" {% if form_data.indPres == '3' %}selected{% endif %}>3 - Operação não presencial, Teleatendimento</option>
+                                    <option value="4" {% if form_data.indPres == '4' %}selected{% endif %}>4 - NF-e em site de vendas</option>
+                                    <option value="5" {% if form_data.indPres == '5' %}selected{% endif %}>5 - Operação presencial, fora do estabelecimento</option>
+                                    <option value="9" {% if form_data.indPres == '9' %}selected{% endif %}>9 - Outros</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="modFrete" class="form-label">Modalidade do Frete</label>
+                                <select class="form-select" id="modFrete" name="modFrete" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="0" {% if form_data.modFrete == '0' %}selected{% endif %}>0 - Por conta do emitente</option>
+                                    <option value="1" {% if form_data.modFrete == '1' %}selected{% endif %}>1 - Por conta do destinatário/remetente</option>
+                                    <option value="2" {% if form_data.modFrete == '2' %}selected{% endif %}>2 - Por conta de terceiros</option>
+                                    <option value="3" {% if form_data.modFrete == '3' %}selected{% endif %}>3 - Sem frete</option>
+                                    <option value="4" {% if form_data.modFrete == '4' %}selected{% endif %}>4 - Por conta do remetente</option>
+                                    <option value="9" {% if form_data.modFrete == '9' %}selected{% endif %}>9 - Outros</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="dataEmissao" class="form-label">Data de Emissão</label>
+                                <input type="date" class="form-control" id="dataEmissao" name="dataEmissao" value="{{ form_data.dataEmissao | default(now.strftime('%Y-%m-%d')) }}" required>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="dataSaidaEntrada" class="form-label">Data de Saída/Entrada</label>
+                                <input type="date" class="form-control" id="dataSaidaEntrada" name="dataSaidaEntrada" value="{{ form_data.dataSaidaEntrada | default(now.strftime('%Y-%m-%d')) }}" required>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="horaSaidaEntrada" class="form-label">Hora de Saída/Entrada</label>
+                                <input type="time" class="form-control" id="horaSaidaEntrada" name="horaSaidaEntrada" value="{{ form_data.horaSaidaEntrada | default(now.strftime('%H:%M')) }}">
+                            </div>
+                        </div>
+                    </div>
+                    {# ABA: EMITENTE #}
+                    <div class="tab-pane fade" id="emitente-pane" role="tabpanel" aria-labelledby="emitente-tab" tabindex="0">
+                        <h5 class="mb-3 text-primary">Dados do Emitente (Sua Empresa)</h5>
+                        <p class="alert alert-info">Estes dados são carregados do cadastro do cliente ao qual você está associado e não podem ser alterados diretamente aqui. Para editar, vá para o cadastro de clientes.</p>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Razão Social</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.razao_social | default('N/A') }}" readonly>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">CNPJ</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.cnpj | default('N/A') }}" readonly>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Inscrição Estadual</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.inscricao_estadual | default('N/A') }}" readonly>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-9 mb-3">
+                                <label class="form-label">Endereço</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.logradouro | default('N/A') }}, {{ emitente_data.numero | default('') }} - {{ emitente_data.bairro | default('') }}" readonly>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">CEP</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.cep | default('N/A') }}" readonly>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Município</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.nome_municipio | default('N/A') }} - {{ emitente_data.uf | default('N/A') }}" readonly>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Regime Tributário</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.regime_tributario_nome | default('N/A') }}" readonly>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">CNAE</label>
+                                <input type="text" class="form-control" value="{{ emitente_data.cnae | default('N/A') }}" readonly>
+                            </div>
+                        </div>
+                    </div>
+                    {# ABA: DESTINATÁRIO #}
+                    <div class="tab-pane fade" id="destinatario-pane" role="tabpanel" aria-labelledby="destinatario-tab" tabindex="0">
+                        <h5 class="mb-3 text-primary">Dados do Destinatário</h5>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="destinatario_id" class="form-label">Selecionar Destinatário Cadastrado</label>
+                                <select class="form-select select2-searchable" id="destinatario_id" name="destinatario_id"> {# Adicionado select2-searchable #}
+                                    <option value="">Selecione um destinatário...</option>
+                                    {% for dest in destinatarios %}
+                                        <option value="{{ dest.destinatario_id }}" {% if form_data.destinatario_id == dest.destinatario_id %}selected{% endif %}>
+                                            {{ dest.nome_razao_social }} ({{ dest.cpf_cnpj }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">
+                                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=emitente_data.cliente_id) }}" >Adicionar novo destinatário</a> ou
+                                    <a href="#" id="clearDestinatario">Limpar seleção</a>
+                                </small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="dest_cnpj_cpf" class="form-label">CPF/CNPJ Destinatário</label>
+                                <input type="text" class="form-control" id="dest_cnpj_cpf" name="dest_cnpj_cpf" value="{{ form_data.dest_cnpj_cpf | default('') }}" readonly>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-9 mb-3">
+                                <label for="dest_razao_social" class="form-label">Razão Social / Nome</label>
+                                <input type="text" class="form-control" id="dest_razao_social" name="dest_razao_social" value="{{ form_data.dest_razao_social | default('') }}" readonly>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="dest_ie" class="form-label">Inscrição Estadual</label>
+                                <input type="text" class="form-control" id="dest_ie" name="dest_ie" value="{{ form_data.dest_ie | default('') }}" readonly>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-9 mb-3">
+                                <label for="dest_endereco" class="form-label">Endereço</label>
+                                <input type="text" class="form-control" id="dest_endereco" name="dest_endereco" value="{{ form_data.dest_endereco | default('') }}" readonly>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="dest_cep" class="form-label">CEP</label>
+                                <input type="text" class="form-control" id="dest_cep" name="dest_cep" value="{{ form_data.dest_cep | default('') }}" readonly>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="dest_municipio" class="form-label">Município</label>
+                                <input type="text" class="form-control" id="dest_municipio" name="dest_municipio" value="{{ form_data.dest_municipio | default('') }}" readonly>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="dest_email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="dest_email" name="dest_email" value="{{ form_data.dest_email | default('') }}" readonly>
+                            </div>
+                        </div>
+                        {# Hidden fields for Destinatario details to be sent in XML #}
+                        <input type="hidden" id="dest_codigo_municipio" name="dest_codigo_municipio" value="{{ form_data.dest_codigo_municipio | default('') }}">
+                        <input type="hidden" id="dest_uf" name="dest_uf" value="{{ form_data.dest_uf | default('') }}">
+                        <input type="hidden" id="dest_ie_indicador" name="dest_ie_indicador" value="{{ form_data.dest_ie_indicador | default('') }}">
+                        <input type="hidden" id="dest_telefone" name="dest_telefone" value="{{ form_data.dest_telefone | default('') }}">
+                    </div>
+                    {# ABA: PRODUTOS/SERVIÇOS #}
+                    <div class="tab-pane fade" id="produtos-pane" role="tabpanel" aria-labelledby="produtos-tab" tabindex="0">
+                        <h5 class="mb-3 text-primary">Itens da Nota Fiscal</h5>
+                        <button type="button" class="btn btn-sm btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addItemModal">Adicionar Produto</button>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Cód. Produto</th>
+                                        <th>Descrição</th>
+                                        <th>CFOP</th>
+                                        <th>NCM</th>
+                                        <th>Qtd.</th>
+                                        <th>Unitário</th>
+                                        <th>Total</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nfe_items_table_body">
+                                    {# Os itens serão renderizados aqui via JavaScript. #}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="row mt-4">
+                            <div class="col-md-6 offset-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Totais da Nota</h5>
+                                        <ul class="list-group list-group-flush">
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                Valor Total dos Produtos: <span id="total_produtos">R$ 0,00</span>
+                                            </li>
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                Valor Total da NF-e: <span id="total_nfe">R$ 0,00</span>
+                                            </li>
+                                            {# Adicionar outros totais importantes aqui (ICMS, IPI, PIS, COFINS, Frete, Seguro, etc.) #}
+                                        </ul>
+                                        {# Hidden fields for totals #}
+                                        <input type="hidden" name="total_produtos_input" id="total_produtos_input" value="{{ form_data.total_produtos_input | default('0.00') }}">
+                                        <input type="hidden" name="total_nfe_input" id="total_nfe_input" value="{{ form_data.total_nfe_input | default('0.00') }}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {# ABA: TRANSPORTE #}
+                    <div class="tab-pane fade" id="transporte-pane" role="tabpanel" aria-labelledby="transporte-tab" tabindex="0">
+                        <h5 class="mb-3 text-primary">Dados de Transporte</h5>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="transportadora_razao_social" class="form-label">Transportadora (Razão Social)</label>
+                                <input type="text" class="form-control" id="transportadora_razao_social" name="transportadora_razao_social" value="{{ form_data.transportadora_razao_social | default('') }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="transportadora_cnpj_cpf" class="form-label">Transportadora (CNPJ/CPF)</label>
+                                <input type="text" class="form-control" id="transportadora_cnpj_cpf" name="transportadora_cnpj_cpf" value="{{ form_data.transportadora_cnpj_cpf | default('') }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="transportadora_ie" class="form-label">Transportadora (IE)</label>
+                                <input type="text" class="form-control" id="transportadora_ie" name="transportadora_ie" value="{{ form_data.transportadora_ie | default('') }}">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="veiculo_placa" class="form-label">Veículo (Placa)</label>
+                                <input type="text" class="form-control" id="veiculo_placa" name="veiculo_placa" value="{{ form_data.veiculo_placa | default('') }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="veiculo_uf" class="form-label">Veículo (UF)</label>
+                                <input type="text" class="form-control" id="veiculo_uf" name="veiculo_uf" value="{{ form_data.veiculo_uf | default('') }}" maxlength="2">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="veiculo_rntrc" class="form-label">Veículo (RNTRC)</label>
+                                <input type="text" class="form-control" id="veiculo_rntrc" name="veiculo_rntrc" value="{{ form_data.veiculo_rntrc | default('') }}">
+                            </div>
+                        </div>
+                        <h6 class="mt-4 mb-3 text-info">Dados da Carga</h6>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="qtd_volumes" class="form-label">Qtd. Volumes</label>
+                                <input type="number" class="form-control" id="qtd_volumes" name="qtd_volumes" value="{{ form_data.qtd_volumes | default('') }}">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="peso_bruto" class="form-label">Peso Bruto (kg)</label>
+                                <input type="number" step="0.001" class="form-control" id="peso_bruto" name="peso_bruto" value="{{ form_data.peso_bruto | default('') }}">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="peso_liquido" class="form-label">Peso Líquido (kg)</label>
+                                <input type="number" step="0.001" class="form-control" id="peso_liquido" name="peso_liquido" value="{{ form_data.peso_liquido | default('') }}">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="cubagem" class="form-label">Cubagem (m³)</label>
+                                <input type="number" step="0.001" class="form-control" id="cubagem" name="cubagem" value="{{ form_data.cubagem | default('') }}">
+                            </div>
+                        </div>
+                    </div>
+                    {# ABA: PAGAMENTO & OUTRAS INFORMAÇÕES #}
+                    <div class="tab-pane fade" id="pagamento-pane" role="tabpanel" aria-labelledby="pagamento-tab" tabindex="0">
+                        <h5 class="mb-3 text-primary">Dados de Pagamento</h5>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="indPag" class="form-label">Indicador de Pagamento</label>
+                                <select class="form-select" id="indPag" name="indPag">
+                                    <option value="">Selecione...</option>
+                                    <option value="0" {% if form_data.indPag == '0' %}selected{% endif %}>0 - Pagamento à Vista</option>
+                                    <option value="1" {% if form_data.indPag == '1' %}selected{% endif %}>1 - Pagamento à Prazo</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="tPag" class="form-label">Meio de Pagamento</label>
+                                <select class="form-select" id="tPag" name="tPag">
+                                    <option value="">Selecione...</option>
+                                    <option value="01" {% if form_data.tPag == '01' %}selected{% endif %}>01 - Dinheiro</option>
+                                    <option value="02" {% if form_data.tPag == '02' %}selected{% endif %}>02 - Cheque</option>
+                                    <option value="03" {% if form_data.tPag == '03' %}selected{% endif %}>03 - Cartão de Crédito</option>
+                                    <option value="04" {% if form_data.tPag == '04' %}selected{% endif %}>04 - Cartão de Débito</option>
+                                    <option value="05" {% if form_data.tPag == '05' %}selected{% endif %}>05 - Crédito Loja</option>
+                                    <option value="10" {% if form_data.tPag == '10' %}selected{% endif %}>10 - Vale Alimentação</option>
+                                    <option value="11" {% if form_data.tPag == '11' %}selected{% endif %}>11 - Vale Refeição</option>
+                                    <option value="12" {% if form_data.tPag == '12' %}selected{% endif %}>12 - Vale Presente</option>
+                                    <option value="13" {% if form_data.tPag == '13' %}selected{% endif %}>13 - Vale Combustível</option>
+                                    <option value="14" {% if form_data.tPag == '14' %}selected{% endif %}>14 - Duplicata Mercantil</option>
+                                    <option value="15" {% if form_data.tPag == '15' %}selected{% endif %}>15 - Boleto Bancário</option>
+                                    <option value="90" {% if form_data.tPag == '90' %}selected{% endif %}>90 - Sem pagamento</option>
+                                    <option value="99" {% if form_data.tPag == '99' %}selected{% endif %}>99 - Outros</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="vPag" class="form-label">Valor do Pagamento</label>
+                                <input type="number" step="0.01" class="form-control" id="vPag" name="vPag" value="{{ form_data.vPag | default('') }}">
+                            </div>
+                        </div>
+                        <h5 class="mt-4 mb-3 text-primary">Informações Adicionais</h5>
+                        <div class="mb-3">
+                            <label for="infAdic" class="form-label">Informações Complementares de Interesse do Contribuinte</label>
+                            <textarea class="form-control" id="infAdic" name="infAdic" rows="3">{{ form_data.infAdic | default('') }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                {# Botões de Ação da NF-e #}
+                <div class="mt-4 text-end">
+                    <button type="submit" class="btn btn-warning me-2" name="action" value="preview">Pré-visualizar XML</button>
+                    <button type="submit" class="btn btn-success me-2" name="action" value="emitir">Emitir NF-e</button>
+                    <button type="submit" class="btn btn-info me-2" name="action" value="draft">Salvar Rascunho</button>
+                    <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+{# MODAL PARA ADICIONAR/EDITAR ITEM DA NF-e #}
+    <div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl"> {# modal-xl para telas grandes #}
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addItemModalLabel">Adicionar/Editar Item da Nota</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="itemForm">
+                        <input type="hidden" id="item_index" name="item_index" value=""> {# Para identificar o item sendo editado #}
+                        <h6 class="text-secondary">Dados do Produto/Serviço</h6>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="item_produto_id" class="form-label">Produto Cadastrado</label>
+                                <select class="form-select" id="item_produto_id" name="item_produto_id">
+                                    <option value="">Selecione um produto...</option>
+                                    {# ATUALIZADO: Adicionando data-attributes para CFOP, CST e CSOSN padrão do produto #}
+                                    {% for prod in produtos %} {# 'produtos' agora é uma lista de dicionários #}
+                                        <option value="{{ prod.produto_id }}" 
+                                                data-ncm="{{ prod.ncm.codigo if prod.ncm else '' }}" 
+                                                data-cfop-code="{{ prod.cfop.cfop if prod.cfop else '' }}" 
+                                                data-cfop-desc="{{ prod.cfop.descricao if prod.cfop else '' }}"
+                                                data-uncom="{{ prod.unidade_comercial }}" 
+                                                data-vuncom="{{ prod.preco_unitario_padrao | default(0) }}" 
+                                                data-origem="{{ prod.origem.codigo if prod.origem else '' }}"
+                                                data-cst-icms-code="{{ prod.csts_icms.codigo if prod.csts_icms else '' }}" {# NOVO #}
+                                                data-csosn-icms-code="{{ prod.csosns_icms.codigo if prod.csosns_icms else '' }}" {# NOVO #}
+                                        >
+                                            {{ prod.descricao }} ({{ prod.codigo_interno }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">Preenche NCM, CFOP, Unidade e Preço padrão.</small>
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_cProd" class="form-label">Cód. Interno</label>
+                                <input type="text" class="form-control" id="item_cProd" name="item_cProd" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="item_xProd" class="form-label">Descrição do Produto</label>
+                                <input type="text" class="form-control" id="item_xProd" name="item_xProd" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="item_NCM" class="form-label">NCM</label>
+                                <input type="text" class="form-control" id="item_NCM" name="item_NCM" required>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="item_CFOP" class="form-label">CFOP</label>
+                                <input type="text" class="form-control" id="item_CFOP" name="item_CFOP" required>
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_uCom" class="form-label">Unid. Comercial</label>
+                                <input type="text" class="form-control" id="item_uCom" name="item_uCom" required>
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_qCom" class="form-label">Quantidade</label>
+                                <input type="number" step="0.001" class="form-control" id="item_qCom" name="item_qCom" value="1" required>
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_vUnCom" class="form-label">Valor Unitário</label>
+                                <input type="number" step="0.01" class="form-control" id="item_vUnCom" name="item_vUnCom" required>
+                            </div>
+                        </div>
+                        <h6 class="mt-4 text-secondary">Dados de Imposto (ICMS)</h6>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="item_orig" class="form-label">Origem da Mercadoria</label>
+                                <input type="text" class="form-control" id="item_orig" name="item_orig" required>
+                                <small class="form-text text-muted">Ex: 0 (Nacional), 1 (Estrangeira Imp. Direta)</small>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="item_CST_CSOSN" class="form-label">CST / CSOSN</label>
+                                <input type="text" class="form-control" id="item_CST_CSOSN" name="item_CST_CSOSN" placeholder="00 ou 101">
+                                <small class="form-text text-muted">Preenchido pela Regra de Tributação ou padrão do produto.</small>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="item_vICMS" class="form-label">Valor ICMS</label>
+                                <input type="number" step="0.01" class="form-control" id="item_vICMS" name="item_vICMS" readonly>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="item_pICMS" class="form-label">Alíquota ICMS (%)</label>
+                                <input type="number" step="0.01" class="form-control" id="item_pICMS" name="item_pICMS">
+                            </div>
+                        </div>
+                        {# Outros Impostos (IPI, PIS, COFINS) - Simplificado por agora #}
+                        <h6 class="mt-4 text-secondary">Outros Impostos (IPI, PIS, COFINS)</h6>
+                        <p class="alert alert-warning">A lógica de cálculo e seleção de CST/alíquotas para IPI, PIS, COFINS é complexa e deve ser determinada por regras de tributação no backend.</p>
+                        <div class="row">
+                            <div class="col-md-2 mb-3">
+                                <label for="item_CST_IPI" class="form-label">CST IPI</label>
+                                <input type="text" class="form-control" id="item_CST_IPI" name="item_CST_IPI">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_pIPI" class="form-label">Alíquota IPI (%)</label>
+                                <input type="number" step="0.01" class="form-control" id="item_pIPI" name="item_pIPI">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_CST_PIS" class="form-label">CST PIS</label>
+                                <input type="text" class="form-control" id="item_CST_PIS" name="item_CST_PIS">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_pPIS" class="form-label">Alíquota PIS (%)</label>
+                                <input type="number" step="0.01" class="form-control" id="item_pPIS" name="item_pPIS">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_CST_COFINS" class="form-label">CST COFINS</label>
+                                <input type="text" class="form-control" id="item_CST_COFINS" name="item_CST_COFINS">
+                            </div>
+                            <div class="col-md-2 mb-3">
+                                <label for="item_pCOFINS" class="form-label">Alíquota COFINS (%)</label>
+                                <input type="number" step="0.01" class="form-control" id="item_pCOFINS" name="item_pCOFINS">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary" id="saveItemBtn">Salvar Item</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }} {# Mantém os scripts do base.html, como jQuery e máscaras #}
+{# Variáveis passadas do Flask, convertidas para JSON strings seguras para JS #}
+    {% set nfe_items_json = initial_nfe_items | tojson | safe if initial_nfe_items is defined and initial_nfe_items is not none else '[]' %}
+    {% set destinatarios_json = destinatarios | tojson | safe if destinatarios is defined and destinatarios is not none else '[]' %}
+    {# ATENÇÃO: 'produtos' agora já é uma lista de dicionários, pronta para 'tojson' #}
+    {% set produtos_json = produtos | tojson | safe if produtos is defined and produtos is not none else '[]' %}
+    {% set emitente_client_id_json = emitente_data.cliente_id | tojson | safe if emitente_data.cliente_id is defined and emitente_data.cliente_id is not none else 'null' %}
+    {% set emitente_uf_json = emitente_data.uf | tojson | safe if emitente_data.uf is defined and emitente_data.uf is not none else 'null' %}
+    {% set emitente_regime_tributario_id_json = emitente_data.regime_tributario_id | tojson | safe if emitente_data.regime_tributario_id is defined and emitente_data.regime_tributario_id is not none else 'null' %}
+    {# NOVO: Passar listas completas de CFOPs, CSTs, CSOSNs para uso em mapeamento #}
+    {# ATENÇÃO: 'all_cfops', 'all_csts', 'all_csosns' agora são listas de dicionários #}
+    {% set all_cfops_json = all_cfops | tojson | safe if all_cfops is defined and all_cfops is not none else '[]' %}
+    {% set all_csts_icms_json = all_csts | tojson | safe if all_csts is defined and all_csts is not none else '[]' %}
+    {% set all_csosns_icms_json = all_csosns | tojson | safe if all_csosns is defined and all_csosns is not none else '[]' %}
+
+<script>
+        var nfeItems = JSON.parse('{{ nfe_items_json | safe }}');
+        
+        if (!Array.isArray(nfeItems)) {
+            console.warn("nfeItems não era um array após JSON.parse, redefinindo para array vazio. Valor original:", nfeItems);
+            nfeItems = [];
+        }
+        const allDestinatarios = JSON.parse('{{ destinatarios_json | safe }}');
+        const allProdutos = JSON.parse('{{ produtos_json | safe }}');
+        const emitenteClientId = JSON.parse('{{ emitente_client_id_json | safe }}');
+        const emitenteUf = JSON.parse('{{ emitente_uf_json | safe }}');
+        const emitenteRegimeTributarioId = JSON.parse('{{ emitente_regime_tributario_id_json | safe }}'); // ADICIONADO
+        // NOVO: Listas completas para lookup
+        const allCfops = JSON.parse('{{ all_cfops_json | safe }}');
+        const allCsts = JSON.parse('{{ all_csts_icms_json | safe }}'); // Renomeado para consistência
+        const allCsosns = JSON.parse('{{ all_csosns_icms_json | safe }}'); // Renomeado para consistência
+
+        // ID do Regime Tributário "Simples Nacional". Ajuste conforme o ID real no seu BD.
+        const SIMPLES_NACIONAL_REGIME_ID = 1; // Exemplo: Substitua pelo ID correto do seu BD
+
+        $(document).ready(function() {
+            // Máscaras (se necessário para campos específicos da NF-e)
+            $('#transportadora_cnpj_cpf').mask('00.000.000/0000-00', {reverse: true});
+            $('#veiculo_placa').mask('AAA-0000');
+            // ... outras máscaras ...
+
+            // Lógica para carregar destinatário ao selecionar no dropdown
+            $('#destinatario_id').change(function() {
+                const destinatarioId = $(this).val();
+                if (destinatarioId) {
+                    const selectedDest = allDestinatarios.find(d => d.destinatario_id == destinatarioId);
+                    
+                    if (selectedDest) {
+                        $('#dest_cnpj_cpf').val(selectedDest.cpf_cnpj);
+                        $('#dest_razao_social').val(selectedDest.nome_razao_social);
+                        $('#dest_ie').val(selectedDest.ie || '');
+                        $('#dest_endereco').val(`${selectedDest.logradouro}, ${selectedDest.numero} ${selectedDest.complemento || ''} - ${selectedDest.bairro}`);
+                        $('#dest_cep').val(selectedDest.cep);
+                        $('#dest_municipio').val(`${selectedDest.nome_municipio} - ${selectedDest.uf}`);
+                        $('#dest_email').val(selectedDest.email || '');
+                        // Campos Hidden
+                        $('#dest_codigo_municipio').val(selectedDest.codigo_municipio);
+                        $('#dest_uf').val(selectedDest.uf);
+                        $('#dest_ie_indicador').val(selectedDest.ie_indicador_nfe);
+                        $('#dest_telefone').val(selectedDest.telefone || '');
+                    }
+                } else {
+                    // Limpar campos se "Selecione..." for escolhido
+                    $('#dest_cnpj_cpf, #dest_razao_social, #dest_ie, #dest_endereco, #dest_cep, #dest_municipio, #dest_email, #dest_codigo_municipio, #dest_uf, #dest_ie_indicador, #dest_telefone').val('');
+                }
+                // Chamar a busca de regra ao mudar o destinatário. Isso pode afetar o CFOP e tributação
+                fetchTaxRuleForCurrentItem(); 
+            }).trigger('change'); // Chamada inicial para carregar se houver um destinatário pré-selecionado
+
+            // Lógica para limpar seleção do destinatário
+            $('#clearDestinatario').click(function(e) {
+                e.preventDefault();
+                $('#destinatario_id').val('').trigger('change');
+            });
+
+            // Lógica para preencher dados do produto no modal ao selecionar
+            $('#item_produto_id').change(function() {
+                const selectedOptionValue = $(this).val();
+                let cfopCode = ''; // Para preencher o CFOP do item
+                if (selectedOptionValue) {
+                    const selectedProd = allProdutos.find(p => p.produto_id == selectedOptionValue);
+                    if (selectedProd) {
+                        $('#item_cProd').val(selectedProd.codigo_interno);
+                        $('#item_xProd').val(selectedProd.descricao);
+                        $('#item_NCM').val(selectedProd.ncm ? selectedProd.ncm.codigo : '');
+                        $('#item_CFOP').val(selectedProd.cfop ? selectedProd.cfop.cfop : ''); // Usa o CFOP padrão do produto
+                        $('#item_uCom').val(selectedProd.unidade_comercial);
+                        $('#item_qCom').val(1);
+                        $('#item_vUnCom').val(selectedProd.preco_unitario_padrao);
+                        $('#item_orig').val(selectedProd.origem ? selectedProd.origem.codigo : '');
+                        // Preencher CST/CSOSN padrão do produto
+                        if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) { // Se emitente é Simples Nacional
+                            $('#item_CST_CSOSN').val(selectedProd.csosns_icms ? selectedProd.csosns_icms.codigo : '');
+                        } else { // Se emitente é Regime Normal
+                            $('#item_CST_CSOSN').val(selectedProd.csts_icms ? selectedProd.csts_icms.codigo : '');
+                        }
+                        
+                        cfopCode = selectedProd.cfop ? selectedProd.cfop.cfop : '';
+                        
+                        // Recalcular o total do item inicialmente com base nos valores preenchidos
+                        calculateItemTotal();
+                    }
+                } else {
+                    $('#item_cProd, #item_xProd, #item_NCM, #item_CFOP, #item_uCom, #item_qCom, #item_vUnCom, #item_orig, #item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
+                }
+                // Preenche o campo NatOp principal da NF-e (o dropdown)
+                $('#natOp').val(cfopCode).trigger('change'); // Trigger change para que o formulário registre a seleção
+                // Chamar a busca de regra ao mudar o produto
+                fetchTaxRuleForCurrentItem(); 
+            });
+
+            // Recalcular total do item ao mudar Qtd, Valor Unitário ou Alíquota ICMS
+            $('#item_qCom, #item_vUnCom, #item_pICMS').on('input', calculateItemTotal);
+
+            // Botão Salvar Item no Modal
+            $('#saveItemBtn').click(function() {
+                const itemForm = $('#itemForm');
+                if (itemForm[0].checkValidity()) {
+                    const item = {
+                        cProd: $('#item_cProd').val(),
+                        xProd: $('#item_xProd').val(),
+                        NCM: $('#item_NCM').val(),
+                        CFOP: $('#item_CFOP').val(),
+                        uCom: $('#item_uCom').val(),
+                        qCom: parseFloat($('#item_qCom').val()),
+                        vUnCom: parseFloat($('#item_vUnCom').val()),
+                        vProd: parseFloat($('#item_qCom').val()) * parseFloat($('#item_vUnCom').val()),
+                        orig: $('#item_orig').val(),
+                        CST_CSOSN: $('#item_CST_CSOSN').val(),
+                        vICMS: parseFloat($('#item_vICMS').val() || 0),
+                        pICMS: parseFloat($('#item_pICMS').val() || 0),
+                        CST_IPI: $('#item_CST_IPI').val(),
+                        pIPI: parseFloat($('#item_pIPI').val() || 0),
+                        CST_PIS: $('#item_CST_PIS').val(),
+                        pPIS: parseFloat($('#item_pPIS').val() || 0),
+                        CST_COFINS: $('#item_CST_COFINS').val(),
+                        pCOFINS: parseFloat($('#item_pCOFINS').val() || 0),
+                    };
+                    const itemIndex = $('#item_index').val();
+                    if (itemIndex !== '') {
+                        nfeItems[parseInt(itemIndex)] = item;
+                    } else {
+                        nfeItems.push(item);
+                    }
+                    renderItemsTable();
+                    calculateTotals();
+                    $('#addItemModal').modal('hide');
+                } else {
+                    itemForm[0].reportValidity();
+                }
+            });
+
+            // Botão Editar Item na Tabela
+            $('#nfe_items_table_body').on('click', '.edit-item-btn', function() {
+                const index = $(this).data('item-id');
+                const item = nfeItems[index];
+                $('#item_index').val(index);
+                $('#item_produto_id').val(''); // Limpa a seleção do produto para que o usuário possa selecionar outro se quiser editar
+                $('#item_cProd').val(item.cProd);
+                $('#item_xProd').val(item.xProd);
+                $('#item_NCM').val(item.NCM);
+                $('#item_CFOP').val(item.CFOP);
+                $('#item_uCom').val(item.uCom);
+                $('#item_qCom').val(item.qCom);
+                $('#item_vUnCom').val(item.vUnCom);
+                $('#item_orig').val(item.orig);
+                $('#item_CST_CSOSN').val(item.CST_CSOSN);
+                $('#item_vICMS').val(item.vICMS.toFixed(2));
+                $('#item_pICMS').val(item.pICMS);
+                $('#item_CST_IPI').val(item.CST_IPI);
+                $('#item_pIPI').val(item.pIPI);
+                $('#item_CST_PIS').val(item.CST_PIS);
+                $('#item_pPIS').val(item.pPIS);
+                $('#item_CST_COFINS').val(item.CST_COFINS);
+                $('#item_pCOFINS').val(item.pCOFINS);
+                $('#addItemModalLabel').text('Editar Item da Nota');
+                $('#addItemModal').modal('show');
+            });
+
+            // Botão Remover Item da Tabela
+            $('#nfe_items_table_body').on('click', '.remove-item-btn', function() {
+                const index = $(this).data('item-id');
+                if (confirm('Tem certeza que deseja remover este item?')) {
+                    nfeItems.splice(index, 1);
+                    renderItemsTable();
+                    calculateTotals();
+                }
+            });
+
+            // Limpar formulário do modal ao fechar
+            $('#addItemModal').on('hidden.bs.modal', function () {
+                $('#itemForm')[0].reset();
+                $('#item_index').val('');
+                $('#addItemModalLabel').text('Adicionar/Editar Item da Nota');
+            });
+
+            // Chamada da função de busca de regras quando o modal de item é aberto
+            // para um NOVO item. Para edição, não queremos sobrescrever os valores já salvos.
+            $('#addItemModal').on('show.bs.modal', function (e) {
+                // Se for um novo item (item_index está vazio), tente buscar a regra
+                if ($('#item_index').val() === '') {
+                    // Pequeno delay para garantir que os campos de produto/destinatário estejam carregados
+                    // (especialmente se o modal for aberto antes de um 'change' ter sido processado)
+                    setTimeout(fetchTaxRuleForCurrentItem, 100); 
+                }
+            });
+
+            // Intercepta o submit do formulário principal para adicionar os itens como hidden inputs
+            $('#nfeForm').submit(function(e) {
+                $('input[name^="items["]').remove();
+                nfeItems.forEach((item, index) => {
+                    const hiddenInput = $('<input>')
+                        .attr('type', 'hidden')
+                        .attr('name', `items[${index}][json]`)
+                        .val(JSON.stringify(item));
+                    $('#nfeForm').append(hiddenInput);
+                });
+                return true; 
+            });
+
+            // Renderiza os itens iniciais (se houver) e calcula os totais ao carregar a página
+            renderItemsTable();
+            calculateTotals();
+        });
+
+        // Funções auxiliares
+
+        // Função para buscar e aplicar a regra de tributação via AJAX
+        function fetchTaxRuleForCurrentItem() {
+            const selectedProductId = $('#item_produto_id').val();
+            const selectedDestinatarioId = $('#destinatario_id').val();
+            // Limpar campos de imposto antes de buscar uma nova regra
+            $('#item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
+
+            if (!selectedProductId) {
+                return;
+            }
+
+            const selectedProduct = allProdutos.find(p => p.produto_id == selectedProductId);
+            let selectedDestinatario = null;
+            if (selectedDestinatarioId) {
+                selectedDestinatario = allDestinatarios.find(d => d.destinatario_id == selectedDestinatarioId);
+            }
+
+            if (!selectedProduct || !emitenteClientId || emitenteRegimeTributarioId === null) {
+                console.warn("Dados insuficientes para buscar regra de tributação. Verifique se o produto está selecionado, se o emitente tem ID e regime tributário.");
+                return;
+            }
+            const requestData = {
+                cliente_id: emitenteClientId,
+                regime_tributario_id: emitenteRegimeTributarioId,
+                cfop_codigo: selectedProduct.cfop ? selectedProduct.cfop.cfop : null, // CFOP do produto
+                ncm_codigo: selectedProduct.ncm ? selectedProduct.ncm.codigo : null,
+                uf_origem: emitenteUf,
+                uf_destino: selectedDestinatario ? selectedDestinatario.uf : null,
+                tipo_item: selectedProduct.tipo_item || null, // Se tipo_item for um campo no seu modelo Produto
+            };
+            console.log("Buscando regra com dados:", requestData); // Para depuração
+            $.ajax({
+                url: '/api/regras_tributacao/buscar',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(requestData),
+                success: function(response) {
+                    console.log("Regra de tributação encontrada:", response);
+                    
+                    // Preencher os campos do modal com a regra encontrada
+                    // Verifica se é Simples Nacional ou Regime Normal para CST/CSOSN
+                    if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) { // Supondo 1 para Simples Nacional
+                        $('#item_CST_CSOSN').val(response.csosn_icms_codigo || '');
+                    } else { // Regime Normal
+                        $('#item_CST_CSOSN').val(response.cst_icms_codigo || '');
+                    }
+                    
+                    $('#item_pICMS').val(response.aliquota_icms || 0);
+                    
+                    // Outros impostos:
+                    $('#item_CST_IPI').val(response.cst_ipi || '');
+                    $('#item_pIPI').val(response.aliquota_ipi || 0);
+                    $('#item_CST_PIS').val(response.cst_pis || '');
+                    $('#item_pPIS').val(response.aliquota_pis || 0);
+                    $('#item_CST_COFINS').val(response.cst_cofins || '');
+                    $('#item_pCOFINS').val(response.aliquota_cofins || 0);
+                    // Atualiza o CFOP do item no modal (se a regra sobrescreveu)
+                    $('#item_CFOP').val(response.cfop_codigo || (selectedProduct.cfop ? selectedProduct.cfop.cfop : ''));
+                    // Atualiza a Natureza da Operação principal da NF-e (o dropdown)
+                    const cfopToSelect = response.cfop_codigo || (selectedProduct.cfop ? selectedProduct.cfop.cfop : '');
+                    if (cfopToSelect) {
+                         $('#natOp').val(cfopToSelect).trigger('change');
+                    }
+                    
+                    // Recalcular o total do item após aplicar a regra
+                    calculateItemTotal();
+                },
+                error: function(xhr, status, error) {
+                    const errorMessage = xhr.responseJSON ? xhr.responseJSON.message : "Erro desconhecido ao buscar regra de tributação.";
+                    console.error("Erro na busca de regra de tributação:", errorMessage);
+                    // Se a busca falhar, tentamos voltar aos valores padrão do produto ou limpar.
+                    const selectedProductId = $('#item_produto_id').val();
+                    if (selectedProductId) {
+                        const selectedProd = allProdutos.find(p => p.produto_id == selectedProductId);
+                        if (selectedProd) {
+                            if (emitenteRegimeTributarioId === SIMPLES_NACIONAL_REGIME_ID) {
+                                $('#item_CST_CSOSN').val(selectedProd.csosns_icms ? selectedProd.csosns_icms.codigo : '');
+                            } else {
+                                $('#item_CST_CSOSN').val(selectedProd.csts_icms ? selectedProd.csts_icms.codigo : '');
+                            }
+                            $('#item_pICMS').val(0); 
+                            $('#item_CST_IPI').val(''); $('#item_pIPI').val(0);
+                            $('#item_CST_PIS').val(''); $('#item_pPIS').val(0);
+                            $('#item_CST_COFINS').val(''); $('#item_pCOFINS').val(0);
+                            $('#item_CFOP').val(selectedProd.cfop ? selectedProd.cfop.cfop : '');
+                        }
+                    } else {
+                         $('#item_CST_CSOSN, #item_vICMS, #item_pICMS, #item_CST_IPI, #item_pIPI, #item_CST_PIS, #item_pPIS, #item_CST_COFINS, #item_pCOFINS').val('');
+                         $('#item_CFOP').val('');
+                    }
+                    // Garante que a natureza da operação é preenchida pelo CFOP padrão do produto se a busca de regra falhar
+                    if (selectedProductId) {
+                        const selectedProd = allProdutos.find(p => p.produto_id == selectedProductId);
+                        const cfopCode = selectedProd.cfop ? selectedProd.cfop.cfop : '';
+                        $('#natOp').val(cfopCode).trigger('change');
+                    } else {
+                        $('#natOp').val('');
+                    }
+                    calculateItemTotal(); // Recalcula o total com os valores redefinidos
+                }
+            });
+        }
+
+        function renderItemsTable() {
+            const tbody = $('#nfe_items_table_body');
+            tbody.empty();
+            if (nfeItems.length === 0) {
+                tbody.append('<tr><td colspan="8" class="text-center">Nenhum item adicionado ainda.</td></tr>');
+                return;
+            }
+            nfeItems.forEach((item, index) => {
+                const row = `
+                    <tr>
+                        <td>${item.cProd}</td>
+                        <td>${item.xProd}</td>
+                        <td>${item.CFOP}</td>
+                        <td>${item.NCM}</td>
+                        <td>${item.qCom}</td>
+                        <td>R$ ${item.vUnCom.toFixed(2)}</td>
+                        <td>R$ ${item.vProd.toFixed(2)}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-info edit-item-btn" data-item-id="${index}">Editar</button>
+                            <button type="button" class="btn btn-sm btn-danger remove-item-btn" data-item-id="${index}">Remover</button>
+                        </td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+        }
+
+        function calculateItemTotal() {
+            const qCom = parseFloat($('#item_qCom').val()) || 0;
+            const vUnCom = parseFloat($('#item_vUnCom').val()) || 0;
+            const vProd = qCom * vUnCom;
+            const pICMS = parseFloat($('#item_pICMS').val() || 0);
+            const vICMS = vProd * (pICMS / 100);
+
+            $('#item_vICMS').val(vICMS.toFixed(2));
+        }
+
+        function calculateTotals() {
+            let totalProdutos = 0;
+            let totalNFE = 0;
+
+            nfeItems.forEach(item => {
+                totalProdutos += item.vProd;
+                totalNFE += item.vProd + (item.vICMS || 0) + (item.vIPI || 0);
+            });
+
+            $('#total_produtos').text(`R$ ${totalProdutos.toFixed(2)}`);
+            $('#total_produtos_input').val(totalProdutos.toFixed(2));
+
+            $('#total_nfe').text(`R$ ${totalNFE.toFixed(2)}`);
+            $('#total_nfe_input').val(totalNFE.toFixed(2));
+        }
+    </script>
+{% endblock %}

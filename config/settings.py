@@ -1,0 +1,23 @@
+import os
+
+# Configurações do Flask
+SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'sua_chave_secreta_padrao_muito_complexa_e_longa_aqui')
+
+# Configurações do Banco de Dados
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo2505@localhost:5432/sjtnfe")
+
+# Configurações da Sefaz
+SEFAZ_AMBIENTE_HOMOLOGACAO = True  # True = Homologação, False = Produção
+USAR_CERTIFICADO_REAL = True  # True = Usar certificado real, False = Simulado
+
+# Configurações de Debug
+DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+HOST = os.getenv('FLASK_HOST', '0.0.0.0')
+PORT = int(os.getenv('PORT', 8080))
+
+# Configurações de Upload
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+
+# Configurações de Log
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if csosn %}Editar CSOSN ICMS{% else %}Novo CSOSN ICMS{% endif %}{% endblock %}
+
+{% block content %}
+    <h1>{% if csosn %}Editando CSOSN ICMS ({{ csosn.codigo }}){% else %}Novo CSOSN ICMS{% endif %}</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <fieldset>
+            <legend>Dados do CSOSN ICMS</legend>
+
+            <div class="form-group">
+                <label for="codigo">Código CSOSN ICMS:</label>
+                <input type="text" id="codigo" name="codigo" placeholder="Ex: 101" value="{{ csosn.codigo if csosn else (form_data.codigo if form_data else '') }}" maxlength="3" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="descricao">Descrição:</label>
+                <textarea id="descricao" name="descricao" placeholder="Descrição completa do CSOSN ICMS" required>{{ csosn.descricao if csosn else (form_data.descricao if form_data else '') }}</textarea>
+            </div>
+        </fieldset>
+        
+        <div class="button-group">
+            <button type="submit" class="btn">Salvar CSOSN ICMS</button>
+            <a href="{{ url_for('admin.list_csosn') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+{% endblock %}

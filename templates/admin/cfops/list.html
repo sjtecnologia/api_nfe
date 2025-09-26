@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}CFOPs - Admin{% endblock %}
+
+{% block content %}
+    <h1>Administração de CFOPs</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p><a href="{{ url_for('admin.create_cfop') }}" class="btn">Adicionar Novo CFOP</a></p>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">CFOP</th>
+                <th scope="col">Descrição</th>
+                <th scope="col">Observação</th>
+                <th scope="col">Tipo Operação</th>
+                <th scope="col">Identificador Destino</th>
+                <th scope="col">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cfop_item in cfops %} {# Renomeado para cfop_item para evitar conflito com a classe Cfop #}
+            <tr>
+                <td>{{ cfop_item.cfop_id }}</td>
+                <td>{{ cfop_item.cfop }}</td>
+                <td>{{ cfop_item.descricao }}</td>
+                <td>{{ cfop_item.observacao if cfop_item.observacao else 'N/A' }}</td>
+                <td>{{ cfop_item.tipooperacao if cfop_item.tipooperacao else 'N/A' }}</td>
+                <td>{{ cfop_item.identificadordestinooperacao if cfop_item.identificadordestinooperacao else 'N/A' }}</td>
+                <td>
+                    <a href="{{ url_for('admin.edit_cfop', cfop_id=cfop_item.cfop_id) }}" class="btn btn-warning btn-sm">Editar</a>
+                    <form action="{{ url_for('admin.delete_cfop', cfop_id=cfop_item.cfop_id) }}" method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir o CFOP {{ cfop_item.cfop }}?');">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">Nenhum CFOP cadastrado.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

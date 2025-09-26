@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Trocar Cliente' if switching else 'Selecionar Cliente' }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3>
+                        <i class="fas fa-building"></i> 
+                        {{ 'Trocar Cliente' if switching else 'Selecionar Cliente' }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    {% if switching %}
+                    <p>Selecione outro cliente para trabalhar:</p>
+                    {% else %}
+                    <p>Você tem acesso aos seguintes clientes. Selecione um para continuar:</p>
+                    {% endif %}
+                    
+                    <div class="row">
+                        {% for client in clients %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 border">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-building fa-3x text-primary"></i>
+                                    </div>
+                                    <h5 class="card-title">{{ client.razao_social }}</h5>
+                                    {% if client.nome_fantasia and client.nome_fantasia != client.razao_social %}
+                                    <p class="card-text text-muted">{{ client.nome_fantasia }}</p>
+                                    {% endif %}
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            CNPJ: {{ client.cnpj[:2] }}.{{ client.cnpj[2:5] }}.{{ client.cnpj[5:8] }}/{{ client.cnpj[8:12] }}-{{ client.cnpj[12:] }}
+                                        </small>
+                                    </p>
+                                    <a href="{{ url_for('home.select_client', cliente_id=client.cliente_id) }}" 
+                                       class="btn btn-primary btn-block">
+                                        <i class="fas fa-arrow-right"></i> Selecionar
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    {% if switching %}
+                    <div class="mt-3">
+                        <a href="javascript:history.back()" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

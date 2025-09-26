@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if certificado.certificado_digital_id %}Editar Certificado: {{ certificado.nome_arquivo_original }}{% else %}Novo Certificado{% endif %}
+{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">
+        {% if certificado.certificado_digital_id %}Editar Certificado: {{ certificado.nome_arquivo_original }}{% else %}Novo Certificado{% endif %}
+    </h1>
+
+    {% if return_client_id %}
+        {% set cliente_associado = clientes | selectattr('cliente_id', 'equalto', return_client_id) | first %}
+        {% if cliente_associado %}
+            <p class="lead">Associado ao Cliente: <strong>{{ cliente_associado.razao_social }}</strong></p>
+        {% endif %}
+    {% endif %}
+    
+    <form action="{{ url_for('admin.edit_certificado', certificado_digital_id=certificado.certificado_digital_id) if certificado.certificado_digital_id else url_for('admin.create_certificado') }}" method="post" enctype="multipart/form-data">
+        {# Input oculto para o cliente_id - já está no form content, mas pode ser útil aqui para depuração #}
+        <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
+
+        <div class="mb-3">
+            <label for="cliente_id_select" class="form-label">Cliente Associado</label>
+            <select class="form-select" id="cliente_id_select" name="cliente_id" required>
+                <option value="">Selecione um cliente...</option>
+                {% for cliente_item in clientes %}
+                    <option value="{{ cliente_item.cliente_id }}" {% if (form_data.cliente_id | default(return_client_id)) == cliente_item.cliente_id %}selected{% endif %}>
+                        {{ cliente_item.razao_social }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="nome_arquivo_original" class="form-label">Nome do Arquivo (ou Descrição)</label>
+            <input type="text" class="form-control" id="nome_arquivo_original" name="cert_nome_arquivo_original" value="{{ form_data.nome_arquivo_original | default('') }}" required>
+        </div>
+        
+        {% if not certificado.certificado_digital_id %} {# Apenas para NOVOS certificados, no EDIT você não re-envia o arquivo #}
+        <div class="mb-3">
+            <label for="conteudo_certificado_file" class="form-label">Arquivo do Certificado (.pfx)</label>
+            <input class="form-control" type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" accept=".pfx" required>
+        </div>
+        {% else %}
+        <div class="mb-3">
+            <label class="form-label">Fingerprint Atual</label>
+            <input type="text" class="form-control" value="{{ certificado.fingerprint }}" disabled>
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+            <label for="cert_senha_certificado" class="form-label">Senha do Certificado (Preencher apenas para alterar/primeiro upload)</label>
+            <input type="password" class="form-control" id="cert_senha_certificado" name="cert_senha_certificado" {% if not certificado.certificado_digital_id %}required{% endif %}>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="validade_inicio" class="form-label">Validade Início</label>
+                <input type="date" class="form-control" id="validade_inicio" name="cert_validade_inicio" value="{{ form_data.validade_inicio | default('') }}">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="validade_fim" class="form-label">Validade Fim</label>
+                <input type="date" class="form-control" id="validade_fim" name="cert_validade_fim" value="{{ form_data.validade_fim | default('') }}">
+            </div>
+        </div>
+
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="ativo" name="cert_ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
+            <label class="form-check-label" for="ativo">
+                Certificado Ativo
+            </label>
+        </div>
+
+        <button type="submit" class="btn btn-success">Salvar Certificado</button>
+        {% if return_client_id %}
+            <a href="{{ url_for('admin.edit_cliente', cliente_id=return_client_id, _anchor='certificados') }}" class="btn btn-secondary">Voltar ao Cliente</a>
+        {% else %}
+            <a href="{{ url_for('admin.list_certificados') }}" class="btn btn-secondary">Cancelar</a>
+        {% endif %}
+    </form>
+{% endblock %}

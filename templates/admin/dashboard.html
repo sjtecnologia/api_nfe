@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Administrativo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Admin -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h2><i class="fas fa-tools"></i> Dashboard Administrativo</h2>
+                    <p class="mb-0">Visão geral da plataforma NFe</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas Gerais -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Clientes
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_clientes }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Total de NFes
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_nfes }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-invoice fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                NFes este Ano
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.nfes_ano }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                NFes este Mês
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.nfes_mes }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar-day fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Administrativas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-bolt"></i> Ações Administrativas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('admin.list_clientes') }}" 
+                               class="btn btn-primary btn-lg btn-block">
+                                <i class="fas fa-users"></i><br>
+                                Gerenciar Clientes
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('admin.list_users') }}" 
+                               class="btn btn-success btn-lg btn-block">
+                                <i class="fas fa-user"></i><br>
+                                Usuários
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('admin.list_nfes') }}" 
+                               class="btn btn-info btn-lg btn-block">
+                                <i class="fas fa-file-invoice"></i><br>
+                                Todas as NFes
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ url_for('admin.list_cfops') }}" 
+                               class="btn btn-warning btn-lg btn-block">
+                                <i class="fas fa-cogs"></i><br>
+                                Cadastros Fiscais
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Últimos Clientes Cadastrados -->
+    {% if ultimos_clientes %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-history"></i> Últimos Clientes Cadastrados</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Razão Social</th>
+                                    <th>Nome Fantasia</th>
+                                    <th>CNPJ</th>
+                                    <th>Data Cadastro</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cliente in ultimos_clientes %}
+                                <tr>
+                                    <td>{{ cliente.razao_social }}</td>
+                                    <td>{{ cliente.nome_fantasia or '-' }}</td>
+                                    <td>{{ cliente.cnpj }}</td>
+                                    <td>{{ cliente.data_cadastro.strftime('%d/%m/%Y') if cliente.data_cadastro else '-' }}</td>
+                                    <td>
+                                        <a href="{{ url_for('admin.view_cliente', cliente_id=cliente.cliente_id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

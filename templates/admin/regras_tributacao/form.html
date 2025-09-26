@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if regra.regra_tributacao_id %}Editar Regra Tributária: {{ regra.descricao_regra }}{% else %}Nova Regra Tributária{% endif %}
+{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">
+        {% if regra.regra_tributacao_id %}Editar Regra Tributária: {{ regra.descricao_regra }}{% else %}Nova Regra Tributária{% endif %}
+    </h1>
+{% if return_client_id %}
+        {% set cliente_associado = clientes | selectattr('cliente_id', 'equalto', return_client_id) | first %}
+        {% if cliente_associado %}
+            <p class="lead">Associado ao Cliente: <strong>{{ cliente_associado.razao_social }}</strong></p>
+        {% endif %}
+    {% endif %}
+    
+    <form action="{{ url_for('admin.edit_regra_tributacao', regra_tributacao_id=regra.regra_tributacao_id) if regra.regra_tributacao_id else url_for('admin.create_regra_tributacao') }}" method="post">
+        {# Input oculto para o cliente_id - Garante que o cliente_id seja enviado pelo formulário principal #}
+        <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
+
+        {# Inclui os campos do formulário de regras de tributação, agora sem as tags <form> extras #}
+        {% include 'admin_regras_tributacao_form_fields.html' %}
+
+        {# Botões de ação da página completa #}
+        <div class="mt-3 text-end"> {# Adicionado text-end para alinhar à direita #}
+            <button type="submit" class="btn btn-success">Salvar Regra</button>
+            {% if return_client_id %}
+                {# Retorna para a aba 'Regras Tributárias' na página de edição do cliente #}
+                <a href="{{ url_for('admin.edit_cliente', cliente_id=return_client_id, _anchor='regras') }}" class="btn btn-secondary">Voltar ao Cliente</a>
+            {% else %}
+                {# Cancela e volta para a listagem geral de regras #}
+                <a href="{{ url_for('admin.list_regras_tributacao') }}" class="btn btn-secondary">Cancelar</a>
+            {% endif %}
+        </div>
+    </form>
+{% endblock %}

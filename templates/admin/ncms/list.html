@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}NCMs - Admin{% endblock %}
+
+{% block content %}
+    <h1>Administração de NCMs</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p><a href="{{ url_for('admin.create_ncm') }}" class="btn">Adicionar Novo NCM</a></p>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Código</th>
+                <th scope="col">Descrição</th>
+                <th scope="col">Data Início</th>
+                <th scope="col">Data Fim</th>
+                <th scope="col">Tipo Ato</th>
+                <th scope="col">Nº Ato</th>
+                <th scope="col">Ano Ato</th>
+                <th scope="col">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ncm in ncms %}
+            <tr>
+                <td>{{ ncm.ncm_id }}</td>
+                <td>{{ ncm.codigo }}</td>
+                <td>{{ ncm.descricao }}</td>
+                <td>{{ ncm.data_Inicio.strftime('%d/%m/%Y') if ncm.data_Inicio else 'N/A' }}</td>
+                <td>{{ ncm.data_Fim.strftime('%d/%m/%Y') if ncm.data_Fim else 'N/A' }}</td>
+                <td>{{ ncm.tipo_ato if ncm.tipo_ato else 'N/A' }}</td>
+                <td>{{ ncm.numero_ato if ncm.numero_ato else 'N/A' }}</td>
+                <td>{{ ncm.ano_ato if ncm.ano_ato else 'N/A' }}</td>
+                <td>
+                    <a href="{{ url_for('admin.edit_ncm', ncm_id=ncm.ncm_id) }}" class="btn btn-warning btn-sm">Editar</a>
+                    <form action="{{ url_for('admin.delete_ncm', ncm_id=ncm.ncm_id) }}" method="post" style="display:inline;">
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir o NCM {{ ncm.codigo }}?');">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9">Nenhum NCM cadastrado.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

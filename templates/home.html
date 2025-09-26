@@ -1,8 +1,61 @@
-{% extends 'base.html' %}
 
-{% block title %}Bem-vindo{% endblock %}
+{% extends "base.html" %}
+
+{% block title %}Home - API NFE{% endblock %}
 
 {% block content %}
-    <h2>Bem-vindo ao Sistema de Gerenciamento de NF-e!</h2>
-    <p>Use o menu acima para navegar pelas funcionalidades do sistema.</p>
+<div class="row">
+    <div class="col-12">
+        <h1>Bem-vindo ao Sistema API NFE</h1>
+        
+        {% if current_user.is_authenticated %}
+            <div class="alert alert-info">
+                <h4>Olá, {{ current_user.username }}!</h4>
+                <p>Use o menu de navegação acima para acessar as funcionalidades do sistema.</p>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Emitir NF-e</h5>
+                            <p class="card-text">Emita notas fiscais eletrônicas de forma rápida e segura.</p>
+                            <a href="{{ url_for('nfe.emitir_nfe') }}" class="btn btn-primary">Emitir Agora</a>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if has_permission('nfe.read') %}
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Consultar NF-e</h5>
+                            <p class="card-text">Visualize e gerencie suas notas fiscais emitidas.</p>
+                            <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-info">Ver Lista</a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if has_permission('clients.read') %}
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Clientes</h5>
+                            <p class="card-text">Gerencie informações dos seus clientes.</p>
+                            <a href="{{ url_for('admin.list_clientes') }}" class="btn btn-success">Gerenciar</a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="alert alert-warning">
+                <h4>Acesso Restrito</h4>
+                <p>Por favor, faça login para acessar o sistema.</p>
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Fazer Login</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

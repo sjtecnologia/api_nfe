@@ -1,37 +1,34 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Login - API NFE{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5"> {# Centraliza o conteúdo horizontalmente e adiciona margem superior #}
-    <div class="col-md-6 col-lg-4"> {# Define a largura da coluna para telas médias (6/12) e grandes (4/12) #}
-        <div class="card shadow-lg"> {# Adiciona um cartão com sombra para o formulário de login #}
-            <div class="card-body p-4"> {# Adiciona padding dentro do corpo do cartão #}
-                <h2 class="card-title text-center mb-4" style="color: var(--sj-teal-dark);">Login</h2> {# Título do cartão centralizado, usando sua cor tema #}
-                
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3>Login do Sistema</h3>
+            </div>
+            <div class="card-body">
                 <form method="POST">
-                    {# Campo de Usuário #}
-                    <div class="mb-3"> {# Margem inferior #}
-                        <label for="username" class="form-label">Usuário:</label> {# Estilo de label do Bootstrap #}
-                        <input type="text" id="username" name="username" class="form-control" required autofocus> {# Estilo de input do Bootstrap #}
-                    </div>
-                    
-                    {# Campo de Senha #}
                     <div class="mb-3">
-                        <label for="password" class="form-label">Senha:</label>
-                        <input type="password" id="password" name="password" class="form-control" required>
+                        <label for="username" class="form-label">Nome de Usuário</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
                     </div>
                     
-                    {# Checkbox "Lembrar-me" #}
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Senha</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me">
-                        <label class="form-check-label" for="remember_me">Lembrar-me</label>
+                        <label class="form-check-label" for="remember_me">
+                            Lembrar-me
+                        </label>
                     </div>
                     
-                    {# Botão de Entrar #}
-                    <div class="d-grid"> {# Faz o botão ocupar a largura total do seu contêiner #}
-                        <button type="submit" class="btn btn-primary" style="background-color: var(--sj-teal-dark); border-color: var(--sj-teal-dark);">Entrar</button> {# Botão com estilo Bootstrap e cor tema #}
-                    </div>
+                    <button type="submit" class="btn btn-primary">Entrar</button>
                 </form>
             </div>
         </div>

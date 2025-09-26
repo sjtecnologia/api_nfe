@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Notas Fiscais{% endblock %}
+
+{% block content %}
+    <h1 class="mb-4">Notas Fiscais Emitidas e Rascunhos</h1>
+    <div class="card shadow-lg">
+        <div class="card-header">
+            Lista de NF-e
+        </div>
+        <div class="card-body">
+            <a href="{{ url_for('nfe.emitir_nfe') }}" class="btn btn-primary mb-3">Emitir Nova NF-e</a>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID NF-e</th>
+                            <th>Cliente</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Chave de Acesso</th>
+                            <th>Protocolo SEFAZ</th>
+                            <th>Data Criação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for nfe in nfes %}
+                        <tr>
+                            <td>{{ nfe.nfe_emitida_id }}</td>
+                            <td>{{ cliente_map.get(nfe.cliente_id, 'N/A') }}</td>
+                            <td>{{ nfe.tipo_nfe }}</td>
+                            <td>
+                                {% if nfe.status == 'AUTORIZADA' %}
+                                    <span class="badge bg-success">{{ nfe.status }}</span>
+                                {% elif nfe.status.startswith('REJEITADA') %}
+                                    <span class="badge bg-danger">{{ nfe.status }}</span>
+                                {% elif nfe.status == 'RASCUNHO' %}
+                                    <span class="badge bg-secondary">{{ nfe.status }}</span>
+                                {% else %}
+                                    <span class="badge bg-info">{{ nfe.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ nfe.chave_acesso | default('N/A') }}</td>
+                            <td>{{ nfe.protocolo_sefaz | default('N/A') }}</td>
+                            <td>{{ nfe.data_criacao.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                            <td>
+                                {# Ações: visualização, edição (se for rascunho), etc. #}
+                                {% if nfe.json_nfe and nfe.json_nfe.xml_content %}
+                                    <a href="#" class="btn btn-sm btn-info view-xml-btn" data-xml-content="{{ nfe.json_nfe.xml_content | e }}" title="Visualizar XML">
+                                        <i class="bi bi-file-earmark-code"></i> XML
+                                    </a>
+                                {% endif %}
+                                {% if nfe.status == 'RASCUNHO' %}
+                                    <a href="{{ url_for('nfe.emitir_nfe', nfe_id=nfe.nfe_emitida_id) }}" class="btn btn-sm btn-warning" title="Continuar Edição">
+                                        <i class="bi bi-pencil-square"></i> Editar
+                                    </a>
+                                {% endif %}
+                                {# Implementar mais ações como Cancelar, Imprimir DANFE, etc. #}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center">Nenhuma Nota Fiscal encontrada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# Modal para exibir XML #}
+    <div class="modal fade" id="xmlViewModal" tabindex="-1" aria-labelledby="xmlViewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="xmlViewModalLabel">Conteúdo XML</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <pre><code id="xmlContentDisplay" class="language-xml"></code></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script>
+        $(document).ready(function() {
+            $('.view-xml-btn').on('click', function(e) {
+                e.preventDefault();
+                const xmlContent = $(this).data('xml-content');
+                $('#xmlContentDisplay').text(xmlContent);
+                $('#xmlViewModal').modal('show');
+            });
+        });
+    </script>
+{% endblock %}
