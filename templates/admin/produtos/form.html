@@ -1,34 +1,467 @@
 {% extends "base.html" %}
 
-{% block title %}
-    {% if produto and produto.produto_id %}Editar Produto: {{ produto.descricao }}{% else %}Novo Produto{% endif %}
+{% block title %}{{ 'Editar' if produto else 'Novo' }} Produto{% endblock %}
+
+{% block extra_css %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+.select2-container--default .select2-selection--single {
+    height: 38px !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 36px !important;
+    padding-left: 12px !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px !important;
+    right: 10px !important;
+}
+.select2-dropdown {
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+}
+</style>
 {% endblock %}
 
 {% block content %}
-    <h1 class="mb-4">
-        {% if produto and produto.produto_id %}Editar Produto: {{ produto.descricao }}{% else %}Novo Produto{% endif %}
-    </h1>
-    
-    {% if return_client_id %}
-        {% set cliente_associado = clientes | selectattr('cliente_id', 'equalto', return_client_id) | first %}
-        {% if cliente_associado %}
-            <p class="lead">Associado ao Cliente: <strong>{{ cliente_associado.razao_social }}</strong></p>
-        {% endif %}
-    {% endif %}
-    <form action="{{ url_for('admin.edit_produto', produto_id=produto.produto_id) if produto and produto.produto_id else url_for('admin.create_produto') }}" method="post">
-        {# Input oculto para o cliente_id - Garante que o cliente_id seja enviado pelo formulário principal #}
-        <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
-        {# ATUALIZADO: Inclui o parcial com o contexto completo #}
-        {% include 'admin_produtos_form_fields.html' with context %}
-        
-        {# Botões de ação da página completa #}
-        <div class="mt-3 text-end"> {# Adicionado text-end para alinhar à direita #}
-            <button type="submit" class="btn btn-success">Salvar Produto</button>
-            {% if return_client_id %}
-                <a href="{{ url_for('admin.edit_cliente', cliente_id=return_client_id, _anchor='produtos') }}" class="btn btn-secondary">Voltar ao Cliente</a>
-            {% else %}
-                <a href="{{ url_for('admin.list_produtos') }}" class="btn btn-secondary">Cancelar</a>
-            {% endif %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-box"></i>
+                        {{ 'Editar' if produto else 'Novo' }} Produto
+                        {% if produto %}
+                            <small class="text-muted">ID: {{ produto.produto_id }}</small>
+                        {% endif %}
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.update_produto', produto_id=produto.produto_id) if produto else url_for('admin.store_produto') }}">
+                        
+                        <!-- Campo oculto para cliente_id -->
+                        <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                        
+                        <!-- INFORMAÇÕES BÁSICAS -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-info-circle text-primary"></i>
+                                    Informações Básicas
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- Código Interno -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="codigo_interno">Código Interno *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="codigo_interno" 
+                                           name="codigo_interno" 
+                                           value="{{ produto.codigo_interno if produto else '' }}" 
+                                           required
+                                           placeholder="Ex: PROD001">
+                                </div>
+                            </div>
+                            
+                            <!-- Unidade Comercial -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="unidade_comercial">Unidade Comercial *</label>
+                                    <select class="form-control" id="unidade_comercial" name="unidade_comercial" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="UN" {{ 'selected' if produto and produto.unidade_comercial == 'UN' else '' }}>UN - Unidade</option>
+                                        <option value="KG" {{ 'selected' if produto and produto.unidade_comercial == 'KG' else '' }}>KG - Quilograma</option>
+                                        <option value="MT" {{ 'selected' if produto and produto.unidade_comercial == 'MT' else '' }}>MT - Metro</option>
+                                        <option value="M2" {{ 'selected' if produto and produto.unidade_comercial == 'M2' else '' }}>M2 - Metro Quadrado</option>
+                                        <option value="M3" {{ 'selected' if produto and produto.unidade_comercial == 'M3' else '' }}>M3 - Metro Cúbico</option>
+                                        <option value="LT" {{ 'selected' if produto and produto.unidade_comercial == 'LT' else '' }}>LT - Litro</option>
+                                        <option value="CX" {{ 'selected' if produto and produto.unidade_comercial == 'CX' else '' }}>CX - Caixa</option>
+                                        <option value="PC" {{ 'selected' if produto and produto.unidade_comercial == 'PC' else '' }}>PC - Peça</option>
+                                        <option value="PR" {{ 'selected' if produto and produto.unidade_comercial == 'PR' else '' }}>PR - Par</option>
+                                        <option value="DZ" {{ 'selected' if produto and produto.unidade_comercial == 'DZ' else '' }}>DZ - Dúzia</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Tipo de Item -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="tipo_item">Tipo de Item *</label>
+                                    <select class="form-control" id="tipo_item" name="tipo_item" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="PRODUTO" {{ 'selected' if produto and produto.tipo_item in ['PRODUTO', 'produto'] else '' }}>Produto</option>
+                                        <option value="SERVICO" {{ 'selected' if produto and produto.tipo_item in ['SERVICO', 'servico'] else '' }}>Serviço</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Descrição -->
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="descricao">Descrição do Produto *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="descricao" 
+                                           name="descricao" 
+                                           value="{{ produto.descricao if produto else '' }}" 
+                                           required
+                                           maxlength="120"
+                                           placeholder="Descrição completa do produto/serviço">
+                                    <small class="text-muted">Máximo 120 caracteres</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Preço Unitário -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="preco_unitario_padrao">Preço Unitário Padrão</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               id="preco_unitario_padrao" 
+                                               name="preco_unitario_padrao" 
+                                               value="{{ produto.preco_unitario_padrao if produto else '' }}" 
+                                               step="0.01" 
+                                               min="0"
+                                               placeholder="0.00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- CLASSIFICAÇÃO FISCAL -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-clipboard-list text-success"></i>
+                                    Classificação Fiscal
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- NCM -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="ncm_id">NCM - Nomenclatura Comum do Mercosul *</label>
+                                    <select class="form-control js-select2" id="ncm_id" name="ncm_id" required>
+                                        <option value="">Selecione um NCM...</option>
+                                        {% for ncm in ncms %}
+                                            <option value="{{ ncm.ncm_id }}" 
+                                                    {{ 'selected' if produto and produto.ncm_id == ncm.ncm_id else '' }}>
+                                                {{ ncm.codigo }} - {{ ncm.descricao }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Código de classificação fiscal do produto</small>
+                                </div>
+                            </div>
+                            
+                            <!-- CEST -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cest">CEST - Código Especificador da Substituição Tributária</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="cest" 
+                                           name="cest" 
+                                           value="{{ produto.cest if produto and produto.cest else '' }}" 
+                                           placeholder="Ex: 01.001.00"
+                                           maxlength="7">
+                                    <small class="text-muted">Apenas para produtos sujeitos à ST</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- CFOP -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cfop_id">CFOP - Código Fiscal de Operação *</label>
+                                    <select class="form-control js-select2" id="cfop_id" name="cfop_id" required>
+                                        <option value="">Selecione um CFOP...</option>
+                                        {% for cfop in cfops %}
+                                            <option value="{{ cfop.cfop_id }}" 
+                                                    {{ 'selected' if produto and produto.cfop_id == cfop.cfop_id else '' }}>
+                                                {{ cfop.codigo }} - {{ cfop.descricao }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Operação padrão para este produto</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Origem da Mercadoria -->
+                            <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="origem_mercadoria">Origem da Mercadoria *</label>
+                                <select class="form-control" id="origem_mercadoria" name="origem_mercadoria" required>
+                                    <option value="">Selecione...</option>
+                                    {% for origem in origens_mercadoria %}
+                                        <option value="{{ origem.codigo }}" 
+                                                {{ 'selected' if produto and (produto.origem_mercadoria|string == origem.codigo) else '' }}>
+                                            {{ origem.codigo }} - {{ origem.descricao }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Procedência do produto</small>
+                                
+                                
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- TRIBUTAÇÃO -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-calculator text-warning"></i>
+                                    Tributação
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- CST ICMS COM PESQUISA -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cst_id">CST ICMS - Código de Situação Tributária</label>
+                                    <select class="form-control js-select2" id="cst_id" name="cst_id">
+                                        <option value="">Selecione um CST...</option>
+                                        {% for cst in csts %}
+                                            <option value="{{ cst.cst_id }}" 
+                                                    {{ 'selected' if produto and produto.cst_id == cst.cst_id else '' }}>
+                                                {{ cst.codigo }} - {{ cst.descricao }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Para empresas do Regime Normal</small>
+                                </div>
+                            </div>
+                            
+                            <!-- CSOSN COM PESQUISA -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="csosn_id">CSOSN - Código Simples Nacional</label>
+                                    <select class="form-control js-select2" id="csosn_id" name="csosn_id">
+                                        <option value="">Selecione um CSOSN...</option>
+                                        {% for csosn in csosns %}
+                                            <option value="{{ csosn.csosn_id }}" 
+                                                    {{ 'selected' if produto and produto.csosn_id == csosn.csosn_id else '' }}>
+                                                {{ csosn.codigo }} - {{ csosn.descricao }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Para empresas do Simples Nacional</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Informação importante sobre CST vs CSOSN -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-lightbulb"></i>
+                                    <strong>Dica:</strong> 
+                                    Use <strong>CST ICMS</strong> para empresas do Regime Normal ou 
+                                    <strong>CSOSN</strong> para empresas do Simples Nacional. 
+                                    Não é necessário preencher ambos.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- STATUS -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-toggle-on text-info"></i>
+                                    Status
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <!-- Ativo -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" 
+                                               class="custom-control-input" 
+                                               id="ativo" 
+                                               name="ativo" 
+                                               {{ 'checked' if not produto or produto.ativo else '' }}>
+                                        <label class="custom-control-label" for="ativo">
+                                            <strong>Produto Ativo</strong>
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">
+                                        Produtos inativos não aparecem nas listas de seleção para NFe
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- BOTÕES DE AÇÃO -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group mb-0">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-save"></i>
+                                        {{ 'Atualizar' if produto else 'Salvar' }} Produto
+                                    </button>
+                                    
+                                    <a href="{{ url_for('admin.list_produtos', cliente_id=cliente_id) }}" 
+                                       class="btn btn-secondary btn-lg ml-2">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Voltar para Lista
+                                    </a>
+                                    
+                                    {% if produto %}
+                                        <button type="button" 
+                                                class="btn btn-outline-info btn-lg ml-2"
+                                                onclick="duplicarProduto()">
+                                            <i class="fas fa-copy"></i>
+                                            Duplicar Produto
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-    </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+console.log('🔍 Verificando se jQuery está disponível...');
+
+// Aguardar o DOM carregar
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar se jQuery do base.html foi carregado
+    let checkJQuery = setInterval(function() {
+        if (typeof jQuery !== 'undefined') {
+            console.log('✅ jQuery encontrado:', $.fn.jquery);
+            clearInterval(checkJQuery);
+            
+            // Carregar Select2 via script
+            const select2Script = document.createElement('script');
+            select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
+            select2Script.onload = function() {
+                console.log('✅ Select2 carregado');
+                initSelect2();
+            };
+            select2Script.onerror = function() {
+                console.error('❌ Erro ao carregar Select2');
+                alert('Erro: Não foi possível carregar Select2. Verifique sua conexão.');
+            };
+            document.head.appendChild(select2Script);
+        } else {
+            console.log('⏳ Aguardando jQuery...');
+        }
+    }, 100);
+    
+    // Timeout de segurança
+    setTimeout(function() {
+        clearInterval(checkJQuery);
+        if (typeof jQuery === 'undefined') {
+            console.error('❌ jQuery não foi carregado após 10 segundos');
+            alert('Erro: jQuery não foi carregado. Recarregue a página.');
+        }
+    }, 10000);
+});
+
+function initSelect2() {
+    console.log('🚀 Inicializando Select2...');
+    
+    // Aguardar Select2 estar disponível
+    let checkSelect2 = setInterval(function() {
+        if ($.fn.select2) {
+            console.log('✅ Select2 disponível');
+            clearInterval(checkSelect2);
+            
+            // Verificar elementos
+            const elementos = $('.js-select2');
+            console.log('🔍 Elementos .js-select2 encontrados:', elementos.length);
+            
+            // Inicializar nos elementos
+            elementos.each(function() {
+                const $this = $(this);
+                const name = $this.attr('name') || $this.attr('id');
+                
+                try {
+                    $this.select2({
+                        width: '100%',
+                        allowClear: true,
+                        placeholder: 'Digite para pesquisar...',
+                        language: {
+                            noResults: () => "Nenhum resultado encontrado",
+                            searching: () => "Pesquisando..."
+                        }
+                    });
+                    console.log('✅ Select2 inicializado em:', name);
+                } catch (error) {
+                    console.error('❌ Erro ao inicializar Select2 em', name, ':', error);
+                }
+            });
+            
+            console.log('🎉 Select2 inicialização concluída!');
+        }
+    }, 100);
+}
+
+// Funções auxiliares
+function duplicarProduto() {
+    if (confirm('Deseja criar uma cópia deste produto?')) {
+        document.querySelector('form').action = '{{ url_for("admin.store_produto") }}';
+        const codigo = document.getElementById('codigo_interno');
+        if (codigo?.value) codigo.value += '_COPIA';
+        alert('Produto preparado para duplicação!');
+    }
+}
+
+// Formatação do CEST
+document.addEventListener('DOMContentLoaded', function() {
+    const cestInput = document.getElementById('cest');
+    if (cestInput) {
+        cestInput.addEventListener('input', function() {
+            let value = this.value.replace(/\D/g, '');
+            if (value.length >= 2) {
+                value = value.substring(0,2) + '.' + value.substring(2);
+            }
+            if (value.length >= 6) {
+                value = value.substring(0,6) + '.' + value.substring(6);
+            }
+            if (value.length > 9) {
+                value = value.substring(0,9);
+            }
+            this.value = value;
+        });
+    }
+});
+</script>
 {% endblock %}

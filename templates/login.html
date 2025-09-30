@@ -1,37 +1,409 @@
 {% extends "base.html" %}
 
-{% block title %}Login - API NFE{% endblock %}
+{% block title %}Login - NfeSjtec{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h3>Login do Sistema</h3>
+<div class="container-fluid">
+    <div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+        <div class="col-xl-4 col-lg-5 col-md-6 col-sm-8">
+            
+            <!-- ✅ MENSAGENS FORA DO CARD (POSIÇÃO FIXA)
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="alerts-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px;">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-sm auto-close-alert" 
+                                 role="alert" 
+                                 style="border-radius: 12px; border: none; border-left: 4px solid; margin-bottom: 10px; animation: slideInRight 0.5s ease-out;">
+                                <i class="fas fa-{{ 'exclamation-triangle' if category == 'error' or category == 'danger' else 'info-circle' if category == 'info' else 'check-circle' }} mr-2"></i>
+                                {{ message }}
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %} -->
+            
+            <!-- ✅ CARD DE LOGIN PRINCIPAL -->
+            <div class="card shadow-lg border-0" style="border-radius: 20px; overflow: hidden;">
+                
+                <!-- ✅ HEADER COM LOGO E BRANDING -->
+                <div class="card-header text-center py-4" style="background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%); border: none;">
+                    <div class="logo-container mb-3">
+                        <div class="logo-circle mx-auto" style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+                            <i class="fas fa-file-invoice" style="font-size: 2.5rem; color: white; text-shadow: 0 2px 10px rgba(0,0,0,0.3);"></i>
+                        </div>
+                    </div>
+                    <h2 class="text-white mb-1" style="font-weight: 600; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">
+                        NfeSjtec
+                    </h2>
+                    <p class="text-white mb-0" style="opacity: 0.9; font-size: 0.95rem;">
+                        Sistema de Nota Fiscal Eletrônica
+                    </p>
+                    <small class="text-white" style="opacity: 0.7;">
+                        SJ Tecnologia - v2.0
+                    </small>
+                </div>
+                
+                <!-- ✅ CORPO DO FORMULÁRIO (SEM MENSAGENS DUPLICADAS) -->
+                <div class="card-body p-5">
+                    
+                    <!-- ✅ FORMULÁRIO HTML SIMPLES -->
+                    <form method="POST" id="loginForm">
+                        
+                        <!-- Campo Username -->
+                        <div class="form-group mb-4">
+                            <label for="username" class="form-label text-dark font-weight-600">
+                                <i class="fas fa-user text-primary mr-2"></i>
+                                Usuário
+                            </label>
+                            <input type="text" class="form-control form-control-lg" id="username" name="username" 
+                                   style="border-radius: 10px; border: 2px solid #e0e0e0; padding: 15px 20px; font-size: 1rem; transition: all 0.3s ease;" 
+                                   placeholder="Digite seu usuário" required>
+                        </div>
+                        
+                        <!-- Campo Password -->
+                        <div class="form-group mb-4">
+                            <label for="password" class="form-label text-dark font-weight-600">
+                                <i class="fas fa-lock text-primary mr-2"></i>
+                                Senha
+                            </label>
+                            <div class="input-group">
+                                <input type="password" class="form-control form-control-lg" id="passwordField" name="password"
+                                       style="border-radius: 10px 0 0 10px; border: 2px solid #e0e0e0; border-right: none; padding: 15px 20px; font-size: 1rem;" 
+                                       placeholder="Digite sua senha" required>
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" id="togglePassword" 
+                                            style="border-radius: 0 10px 10px 0; border: 2px solid #e0e0e0; border-left: none; padding: 15px 15px;">
+                                        <i class="fas fa-eye" id="toggleIcon"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Checkbox Remember Me -->
+                        <div class="form-group mb-4">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="remember_me" name="remember_me">
+                                <label class="custom-control-label" for="remember_me">
+                                    <span class="text-muted">Lembrar de mim por 30 dias</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Botão de Submit -->
+                        <div class="form-group mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg btn-block" 
+                                    style="border-radius: 10px; padding: 15px; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 4px 15px rgba(0, 188, 212, 0.4); transition: all 0.3s ease;">
+                                <span class="btn-text">Entrar</span>
+                                <i class="fas fa-spinner fa-spin d-none" id="loading-spinner"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Links Adicionais -->
+                        <div class="text-center">
+                            <a href="#" class="text-muted" style="font-size: 0.9rem; text-decoration: none;" onclick="alert('Funcionalidade não implementada ainda')">
+                                <i class="fas fa-question-circle"></i>
+                                Esqueceu sua senha?
+                            </a>
+                        </div>
+                        
+                    </form>
+                </div>
+                
+                <!-- ✅ FOOTER DO CARD -->
+                <div class="card-footer text-center py-3" style="background: linear-gradient(135deg, var(--sj-light) 0%, #ffffff 100%); border: none;">
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt text-primary"></i>
+                        Acesso seguro e criptografado
+                    </small>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="username" class="form-label">Nome de Usuário</label>
-                        <input type="text" class="form-control" id="username" name="username" required>
+            
+            <!-- ✅ INFORMAÇÕES ADICIONAIS -->
+            <div class="text-center mt-4">
+                <div class="row">
+                    <div class="col-4">
+                        <div class="text-center">
+                            <i class="fas fa-lock" style="font-size: 1.5rem; color: var(--sj-success); margin-bottom: 5px;"></i>
+                            <br>
+                            <small class="text-muted">Seguro</small>
+                        </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="password" class="form-label">Senha</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
+                    <div class="col-4">
+                        <div class="text-center">
+                            <i class="fas fa-cloud" style="font-size: 1.5rem; color: var(--sj-primary); margin-bottom: 5px;"></i>
+                            <br>
+                            <small class="text-muted">Cloud</small>
+                        </div>
                     </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me">
-                        <label class="form-check-label" for="remember_me">
-                            Lembrar-me
-                        </label>
+                    <div class="col-4">
+                        <div class="text-center">
+                            <i class="fas fa-mobile-alt" style="font-size: 1.5rem; color: var(--sj-secondary); margin-bottom: 5px;"></i>
+                            <br>
+                            <small class="text-muted">Mobile</small>
+                        </div>
                     </div>
-                    
-                    <button type="submit" class="btn btn-primary">Entrar</button>
-                </form>
+                </div>
             </div>
+            
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===== TELA DE LOGIN PERSONALIZADA ===== */
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* ===== CARD DE LOGIN ===== */
+.card {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.95);
+    animation: slideInUp 0.8s ease-out;
+}
+
+/* ===== CAMPOS DE FORMULÁRIO ===== */
+.form-control:focus {
+    border-color: var(--sj-primary) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 188, 212, 0.25) !important;
+    transform: translateY(-2px);
+}
+
+.form-control:hover {
+    border-color: var(--sj-primary);
+    transform: translateY(-1px);
+}
+
+/* ===== BOTÃO DE LOGIN ===== */
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 188, 212, 0.6) !important;
+}
+
+/* ===== TOGGLE PASSWORD ===== */
+#togglePassword {
+    transition: all 0.3s ease;
+}
+
+#togglePassword:hover {
+    background-color: var(--sj-light);
+    border-color: var(--sj-primary);
+    color: var(--sj-primary);
+}
+
+/* ===== MENSAGENS DE ALERTA ===== */
+.alerts-container .alert {
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.9), rgba(220, 53, 69, 0.8));
+    color: white;
+    border-left-color: #dc3545 !important;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(40, 167, 69, 0.8));
+    color: white;
+    border-left-color: #28a745 !important;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, rgba(23, 162, 184, 0.9), rgba(23, 162, 184, 0.8));
+    color: white;
+    border-left-color: #17a2b8 !important;
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.9), rgba(255, 193, 7, 0.8));
+    color: #212529;
+    border-left-color: #ffc107 !important;
+}
+
+/* ===== ANIMAÇÕES ===== */
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+}
+
+/* ===== RESPONSIVIDADE ===== */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 2rem !important;
+    }
+    
+    .alerts-container {
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        right: 10px !important;
+        max-width: none !important;
+    }
+}
+
+/* ===== LOADING STATE ===== */
+.btn-loading {
+    position: relative;
+}
+
+.btn-loading .btn-text {
+    opacity: 0.3;
+}
+
+.btn-loading #loading-spinner {
+    display: inline-block !important;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    
+    // ✅ AUTO-CLOSE ALERTS APÓS 5 SEGUNDOS
+    $('.auto-close-alert').each(function() {
+        const alert = $(this);
+        
+        // Fechar automaticamente após 5 segundos
+        setTimeout(function() {
+            alert.css('animation', 'fadeOut 0.5s ease-out');
+            setTimeout(function() {
+                alert.alert('close');
+            }, 500);
+        }, 5000);
+        
+        // Pausar auto-close se o mouse estiver sobre o alert
+        alert.hover(
+            function() {
+                // Mouse enter - pausar timer
+                const currentTimeout = alert.data('timeout');
+                if (currentTimeout) {
+                    clearTimeout(currentTimeout);
+                }
+            },
+            function() {
+                // Mouse leave - retomar timer
+                const alert = $(this);
+                const newTimeout = setTimeout(function() {
+                    alert.css('animation', 'fadeOut 0.5s ease-out');
+                    setTimeout(function() {
+                        alert.alert('close');
+                    }, 500);
+                }, 2000);
+                alert.data('timeout', newTimeout);
+            }
+        );
+    });
+    
+    // ✅ TOGGLE PASSWORD VISIBILITY
+    $('#togglePassword').click(function() {
+        const passwordField = $('#passwordField');
+        const toggleIcon = $('#toggleIcon');
+        
+        if (passwordField.attr('type') === 'password') {
+            passwordField.attr('type', 'text');
+            toggleIcon.removeClass('fa-eye').addClass('fa-eye-slash');
+        } else {
+            passwordField.attr('type', 'password');
+            toggleIcon.removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+    });
+    
+    // ✅ LOADING STATE NO SUBMIT
+    $('#loginForm').submit(function(e) {
+        const submitBtn = $(this).find('button[type="submit"]');
+        const btnText = submitBtn.find('.btn-text');
+        const spinner = submitBtn.find('#loading-spinner');
+        
+        // Mostrar loading
+        submitBtn.addClass('btn-loading');
+        submitBtn.prop('disabled', true);
+        btnText.text('Entrando...');
+        spinner.removeClass('d-none');
+        
+        // Permitir submit normal
+        return true;
+    });
+    
+    // ✅ FOCO AUTOMÁTICO NO PRIMEIRO CAMPO
+    $('#username').focus();
+    
+    // ✅ ENTER PARA SUBMIT
+    $('.form-control').keypress(function(e) {
+        if (e.which === 13) {
+            $('#loginForm').submit();
+        }
+    });
+    
+    // ✅ VALIDAÇÃO EM TEMPO REAL
+    $('#username').on('input', function() {
+        const value = $(this).val();
+        if (value.length >= 3) {
+            $(this).removeClass('is-invalid').addClass('is-valid');
+        } else {
+            $(this).removeClass('is-valid').addClass('is-invalid');
+        }
+    });
+    
+    $('#passwordField').on('input', function() {
+        const value = $(this).val();
+        if (value.length >= 4) {
+            $(this).removeClass('is-invalid').addClass('is-valid');
+        } else {
+            $(this).removeClass('is-valid').addClass('is-invalid');
+        }
+    });
+    
+    // ✅ REMOVER LOADING SE VOLTAR À PÁGINA (erro de login)
+    window.addEventListener('pageshow', function() {
+        const submitBtn = $('#loginForm').find('button[type="submit"]');
+        const btnText = submitBtn.find('.btn-text');
+        const spinner = submitBtn.find('#loading-spinner');
+        
+        submitBtn.removeClass('btn-loading');
+        submitBtn.prop('disabled', false);
+        btnText.text('Entrar');
+        spinner.addClass('d-none');
+    });
+    
+});
+</script>
 {% endblock %}

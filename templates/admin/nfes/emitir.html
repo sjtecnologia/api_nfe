@@ -1,0 +1,1163 @@
+{% extends "base.html" %}
+
+{% block title %}Emitir NFe{% endblock %}
+
+{% block extra_css %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+.select2-container--default .select2-selection--single {
+    height: 38px !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 36px !important;
+    padding-left: 12px !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px !important;
+    right: 10px !important;
+}
+.select2-dropdown {
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+}
+.produto-item {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #f8f9fa;
+    margin-bottom: 1rem;
+    padding: 1rem;
+}
+.produto-item h6 {
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+.btn-ambiente {
+    position: relative;
+}
+.btn-ambiente .badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    font-size: 0.6em;
+}
+.debug-info {
+    background: #e7f3ff;
+    border: 1px solid #bee5eb;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 10px 0;
+    font-family: monospace;
+    font-size: 12px;
+    color: #0c5460;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-file-invoice"></i>
+                        Emitir Nova NFe
+                        <small class="text-muted">
+                            {% if emitente_data and emitente_data.razao_social %}
+                                {{ emitente_data.razao_social }}
+                            {% else %}
+                                Cliente não identificado
+                            {% endif %}
+                        </small>
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <!-- ✅ DEBUG INFO VISÍVEL PARA VERIFICAR DADOS -->
+                    <div class="debug-info">
+                        <strong>🔍 Status dos Dados:</strong><br>
+                        • Emitente: {% if emitente_data %}✅ {{ emitente_data.razao_social }}{% else %}❌ Não encontrado{% endif %}<br>
+                        • Destinatários: {% if destinatarios %}✅ {{ destinatarios|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
+                        • Produtos: {% if produtos %}✅ {{ produtos|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
+                        • CFOPs: {% if all_cfops %}✅ {{ all_cfops|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
+                        • CSTs: {% if all_csts %}✅ {{ all_csts|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
+                        • CSOSNs: {% if all_csosns %}✅ {{ all_csosns|length }} encontrados{% else %}❌ Nenhum{% endif %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary float-right" onclick="this.parentElement.style.display='none'">Ocultar Debug</button>
+                    </div>
+                    
+                    <form method="POST" id="formNFe">
+                        
+                        <!-- Campo oculto para cliente_id -->
+                        <input type="hidden" name="cliente_id" value="{{ emitente_data.cliente_id if emitente_data else '' }}">
+                        
+                        <!-- INFORMAÇÕES GERAIS DA NFe -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-info-circle text-primary"></i>
+                                    Informações Gerais da NFe
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- Tipo de NFe -->
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="tpNF">Tipo de NFe *</label>
+                                    <select class="form-control" id="tpNF" name="tpNF" required>
+                                        <option value="1" selected>1 - Saída</option>
+                                        <option value="0">0 - Entrada</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Finalidade da Emissão -->
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="finNFe">Finalidade da Emissão *</label>
+                                    <select class="form-control" id="finNFe" name="finNFe" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="1" selected>1 - Normal</option>
+                                        <option value="2">2 - Complementar</option>
+                                        <option value="3">3 - Ajuste</option>
+                                        <option value="4">4 - Devolução</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Data de Emissão -->
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="dataEmissao">Data de Emissão *</label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           id="dataEmissao" 
+                                           name="dataEmissao" 
+                                           required>
+                                </div>
+                            </div>
+                            
+                            <!-- Série -->
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="serie">Série *</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="serie" 
+                                           name="serie" 
+                                           value="1" 
+                                           min="1" 
+                                           max="999" 
+                                           required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- ✅ NATUREZA DA OPERAÇÃO COMO SELECT COM CFOPs -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label for="natOp">Natureza da Operação (CFOP) *</label>
+                                    <select class="form-control js-select2" 
+                                            id="natOp" 
+                                            name="natOp" 
+                                            required>
+                                        <option value="">Selecione o CFOP da operação...</option>
+                                        <!-- Options serão preenchidas via JavaScript -->
+                                    </select>
+                                    <small class="text-muted">Selecione o CFOP que melhor descreve a operação</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- DADOS DO DESTINATÁRIO -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-user text-success"></i>
+                                    Dados do Destinatário
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label for="destinatario">Destinatário *</label>
+                                    <select class="form-control js-select2" id="destinatario" name="destinatario" required>
+                                        <option value="">Selecione um destinatário...</option>
+                                        <!-- Options serão preenchidas via JavaScript -->
+                                    </select>
+                                    <small class="form-text text-muted">
+                                        <span id="destinatarios-count">Carregando...</span> |
+                                        <a href="{{ url_for('admin.list_destinatarios', cliente_id=emitente_data.cliente_id) }}" target="_blank">
+                                            <i class="fas fa-external-link-alt"></i> Gerenciar destinatários
+                                        </a>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- PRODUTOS/SERVIÇOS -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-box text-warning"></i>
+                                    Produtos/Serviços
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <div id="produtos-container">
+                                        <!-- Produtos serão adicionados aqui via JavaScript -->
+                                    </div>
+                                    
+                                    <button type="button" class="btn btn-primary mb-3" onclick="adicionarProduto()">
+                                        <i class="fas fa-plus"></i> Adicionar Produto/Serviço
+                                    </button>
+                                    
+                                    <small class="form-text text-muted">
+                                        <a href="{{ url_for('admin.list_produtos', cliente_id=emitente_data.cliente_id) }}" target="_blank">
+                                            <i class="fas fa-external-link-alt"></i> Gerenciar produtos
+                                        </a>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- TOTAIS DA NFe -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-calculator text-info"></i>
+                                    Totais da NFe
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Total dos Produtos</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        <input type="text" class="form-control" id="totalProdutos" value="0,00" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Total do ICMS</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        <input type="text" class="form-control" id="totalICMS" value="0,00" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Total da NFe</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        <input type="text" class="form-control" id="totalNFe" value="0,00" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label>Quantidade de Itens</label>
+                                    <input type="text" class="form-control" id="quantidadeItens" value="0" readonly>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- OBSERVAÇÕES -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-comment text-secondary"></i>
+                                    Informações Adicionais
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label for="infCpl">Informações Complementares</label>
+                                    <textarea class="form-control" 
+                                              id="infCpl" 
+                                              name="infCpl" 
+                                              rows="3" 
+                                              maxlength="5000"
+                                              placeholder="Informações adicionais de interesse do contribuinte"></textarea>
+                                    <small class="text-muted">Máximo 5000 caracteres</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- BOTÕES DE AÇÃO -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group mb-0">
+                                    <button type="submit" name="action" value="rascunho" class="btn btn-secondary btn-lg">
+                                        <i class="fas fa-save"></i>
+                                        Salvar como Rascunho
+                                    </button>
+                                    
+                                    <button type="button" 
+                                            class="btn btn-success btn-lg btn-ambiente ml-2" 
+                                            onclick="emitirNFe('homologacao')"
+                                            title="Emitir em ambiente de teste">
+                                        <i class="fas fa-vial"></i>
+                                        Emitir (Homologação)
+                                        <span class="badge badge-warning">TEST</span>
+                                    </button>
+                                    
+                                    <button type="button" 
+                                            class="btn btn-danger btn-lg btn-ambiente ml-2" 
+                                            onclick="emitirNFe('producao')"
+                                            title="Emitir em ambiente de produção - CUIDADO!">
+                                        <i class="fas fa-rocket"></i>
+                                        Emitir (Produção)
+                                        <span class="badge badge-light">PROD</span>
+                                    </button>
+                                    
+                                    <button type="button" class="btn btn-info btn-lg ml-2" onclick="previewXML()">
+                                        <i class="fas fa-eye"></i>
+                                        Visualizar XML
+                                    </button>
+                                    
+                                    <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary btn-lg ml-2">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Cancelar
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ DADOS EM FORMATO JSON PARA JAVASCRIPT -->
+<script type="application/json" id="data-produtos">
+{% if produtos %}{{ produtos|tojson|safe }}{% else %}[]{% endif %}
+</script>
+
+<script type="application/json" id="data-cfops">
+{% if all_cfops %}{{ all_cfops|tojson|safe }}{% else %}[]{% endif %}
+</script>
+
+<script type="application/json" id="data-csts">
+{% if all_csts %}{{ all_csts|tojson|safe }}{% else %}[]{% endif %}
+</script>
+
+<script type="application/json" id="data-csosns">
+{% if all_csosns %}{{ all_csosns|tojson|safe }}{% else %}[]{% endif %}
+</script>
+
+<script type="application/json" id="data-destinatarios">
+{% if destinatarios %}{{ destinatarios|tojson|safe }}{% else %}[]{% endif %}
+</script>
+
+<script type="application/json" id="data-initial-items">
+{% if initial_nfe_items %}{{ initial_nfe_items|tojson|safe }}{% else %}[]{% endif %}
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+console.log('🔍 Iniciando carregamento da página de emissão NFe...');
+
+// ✅ FUNÇÃO MELHORADA PARA CARREGAR DADOS JSON
+function carregarDados() {
+    try {
+        // Buscar e parsear dados JSON de forma mais segura
+        const produtosEl = document.getElementById('data-produtos');
+        const cfopsEl = document.getElementById('data-cfops');
+        const cstsEl = document.getElementById('data-csts');
+        const csosnsEl = document.getElementById('data-csosns');
+        const destinatariosEl = document.getElementById('data-destinatarios');
+        const initialItemsEl = document.getElementById('data-initial-items');
+        
+        // Parse com try/catch individual
+        try {
+            window.produtosDisponiveis = produtosEl ? JSON.parse(produtosEl.textContent || '[]') : [];
+            console.log('✅ Produtos carregados:', window.produtosDisponiveis.length);
+        } catch (e) {
+            console.warn('⚠️ Erro ao parsear produtos:', e);
+            window.produtosDisponiveis = [];
+        }
+        
+        try {
+            window.allCfops = cfopsEl ? JSON.parse(cfopsEl.textContent || '[]') : [];
+            console.log('✅ CFOPs carregados:', window.allCfops.length);
+        } catch (e) {
+            console.warn('⚠️ Erro ao parsear CFOPs:', e);
+            window.allCfops = [];
+        }
+        
+        try {
+            window.allCsts = cstsEl ? JSON.parse(cstsEl.textContent || '[]') : [];
+            console.log('✅ CSTs carregados:', window.allCsts.length);
+        } catch (e) {
+            console.warn('⚠️ Erro ao parsear CSTs:', e);
+            window.allCsts = [];
+        }
+        
+        try {
+            window.allCsosns = csosnsEl ? JSON.parse(csosnsEl.textContent || '[]') : [];
+            console.log('✅ CSOSNs carregados:', window.allCsosns.length);
+        } catch (e) {
+            console.warn('⚠️ Erro ao parsear CSOSNs:', e);
+            window.allCsosns = [];
+        }
+        
+        try {
+            window.destinatariosDisponiveis = destinatariosEl ? JSON.parse(destinatariosEl.textContent || '[]') : [];
+            console.log('✅ Destinatários carregados:', window.destinatariosDisponiveis.length);
+            
+            // ✅ DEBUG ADICIONAL PARA DESTINATÁRIOS
+            if (window.destinatariosDisponiveis.length > 0) {
+                console.log('🔍 Primeiro destinatário:', window.destinatariosDisponiveis[0]);
+                console.log('🔍 Campos disponíveis:', Object.keys(window.destinatariosDisponiveis[0]));
+            }
+        } catch (e) {
+            console.warn('⚠️ Erro ao parsear destinatários:', e);
+            window.destinatariosDisponiveis = [];
+        }
+        
+        try {
+            window.initialNfeItems = initialItemsEl ? JSON.parse(initialItemsEl.textContent || '[]') : [];
+            console.log('✅ Itens iniciais carregados:', window.initialNfeItems.length);
+        } catch (e) {
+            console.warn('⚠️ Erro ao parsear itens iniciais:', e);
+            window.initialNfeItems = [];
+        }
+        
+        // Log final
+        console.log('🎉 Dados carregados com sucesso:', {
+            produtos: window.produtosDisponiveis.length,
+            cfops: window.allCfops.length,
+            csts: window.allCsts.length,
+            csosns: window.allCsosns.length,
+            destinatarios: window.destinatariosDisponiveis.length,
+            items: window.initialNfeItems.length
+        });
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Erro crítico ao carregar dados:', error);
+        
+        // Inicializar com arrays vazios mesmo com erro
+        window.produtosDisponiveis = [];
+        window.allCfops = [];
+        window.allCsts = [];
+        window.allCsosns = [];
+        window.destinatariosDisponiveis = [];
+        window.initialNfeItems = [];
+        
+        return false;
+    }
+}
+
+// Inicializar variáveis globais
+window.produtosSelecionados = [];
+
+// ✅ AGUARDAR DOM CARREGAR
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 DOM carregado, iniciando aplicação...');
+    
+    // Carregar dados primeiro
+    const dadosCarregados = carregarDados();
+    
+    if (!dadosCarregados) {
+        console.error('❌ Falha no carregamento de dados');
+        alert('⚠️ Alguns dados podem não ter sido carregados.\nA aplicação pode não funcionar corretamente.');
+    }
+    
+    // Inicializar data atual
+    const dataEmissaoEl = document.getElementById('dataEmissao');
+    if (dataEmissaoEl && !dataEmissaoEl.value) {
+        const hoje = new Date();
+        const dataFormatada = hoje.getFullYear() + '-' + 
+                             String(hoje.getMonth() + 1).padStart(2, '0') + '-' + 
+                             String(hoje.getDate()).padStart(2, '0');
+        dataEmissaoEl.value = dataFormatada;
+        console.log('✅ Data atual definida:', dataFormatada);
+    }
+    
+    // Verificar se jQuery existe
+    if (typeof jQuery !== 'undefined') {
+        console.log('✅ jQuery disponível:', $.fn.jquery);
+        loadSelect2();
+    } else {
+        console.warn('⚠️ jQuery não encontrado, carregando...');
+        loadJQueryThenSelect2();
+    }
+});
+
+function loadJQueryThenSelect2() {
+    // Tentar carregar jQuery se não existir
+    const script = document.createElement('script');
+    script.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
+    script.onload = function() {
+        console.log('✅ jQuery carregado');
+        loadSelect2();
+    };
+    script.onerror = function() {
+        console.error('❌ Erro ao carregar jQuery');
+        console.log('🔧 Continuando sem Select2...');
+        populateSelects(); // Povoar selects mesmo sem Select2
+    };
+    document.head.appendChild(script);
+}
+
+function loadSelect2() {
+    // Carregar Select2
+    const select2Script = document.createElement('script');
+    select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
+    select2Script.onload = function() {
+        console.log('✅ Select2 carregado');
+        populateSelects(); // Povoar selects primeiro
+        initSelect2(); // Depois inicializar Select2
+    };
+    select2Script.onerror = function() {
+        console.warn('⚠️ Erro ao carregar Select2, usando selects normais');
+        populateSelects(); // Povoar selects mesmo sem Select2
+    };
+    document.head.appendChild(select2Script);
+}
+
+// ...existing code...
+
+// ✅ FUNÇÃO PARA POVOAR OS SELECTS - VERSÃO CORRIGIDA PARA DESTINATÁRIOS
+function populateSelects() {
+    console.log('🔄 Populando selects...');
+    
+    // ✅ POVOAR SELECT DE CFOPS (NATUREZA DA OPERAÇÃO)
+    const natOpSelect = document.getElementById('natOp');
+    if (natOpSelect && window.allCfops && window.allCfops.length > 0) {
+        // Limpar options existentes (exceto o primeiro)
+        natOpSelect.innerHTML = '<option value="">Selecione o CFOP da operação...</option>';
+        
+        // Ordenar CFOPs por código
+        const cfopsOrdenados = window.allCfops.sort((a, b) => {
+            const codigoA = a.cfop || a.codigo || '';
+            const codigoB = b.cfop || b.codigo || '';
+            return codigoA.localeCompare(codigoB);
+        });
+        
+        cfopsOrdenados.forEach(cfop => {
+            const option = document.createElement('option');
+            const codigo = cfop.cfop || cfop.codigo || 'S/C';
+            const descricao = cfop.descricao || 'Sem descrição';
+            
+            option.value = `${codigo} - ${descricao}`;
+            option.textContent = `${codigo} - ${descricao}`;
+            option.setAttribute('data-cfop-id', cfop.cfop_id || '');
+            option.setAttribute('data-codigo', codigo);
+            
+            natOpSelect.appendChild(option);
+        });
+        
+        console.log('✅ CFOPs adicionados ao select:', cfopsOrdenados.length);
+    } else {
+        console.warn('⚠️ Nenhum CFOP disponível para o select de Natureza da Operação');
+    }
+    
+    // ✅ POVOAR SELECT DE DESTINATÁRIOS - MAPEAMENTO CORRIGIDO
+    const destinatarioSelect = document.getElementById('destinatario');
+    const destinatariosCount = document.getElementById('destinatarios-count');
+    
+    if (destinatarioSelect && window.destinatariosDisponiveis) {
+        console.log('🔍 Processando destinatários:', window.destinatariosDisponiveis);
+        
+        // Limpar options existentes (exceto o primeiro)
+        destinatarioSelect.innerHTML = '<option value="">Selecione um destinatário...</option>';
+        
+        if (window.destinatariosDisponiveis.length > 0) {
+            // ✅ PRIMEIRO VAMOS VER A ESTRUTURA REAL DOS DADOS
+            console.log('🔍 Estrutura do primeiro destinatário:', window.destinatariosDisponiveis[0]);
+            console.log('🔍 Todas as chaves disponíveis:', Object.keys(window.destinatariosDisponiveis[0]));
+            
+            window.destinatariosDisponiveis.forEach((dest, index) => {
+                console.log(`🔍 Processando destinatário ${index}:`, dest);
+                
+                const option = document.createElement('option');
+                
+                // ✅ MAPEAR TODOS OS CAMPOS POSSÍVEIS (MAIS ABRANGENTE)
+                const destinatarioId = dest.destinatario_id || dest.id || dest.dest_id || dest.pk || '';
+                
+                // ✅ TENTAR VÁRIOS NOMES POSSÍVEIS PARA RAZÃO SOCIAL
+                let razaoSocial = '';
+                const possiveisNomes = [
+                    'razao_social_ou_nome', 'razao_social', 'nome_razao_social', 
+                    'nome', 'nome_fantasia', 'empresa', 'cliente', 'destinatario',
+                    'razao', 'social', 'nome_completo', 'nome_empresa'
+                ];
+                
+                for (const campo of possiveisNomes) {
+                    if (dest[campo] && dest[campo].toString().trim() !== '') {
+                        razaoSocial = dest[campo].toString().trim();
+                        console.log(`✅ Nome encontrado no campo '${campo}': ${razaoSocial}`);
+                        break;
+                    }
+                }
+                
+                // ✅ TENTAR VÁRIOS NOMES POSSÍVEIS PARA CNPJ/CPF
+                let cnpjCpf = '';
+                const possiveisDocumentos = [
+                    'cnpj_cpf', 'cnpj', 'cpf', 'documento', 'doc', 
+                    'num_documento', 'numero_documento', 'inscricao'
+                ];
+                
+                for (const campo of possiveisDocumentos) {
+                    if (dest[campo] && dest[campo].toString().trim() !== '') {
+                        cnpjCpf = dest[campo].toString().trim();
+                        console.log(`✅ Documento encontrado no campo '${campo}': ${cnpjCpf}`);
+                        break;
+                    }
+                }
+                
+                // ✅ FALLBACK PARA VALORES PADRÃO SE NÃO ENCONTRAR
+                if (!razaoSocial) {
+                    razaoSocial = `Destinatário ${index + 1}`;
+                    console.warn(`⚠️ Nome não encontrado, usando fallback: ${razaoSocial}`);
+                }
+                
+                if (!cnpjCpf) {
+                    cnpjCpf = 'Documento não informado';
+                    console.warn(`⚠️ Documento não encontrado, usando fallback: ${cnpjCpf}`);
+                }
+                
+                // Logs para debug
+                console.log(`  • ID final: ${destinatarioId}`);
+                console.log(`  • Razão/Nome final: ${razaoSocial}`);
+                console.log(`  • CNPJ/CPF final: ${cnpjCpf}`);
+                
+                option.value = destinatarioId;
+                option.textContent = `${razaoSocial} - ${cnpjCpf}`;
+                
+                // Adicionar dados extras como atributos
+                option.setAttribute('data-razao-social', razaoSocial);
+                option.setAttribute('data-cnpj-cpf', cnpjCpf);
+                
+                // ✅ ENDEREÇO COMPLETO COM MÚLTIPLAS TENTATIVAS
+                const possiveisEnderecos = {
+                    logradouro: ['logradouro', 'rua', 'endereco', 'end', 'address'],
+                    numero: ['numero', 'num', 'number', 'n'],
+                    bairro: ['bairro', 'distrito', 'neighborhood'],
+                    municipio: ['nome_municipio', 'municipio', 'cidade', 'city'],
+                    uf: ['uf', 'estado', 'state']
+                };
+                
+                let logradouro = '', numero = '', bairro = '', municipio = '', uf = '';
+                
+                // Buscar logradouro
+                for (const campo of possiveisEnderecos.logradouro) {
+                    if (dest[campo] && dest[campo].toString().trim() !== '') {
+                        logradouro = dest[campo].toString().trim();
+                        break;
+                    }
+                }
+                
+                // Buscar número
+                for (const campo of possiveisEnderecos.numero) {
+                    if (dest[campo] && dest[campo].toString().trim() !== '') {
+                        numero = dest[campo].toString().trim();
+                        break;
+                    }
+                }
+                
+                // Buscar bairro
+                for (const campo of possiveisEnderecos.bairro) {
+                    if (dest[campo] && dest[campo].toString().trim() !== '') {
+                        bairro = dest[campo].toString().trim();
+                        break;
+                    }
+                }
+                
+                // Buscar município
+                for (const campo of possiveisEnderecos.municipio) {
+                    if (dest[campo] && dest[campo].toString().trim() !== '') {
+                        municipio = dest[campo].toString().trim();
+                        break;
+                    }
+                }
+                
+                // Buscar UF
+                for (const campo of possiveisEnderecos.uf) {
+                    if (dest[campo] && dest[campo].toString().trim() !== '') {
+                        uf = dest[campo].toString().trim();
+                        break;
+                    }
+                }
+                
+                // Montar endereço apenas com campos disponíveis
+                let enderecoCompleto = '';
+                if (logradouro) enderecoCompleto += logradouro;
+                if (numero) enderecoCompleto += (enderecoCompleto ? ', ' : '') + numero;
+                if (bairro) enderecoCompleto += (enderecoCompleto ? ' - ' : '') + bairro;
+                if (municipio) enderecoCompleto += (enderecoCompleto ? ' - ' : '') + municipio;
+                if (uf) enderecoCompleto += (enderecoCompleto ? '/' : '') + uf;
+                
+                if (!enderecoCompleto) {
+                    enderecoCompleto = 'Endereço não informado';
+                }
+                
+                option.setAttribute('data-endereco', enderecoCompleto);
+                
+                destinatarioSelect.appendChild(option);
+            });
+            
+            console.log('✅ Destinatários adicionados ao select:', window.destinatariosDisponiveis.length);
+            
+            // Atualizar contador
+            if (destinatariosCount) {
+                destinatariosCount.textContent = `${window.destinatariosDisponiveis.length} destinatário(s) encontrado(s)`;
+            }
+        } else {
+            console.warn('⚠️ Nenhum destinatário disponível no array');
+            
+            // Adicionar option informativa
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Nenhum destinatário cadastrado';
+            option.disabled = true;
+            destinatarioSelect.appendChild(option);
+            
+            // Atualizar contador
+            if (destinatariosCount) {
+                destinatariosCount.textContent = 'Nenhum destinatário cadastrado';
+                destinatariosCount.style.color = 'red';
+            }
+        }
+    } else {
+        console.warn('⚠️ Select de destinatários não encontrado ou dados não disponíveis');
+        console.log('  • destinatarioSelect existe?', !!destinatarioSelect);
+        console.log('  • window.destinatariosDisponiveis existe?', !!window.destinatariosDisponiveis);
+        console.log('  • window.destinatariosDisponiveis:', window.destinatariosDisponiveis);
+    }
+    
+    console.log('✅ Selects populados com sucesso!');
+}
+
+// ...existing code...
+
+function initSelect2() {
+    if (typeof $ === 'undefined' || !$.fn.select2) {
+        console.warn('⚠️ Select2 não disponível');
+        return;
+    }
+    
+    $('.js-select2').each(function() {
+        const $this = $(this);
+        try {
+            // Configuração específica para cada tipo de select
+            let config = {
+                width: '100%',
+                allowClear: true,
+                language: {
+                    noResults: function() { return "Nenhum resultado encontrado"; },
+                    searching: function() { return "Pesquisando..."; }
+                }
+            };
+            
+            // Configuração específica para CFOPs
+            if ($this.attr('id') === 'natOp') {
+                config.placeholder = 'Digite para pesquisar CFOP...';
+                config.templateResult = function(state) {
+                    if (!state.id) return state.text;
+                    
+                    // Destacar código e descrição
+                    const parts = state.text.split(' - ');
+                    if (parts.length >= 2) {
+                        return $(`
+                            <div>
+                                <strong>${parts[0]}</strong> - ${parts.slice(1).join(' - ')}
+                            </div>
+                        `);
+                    }
+                    return state.text;
+                };
+            }
+            // Configuração específica para destinatários
+            else if ($this.attr('id') === 'destinatario') {
+                config.placeholder = 'Digite para pesquisar destinatário...';
+                config.templateResult = function(state) {
+                    if (!state.id) return state.text;
+                    
+                    const $option = $this.find(`option[value="${state.id}"]`);
+                    const endereco = $option.attr('data-endereco');
+                    
+                    if (endereco && endereco.trim() !== '') {
+                        return $(`
+                            <div>
+                                <div><strong>${state.text}</strong></div>
+                                <small class="text-muted">${endereco}</small>
+                            </div>
+                        `);
+                    }
+                    return state.text;
+                };
+            }
+            // Configuração padrão para produtos
+            else {
+                config.placeholder = 'Digite para pesquisar...';
+            }
+            
+            $this.select2(config);
+            console.log('✅ Select2 inicializado em:', $this.attr('id'));
+        } catch (error) {
+            console.error('❌ Erro ao inicializar Select2:', error);
+        }
+    });
+}
+
+// ✅ FUNÇÃO PARA ADICIONAR PRODUTO
+function adicionarProduto() {
+    if (!window.produtosDisponiveis || window.produtosDisponiveis.length === 0) {
+        alert('⚠️ Nenhum produto cadastrado!\n\nPara emitir uma NFe, é necessário ter produtos cadastrados.\n\nClique no link "Gerenciar produtos" para cadastrar produtos.');
+        return;
+    }
+    
+    const index = window.produtosSelecionados.length;
+    const produtoHtml = criarHtmlProduto(index);
+    
+    document.getElementById('produtos-container').insertAdjacentHTML('beforeend', produtoHtml);
+    
+    // Inicializar Select2 no novo select se disponível
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $(`#produto_${index}`).select2({
+            width: '100%',
+            allowClear: true,
+            placeholder: 'Selecione um produto...'
+        });
+    }
+    
+    // Adicionar ao array
+    window.produtosSelecionados.push({});
+    
+    console.log('✅ Produto adicionado:', index);
+}
+
+function criarHtmlProduto(index, item = null) {
+    // Criar select de produtos
+    let optionsProdutos = '<option value="">Selecione um produto...</option>';
+    
+    if (window.produtosDisponiveis && window.produtosDisponiveis.length > 0) {
+        window.produtosDisponiveis.forEach(produto => {
+            const selected = (item && item.produto_id == produto.produto_id) ? 'selected' : '';
+            optionsProdutos += `<option value="${produto.produto_id}" ${selected}>`;
+            optionsProdutos += `${produto.codigo_interno || 'S/C'} - ${produto.descricao || 'Sem descrição'}`;
+            optionsProdutos += '</option>';
+        });
+    }
+    
+    const quantidade = item ? item.quantidade : '1';
+    const valorUnitario = item ? item.valor_unitario : '';
+    
+    return `
+    <div class="produto-item" id="produto-item-${index}">
+        <h6>
+            <i class="fas fa-box"></i> Item ${index + 1}
+            <button type="button" class="btn btn-sm btn-outline-danger float-right" onclick="removerProduto(${index})">
+                <i class="fas fa-trash"></i> Remover
+            </button>
+        </h6>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label>Produto/Serviço *</label>
+                    <select class="form-control" id="produto_${index}" name="produto_${index}" required onchange="preencherDadosProduto(${index})">
+                        ${optionsProdutos}
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-group">
+                    <label>Quantidade *</label>
+                    <input type="number" class="form-control" id="quantidade_${index}" name="quantidade_${index}" 
+                           value="${quantidade}" step="0.01" min="0.01" required onchange="calcularTotais()">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-group">
+                    <label>Valor Unitário *</label>
+                    <input type="number" class="form-control" id="valor_unitario_${index}" name="valor_unitario_${index}" 
+                           value="${valorUnitario}" step="0.01" min="0" required onchange="calcularTotais()">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-group">
+                    <label>Total do Item</label>
+                    <input type="text" class="form-control" id="total_item_${index}" readonly>
+                </div>
+            </div>
+        </div>
+        <input type="hidden" name="items[${index}][json]" id="item_json_${index}">
+    </div>`;
+}
+
+function preencherDadosProduto(index) {
+    const produtoId = document.getElementById(`produto_${index}`).value;
+    if (!produtoId) return;
+    
+    const produto = window.produtosDisponiveis.find(p => p.produto_id == produtoId);
+    
+    if (produto && produto.preco_unitario_padrao) {
+        document.getElementById(`valor_unitario_${index}`).value = produto.preco_unitario_padrao;
+        calcularTotais();
+    }
+}
+
+function removerProduto(index) {
+    if (confirm('Deseja remover este item?')) {
+        document.getElementById(`produto-item-${index}`).remove();
+        window.produtosSelecionados.splice(index, 1);
+        calcularTotais();
+        renumerarItens();
+    }
+}
+
+function renumerarItens() {
+    const items = document.querySelectorAll('.produto-item');
+    items.forEach((item, i) => {
+        const oldIndex = item.id.split('-')[2];
+        const newIndex = i;
+        
+        // Atualizar ID do container
+        item.id = `produto-item-${newIndex}`;
+        
+        // Atualizar título
+        item.querySelector('h6').innerHTML = `
+            <i class="fas fa-box"></i> Item ${newIndex + 1}
+            <button type="button" class="btn btn-sm btn-outline-danger float-right" onclick="removerProduto(${newIndex})">
+                <i class="fas fa-trash"></i> Remover
+            </button>`;
+        
+        // Atualizar todos os elementos com IDs e names
+        item.querySelectorAll('[id], [name], [onchange]').forEach(el => {
+            if (el.id) {
+                el.id = el.id.replace(`_${oldIndex}`, `_${newIndex}`);
+            }
+            if (el.name) {
+                el.name = el.name.replace(`_${oldIndex}`, `_${newIndex}`).replace(`[${oldIndex}]`, `[${newIndex}]`);
+            }
+            if (el.getAttribute('onchange')) {
+                el.setAttribute('onchange', el.getAttribute('onchange').replace(`(${oldIndex})`, `(${newIndex})`));
+            }
+        });
+    });
+}
+
+function calcularTotais() {
+    let totalProdutos = 0;
+    let quantidadeItens = 0;
+    
+    const items = document.querySelectorAll('.produto-item');
+    items.forEach((item, i) => {
+        const quantidadeEl = document.getElementById(`quantidade_${i}`);
+        const valorUnitarioEl = document.getElementById(`valor_unitario_${i}`);
+        const totalItemEl = document.getElementById(`total_item_${i}`);
+        
+        if (quantidadeEl && valorUnitarioEl && totalItemEl) {
+            const quantidade = parseFloat(quantidadeEl.value || 0);
+            const valorUnitario = parseFloat(valorUnitarioEl.value || 0);
+            const totalItem = quantidade * valorUnitario;
+            
+            totalItemEl.value = totalItem.toFixed(2);
+            totalProdutos += totalItem;
+            quantidadeItens++;
+            
+            // Atualizar JSON do item
+            atualizarJsonItem(i);
+        }
+    });
+    
+    // Atualizar campos de totais
+    document.getElementById('totalProdutos').value = totalProdutos.toFixed(2);
+    document.getElementById('totalICMS').value = '0.00'; // Por enquanto
+    document.getElementById('totalNFe').value = totalProdutos.toFixed(2);
+    document.getElementById('quantidadeItens').value = quantidadeItens;
+}
+
+function atualizarJsonItem(index) {
+    const produtoIdEl = document.getElementById(`produto_${index}`);
+    const quantidadeEl = document.getElementById(`quantidade_${index}`);
+    const valorUnitarioEl = document.getElementById(`valor_unitario_${index}`);
+    const jsonFieldEl = document.getElementById(`item_json_${index}`);
+    
+    if (produtoIdEl && quantidadeEl && valorUnitarioEl && jsonFieldEl) {
+        const produtoId = produtoIdEl.value;
+        const quantidade = quantidadeEl.value;
+        const valorUnitario = valorUnitarioEl.value;
+        
+        if (produtoId && quantidade && valorUnitario) {
+            const produto = window.produtosDisponiveis.find(p => p.produto_id == produtoId);
+            
+            const itemData = {
+                produto_id: produtoId,
+                quantidade: quantidade,
+                valor_unitario: valorUnitario,
+                produto_data: produto
+            };
+            
+            jsonFieldEl.value = JSON.stringify(itemData);
+        }
+    }
+}
+
+// ✅ FUNÇÃO PARA EMITIR NFe COM AMBIENTE
+function emitirNFe(ambiente) {
+    console.log('🚀 Emitindo NFe em ambiente:', ambiente);
+    
+    // Validar formulário
+    if (!validarFormulario()) {
+        return;
+    }
+    
+    // Confirmar emissão
+    let mensagem = '';
+    if (ambiente === 'producao') {
+        mensagem = '⚠️ ATENÇÃO - AMBIENTE DE PRODUÇÃO ⚠️\n\n' +
+                  'Você está prestes a emitir uma NFe REAL!\n\n' +
+                  'Esta operação gerará uma NFe oficial com valor fiscal.\n\n' +
+                  'TEM CERTEZA ABSOLUTA de que deseja continuar?';
+    } else {
+        mensagem = '🧪 EMISSÃO EM HOMOLOGAÇÃO\n\n' +
+                  'Você está emitindo uma NFe de TESTE.\n\n' +
+                  'Esta NFe NÃO tem valor fiscal.\n\n' +
+                  'Confirma a emissão de teste?';
+    }
+    
+    if (!confirm(mensagem)) {
+        return;
+    }
+    
+    // Atualizar todos os JSONs
+    const items = document.querySelectorAll('.produto-item');
+    items.forEach((item, i) => atualizarJsonItem(i));
+    
+    // Adicionar campos ao formulário
+    const form = document.getElementById('formNFe');
+    
+    // Remover campos anteriores
+    const existingAmbiente = form.querySelector('input[name="ambiente"]');
+    const existingAction = form.querySelector('input[name="action"][value="emitir"]');
+    
+    if (existingAmbiente) existingAmbiente.remove();
+    if (existingAction) existingAction.remove();
+    
+    // Adicionar novos campos
+    const ambienteInput = document.createElement('input');
+    ambienteInput.type = 'hidden';
+    ambienteInput.name = 'ambiente';
+    ambienteInput.value = ambiente;
+    form.appendChild(ambienteInput);
+    
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'emitir';
+    form.appendChild(actionInput);
+    
+    // Submeter formulário
+    form.submit();
+}
+
+function validarFormulario() {
+    // Validar campos obrigatórios
+    const camposObrigatorios = ['tpNF', 'finNFe', 'dataEmissao', 'serie', 'natOp', 'destinatario'];
+    
+    for (const campo of camposObrigatorios) {
+        const elemento = document.getElementById(campo);
+        if (!elemento || !elemento.value.trim()) {
+            const label = elemento ? elemento.previousElementSibling : null;
+            const nomeCampo = label ? label.textContent : campo;
+            alert(`❌ Campo obrigatório não preenchido:\n\n${nomeCampo}`);
+            if (elemento) elemento.focus();
+            return false;
+        }
+    }
+    
+    // Validar se tem pelo menos um produto
+    const items = document.querySelectorAll('.produto-item');
+    if (items.length === 0) {
+        alert('❌ Nenhum produto adicionado!\n\nPor favor, adicione pelo menos um produto/serviço à NFe.');
+        return false;
+    }
+    
+    // Validar cada item
+    for (let i = 0; i < items.length; i++) {
+        const produtoEl = document.getElementById(`produto_${i}`);
+        const quantidadeEl = document.getElementById(`quantidade_${i}`);
+        const valorEl = document.getElementById(`valor_unitario_${i}`);
+        
+        if (!produtoEl || !produtoEl.value) {
+            alert(`❌ Produto não selecionado no item ${i + 1}!`);
+            if (produtoEl) produtoEl.focus();
+            return false;
+        }
+        
+        if (!quantidadeEl || !quantidadeEl.value || parseFloat(quantidadeEl.value) <= 0) {
+            alert(`❌ Quantidade inválida no item ${i + 1}!`);
+            if (quantidadeEl) quantidadeEl.focus();
+            return false;
+        }
+        
+        if (!valorEl || !valorEl.value || parseFloat(valorEl.value) <= 0) {
+            alert(`❌ Valor inválido no item ${i + 1}!`);
+            if (valorEl) valorEl.focus();
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+function previewXML() {
+    alert('🚧 Funcionalidade em desenvolvimento\n\nO preview do XML será implementado em breve.');
+}
+
+// Calcular totais ao carregar
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(calcularTotais, 100);
+});
+
+console.log('✅ Script de NFe carregado com sucesso!');
+</script>
+{% endblock %}

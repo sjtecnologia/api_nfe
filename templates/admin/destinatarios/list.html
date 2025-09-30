@@ -1,33 +1,107 @@
-<div class="table-responsive">
-    {% if destinatarios_existentes %}
-        <table class="table table-striped table-hover mt-3">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nome/Razão Social</th>
-                    <th>CPF/CNPJ</th>
-                    <th>Município</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for destinatario in destinatarios_existentes %}
-                    <tr>
-                        <td>{{ destinatario.destinatario_id }}</td>
-                        <td>{{ destinatario.nome_razao_social | truncate(40, True, '...') }}</td>
-                        <td>{{ destinatario.cpf_cnpj }}</td>
-                        <td>{{ destinatario.nome_municipio }} ({{ destinatario.uf }})</td>
-                        <td>
-                            <a href="{{ url_for('admin_destinatarios_nfe_edit', destinatario_id=destinatario.destinatario_id, cliente_id=cliente.cliente_id) }}" class="btn btn-sm btn-info me-2">Editar</a>
-                            <form action="{{ url_for('admin_destinatarios_nfe_delete', destinatario_id=destinatario.destinatario_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este destinatário?');">
-                                <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
-                            </form>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="alert alert-info mt-3">Nenhum destinatário NF-e associado a este cliente ainda.</p>
-    {% endif %}
+{% extends "base.html" %}
+
+{% block title %}Destinatários - {{ cliente_nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-address-book"></i>
+                            Destinatários - {{ cliente_nome }}
+                        </h5>
+                        <a href="{{ url_for('admin.novo_destinatario', cliente_id=cliente_id) }}" 
+                           class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Novo Destinatário
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    {% if destinatarios %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>CPF/CNPJ</th>
+                                        <th>Nome/Razão Social</th>
+                                        <th>Tipo</th>
+                                        <th>Município</th>
+                                        <th>E-mail</th>
+                                        <th>Telefone</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for destinatario in destinatarios %}
+                                    <tr>
+                                        <td>
+                                            <code>{{ destinatario.cpf_cnpj or '-' }}</code>
+                                        </td>
+                                        <td>
+                                            <strong>{{ destinatario.nome_razao_social }}</strong>
+                                            {% if destinatario.ie %}
+                                                <br><small class="text-muted">IE: {{ destinatario.ie }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if destinatario.tipo_pessoa == 'F' %}
+                                                <span class="badge badge-info">Pessoa Física</span>
+                                            {% elif destinatario.tipo_pessoa == 'J' %}
+                                                <span class="badge badge-primary">Pessoa Jurídica</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">{{ destinatario.tipo_pessoa or 'N/A' }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ destinatario.nome_municipio or '-' }}
+                                            {% if destinatario.codigo_municipio %}
+                                                <br><small class="text-muted">Cód: {{ destinatario.codigo_municipio }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if destinatario.email %}
+                                                <a href="mailto:{{ destinatario.email }}">{{ destinatario.email }}</a>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if destinatario.telefone %}
+                                                <a href="tel:{{ destinatario.telefone }}">{{ destinatario.telefone }}</a>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <a href="{{ url_for('admin.edit_destinatario', destinatario_id=destinatario.destinatario_id) }}" 
+                                                   class="btn btn-sm btn-outline-primary" 
+                                                   title="Editar">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-address-book fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Nenhum destinatário encontrado</h5>
+                            <p class="text-muted">
+                                Clique em "Novo Destinatário" para cadastrar o primeiro.
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}

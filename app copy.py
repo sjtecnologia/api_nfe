@@ -3735,7 +3735,7 @@ def admin_emitir_nfe():
                 db.add(nfe_autorizada)
                 db.commit()
                 flash(f'NF-e emitida com sucesso! Protocolo: {sefaz_response["protocolo"]}', 'success')
-                return redirect(url_for('admin_nfes_list'))
+                return redirect(url_for('list'))
             except Exception as e:
                 db.rollback()
                 flash(f'NF-e autorizada pela Sefaz, mas erro ao salvar no banco: {e}. Anote o protocolo: {sefaz_response["protocolo"]}', 'warning')
@@ -3798,7 +3798,7 @@ def admin_nfes_list():
     # Para exibir o nome do cliente na lista, se necessário
     clientes = db.query(Cliente).filter(Cliente.cliente_id.in_(accessible_client_ids)).all()
     cliente_map = {c.cliente_id: c.razao_social for c in clientes}
-    return render_template('admin_nfes_list.html', nfes=nfes, cliente_map=cliente_map)
+    return render_template('list.html', nfes=nfes, cliente_map=cliente_map)
 
 def list_routes():
     """Lista todas as rotas registradas na aplicação"""

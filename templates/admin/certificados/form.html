@@ -1,82 +1,115 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
-{% block title %}
-    {% if certificado.certificado_digital_id %}Editar Certificado: {{ certificado.nome_arquivo_original }}{% else %}Novo Certificado{% endif %}
-{% endblock %}
+{% block title %}Novo Certificado Digital{% endblock %}
 
 {% block content %}
-    <h1 class="mb-4">
-        {% if certificado.certificado_digital_id %}Editar Certificado: {{ certificado.nome_arquivo_original }}{% else %}Novo Certificado{% endif %}
-    </h1>
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-certificate"></i>
+                        Novo Certificado Digital
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.salvar_certificado') }}" 
+                          enctype="multipart/form-data" id="certificadoForm">
+                        <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                        
+                        <div class="form-group">
+                            <label for="arquivo_certificado">
+                                <i class="fas fa-file-upload"></i>
+                                Arquivo do Certificado *
+                            </label>
+                            <input type="file" class="form-control-file" id="arquivo_certificado" 
+                                   name="arquivo_certificado" accept=".pfx,.p12" required>
+                            <small class="form-text text-muted">
+                                Selecione um arquivo .pfx ou .p12
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="senha_certificado">
+                                <i class="fas fa-key"></i>
+                                Senha do Certificado *
+                            </label>
+                            <input type="password" class="form-control" id="senha_certificado" 
+                                   name="senha_certificado" placeholder="Digite a senha do certificado" required>
+                            <small class="form-text text-muted">
+                                Senha utilizada para proteger o certificado digital
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Importante:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>O certificado deve estar válido</li>
+                                <li>Formato aceito: .pfx ou .p12</li>
+                                <li>A senha deve estar correta</li>
+                                <li>Será utilizado para assinatura das NF-e</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload"></i>
+                                Enviar Certificado
+                            </button>
+                            <a href="{{ url_for('admin.list_certificados', cliente_id=cliente_id) }}" 
+                               class="btn btn-secondary ml-2">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-    {% if return_client_id %}
-        {% set cliente_associado = clientes | selectattr('cliente_id', 'equalto', return_client_id) | first %}
-        {% if cliente_associado %}
-            <p class="lead">Associado ao Cliente: <strong>{{ cliente_associado.razao_social }}</strong></p>
-        {% endif %}
-    {% endif %}
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#arquivo_certificado').on('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const fileName = file.name.toLowerCase();
+            if (!fileName.endsWith('.pfx') && !fileName.endsWith('.p12')) {
+                alert('Por favor, selecione um arquivo .pfx ou .p12');
+                this.value = '';
+                return;
+            }
+            
+            const label = $('label[for="arquivo_certificado"]');
+            label.html('<i class="fas fa-file-check text-success"></i> Arquivo: ' + file.name);
+        }
+    });
     
-    <form action="{{ url_for('admin.edit_certificado', certificado_digital_id=certificado.certificado_digital_id) if certificado.certificado_digital_id else url_for('admin.create_certificado') }}" method="post" enctype="multipart/form-data">
-        {# Input oculto para o cliente_id - já está no form content, mas pode ser útil aqui para depuração #}
-        <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
-
-        <div class="mb-3">
-            <label for="cliente_id_select" class="form-label">Cliente Associado</label>
-            <select class="form-select" id="cliente_id_select" name="cliente_id" required>
-                <option value="">Selecione um cliente...</option>
-                {% for cliente_item in clientes %}
-                    <option value="{{ cliente_item.cliente_id }}" {% if (form_data.cliente_id | default(return_client_id)) == cliente_item.cliente_id %}selected{% endif %}>
-                        {{ cliente_item.razao_social }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="mb-3">
-            <label for="nome_arquivo_original" class="form-label">Nome do Arquivo (ou Descrição)</label>
-            <input type="text" class="form-control" id="nome_arquivo_original" name="cert_nome_arquivo_original" value="{{ form_data.nome_arquivo_original | default('') }}" required>
-        </div>
+    $('#certificadoForm').on('submit', function(e) {
+        const arquivo = $('#arquivo_certificado')[0].files[0];
+        const senha = $('#senha_certificado').val();
         
-        {% if not certificado.certificado_digital_id %} {# Apenas para NOVOS certificados, no EDIT você não re-envia o arquivo #}
-        <div class="mb-3">
-            <label for="conteudo_certificado_file" class="form-label">Arquivo do Certificado (.pfx)</label>
-            <input class="form-control" type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" accept=".pfx" required>
-        </div>
-        {% else %}
-        <div class="mb-3">
-            <label class="form-label">Fingerprint Atual</label>
-            <input type="text" class="form-control" value="{{ certificado.fingerprint }}" disabled>
-        </div>
-        {% endif %}
-
-        <div class="mb-3">
-            <label for="cert_senha_certificado" class="form-label">Senha do Certificado (Preencher apenas para alterar/primeiro upload)</label>
-            <input type="password" class="form-control" id="cert_senha_certificado" name="cert_senha_certificado" {% if not certificado.certificado_digital_id %}required{% endif %}>
-        </div>
+        if (!arquivo) {
+            e.preventDefault();
+            alert('Selecione um arquivo de certificado!');
+            return false;
+        }
         
-        <div class="row">
-            <div class="col-md-6 mb-3">
-                <label for="validade_inicio" class="form-label">Validade Início</label>
-                <input type="date" class="form-control" id="validade_inicio" name="cert_validade_inicio" value="{{ form_data.validade_inicio | default('') }}">
-            </div>
-            <div class="col-md-6 mb-3">
-                <label for="validade_fim" class="form-label">Validade Fim</label>
-                <input type="date" class="form-control" id="validade_fim" name="cert_validade_fim" value="{{ form_data.validade_fim | default('') }}">
-            </div>
-        </div>
-
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" id="ativo" name="cert_ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
-            <label class="form-check-label" for="ativo">
-                Certificado Ativo
-            </label>
-        </div>
-
-        <button type="submit" class="btn btn-success">Salvar Certificado</button>
-        {% if return_client_id %}
-            <a href="{{ url_for('admin.edit_cliente', cliente_id=return_client_id, _anchor='certificados') }}" class="btn btn-secondary">Voltar ao Cliente</a>
-        {% else %}
-            <a href="{{ url_for('admin.list_certificados') }}" class="btn btn-secondary">Cancelar</a>
-        {% endif %}
-    </form>
+        if (!senha) {
+            e.preventDefault();
+            alert('Digite a senha do certificado!');
+            return false;
+        }
+        
+        $('button[type="submit"]').html('<i class="fas fa-spinner fa-spin"></i> Enviando...').prop('disabled', true);
+        
+        return true;
+    });
+});
+</script>
 {% endblock %}

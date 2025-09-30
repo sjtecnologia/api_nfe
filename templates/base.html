@@ -3,44 +3,664 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Sistema NFe{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>{% block title %}SJ Tecnologia - Sistema NFe{% endblock %}</title>
+    
+    <!-- ✅ FAVICON DA SJ TECNOLOGIA -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    
+    <!-- ✅ USAR APENAS BOOTSTRAP 4.6 (compatível com Select2) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- ✅ TEMA PERSONALIZADO SJ TECNOLOGIA -->
     <style>
+        :root {
+            --sj-primary: #00BCD4;      /* Azul Ciano Principal */
+            --sj-secondary: #0288D1;    /* Azul Escuro */
+            --sj-accent: #607D8B;       /* Cinza Metálico */
+            --sj-light: #ECEFF1;       /* Cinza Claro */
+            --sj-dark: #263238;        /* Cinza Escuro */
+            --sj-success: #4CAF50;     /* Verde */
+            --sj-warning: #FF9800;     /* Laranja */
+            --sj-danger: #F44336;      /* Vermelho */
+        }
+        
+        /* ===== NAVBAR PERSONALIZADA ===== */
+        .navbar-dark {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%) !important;
+            box-shadow: 0 2px 10px rgba(0, 188, 212, 0.3);
+        }
+        
+        /* ===== LOGO E BRANDING ===== */
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.4rem;
+            color: white !important;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-brand:hover {
+            background-color: rgba(255,255,255,0.1);
+            transform: scale(1.02);
+            text-decoration: none;
+            color: white !important;
+        }
+        
+        .navbar-brand .logo {
+            width: 32px;
+            height: 32px;
+            margin-right: 12px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffffff 0%, var(--sj-light) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .navbar-brand .logo i {
+            color: var(--sj-primary);
+            font-size: 18px;
+            margin: 0;
+        }
+        
+        .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+            transition: all 0.3s ease;
+            border-radius: 6px;
+            margin: 0 2px;
+        }
+        
+        .nav-link:hover {
+            color: white !important;
+            background-color: rgba(255,255,255,0.1);
+            transform: translateY(-1px);
+        }
+        
+        .dropdown-menu {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-top: 3px solid var(--sj-primary);
+        }
+        
+        /* ===== BOTÕES PERSONALIZADOS ===== */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 188, 212, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--sj-secondary) 0%, var(--sj-primary) 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 188, 212, 0.4);
+        }
+        
+        .btn-outline-primary {
+            color: var(--sj-primary);
+            border-color: var(--sj-primary);
+            border-radius: 8px;
+        }
+        
+        .btn-outline-primary:hover {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+            box-shadow: 0 2px 8px rgba(0, 188, 212, 0.3);
+        }
+        
+        /* ===== CARDS PERSONALIZADOS ===== */
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            overflow: hidden;
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border-bottom: none;
+            border-radius: 12px 12px 0 0 !important;
+        }
+        
+        .card-title {
+            color: white;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+        
+        .card-header h5 {
+            color: white !important;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+        
+        .card-header i {
+            color: rgba(255,255,255,0.9);
+            margin-right: 8px;
+        }
+        
+        /* ===== CARD HEADER ALTERNATIVO (fundo claro) ===== */
+        .card-header.bg-light {
+            background: linear-gradient(135deg, var(--sj-light) 0%, #ffffff 100%) !important;
+            color: var(--sj-dark) !important;
+            border-bottom: 1px solid rgba(0, 188, 212, 0.1);
+        }
+        
+        .card-header.bg-light .card-title,
+        .card-header.bg-light h5 {
+            color: var(--sj-dark) !important;
+        }
+        
+        .card-header.bg-light i {
+            color: var(--sj-primary) !important;
+        }
+        
+        /* ===== DASHBOARD CARDS ESPECIAIS ===== */
+        .stats-card {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 188, 212, 0.4);
+        }
+        
+        .stats-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            transform: rotate(45deg);
+        }
+        
+        .stats-card .icon {
+            font-size: 2.5rem;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+        
+        .stats-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stats-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        /* ===== BORDAS LATERAIS COLORIDAS ===== */
         .border-left-primary {
-            border-left: 0.25rem solid #007bff !important;
+            border-left: 4px solid var(--sj-primary) !important;
         }
         .border-left-success {
-            border-left: 0.25rem solid #28a745 !important;
+            border-left: 4px solid var(--sj-success) !important;
         }
         .border-left-info {
-            border-left: 0.25rem solid #17a2b8 !important;
+            border-left: 4px solid var(--sj-secondary) !important;
         }
         .border-left-warning {
-            border-left: 0.25rem solid #ffc107 !important;
+            border-left: 4px solid var(--sj-warning) !important;
         }
+        .border-left-danger {
+            border-left: 4px solid var(--sj-danger) !important;
+        }
+        
+        /* ===== BADGES PERSONALIZADOS ===== */
+        .badge-primary {
+            background-color: var(--sj-primary) !important;
+        }
+        
+        .badge-secondary {
+            background-color: var(--sj-accent) !important;
+        }
+        
+        .badge-danger {
+            background-color: var(--sj-danger) !important;
+        }
+        
+        /* ===== ALERTAS PERSONALIZADOS ===== */
+        .alert {
+            border: none;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        
+        .alert-success {
+            background-color: rgba(76, 175, 80, 0.1);
+            border-left-color: var(--sj-success);
+            color: #2E7D32;
+        }
+        
+        .alert-info {
+            background-color: rgba(2, 136, 209, 0.1);
+            border-left-color: var(--sj-secondary);
+            color: #1565C0;
+        }
+        
+        .alert-warning {
+            background-color: rgba(255, 152, 0, 0.1);
+            border-left-color: var(--sj-warning);
+            color: #E65100;
+        }
+        
+        .alert-danger {
+            background-color: rgba(244, 67, 54, 0.1);
+            border-left-color: var(--sj-danger);
+            color: #C62828;
+        }
+        
+        /* ===== FORMULÁRIOS PERSONALIZADOS ===== */
+        .form-control:focus {
+            border-color: var(--sj-primary);
+            box-shadow: 0 0 0 0.2rem rgba(0, 188, 212, 0.25);
+        }
+        
+        .custom-control-input:checked ~ .custom-control-label::before {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        /* ===== BREADCRUMB PERSONALIZADO ===== */
+        .breadcrumb {
+            background: linear-gradient(135deg, var(--sj-light) 0%, #ffffff 100%);
+            border-bottom: 1px solid rgba(0, 188, 212, 0.1);
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--sj-primary);
+            font-weight: 500;
+        }
+        
+        /* ===== FOOTER PERSONALIZADO ===== */
+        footer {
+            background: linear-gradient(135deg, var(--sj-dark) 0%, var(--sj-accent) 100%);
+            color: rgba(255,255,255,0.8);
+        }
+        
+        footer .text-muted {
+            color: rgba(255,255,255,0.6) !important;
+        }
+        
+        /* ===== TABELAS PERSONALIZADAS ===== */
+        .table thead th {
+            background-color: var(--sj-light);
+            color: var(--sj-dark);
+            font-weight: 600;
+            border-bottom: 2px solid var(--sj-primary);
+        }
+        
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(0, 188, 212, 0.02);
+        }
+        
+        /* ===== MODAL PERSONALIZADO ===== */
+        .modal-content {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+            border-bottom: none;
+        }
+        
+        .modal-header .close {
+            color: white;
+            opacity: 0.8;
+        }
+        
+        .modal-header .close:hover {
+            opacity: 1;
+        }
+        
+        /* ===== PROGRESS BARS PERSONALIZADAS ===== */
+        .progress {
+            height: 8px;
+            border-radius: 10px;
+            background-color: rgba(0, 188, 212, 0.1);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            border-radius: 10px;
+        }
+        
+        /* ===== SWITCH PERSONALIZADO ===== */
+        .custom-switch .custom-control-input:checked ~ .custom-control-label::before {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        .custom-switch .custom-control-input:checked ~ .custom-control-label::after {
+            background-color: white;
+        }
+        
+        /* ===== PAGINAÇÃO PERSONALIZADA ===== */
+        .page-link {
+            color: var(--sj-primary);
+            border-color: rgba(0, 188, 212, 0.2);
+        }
+        
+        .page-link:hover {
+            color: white;
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        .page-item.active .page-link {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        /* ===== SCROLLBAR PERSONALIZADA ===== */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--sj-light);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--sj-accent);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--sj-primary);
+        }
+        
+        /* ===== EFEITOS DE HOVER NOS ÍCONES ===== */
+        .icon-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .icon-hover:hover {
+            transform: scale(1.2) rotate(5deg);
+            color: var(--sj-primary);
+        }
+        
+        /* ===== GRADIENT TEXT ===== */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: bold;
+        }
+        
+        /* ===== FLOATING ACTION BUTTON ===== */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 20px rgba(0, 188, 212, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(0, 188, 212, 0.6);
+            color: white;
+        }
+        
+        /* ===== LOADING SPINNER PERSONALIZADO ===== */
+        .sj-spinner {
+            border: 3px solid rgba(0, 188, 212, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid var(--sj-primary);
+            width: 40px;
+            height: 40px;
+            animation: sjSpin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        /* ===== CORES DE TEXTO ===== */
         .text-gray-800 {
-            color: #5a5c69 !important;
+            color: var(--sj-dark) !important;
         }
         .text-gray-300 {
-            color: #dddfeb !important;
+            color: var(--sj-accent) !important;
+        }
+        .text-primary {
+            color: var(--sj-primary) !important;
+        }
+        /* ===== MENSAGENS GLOBAIS COM AUTO-CLOSE ===== */
+        .alerts-global-container .alert {
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        /* ===== CORES DOS ALERTAS ===== */
+        .alert-danger.global-alert {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.95), rgba(220, 53, 69, 0.85));
+            color: white;
+            border-left-color: #dc3545 !important;
+        }
+
+        .alert-success.global-alert {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.95), rgba(40, 167, 69, 0.85));
+            color: white;
+            border-left-color: #28a745 !important;
+        }
+
+        .alert-info.global-alert {
+            background: linear-gradient(135deg, rgba(23, 162, 184, 0.95), rgba(23, 162, 184, 0.85));
+            color: white;
+            border-left-color: #17a2b8 !important;
+        }
+
+        .alert-warning.global-alert {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.95), rgba(255, 193, 7, 0.85));
+            color: #212529;
+            border-left-color: #ffc107 !important;
+        }
+
+        /* ===== ESTADOS DO ALERT ===== */
+        .alert.closing {
+            animation: slideOutRight 0.5s ease-out forwards;
+        }
+
+        .alert.showing {
+            animation: slideInRight 0.6s ease-out forwards;
+        }
+        
+        /* ===== ANIMAÇÕES PERSONALIZADAS ===== */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes sjSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .slide-in-left {
+            animation: slideInLeft 0.6s ease-out;
+        }
+        
+        /* ===== ANIMAÇÕES ===== */
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+        }
+
+        @keyframes progressCountdown {
+            from {
+                width: 100%;
+            }
+            to {
+                width: 0%;
+            }
+        }
+        
+        .slide-in-right {
+            animation: slideInRight 0.6s ease-out;
+        }
+        
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 768px) {
+            .navbar-brand {
+                font-size: 1.2rem;
+            }
+            
+            .card {
+                margin-bottom: 1rem;
+            }
+            
+            .fab {
+                bottom: 20px;
+                right: 20px;
+                width: 48px;
+                height: 48px;
+                font-size: 20px;
+            }
+        }
+        /* ===== HOVER EFFECTS ===== */
+        .global-alert:hover .progress-bar {
+            animation-play-state: paused;
+        }
+
+        .global-alert:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+        }
+
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 768px) {
+            .alerts-global-container {
+                position: fixed !important;
+                top: 10px !important;
+                left: 10px !important;
+                right: 10px !important;
+                max-width: none !important;
+            }
+            
+            .global-alert {
+                margin-bottom: 8px !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .alert-content {
+                font-size: 0.9rem;
+            }
+            
+            .alert-icon {
+                font-size: 1rem !important;
+            }
         }
     </style>
-    {% block head %}{% endblock %}
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('home.home') }}">
-                <i class="fas fa-file-invoice"></i> Sistema NFe
+                <div class="logo">
+                    <i class="fas fa-file-invoice"></i>
+                </div>
+                <span>NfeSjtec</span>
+                <small style="font-size: 0.75rem; opacity: 0.8; margin-left: 8px;">v2.0</small>
             </a>
             
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <ul class="navbar-nav mr-auto mb-2 mb-lg-0">
                     {% if current_user.is_authenticated %}
                         
                         <!-- Menu para Clientes (não admin) -->
@@ -121,72 +741,72 @@
                             <!-- Dropdown para Cadastros Fiscais -->
                             {% if has_permission('cfops.read') or has_permission('ncms.read') or has_permission('cst.read') or has_permission('csosn.read') %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
                                     <i class="fas fa-cogs"></i> Cadastros Fiscais
                                 </a>
-                                <ul class="dropdown-menu">
+                                <div class="dropdown-menu">
                                     {% if has_permission('cfops.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_cfops') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_cfops') }}">
                                         <i class="fas fa-exchange-alt"></i> CFOPs
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('ncms.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_ncms') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_ncms') }}">
                                         <i class="fas fa-barcode"></i> NCMs
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('cst.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_cst') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_cst') }}">
                                         <i class="fas fa-percentage"></i> CST ICMS
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('csosn.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_csosn') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_csosn') }}">
                                         <i class="fas fa-calculator"></i> CSOSN ICMS
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('origens_mercadoria.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_origens_mercadoria') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_origens_mercadoria') }}">
                                         <i class="fas fa-map-marker-alt"></i> Origem Mercadoria
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('regimes_tributarios.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_regimes_tributarios') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_regimes_tributarios') }}">
                                         <i class="fas fa-building"></i> Regimes Tributários
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('motivos_desoneracao.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_motivos_desoneracao') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_motivos_desoneracao') }}">
                                         <i class="fas fa-minus-circle"></i> Motivos Desoneração
-                                    </a></li>
+                                    </a>
                                     {% endif %}
-                                </ul>
+                                </div>
                             </li>
                             {% endif %}
                             
                             <!-- Dropdown para Administração do Sistema -->
                             {% if has_permission('users.read') or has_permission('roles.read') %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
                                     <i class="fas fa-tools"></i> Sistema
                                 </a>
-                                <ul class="dropdown-menu">
+                                <div class="dropdown-menu">
                                     {% if has_permission('users.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_users') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_users') }}">
                                         <i class="fas fa-user"></i> Usuários
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('roles.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_roles') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_roles') }}">
                                         <i class="fas fa-user-tag"></i> Papéis
-                                    </a></li>
+                                    </a>
                                     {% endif %}
                                     {% if has_permission('permissions.read') %}
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.list_permissions') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_permissions') }}">
                                         <i class="fas fa-key"></i> Permissões
-                                    </a></li>
+                                    </a>
                                     {% endif %}
-                                </ul>
+                                </div>
                             </li>
                             {% endif %}
                             
@@ -199,55 +819,43 @@
                 <ul class="navbar-nav">
                     {% if current_user.is_authenticated %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
                                 <i class="fas fa-user-circle"></i> {{ current_user.username }}
                                 {% if not current_user.is_admin() and session.current_client_id %}
-                                    <small class="badge bg-primary ms-1">Cliente</small>
+                                    <small class="badge badge-primary ml-1">Cliente</small>
                                 {% elif current_user.is_admin() %}
-                                    <small class="badge bg-danger ms-1">Admin</small>
+                                    <small class="badge badge-danger ml-1">Admin</small>
                                 {% endif %}
                             </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <h6 class="dropdown-header">
-                                        <i class="fas fa-user"></i> {{ current_user.username }}
-                                    </h6>
-                                </li>
+                            <div class="dropdown-menu dropdown-menu-right">
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-user"></i> {{ current_user.username }}
+                                </h6>
                                 
                                 <!-- Informações do Cliente Atual -->
                                 {% if not current_user.is_admin() and session.current_client_id %}
-                                <li>
-                                    <span class="dropdown-item-text">
-                                        <small class="text-muted">Cliente Atual:</small><br>
-                                        <strong>{{ session.current_client_name or 'Cliente Selecionado' }}</strong>
-                                    </span>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <a class="dropdown-item" href="{{ url_for('home.switch_client') }}">
-                                        <i class="fas fa-exchange-alt"></i> Trocar Cliente
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
+                                <span class="dropdown-item-text">
+                                    <small class="text-muted">Cliente Atual:</small><br>
+                                    <strong>{{ session.current_client_name or 'Cliente Selecionado' }}</strong>
+                                </span>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="{{ url_for('home.switch_client') }}">
+                                    <i class="fas fa-exchange-alt"></i> Trocar Cliente
+                                </a>
+                                <div class="dropdown-divider"></div>
                                 {% endif %}
                                 
-                                <li>
-                                    <a class="dropdown-item" href="{{ url_for('home.home') }}">
-                                        <i class="fas fa-tachometer-alt"></i> Dashboard
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#" onclick="alert('Perfil não implementado ainda')">
-                                        <i class="fas fa-user-edit"></i> Meu Perfil
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
-                                        <i class="fas fa-sign-out-alt"></i> Sair
-                                    </a>
-                                </li>
-                            </ul>
+                                <a class="dropdown-item" href="{{ url_for('home.home') }}">
+                                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                                </a>
+                                <a class="dropdown-item" href="#" onclick="alert('Perfil não implementado ainda')">
+                                    <i class="fas fa-user-edit"></i> Meu Perfil
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                    <i class="fas fa-sign-out-alt"></i> Sair
+                                </a>
+                            </div>
                         </li>
                     {% else %}
                         <li class="nav-item">
@@ -262,7 +870,7 @@
     </nav>
 
     <!-- Breadcrumb para mostrar contexto atual -->
-    {% if current_user.is_authenticated and not current_user.is_admin() and session.current_client_id %}
+    <!-- {% if current_user.is_authenticated and not current_user.is_admin() and session.current_client_id %}
     <nav aria-label="breadcrumb" class="bg-light py-2">
         <div class="container-fluid">
             <ol class="breadcrumb mb-0">
@@ -278,56 +886,207 @@
             </ol>
         </div>
     </nav>
-    {% endif %}
+    {% endif %} -->
 
     <main class="container-fluid mt-3">
         <!-- Área para mostrar mensagens flash -->
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="row">
-                    <div class="col-12">
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                                {% if category == 'success' %}
-                                    <i class="fas fa-check-circle"></i>
-                                {% elif category == 'danger' or category == 'error' %}
+        {% if messages %}
+            <div class="alerts-global-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 450px;">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-lg auto-close-alert global-alert" 
+                         role="alert" 
+                         style="border-radius: 12px; border: none; border-left: 5px solid; margin-bottom: 12px; animation: slideInRight 0.6s ease-out; backdrop-filter: blur(15px);">
+                        
+                        <!-- ✅ ÍCONE BASEADO NO TIPO -->
+                        <div class="d-flex align-items-start">
+                            <div class="alert-icon mr-3" style="font-size: 1.2rem; margin-top: 2px;">
+                                {% if category == 'error' or category == 'danger' %}
                                     <i class="fas fa-exclamation-triangle"></i>
+                                {% elif category == 'success' %}
+                                    <i class="fas fa-check-circle"></i>
                                 {% elif category == 'warning' %}
                                     <i class="fas fa-exclamation-circle"></i>
                                 {% elif category == 'info' %}
                                     <i class="fas fa-info-circle"></i>
+                                {% else %}
+                                    <i class="fas fa-bell"></i>
                                 {% endif %}
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
-                        {% endfor %}
+                            
+                            <div class="alert-content flex-grow-1">
+                                <div class="alert-message" style="font-weight: 500; line-height: 1.4;">
+                                    {{ message }}
+                                </div>
+                                
+                                <!-- ✅ BARRA DE PROGRESSO PARA AUTO-CLOSE -->
+                                <div class="auto-close-progress" style="height: 3px; background: rgba(255,255,255,0.3); border-radius: 3px; margin-top: 8px; overflow: hidden;">
+                                    <div class="progress-bar" style="height: 100%; background: rgba(255,255,255,0.7); width: 100%; animation: progressCountdown 6s linear forwards;"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- ✅ BOTÃO FECHAR -->
+                            <button type="button" class="close ml-2" data-dismiss="alert" aria-label="Close" style="font-size: 1.5rem; opacity: 0.8;">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
                     </div>
-                </div>
-            {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
         {% endwith %}
 
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-light mt-5 py-3">
+     <!-- Footer -->
+    <footer class="mt-5 py-3">
         <div class="container-fluid text-center">
             <small class="text-muted">
-                <i class="fas fa-code"></i> Sistema NFe - 
+                <i class="fas fa-code"></i> NfeSjtec - Sistema de Nota Fiscal Eletrônica
                 {% if current_user.is_authenticated %}
-                    Usuário: <strong>{{ current_user.username }}</strong>
+                    | Usuário: <strong>{{ current_user.username }}</strong>
                     {% if current_user.is_admin() %}
-                        <span class="badge bg-danger ms-1">Administrador</span>
+                        <span class="badge badge-danger ml-1">Administrador</span>
                     {% elif session.current_client_id %}
-                        <span class="badge bg-primary ms-1">{{ session.current_client_name or 'Cliente' }}</span>
+                        <span class="badge badge-primary ml-1">{{ session.current_client_name or 'Cliente' }}</span>
                     {% endif %}
                 {% endif %}
-                © 2024
+                | © 2024
             </small>
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block scripts %}{% endblock %}
+    <!-- ✅ ORDEM CORRETA: jQuery PRIMEIRO, depois Bootstrap -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ✅ JAVASCRIPT DE AUTO-CLOSE APÓS JQUERY -->
+    <script>
+    $(document).ready(function() {
+        
+        console.log('🔧 Inicializando sistema de auto-close alerts...');
+        
+        // ✅ FUNÇÃO CORRIGIDA DE AUTO-CLOSE
+        function initAutoCloseAlerts() {
+            $('.auto-close-alert:not(.initialized)').each(function() {
+                const $alert = $(this);
+                const closeTime = 6000; // 6 segundos
+                let timeoutId;
+                let isPaused = false;
+                
+                console.log('📋 Inicializando alert:', $alert.find('.alert-message').text().substring(0, 30) + '...');
+                
+                // Marcar como inicializado
+                $alert.addClass('initialized showing');
+                
+                // Função para fechar o alert
+                function closeAlert() {
+                    console.log('🚫 Fechando alert automaticamente');
+                    
+                    // Adicionar classe de fechamento
+                    $alert.addClass('closing');
+                    
+                    // Aguardar animação CSS e remover elemento
+                    setTimeout(function() {
+                        $alert.fadeOut(300, function() {
+                            $alert.remove();
+                            console.log('✅ Alert removido do DOM');
+                        });
+                    }, 500); // Aguarda a animação slideOutRight (0.5s)
+                }
+                
+                // Timer principal
+                function startTimer() {
+                    if (!isPaused) {
+                        console.log('⏰ Iniciando timer de 6 segundos');
+                        timeoutId = setTimeout(closeAlert, closeTime);
+                    }
+                }
+                
+                // Eventos de hover
+                $alert.hover(
+                    function() {
+                        // Mouse enter - pausar
+                        console.log('⏸️  Pausando timer (hover)');
+                        isPaused = true;
+                        if (timeoutId) {
+                            clearTimeout(timeoutId);
+                        }
+                        $(this).find('.progress-bar').css('animation-play-state', 'paused');
+                    },
+                    function() {
+                        // Mouse leave - retomar
+                        console.log('▶️  Retomando timer (leave)');
+                        isPaused = false;
+                        $(this).find('.progress-bar').css('animation-play-state', 'running');
+                        
+                        // Tempo reduzido ao retomar (2 segundos)
+                        timeoutId = setTimeout(closeAlert, 2000);
+                    }
+                );
+                
+                // Botão de fechar manual
+                $alert.find('.close').off('click.autoclose').on('click.autoclose', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('❌ Fechamento manual do alert');
+                    
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                    }
+                    closeAlert();
+                });
+                
+                // Iniciar o timer
+                startTimer();
+            });
+        }
+        
+        // ✅ INICIALIZAR IMEDIATAMENTE
+        initAutoCloseAlerts();
+        
+        // ✅ OBSERVER PARA ALERTS DINÂMICOS (AJAX)
+        const alertObserver = new MutationObserver(function(mutations) {
+            let hasNewAlerts = false;
+            
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) {
+                        if ($(node).hasClass('auto-close-alert') || $(node).find('.auto-close-alert').length > 0) {
+                            hasNewAlerts = true;
+                        }
+                    }
+                });
+            });
+            
+            if (hasNewAlerts) {
+                console.log('🔍 Novos alerts detectados via AJAX/DOM');
+                setTimeout(initAutoCloseAlerts, 100); // Pequeno delay para garantir renderização
+            }
+        });
+        
+        // Observar mudanças no DOM
+        alertObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        // ✅ FALLBACK: Verificar periodicamente por novos alerts
+        setInterval(function() {
+            const newAlerts = $('.auto-close-alert:not(.initialized)').length;
+            if (newAlerts > 0) {
+                console.log(`🔄 Encontrados ${newAlerts} alerts não inicializados`);
+                initAutoCloseAlerts();
+            }
+        }, 1000);
+        
+        console.log('✅ Sistema de auto-close alerts carregado com sucesso');
+    });
+    </script>
+    
+    <!-- Scripts personalizados das páginas -->
+    {% block extra_js %}{% endblock %}
+
 </body>
 </html>

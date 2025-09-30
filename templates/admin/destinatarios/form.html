@@ -1,108 +1,383 @@
 {% extends "base.html" %}
 
 {% block title %}
-    {% if destinatario.destinatario_id %}Editar Destinatário: {{ destinatario.nome_razao_social }}{% else %}Novo Destinatário{% endif %}
+    {% if destinatario %}Editar Destinatário{% else %}Novo Destinatário{% endif %}
 {% endblock %}
 
 {% block content %}
-    {# Título da página #}
-    <h1 class="mb-4">
-        {% if destinatario.destinatario_id %}Editar Destinatário: {{ destinatario.nome_razao_social }}{% else %}Novo Destinatário{% endif %}
-    </h1>
-    
-    {# Parágrafo opcional indicando o cliente associado, se a requisição veio da tela de cliente #}
-    {% if return_client_id %}
-        {% set cliente_associado = clientes | selectattr('cliente_id', 'equalto', return_client_id) | first %}
-        {% if cliente_associado %}
-            <p class="lead">Associado ao Cliente: <strong>{{ cliente_associado.razao_social }}</strong></p>
-        {% endif %}
-    {% endif %}
-
-    {# A tag <form> principal que engloba todo o formulário. Sua action muda para adicionar ou editar. #}
-    <form action="{{ url_for('admin_destinatarios_nfe_edit', destinatario_id=destinatario.destinatario_id) if destinatario.destinatario_id else url_for('admin_destinatarios_nfe_add') }}" method="post">
-        {# Input oculto para o cliente_id. Este campo é sempre enviado e contém o ID do cliente. #}
-        {# É essencial para o backend saber a qual cliente este destinatário pertence. #}
-        <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
-
-        {# Inclui os campos do formulário de destinatário, agora sem as tags <form> extras. #}
-        {% include 'admin_destinatario_form_fields.html' %}
-        
-        {# Botões de ação do formulário. São colocados no arquivo principal. #}
-        <div class="mt-3 text-end"> {# Adicionado text-end para alinhar à direita #}
-            <button type="submit" class="btn btn-success">Salvar Destinatário</button>
-            
-            {% if return_client_id %}
-                {# Botão para voltar à tela de edição do cliente, na aba correta. #}
-                <a href="{{ url_for('admin.edit_cliente', cliente_id=return_client_id, _anchor='destinatarios') }}" class="btn btn-secondary">Voltar ao Cliente</a>
-            {% else %}
-                {# Botão para cancelar e voltar à listagem geral de destinatários, caso não venha de um cliente. #}
-                <a href="{{ url_for('admin_destinatarios_nfe_list') }}" class="btn btn-secondary">Cancelar</a>
-            {% endif %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-address-book"></i>
+                        {% if destinatario %}
+                            Editar Destinatário
+                        {% else %}
+                            Novo Destinatário
+                        {% endif %}
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.salvar_destinatario') }}" id="destinatarioForm">
+                        <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                        {% if destinatario %}
+                            <input type="hidden" name="destinatario_id" value="{{ destinatario.destinatario_id }}">
+                        {% endif %}
+                        
+                        <!-- ✅ IDENTIFICAÇÃO -->
+                        <h6 class="text-primary mb-3">📋 Identificação</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cpf_cnpj">CPF/CNPJ *</label>
+                                    <input type="text" class="form-control" id="cpf_cnpj" name="cpf_cnpj" 
+                                           value="{{ destinatario.cpf_cnpj if destinatario else '' }}" 
+                                           maxlength="18" placeholder="000.000.000-00 ou 00.000.000/0000-00" required>
+                                    <small class="form-text text-muted">Será salvo apenas números</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="tipo_pessoa">Tipo de Pessoa *</label>
+                                    <select class="form-control" id="tipo_pessoa" name="tipo_pessoa" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="F" {% if destinatario and destinatario.tipo_pessoa == 'F' %}selected{% endif %}>Pessoa Física</option>
+                                        <option value="J" {% if destinatario and destinatario.tipo_pessoa == 'J' %}selected{% elif not destinatario %}selected{% endif %}>Pessoa Jurídica</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="nome_razao_social">Nome/Razão Social *</label>
+                                    <input type="text" class="form-control" id="nome_razao_social" name="nome_razao_social" 
+                                           value="{{ destinatario.nome_razao_social if destinatario else '' }}" 
+                                           maxlength="255" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="ie">Inscrição Estadual</label>
+                                    <input type="text" class="form-control" id="ie" name="ie" 
+                                           value="{{ destinatario.ie if destinatario else '' }}" 
+                                           maxlength="14" placeholder="Ex: ISENTO">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="ie_indicador_nfe">Indicador IE para NF-e</label>
+                            <select class="form-control" id="ie_indicador_nfe" name="ie_indicador_nfe">
+                                <option value="C" {% if not destinatario or destinatario.ie_indicador_nfe == 'C' %}selected{% endif %}>Contribuinte ICMS</option>
+                                <option value="E" {% if destinatario and destinatario.ie_indicador_nfe == 'E' %}selected{% endif %}>Isento</option>
+                                <option value="N" {% if destinatario and destinatario.ie_indicador_nfe == 'N' %}selected{% endif %}>Não Contribuinte</option>
+                            </select>
+                        </div>
+                        
+                        <!-- ✅ CONTATO -->
+                        <hr>
+                        <h6 class="text-primary mb-3">📞 Contato</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="email">E-mail</label>
+                                    <input type="email" class="form-control" id="email" name="email" 
+                                           value="{{ destinatario.email if destinatario else '' }}" 
+                                           maxlength="255">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="telefone">Telefone</label>
+                                    <input type="text" class="form-control" id="telefone" name="telefone" 
+                                           value="{{ destinatario.telefone if destinatario else '' }}" 
+                                           maxlength="20" placeholder="(17) 99999-9999">
+                                    <small class="form-text text-muted">Será salvo apenas números</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- ✅ ENDEREÇO COM BUSCA DE CEP -->
+                        <hr>
+                        <h6 class="text-primary mb-3">🏠 Endereço</h6>
+                        
+                        <!-- ✅ CEP COM BOTÃO DE BUSCA -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cep">CEP *</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="cep" name="cep" 
+                                               value="{{ destinatario.cep if destinatario else '' }}" 
+                                               maxlength="9" placeholder="00000-000" required>
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-outline-primary" id="btnBuscarCep">
+                                                <i class="fas fa-search"></i> Buscar
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">Será salvo apenas números (máx 8)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="uf">UF *</label>
+                                    <select class="form-control" id="uf" name="uf" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="AC" {% if destinatario and destinatario.uf == 'AC' %}selected{% endif %}>Acre</option>
+                                        <option value="AL" {% if destinatario and destinatario.uf == 'AL' %}selected{% endif %}>Alagoas</option>
+                                        <option value="AP" {% if destinatario and destinatario.uf == 'AP' %}selected{% endif %}>Amapá</option>
+                                        <option value="AM" {% if destinatario and destinatario.uf == 'AM' %}selected{% endif %}>Amazonas</option>
+                                        <option value="BA" {% if destinatario and destinatario.uf == 'BA' %}selected{% endif %}>Bahia</option>
+                                        <option value="CE" {% if destinatario and destinatario.uf == 'CE' %}selected{% endif %}>Ceará</option>
+                                        <option value="DF" {% if destinatario and destinatario.uf == 'DF' %}selected{% endif %}>Distrito Federal</option>
+                                        <option value="ES" {% if destinatario and destinatario.uf == 'ES' %}selected{% endif %}>Espírito Santo</option>
+                                        <option value="GO" {% if destinatario and destinatario.uf == 'GO' %}selected{% endif %}>Goiás</option>
+                                        <option value="MA" {% if destinatario and destinatario.uf == 'MA' %}selected{% endif %}>Maranhão</option>
+                                        <option value="MT" {% if destinatario and destinatario.uf == 'MT' %}selected{% endif %}>Mato Grosso</option>
+                                        <option value="MS" {% if destinatario and destinatario.uf == 'MS' %}selected{% endif %}>Mato Grosso do Sul</option>
+                                        <option value="MG" {% if destinatario and destinatario.uf == 'MG' %}selected{% endif %}>Minas Gerais</option>
+                                        <option value="PA" {% if destinatario and destinatario.uf == 'PA' %}selected{% endif %}>Pará</option>
+                                        <option value="PB" {% if destinatario and destinatario.uf == 'PB' %}selected{% endif %}>Paraíba</option>
+                                        <option value="PR" {% if destinatario and destinatario.uf == 'PR' %}selected{% endif %}>Paraná</option>
+                                        <option value="PE" {% if destinatario and destinatario.uf == 'PE' %}selected{% endif %}>Pernambuco</option>
+                                        <option value="PI" {% if destinatario and destinatario.uf == 'PI' %}selected{% endif %}>Piauí</option>
+                                        <option value="RJ" {% if destinatario and destinatario.uf == 'RJ' %}selected{% endif %}>Rio de Janeiro</option>
+                                        <option value="RN" {% if destinatario and destinatario.uf == 'RN' %}selected{% endif %}>Rio Grande do Norte</option>
+                                        <option value="RS" {% if destinatario and destinatario.uf == 'RS' %}selected{% endif %}>Rio Grande do Sul</option>
+                                        <option value="RO" {% if destinatario and destinatario.uf == 'RO' %}selected{% endif %}>Rondônia</option>
+                                        <option value="RR" {% if destinatario and destinatario.uf == 'RR' %}selected{% endif %}>Roraima</option>
+                                        <option value="SC" {% if destinatario and destinatario.uf == 'SC' %}selected{% endif %}>Santa Catarina</option>
+                                        <option value="SP" {% if destinatario and destinatario.uf == 'SP' %}selected{% elif not destinatario %}selected{% endif %}>São Paulo</option>
+                                        <option value="SE" {% if destinatario and destinatario.uf == 'SE' %}selected{% endif %}>Sergipe</option>
+                                        <option value="TO" {% if destinatario and destinatario.uf == 'TO' %}selected{% endif %}>Tocantins</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="logradouro">Logradouro *</label>
+                                    <input type="text" class="form-control" id="logradouro" name="logradouro" 
+                                           value="{{ destinatario.logradouro if destinatario else '' }}" 
+                                           maxlength="255" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="numero">Número *</label>
+                                    <input type="text" class="form-control" id="numero" name="numero" 
+                                           value="{{ destinatario.numero if destinatario else '' }}" 
+                                           maxlength="60" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="complemento">Complemento</label>
+                                    <input type="text" class="form-control" id="complemento" name="complemento" 
+                                           value="{{ destinatario.complemento if destinatario else '' }}" 
+                                           maxlength="255">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="bairro">Bairro *</label>
+                                    <input type="text" class="form-control" id="bairro" name="bairro" 
+                                           value="{{ destinatario.bairro if destinatario else '' }}" 
+                                           maxlength="255" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="nome_municipio">Município *</label>
+                                    <input type="text" class="form-control" id="nome_municipio" name="nome_municipio" 
+                                           value="{{ destinatario.nome_municipio if destinatario else '' }}" 
+                                           maxlength="255" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label for="codigo_municipio">Código do Município *</label>
+                                    <input type="text" class="form-control" id="codigo_municipio" name="codigo_municipio" 
+                                           value="{{ destinatario.codigo_municipio if destinatario else '' }}" 
+                                           maxlength="7" placeholder="3549904" required>
+                                    <small class="form-text text-muted">Código IBGE (7 dígitos) - será preenchido automaticamente ao buscar CEP</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i>
+                                {% if destinatario %}Atualizar{% else %}Criar{% endif %} Destinatário
+                            </button>
+                            <a href="{{ url_for('admin.list_destinatarios', cliente_id=cliente_id) }}" 
+                               class="btn btn-secondary ml-2">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-    </form>
+    </div>
+</div>
+
+<!-- ✅ LOADING OVERLAY -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; text-align: center;">
+        <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+        <p class="mt-2 mb-0">Buscando CEP...</p>
+    </div>
+</div>
 {% endblock %}
 
-{# Bloco de scripts para máscaras e lógica de busca de CEP, incluído uma única vez na página. #}
-{% block scripts %}
+{% block extra_js %}
 <script>
-    $(document).ready(function() {
-        // Máscaras para formatação de entrada de dados.
-        $('#cpf_cnpj').mask('00.000.000/0000-00', {reverse: true});
-        $('#ie').mask('000.000.000.000');
-        $('#telefone').mask('(00) 00000-0000');
-        $('#cep').mask('00000-000');
-
-        // Lógica para busca de endereço a partir do CEP via ViaCEP.
-        $('#btn-buscar-cep').on('click', function() {
-            var cep = $('#cep').val().replace(/\D/g, ''); // Remove caracteres não-numéricos.
-            if (cep.length != 8) {
-                alert('CEP inválido. Por favor, digite 8 dígitos.');
-                return;
-            }
-
-            // Exibe um overlay de carregamento para feedback visual ao usuário.
-            $('#loadingOverlay').removeClass('hidden');
-
-            $.ajax({
-                url: `https://viacep.com.br/ws/${cep}/json/`,
-                method: 'GET',
-                dataType: 'json',
-                success: function(data) {
-                    if (data.erro) {
-                        alert('CEP não encontrado.');
-                    } else {
-                        // Preenche os campos do formulário com os dados retornados pela API.
-                        $('#logradouro').val(data.logradouro);
-                        $('#complemento').val(data.complemento);
-                        $('#bairro').val(data.bairro);
-                        $('#nome_municipio').val(data.localidade);
-                        $('#uf').val(data.uf);
-                        $('#codigo_municipio').val(data.ibge); 
-                        $('#codigo_uf').val(data.uf); // ViaCEP retorna a sigla da UF para codigo_uf.
-                    }
-                },
-                error: function() {
-                    alert('Erro ao buscar o CEP. Tente novamente.');
-                },
-                complete: function() {
-                    // Remove o overlay de carregamento após a conclusão da requisição.
-                    $('#loadingOverlay').addClass('hidden');
-                }
-            });
-        });
-
-        // Adiciona lógica para alternar a máscara do CPF/CNPJ com base no tipo de pessoa (Física/Jurídica).
-        $('#tipo_pessoa').change(function() {
-            var tipo = $(this).val();
-            var cpfCnpjInput = $('#cpf_cnpj');
-            if (tipo === 'F') {
-                cpfCnpjInput.mask('000.000.000-00', {reverse: true});
-            } else if (tipo === 'J') {
-                cpfCnpjInput.mask('00.000.000/0000-00', {reverse: true});
-            } else {
-                cpfCnpjInput.unmask(); // Remove a máscara se nenhum tipo for selecionado.
-            }
-        }).trigger('change'); // Dispara o evento 'change' no carregamento da página para aplicar a máscara inicial.
+// ✅ FORMATAÇÃO E VALIDAÇÃO DE CAMPOS + BUSCA CEP
+$(document).ready(function() {
+    // Máscara para CPF/CNPJ
+    $('#cpf_cnpj').on('input', function() {
+        let value = this.value.replace(/\D/g, '');
+        if (value.length <= 11) {
+            // CPF: 000.000.000-00
+            value = value.replace(/(\d{3})(\d)/, '$1.$2');
+            value = value.replace(/(\d{3})(\d)/, '$1.$2');
+            value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+        } else {
+            // CNPJ: 00.000.000/0000-00
+            value = value.replace(/^(\d{2})(\d)/, '$1.$2');
+            value = value.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+            value = value.replace(/\.(\d{3})(\d)/, '.$1/$2');
+            value = value.replace(/(\d{4})(\d)/, '$1-$2');
+        }
+        this.value = value;
     });
+    
+    // Máscara para telefone
+    $('#telefone').on('input', function() {
+        let value = this.value.replace(/\D/g, '');
+        if (value.length <= 10) {
+            value = value.replace(/(\d{2})(\d)/, '($1) $2');
+            value = value.replace(/(\d{4})(\d)/, '$1-$2');
+        } else {
+            value = value.replace(/(\d{2})(\d)/, '($1) $2');
+            value = value.replace(/(\d{5})(\d)/, '$1-$2');
+        }
+        this.value = value;
+    });
+    
+    // Máscara para CEP
+    $('#cep').on('input', function() {
+        let value = this.value.replace(/\D/g, '');
+        value = value.replace(/(\d{5})(\d)/, '$1-$2');
+        this.value = value;
+    });
+    
+    // ✅ BUSCAR CEP
+    $('#btnBuscarCep').on('click', function() {
+        const cep = $('#cep').val().replace(/\D/g, '');
+        
+        if (cep.length !== 8) {
+            alert('Digite um CEP válido com 8 dígitos!');
+            $('#cep').focus();
+            return;
+        }
+        
+        // Mostrar loading
+        $('#loadingOverlay').show();
+        
+        // Fazer requisição
+        $.ajax({
+            url: `/admin/api/buscar-cep/${cep}`,
+            method: 'GET',
+            timeout: 10000,
+            success: function(data) {
+                if (data.success) {
+                    // Preencher campos
+                    $('#logradouro').val(data.logradouro);
+                    $('#bairro').val(data.bairro);
+                    $('#nome_municipio').val(data.nome_municipio);
+                    $('#uf').val(data.uf);
+                    $('#codigo_municipio').val(data.codigo_municipio);
+                    
+                    // Feedback visual
+                    $('#btnBuscarCep').html('<i class="fas fa-check"></i> Encontrado!').removeClass('btn-outline-primary').addClass('btn-success');
+                    
+                    setTimeout(function() {
+                        $('#btnBuscarCep').html('<i class="fas fa-search"></i> Buscar').removeClass('btn-success').addClass('btn-outline-primary');
+                    }, 2000);
+                    
+                    // Focar no número
+                    $('#numero').focus();
+                } else {
+                    alert('Erro: ' + (data.error || 'CEP não encontrado'));
+                }
+            },
+            error: function(xhr) {
+                let message = 'Erro ao buscar CEP';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    message = xhr.responseJSON.error;
+                }
+                alert(message);
+            },
+            complete: function() {
+                $('#loadingOverlay').hide();
+            }
+        });
+    });
+    
+    // Buscar CEP ao pressionar Enter
+    $('#cep').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            $('#btnBuscarCep').click();
+        }
+    });
+    
+    // Validação antes do envio
+    $('#destinatarioForm').on('submit', function(e) {
+        const cep = $('#cep').val().replace(/\D/g, '');
+        const cpf_cnpj = $('#cpf_cnpj').val().replace(/\D/g, '');
+        const uf = $('#uf').val();
+        
+        if (cep.length !== 8) {
+            e.preventDefault();
+            alert('CEP deve ter exatamente 8 dígitos!');
+            $('#cep').focus();
+            return false;
+        }
+        
+        if (cpf_cnpj.length !== 11 && cpf_cnpj.length !== 14) {
+            e.preventDefault();
+            alert('CPF deve ter 11 dígitos ou CNPJ deve ter 14 dígitos!');
+            $('#cpf_cnpj').focus();
+            return false;
+        }
+        
+        if (!uf) {
+            e.preventDefault();
+            alert('Selecione o estado (UF)!');
+            $('#uf').focus();
+            return false;
+        }
+        
+        console.log('✅ Dados válidos - enviando formulário');
+        return true;
+    });
+});
 </script>
 {% endblock %}

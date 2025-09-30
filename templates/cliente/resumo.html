@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Resumo - {{ cliente.razao_social }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Botão Voltar -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <a href="{{ url_for('cliente.dashboard', cliente_id=cliente.cliente_id) }}" 
+               class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Informações Detalhadas do Cliente -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-building"></i> Informações da Empresa</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><strong>Razão Social:</strong></h6>
+                            <p>{{ cliente.razao_social }}</p>
+
+                            {% if cliente.nome_fantasia and cliente.nome_fantasia != cliente.razao_social %}
+                            <h6><strong>Nome Fantasia:</strong></h6>
+                            <p>{{ cliente.nome_fantasia }}</p>
+                            {% endif %}
+
+                            <h6><strong>CNPJ:</strong></h6>
+                            <p>{{ cliente.cnpj[:2] }}.{{ cliente.cnpj[2:5] }}.{{ cliente.cnpj[5:8] }}/{{ cliente.cnpj[8:12] }}-{{ cliente.cnpj[12:] }}</p>
+
+                            {% if cliente.ie %}
+                            <h6><strong>Inscrição Estadual:</strong></h6>
+                            <p>{{ cliente.ie }}</p>
+                            {% endif %}
+
+                            {% if cliente.regime_tributario_desc %}
+                            <h6><strong>Regime Tributário:</strong></h6>
+                            <p>{{ cliente.regime_tributario_desc }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <h6><strong>Endereço:</strong></h6>
+                            <p>
+                                {{ cliente.endereco }}{% if cliente.numero %}, {{ cliente.numero }}{% endif %}{% if cliente.complemento %} - {{ cliente.complemento }}{% endif %}<br>
+                                {{ cliente.bairro }} - {{ cliente.cidade }}/{{ cliente.uf }}<br>
+                                CEP: {{ cliente.cep[:5] }}-{{ cliente.cep[5:] }} 
+                            </p>
+
+                            {% if cliente.telefone %}
+                            <h6><strong>Telefone:</strong></h6>
+                            <p>{{ cliente.telefone }}</p>
+                            {% endif %}
+
+                            {% if cliente.email %}
+                            <h6><strong>E-mail:</strong></h6>
+                            <p>{{ cliente.email }}</p>
+                            {% endif %}
+
+                            {% if cliente.data_cadastro %}
+                            <h6><strong>Data de Cadastro:</strong></h6>
+                            <p>{{ cliente.data_cadastro.strftime('%d/%m/%Y') }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-cogs"></i> Ações</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('cliente.dashboard', cliente_id=cliente.cliente_id) }}" 
+                           class="btn btn-primary">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ cliente.cliente_id }}" 
+                           class="btn btn-success">
+                            <i class="fas fa-plus-circle"></i> Nova NFe
+                        </a>
+                        <a href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ cliente.cliente_id }}" 
+                           class="btn btn-info">
+                            <i class="fas fa-list"></i> Ver NFes
+                        </a>
+                        <a href="{{ url_for('admin.list_produtos') }}?cliente_id={{ cliente.cliente_id }}" 
+                           class="btn btn-warning">
+                            <i class="fas fa-boxes"></i> Produtos
+                        </a>
+                        <a href="{{ url_for('admin.list_destinatarios') }}?cliente_id={{ cliente.cliente_id }}" 
+                           class="btn btn-secondary">
+                            <i class="fas fa-address-book"></i> Destinatários
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
