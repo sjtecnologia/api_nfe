@@ -23,27 +23,30 @@
     border: 1px solid #ced4da !important;
     border-radius: 0.25rem !important;
 }
-.produto-item {
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
+
+.card-header h5, .card-header h6 {
+    margin: 0;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: #333;
+}
+
+.btn {
+    margin: 0 5px;
+}
+
+.alert {
+    margin-bottom: 0;
+}
+
+input[readonly] {
     background-color: #f8f9fa;
-    margin-bottom: 1rem;
-    padding: 1rem;
 }
-.produto-item h6 {
-    color: #495057;
-    border-bottom: 1px solid #dee2e6;
-    padding-bottom: 0.5rem;
-    margin-bottom: 0.75rem;
-}
-.btn-ambiente {
-    position: relative;
-}
-.btn-ambiente .badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    font-size: 0.6em;
+
+.ncm-item:hover {
+    background-color: #f8f9fa;
 }
 </style>
 {% endblock %}
@@ -52,878 +55,829 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title mb-0">
-                        <i class="fas fa-file-invoice"></i>
-                        Emitir Nova NFe
-                        <small class="text-muted">
-                            {% if emitente_data and emitente_data.razao_social %}
-                                {{ emitente_data.razao_social }}
-                            {% else %}
-                                Cliente não identificado
-                            {% endif %}
-                        </small>
-                    </h4>
+            <div class="page-header">
+                <h1 class="page-title">📄 Emitir Nota Fiscal Eletrônica</h1>
+                <div class="page-subtitle">
+                    <strong>Emitente:</strong> {{ emitente_data.razao_social }} - CNPJ: {{ emitente_data.cnpj }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" id="nfeForm" onsubmit="return validarFormulario()">
+        <!-- ✅ IDENTIFICAÇÃO DA NFE -->
+        <div class="card">
+            <div class="card-header">
+                <h5>🆔 Identificação da NFe</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="modelo">Modelo do Documento *</label>
+                            <select class="form-control" name="modelo" id="modelo" required>
+                                <option value="55" selected>55 - NFe</option>
+                                <option value="65">65 - NFCe</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="serie">Série *</label>
+                            <input type="number" class="form-control" name="serie" id="serie" 
+                                   value="1" min="1" max="999" required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="tpNF">Tipo de Operação *</label>
+                            <select class="form-control" name="tpNF" id="tpNF" required>
+                                <option value="0">0 - Entrada</option>
+                                <option value="1" selected>1 - Saída</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="finNFe">Finalidade da Emissão *</label>
+                            <select class="form-control" name="finNFe" id="finNFe" required>
+                                <option value="1" selected>1 - Normal</option>
+                                <option value="2">2 - Complementar</option>
+                                <option value="3">3 - Ajuste</option>
+                                <option value="4">4 - Devolução</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="card-body">
-                    <form method="POST" id="formNFe">
-                        
-                        <!-- Campo oculto para cliente_id -->
-                        <input type="hidden" name="cliente_id" value="{{ emitente_data.cliente_id if emitente_data else '' }}">
-                        
-                        <!-- INFORMAÇÕES GERAIS DA NFe -->
-                        <div class="row">
-                            <div class="col-12">
-                                <h5 class="mb-3">
-                                    <i class="fas fa-info-circle text-primary"></i>
-                                    Informações Gerais da NFe
-                                </h5>
-                            </div>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="natOp">Natureza da Operação *</label>
+                            <input type="text" class="form-control" name="natOp" id="natOp" 
+                                   placeholder="Ex: Venda de mercadoria" maxlength="60" required>
                         </div>
-                        
-                        <div class="row">
-                            <!-- Tipo de NFe -->
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label for="tpNF">Tipo de NFe *</label>
-                                    <select class="form-control" id="tpNF" name="tpNF" required>
-                                        <option value="1" selected>1 - Saída</option>
-                                        <option value="0">0 - Entrada</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <!-- Finalidade da Emissão -->
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label for="finNFe">Finalidade da Emissão *</label>
-                                    <select class="form-control" id="finNFe" name="finNFe" required>
-                                        <option value="">Selecione...</option>
-                                        <option value="1" selected>1 - Normal</option>
-                                        <option value="2">2 - Complementar</option>
-                                        <option value="3">3 - Ajuste</option>
-                                        <option value="4">4 - Devolução</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <!-- Data de Emissão -->
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label for="dataEmissao">Data de Emissão *</label>
-                                    <input type="date" 
-                                           class="form-control" 
-                                           id="dataEmissao" 
-                                           name="dataEmissao" 
-                                           required>
-                                </div>
-                            </div>
-                            
-                            <!-- Série -->
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label for="serie">Série *</label>
-                                    <input type="number" 
-                                           class="form-control" 
-                                           id="serie" 
-                                           name="serie" 
-                                           value="1" 
-                                           min="1" 
-                                           max="999" 
-                                           required>
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="indFinal">Consumidor Final *</label>
+                            <select class="form-control" name="indFinal" id="indFinal" required>
+                                <option value="0">0 - Normal</option>
+                                <option value="1" selected>1 - Consumidor Final</option>
+                            </select>
                         </div>
-                        
-                        <!-- NATUREZA DA OPERAÇÃO -->
-                        <div class="row">
-                            <div class="col-md-12">
-                                <div class="form-group">
-                                    <label for="natOp">Natureza da Operação (CFOP) *</label>
-                                    <select class="form-control js-select2" 
-                                            id="natOp" 
-                                            name="natOp" 
-                                            required>
-                                        <option value="">Selecione o CFOP da operação...</option>
-                                        <!-- Options serão preenchidas via JavaScript -->
-                                    </select>
-                                    <small class="text-muted">Selecione o CFOP que melhor descreve a operação</small>
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="indPres">Indicador de Presença *</label>
+                            <select class="form-control" name="indPres" id="indPres" required>
+                                <option value="0">0 - Não se aplica</option>
+                                <option value="1" selected>1 - Operação presencial</option>
+                                <option value="2">2 - Operação não presencial, pela Internet</option>
+                                <option value="3">3 - Operação não presencial, Teleatendimento</option>
+                                <option value="4">4 - NFCe em operação com entrega a domicílio</option>
+                                <option value="5">5 - Operação presencial, fora do estabelecimento</option>
+                                <option value="9">9 - Operação não presencial, outros</option>
+                            </select>
                         </div>
-                        
-                        <hr class="my-4">
-                        
-                        <!-- DADOS DO DESTINATÁRIO -->
-                        <div class="row">
-                            <div class="col-12">
-                                <h5 class="mb-3">
-                                    <i class="fas fa-user text-success"></i>
-                                    Dados do Destinatário
-                                </h5>
-                            </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="dataEmissao">Data/Hora de Emissão</label>
+                            <input type="datetime-local" class="form-control" name="dataEmissao" id="dataEmissao">
                         </div>
-                        
-                        <div class="row">
-                            <div class="col-md-12">
-                                <div class="form-group">
-                                    <label for="destinatario">Destinatário *</label>
-                                    <select class="form-control js-select2" id="destinatario" name="destinatario" required>
-                                        <option value="">Selecione um destinatário...</option>
-                                        <!-- Options serão preenchidas via JavaScript -->
-                                    </select>
-                                    <small class="form-text text-muted">
-                                        <span id="destinatarios-count">Carregando...</span> |
-                                        <a href="{{ url_for('admin.list_destinatarios', cliente_id=emitente_data.cliente_id) }}" target="_blank">
-                                            <i class="fas fa-external-link-alt"></i> Gerenciar destinatários
-                                        </a>
-                                    </small>
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="ambiente">Ambiente *</label>
+                            <select class="form-control" name="ambiente" id="ambiente" required>
+                                <option value="homologacao" selected>Homologação</option>
+                                <option value="producao">Produção</option>
+                            </select>
                         </div>
-                        
-                        <hr class="my-4">
-                        
-                        <!-- PRODUTOS/SERVIÇOS -->
-                        <div class="row">
-                            <div class="col-12">
-                                <h5 class="mb-3">
-                                    <i class="fas fa-box text-warning"></i>
-                                    Produtos/Serviços
-                                </h5>
-                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ DESTINATÁRIO -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>👤 Destinatário</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label for="destinatario">Selecionar Destinatário *</label>
+                            <select class="form-control js-select2" name="destinatario" id="destinatario" required>
+                                <option value="">Selecione um destinatário...</option>
+                                {% for dest in destinatarios %}
+                                <option value="{{ dest.destinatario_id }}" 
+                                        data-nome="{{ dest.nome_razao_social }}"
+                                        data-documento="{{ dest.cpf_cnpj }}"
+                                        data-endereco="{{ dest.logradouro }}, {{ dest.numero }} - {{ dest.bairro }}"
+                                        data-cidade="{{ dest.nome_municipio }}/{{ dest.uf }}"
+                                        data-cep="{{ dest.cep }}">
+                                    {{ dest.nome_razao_social }} - {{ dest.cpf_cnpj }}
+                                </option>
+                                {% endfor %}
+                            </select>
                         </div>
-                        
-                        <div class="row">
-                            <div class="col-md-12">
-                                <div class="form-group">
-                                    <div id="produtos-container">
-                                        <!-- Produtos serão adicionados aqui via JavaScript -->
-                                    </div>
-                                    
-                                    <button type="button" class="btn btn-primary mb-3" onclick="adicionarProduto()">
-                                        <i class="fas fa-plus"></i> Adicionar Produto/Serviço
-                                    </button>
-                                    
-                                    <small class="form-text text-muted">
-                                        <a href="{{ url_for('admin.list_produtos', cliente_id=emitente_data.cliente_id) }}" target="_blank">
-                                            <i class="fas fa-external-link-alt"></i> Gerenciar produtos
-                                        </a>
-                                    </small>
-                                </div>
-                            </div>
+                    </div>
+                </div>
+                
+                <!-- Informações do destinatário selecionado -->
+                <div id="destinatarioInfo" style="display: none;" class="mt-3">
+                    <div class="alert alert-info">
+                        <strong>Destinatário Selecionado:</strong><br>
+                        <span id="destNome"></span><br>
+                        <span id="destDocumento"></span><br>
+                        <span id="destEndereco"></span><br>
+                        <span id="destCidade"></span> - CEP: <span id="destCep"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ ITENS DA NFE -->
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>📦 Itens da NFe</h5>
+                <button type="button" class="btn btn-primary btn-sm" onclick="adicionarItem()">
+                    <i class="fas fa-plus"></i> Adicionar Item
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="itensContainer">
+                    <!-- Itens serão adicionados aqui via JavaScript -->
+                </div>
+                
+                <!-- Total Geral -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="alert alert-success">
+                            <h5>💰 Total da NFe: R$ <span id="totalGeral">0,00</span></h5>
                         </div>
-                        
-                        <hr class="my-4">
-                        
-                        <!-- TOTAIS DA NFe -->
-                        <div class="row">
-                            <div class="col-12">
-                                <h5 class="mb-3">
-                                    <i class="fas fa-calculator text-info"></i>
-                                    Totais da NFe
-                                </h5>
-                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ INFORMAÇÕES DE PAGAMENTO -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>💳 Informações de Pagamento *</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="formaPagamento">Forma de Pagamento *</label>
+                            <select class="form-control" name="formaPagamento" id="formaPagamento" required>
+                                <option value="01" selected>01 - Dinheiro</option>
+                                <option value="02">02 - Cheque</option>
+                                <option value="03">03 - Cartão de Crédito</option>
+                                <option value="04">04 - Cartão de Débito</option>
+                                <option value="05">05 - Crédito Loja</option>
+                                <option value="10">10 - Vale Alimentação</option>
+                                <option value="11">11 - Vale Refeição</option>
+                                <option value="12">12 - Vale Presente</option>
+                                <option value="13">13 - Vale Combustível</option>
+                                <option value="15">15 - Boleto Bancário</option>
+                                <option value="16">16 - Depósito Bancário</option>
+                                <option value="17">17 - Pagamento Instantâneo (PIX)</option>
+                                <option value="18">18 - Transferência bancária, Carteira Digital</option>
+                                <option value="19">19 - Programa de fidelidade, Cashback, Crédito Virtual</option>
+                                <option value="90">90 - Sem pagamento</option>
+                                <option value="99">99 - Outros</option>
+                            </select>
                         </div>
-                        
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Total dos Produtos</label>
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="input-group-text">R$</span>
-                                        </div>
-                                        <input type="text" class="form-control" id="totalProdutos" value="0,00" readonly>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Total do ICMS</label>
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="input-group-text">R$</span>
-                                        </div>
-                                        <input type="text" class="form-control" id="totalICMS" value="0,00" readonly>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Total da NFe</label>
-                                    <div class="input-group">
-                                        <div class="input-group-prepend">
-                                            <span class="input-group-text">R$</span>
-                                        </div>
-                                        <input type="text" class="form-control" id="totalNFe" value="0,00" readonly>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Quantidade de Itens</label>
-                                    <input type="text" class="form-control" id="quantidadeItens" value="0" readonly>
-                                </div>
-                            </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="valorPagamento">Valor do Pagamento *</label>
+                            <input type="number" step="0.01" class="form-control" name="valorPagamento" 
+                                   id="valorPagamento" placeholder="0,00" min="0.01" required>
                         </div>
-                        
-                        <hr class="my-4">
-                        
-                        <!-- OBSERVAÇÕES -->
-                        <div class="row">
-                            <div class="col-12">
-                                <h5 class="mb-3">
-                                    <i class="fas fa-comment text-secondary"></i>
-                                    Informações Adicionais
-                                </h5>
-                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ INFORMAÇÕES DE TRANSPORTE -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>🚚 Informações de Transporte</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label for="modFrete">Modalidade do Frete *</label>
+                            <select class="form-control" name="modFrete" id="modFrete" required>
+                                <option value="0">0 - Contratação do Frete por conta do Remetente (CIF)</option>
+                                <option value="1">1 - Contratação do Frete por conta do destinatário/remetente (FOB)</option>
+                                <option value="2">2 - Contratação do Frete por conta de terceiros</option>
+                                <option value="3">3 - Transporte próprio por conta do remetente</option>
+                                <option value="4">4 - Transporte próprio por conta do destinatário</option>
+                                <option value="9" selected>9 - Sem Ocorrência de transporte</option>
+                            </select>
                         </div>
-                        
-                        <div class="row">
-                            <div class="col-md-12">
-                                <div class="form-group">
-                                    <label for="infCpl">Informações Complementares</label>
-                                    <textarea class="form-control" 
-                                              id="infCpl" 
-                                              name="infCpl" 
-                                              rows="3" 
-                                              maxlength="5000"
-                                              placeholder="Informações adicionais de interesse do contribuinte"></textarea>
-                                    <small class="text-muted">Máximo 5000 caracteres</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <hr class="my-4">
-                        
-                        <!-- BOTÕES DE AÇÃO -->
-                        <div class="row">
-                            <div class="col-12">
-                                <div class="form-group mb-0">
-                                    <button type="submit" name="action" value="rascunho" class="btn btn-secondary btn-lg">
-                                        <i class="fas fa-save"></i>
-                                        Salvar como Rascunho
-                                    </button>
-                                    
-                                    <button type="button" 
-                                            class="btn btn-success btn-lg btn-ambiente ml-2" 
-                                            onclick="emitirNFe('homologacao')"
-                                            title="Emitir em ambiente de teste">
-                                        <i class="fas fa-vial"></i>
-                                        Emitir (Homologação)
-                                        <span class="badge badge-warning">TEST</span>
-                                    </button>
-                                    
-                                    <button type="button" 
-                                            class="btn btn-danger btn-lg btn-ambiente ml-2" 
-                                            onclick="emitirNFe('producao')"
-                                            title="Emitir em ambiente de produção - CUIDADO!">
-                                        <i class="fas fa-rocket"></i>
-                                        Emitir (Produção)
-                                        <span class="badge badge-light">PROD</span>
-                                    </button>
-                                    
-                                    <button type="button" class="btn btn-info btn-lg ml-2" onclick="previewXML()">
-                                        <i class="fas fa-eye"></i>
-                                        Visualizar XML
-                                    </button>
-                                    
-                                    <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary btn-lg ml-2">
-                                        <i class="fas fa-arrow-left"></i>
-                                        Cancelar
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ INFORMAÇÕES ADICIONAIS -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>📝 Informações Adicionais</h5>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="infCpl">Informações Complementares</label>
+                    <textarea class="form-control" name="infCpl" id="infCpl" rows="3" 
+                              maxlength="5000" placeholder="Informações adicionais sobre a NFe..."></textarea>
+                    <small class="form-text text-muted">Máximo 5000 caracteres</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ BOTÕES DE AÇÃO -->
+        <div class="card mt-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12 text-center">
+                        <button type="submit" name="action" value="rascunho" class="btn btn-secondary">
+                            <i class="fas fa-save"></i> Salvar como Rascunho
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="previewXML()">
+                            <i class="fas fa-eye"></i> Visualizar XML
+                        </button>
+                        <button type="submit" name="action" value="emitir" class="btn btn-success">
+                            <i class="fas fa-paper-plane"></i> Emitir NFe
+                        </button>
+                        <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- ✅ MODAL PARA BUSCAR NCM -->
+<div class="modal fade" id="ncmModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔍 Buscar NCM</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <input type="text" class="form-control" id="ncmSearch" 
+                           placeholder="Digite para buscar NCM..." onkeyup="buscarNCM()">
+                </div>
+                <div id="ncmResults" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Resultados da busca NCM -->
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-<!-- DADOS EM FORMATO JSON PARA JAVASCRIPT -->
-<script type="application/json" id="data-produtos">
-{% if produtos %}{{ produtos|tojson|safe }}{% else %}[]{% endif %}
-</script>
-
-<script type="application/json" id="data-cfops">
-{% if all_cfops %}{{ all_cfops|tojson|safe }}{% else %}[]{% endif %}
-</script>
-
-<script type="application/json" id="data-csts">
-{% if all_csts %}{{ all_csts|tojson|safe }}{% else %}[]{% endif %}
-</script>
-
-<script type="application/json" id="data-csosns">
-{% if all_csosns %}{{ all_csosns|tojson|safe }}{% else %}[]{% endif %}
-</script>
-
-<script type="application/json" id="data-destinatarios">
-{% if destinatarios %}{{ destinatarios|tojson|safe }}{% else %}[]{% endif %}
-</script>
-
-<script type="application/json" id="data-initial-items">
-{% if initial_nfe_items %}{{ initial_nfe_items|tojson|safe }}{% else %}[]{% endif %}
-</script>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Inicializar variáveis globais
-window.produtosSelecionados = [];
+console.log('🔍 Verificando se jQuery está disponível...');
 
-// FUNÇÃO PARA CARREGAR DADOS JSON
-function carregarDados() {
-    try {
-        const produtosEl = document.getElementById('data-produtos');
-        const cfopsEl = document.getElementById('data-cfops');
-        const cstsEl = document.getElementById('data-csts');
-        const csosnsEl = document.getElementById('data-csosns');
-        const destinatariosEl = document.getElementById('data-destinatarios');
-        const initialItemsEl = document.getElementById('data-initial-items');
-        
-        window.produtosDisponiveis = produtosEl ? JSON.parse(produtosEl.textContent || '[]') : [];
-        window.allCfops = cfopsEl ? JSON.parse(cfopsEl.textContent || '[]') : [];
-        window.allCsts = cstsEl ? JSON.parse(cstsEl.textContent || '[]') : [];
-        window.allCsosns = csosnsEl ? JSON.parse(csosnsEl.textContent || '[]') : [];
-        window.destinatariosDisponiveis = destinatariosEl ? JSON.parse(destinatariosEl.textContent || '[]') : [];
-        window.initialNfeItems = initialItemsEl ? JSON.parse(initialItemsEl.textContent || '[]') : [];
-        
-        return true;
-        
-    } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-        
-        window.produtosDisponiveis = [];
-        window.allCfops = [];
-        window.allCsts = [];
-        window.allCsosns = [];
-        window.destinatariosDisponiveis = [];
-        window.initialNfeItems = [];
-        
-        return false;
-    }
-}
+let itemCounter = 0;
+let totalGeral = 0;
+let currentNcmItemId = null;
 
-// AGUARDAR DOM CARREGAR
+// Base de dados NCM (amostra)
+const ncmDatabase = [
+    { codigo: '84159090', descricao: 'Outras máquinas e aparelhos para condicionamento do ar' },
+    { codigo: '85171231', descricao: 'Telefones para redes celulares' },
+    { codigo: '30049099', descricao: 'Outros medicamentos' },
+    { codigo: '87042310', descricao: 'Outros veículos automotores para transporte de mercadorias, com motor de pistão alternativo de ignição por compressão (diesel ou semidiesel), de peso bruto total superior a 20 t' },
+    { codigo: '22030001', descricao: 'Cerveja de malte' },
+    { codigo: '02071400', descricao: 'Pedaços e miudezas, frescos ou refrigerados de galos e galinhas' },
+    { codigo: '73269090', descricao: 'Outras obras de ferro fundido, ferro ou aço' },
+    { codigo: '39269090', descricao: 'Outras obras de plástico' },
+    { codigo: '64039900', descricao: 'Outros calçados' },
+    { codigo: '61099090', descricao: 'Outras camisetas de malha' }
+];
+
+// Aguardar o DOM carregar
 document.addEventListener('DOMContentLoaded', function() {
-    // Carregar dados primeiro
-    carregarDados();
+    // Verificar se jQuery do base.html foi carregado
+    let checkJQuery = setInterval(function() {
+        if (typeof jQuery !== 'undefined') {
+            console.log('✅ jQuery encontrado:', $.fn.jquery);
+            clearInterval(checkJQuery);
+            
+            // Carregar Select2 via script
+            const select2Script = document.createElement('script');
+            select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
+            select2Script.onload = function() {
+                console.log('✅ Select2 carregado');
+                initSelect2();
+            };
+            select2Script.onerror = function() {
+                console.error('❌ Erro ao carregar Select2');
+                alert('Erro: Não foi possível carregar Select2. Verifique sua conexão.');
+            };
+            document.head.appendChild(select2Script);
+        } else {
+            console.log('⏳ Aguardando jQuery...');
+        }
+    }, 100);
     
-    // Inicializar data atual
-    const dataEmissaoEl = document.getElementById('dataEmissao');
-    if (dataEmissaoEl && !dataEmissaoEl.value) {
-        const hoje = new Date();
-        const dataFormatada = hoje.getFullYear() + '-' + 
-                             String(hoje.getMonth() + 1).padStart(2, '0') + '-' + 
-                             String(hoje.getDate()).padStart(2, '0');
-        dataEmissaoEl.value = dataFormatada;
-    }
+    // Timeout de segurança
+    setTimeout(function() {
+        clearInterval(checkJQuery);
+        if (typeof jQuery === 'undefined') {
+            console.error('❌ jQuery não foi carregado após 10 segundos');
+            alert('Erro: jQuery não foi carregado. Recarregue a página.');
+        }
+    }, 10000);
     
-    // Verificar se jQuery existe
-    if (typeof jQuery !== 'undefined') {
-        loadSelect2();
-    } else {
-        loadJQueryThenSelect2();
-    }
+    // Definir data/hora atual
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('dataEmissao').value = now.toISOString().slice(0, 16);
 });
 
-function loadJQueryThenSelect2() {
-    const script = document.createElement('script');
-    script.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
-    script.onload = function() {
-        loadSelect2();
-    };
-    script.onerror = function() {
-        populateSelects();
-    };
-    document.head.appendChild(script);
-}
-
-function loadSelect2() {
-    const select2Script = document.createElement('script');
-    select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
-    select2Script.onload = function() {
-        populateSelects();
-        initSelect2();
-    };
-    select2Script.onerror = function() {
-        populateSelects();
-    };
-    document.head.appendChild(select2Script);
-}
-
-// FUNÇÃO PARA POVOAR OS SELECTS
-function populateSelects() {
-    // POVOAR SELECT DE CFOPS
-    const natOpSelect = document.getElementById('natOp');
-    if (natOpSelect && window.allCfops && window.allCfops.length > 0) {
-        natOpSelect.innerHTML = '<option value="">Selecione o CFOP da operação...</option>';
-        
-        const cfopsOrdenados = window.allCfops.sort((a, b) => {
-            const codigoA = a.cfop || a.codigo || '';
-            const codigoB = b.cfop || b.codigo || '';
-            return codigoA.localeCompare(codigoB);
-        });
-        
-        cfopsOrdenados.forEach(cfop => {
-            const option = document.createElement('option');
-            const codigo = cfop.cfop || cfop.codigo || 'S/C';
-            const descricao = cfop.descricao || 'Sem descrição';
-            
-            option.value = `${codigo} - ${descricao}`;
-            option.textContent = `${codigo} - ${descricao}`;
-            option.setAttribute('data-cfop-id', cfop.cfop_id || '');
-            option.setAttribute('data-codigo', codigo);
-            
-            natOpSelect.appendChild(option);
-        });
-    }
+function initSelect2() {
+    console.log('🚀 Inicializando Select2...');
     
-    // POVOAR SELECT DE DESTINATÁRIOS - CORRIGIDO CONFORME MODELO
-    const destinatarioSelect = document.getElementById('destinatario');
-    const destinatariosCount = document.getElementById('destinatarios-count');
-    
-    if (destinatarioSelect && window.destinatariosDisponiveis) {
-        destinatarioSelect.innerHTML = '<option value="">Selecione um destinatário...</option>';
-        
-        if (window.destinatariosDisponiveis.length > 0) {
-            window.destinatariosDisponiveis.forEach((dest) => {
-                const option = document.createElement('option');
+    // Aguardar Select2 estar disponível
+    let checkSelect2 = setInterval(function() {
+        if ($.fn.select2) {
+            console.log('✅ Select2 disponível');
+            clearInterval(checkSelect2);
+            
+            // Verificar elementos
+            const elementos = $('.js-select2');
+            console.log('🔍 Elementos .js-select2 encontrados:', elementos.length);
+            
+            // Inicializar nos elementos
+            elementos.each(function() {
+                const $this = $(this);
+                const name = $this.attr('name') || $this.attr('id');
                 
-                // USAR OS CAMPOS CORRETOS DO MODELO
-                const destinatarioId = dest.destinatario_id || '';
-                const nomeRazaoSocial = dest.nome_razao_social || 'Nome não informado';
-                const cpfCnpj = dest.cpf_cnpj || 'Documento não informado';
-                
-                option.value = destinatarioId;
-                option.textContent = `${nomeRazaoSocial} - ${cpfCnpj}`;
-                
-                // Adicionar dados extras como atributos
-                option.setAttribute('data-nome', nomeRazaoSocial);
-                option.setAttribute('data-documento', cpfCnpj);
-                
-                // Endereço completo
-                const logradouro = dest.logradouro || '';
-                const numero = dest.numero || '';
-                const bairro = dest.bairro || '';
-                const municipio = dest.nome_municipio || '';
-                const uf = dest.uf || '';
-                
-                let enderecoCompleto = '';
-                if (logradouro) enderecoCompleto += logradouro;
-                if (numero) enderecoCompleto += (enderecoCompleto ? ', ' : '') + numero;
-                if (bairro) enderecoCompleto += (enderecoCompleto ? ' - ' : '') + bairro;
-                if (municipio) enderecoCompleto += (enderecoCompleto ? ' - ' : '') + municipio;
-                if (uf) enderecoCompleto += (enderecoCompleto ? '/' : '') + uf;
-                
-                if (!enderecoCompleto) {
-                    enderecoCompleto = 'Endereço não informado';
+                try {
+                    $this.select2({
+                        width: '100%',
+                        allowClear: true,
+                        placeholder: 'Digite para pesquisar...',
+                        language: {
+                            noResults: () => "Nenhum resultado encontrado",
+                            searching: () => "Pesquisando..."
+                        }
+                    });
+                    console.log('✅ Select2 inicializado em:', name);
+                } catch (error) {
+                    console.error('❌ Erro ao inicializar Select2 em', name, ':', error);
                 }
-                
-                option.setAttribute('data-endereco', enderecoCompleto);
-                
-                destinatarioSelect.appendChild(option);
             });
             
-            // Atualizar contador
-            if (destinatariosCount) {
-                destinatariosCount.textContent = `${window.destinatariosDisponiveis.length} destinatário(s) encontrado(s)`;
-            }
-        } else {
-            // Adicionar option informativa
-            const option = document.createElement('option');
-            option.value = '';
-            option.textContent = 'Nenhum destinatário cadastrado';
-            option.disabled = true;
-            destinatarioSelect.appendChild(option);
+            // Adicionar evento de mudança no destinatário
+            $('#destinatario').on('select2:select', function(e) {
+                atualizarDestinatarioInfo();
+            });
             
-            // Atualizar contador
-            if (destinatariosCount) {
-                destinatariosCount.textContent = 'Nenhum destinatário cadastrado';
-                destinatariosCount.style.color = 'red';
-            }
+            console.log('🎉 Select2 inicialização concluída!');
+            
+            // Adicionar primeiro item automaticamente
+            adicionarItem();
         }
+    }, 100);
+}
+
+// Atualizar informações do destinatário
+function atualizarDestinatarioInfo() {
+    const select = document.getElementById('destinatario');
+    const option = select.options[select.selectedIndex];
+    const infoDiv = document.getElementById('destinatarioInfo');
+    
+    if (option.value) {
+        document.getElementById('destNome').textContent = option.dataset.nome;
+        document.getElementById('destDocumento').textContent = option.dataset.documento;
+        document.getElementById('destEndereco').textContent = option.dataset.endereco;
+        document.getElementById('destCidade').textContent = option.dataset.cidade;
+        document.getElementById('destCep').textContent = option.dataset.cep;
+        infoDiv.style.display = 'block';
+    } else {
+        infoDiv.style.display = 'none';
     }
 }
 
-function initSelect2() {
-    if (typeof $ === 'undefined' || !$.fn.select2) {
-        return;
-    }
+// Adicionar item à NFe
+function adicionarItem() {
+    itemCounter++;
+    const container = document.getElementById('itensContainer');
     
-    $('.js-select2').each(function() {
-        const $this = $(this);
-        try {
-            let config = {
-                width: '100%',
-                allowClear: true,
-                language: {
-                    noResults: function() { return "Nenhum resultado encontrado"; },
-                    searching: function() { return "Pesquisando..."; }
-                }
-            };
-            
-            // Configuração específica para CFOPs
-            if ($this.attr('id') === 'natOp') {
-                config.placeholder = 'Digite para pesquisar CFOP...';
-                config.templateResult = function(state) {
-                    if (!state.id) return state.text;
-                    
-                    const parts = state.text.split(' - ');
-                    if (parts.length >= 2) {
-                        return $(`
-                            <div>
-                                <strong>${parts[0]}</strong> - ${parts.slice(1).join(' - ')}
-                            </div>
-                        `);
-                    }
-                    return state.text;
-                };
-            }
-            // Configuração específica para destinatários
-            else if ($this.attr('id') === 'destinatario') {
-                config.placeholder = 'Digite para pesquisar destinatário...';
-                config.templateResult = function(state) {
-                    if (!state.id) return state.text;
-                    
-                    const $option = $this.find(`option[value="${state.id}"]`);
-                    const endereco = $option.attr('data-endereco');
-                    
-                    if (endereco && endereco.trim() !== '') {
-                        return $(`
-                            <div>
-                                <div><strong>${state.text}</strong></div>
-                                <small class="text-muted">${endereco}</small>
-                            </div>
-                        `);
-                    }
-                    return state.text;
-                };
-            }
-            else {
-                config.placeholder = 'Digite para pesquisar...';
-            }
-            
-            $this.select2(config);
-        } catch (error) {
-            console.error('Erro ao inicializar Select2:', error);
-        }
-    });
-}
-
-// FUNÇÃO PARA ADICIONAR PRODUTO
-function adicionarProduto() {
-    if (!window.produtosDisponiveis || window.produtosDisponiveis.length === 0) {
-        alert('⚠️ Nenhum produto cadastrado!\n\nPara emitir uma NFe, é necessário ter produtos cadastrados.\n\nClique no link "Gerenciar produtos" para cadastrar produtos.');
-        return;
-    }
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'card mb-3';
+    itemDiv.id = `item-${itemCounter}`;
     
-    const index = window.produtosSelecionados.length;
-    const produtoHtml = criarHtmlProduto(index);
-    
-    document.getElementById('produtos-container').insertAdjacentHTML('beforeend', produtoHtml);
-    
-    // Inicializar Select2 no novo select se disponível
-    if (typeof $ !== 'undefined' && $.fn.select2) {
-        $(`#produto_${index}`).select2({
-            width: '100%',
-            allowClear: true,
-            placeholder: 'Selecione um produto...'
-        });
-    }
-    
-    // Adicionar ao array
-    window.produtosSelecionados.push({});
-}
-
-function criarHtmlProduto(index, item = null) {
-    // Criar select de produtos
-    let optionsProdutos = '<option value="">Selecione um produto...</option>';
-    
-    if (window.produtosDisponiveis && window.produtosDisponiveis.length > 0) {
-        window.produtosDisponiveis.forEach(produto => {
-            const selected = (item && item.produto_id == produto.produto_id) ? 'selected' : '';
-            optionsProdutos += `<option value="${produto.produto_id}" ${selected}>`;
-            optionsProdutos += `${produto.codigo_interno || 'S/C'} - ${produto.descricao || 'Sem descrição'}`;
-            optionsProdutos += '</option>';
-        });
-    }
-    
-    const quantidade = item ? item.quantidade : '1';
-    const valorUnitario = item ? item.valor_unitario : '';
-    
-    return `
-    <div class="produto-item" id="produto-item-${index}">
-        <h6>
-            <i class="fas fa-box"></i> Item ${index + 1}
-            <button type="button" class="btn btn-sm btn-outline-danger float-right" onclick="removerProduto(${index})">
+    itemDiv.innerHTML = `
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6>Item ${itemCounter}</h6>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removerItem(${itemCounter})">
                 <i class="fas fa-trash"></i> Remover
             </button>
-        </h6>
-        <div class="row">
-            <div class="col-md-6">
-                <div class="form-group">
-                    <label>Produto/Serviço *</label>
-                    <select class="form-control" id="produto_${index}" name="produto_${index}" required onchange="preencherDadosProduto(${index})">
-                        ${optionsProdutos}
-                    </select>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="form-group">
-                    <label>Quantidade *</label>
-                    <input type="number" class="form-control" id="quantidade_${index}" name="quantidade_${index}" 
-                           value="${quantidade}" step="0.01" min="0.01" required onchange="calcularTotais()">
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="form-group">
-                    <label>Valor Unitário *</label>
-                    <input type="number" class="form-control" id="valor_unitario_${index}" name="valor_unitario_${index}" 
-                           value="${valorUnitario}" step="0.01" min="0" required onchange="calcularTotais()">
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="form-group">
-                    <label>Total do Item</label>
-                    <input type="text" class="form-control" id="total_item_${index}" readonly>
-                </div>
-            </div>
         </div>
-        <input type="hidden" name="items[${index}][json]" id="item_json_${index}">
-    </div>`;
-}
-
-function preencherDadosProduto(index) {
-    const produtoId = document.getElementById(`produto_${index}`).value;
-    if (!produtoId) return;
+        <div class="card-body">
+            <!-- Produto -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Produto *</label>
+                        <select name="produto_${itemCounter}" class="form-control js-select2-produto" onchange="carregarProduto(${itemCounter})" required>
+                            <option value="">Selecione um produto...</option>
+                            {% for prod in produtos %}
+                            <option value="{{ prod.produto_id }}" 
+                                    data-codigo="{{ prod.codigo_interno }}"
+                                    data-descricao="{{ prod.descricao }}"
+                                    data-preco="{{ prod.preco_unitario_padrao }}"
+                                    data-unidade="{{ prod.unidade_comercial }}">
+                                {{ prod.codigo_interno }} - {{ prod.descricao }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Código do Produto</label>
+                        <input type="text" name="codigo_produto_${itemCounter}" class="form-control" readonly>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="form-group">
+                        <label>Descrição *</label>
+                        <input type="text" name="descricao_${itemCounter}" class="form-control" 
+                               maxlength="120" required>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quantidade e Valores -->
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Unidade *</label>
+                        <input type="text" name="unidade_${itemCounter}" class="form-control" 
+                               value="UN" maxlength="6" required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Quantidade *</label>
+                        <input type="number" step="0.0001" name="quantidade_${itemCounter}" 
+                               class="form-control" min="0.0001" onchange="calcularTotal(${itemCounter})" required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Valor Unitário *</label>
+                        <input type="number" step="0.01" name="valor_unitario_${itemCounter}" 
+                               class="form-control" min="0.01" onchange="calcularTotal(${itemCounter})" required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Valor Total</label>
+                        <input type="number" step="0.01" name="valor_total_${itemCounter}" 
+                               class="form-control" readonly>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Informações Fiscais -->
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>NCM *</label>
+                        <div class="input-group">
+                            <input type="text" name="ncm_${itemCounter}" class="form-control" 
+                                   placeholder="00000000" maxlength="8" pattern="[0-9]{8}" required readonly>
+                            <div class="input-group-append">
+                                <button type="button" class="btn btn-outline-secondary" onclick="abrirBuscaNCM(${itemCounter})">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">Clique na lupa para buscar NCM</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>CFOP *</label>
+                        <select name="cfop_${itemCounter}" class="form-control js-select2-cfop" required>
+                            <option value="">Selecione o CFOP...</option>
+                            {% for cfop in all_cfops %}
+                            <option value="{{ cfop.cfop }}">{{ cfop.cfop }} - {{ cfop.descricao }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Origem *</label>
+                        <select name="origem_${itemCounter}" class="form-control" required>
+                            <option value="0" selected>0 - Nacional</option>
+                            <option value="1">1 - Estrangeira - Importação direta</option>
+                            <option value="2">2 - Estrangeira - Adquirida no mercado interno</option>
+                            <option value="3">3 - Nacional, mercadoria com Conteúdo de Importação superior a 40%</option>
+                            <option value="4">4 - Nacional, cuja produção tenha sido feita em conformidade com os processos produtivos básicos</option>
+                            <option value="5">5 - Nacional, mercadoria com Conteúdo de Importação inferior ou igual a 40%</option>
+                            <option value="6">6 - Estrangeira - Importação direta, sem similar nacional</option>
+                            <option value="7">7 - Estrangeira - Adquirida no mercado interno, sem similar nacional</option>
+                            <option value="8">8 - Nacional, mercadoria com Conteúdo de Importação superior a 70%</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>CST ICMS *</label>
+                        <select name="cst_icms_${itemCounter}" class="form-control js-select2-cst" required>
+                            <option value="">Selecione o CST...</option>
+                            {% for cst in all_csts %}
+                            <option value="{{ cst.cst }}">{{ cst.cst }} - {{ cst.descricao }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Impostos -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Alíquota ICMS (%)</label>
+                        <input type="number" step="0.01" name="aliquota_icms_${itemCounter}" 
+                               class="form-control" value="18.00" min="0" max="50" onchange="calcularTotal(${itemCounter})">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Valor Base Cálculo ICMS</label>
+                        <input type="number" step="0.01" name="bc_icms_${itemCounter}" 
+                               class="form-control" readonly>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Valor ICMS</label>
+                        <input type="number" step="0.01" name="valor_icms_${itemCounter}" 
+                               class="form-control" readonly>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Input hidden para dados JSON -->
+            <input type="hidden" name="items[${itemCounter-1}][json]" id="item_json_${itemCounter}">
+        </div>
+    `;
     
-    const produto = window.produtosDisponiveis.find(p => p.produto_id == produtoId);
+    container.appendChild(itemDiv);
     
-    if (produto && produto.preco_unitario_padrao) {
-        document.getElementById(`valor_unitario_${index}`).value = produto.preco_unitario_padrao;
-        calcularTotais();
-    }
+    // Inicializar Select2 para os novos elementos do item
+    setTimeout(() => {
+        initSelect2ForItem(itemCounter);
+    }, 100);
 }
 
-function removerProduto(index) {
-    if (confirm('Deseja remover este item?')) {
-        document.getElementById(`produto-item-${index}`).remove();
-        window.produtosSelecionados.splice(index, 1);
-        calcularTotais();
-        renumerarItens();
-    }
-}
-
-function renumerarItens() {
-    const items = document.querySelectorAll('.produto-item');
-    items.forEach((item, i) => {
-        const oldIndex = item.id.split('-')[2];
-        const newIndex = i;
-        
-        // Atualizar ID do container
-        item.id = `produto-item-${newIndex}`;
-        
-        // Atualizar título
-        item.querySelector('h6').innerHTML = `
-            <i class="fas fa-box"></i> Item ${newIndex + 1}
-            <button type="button" class="btn btn-sm btn-outline-danger float-right" onclick="removerProduto(${newIndex})">
-                <i class="fas fa-trash"></i> Remover
-            </button>`;
-        
-        // Atualizar todos os elementos com IDs e names
-        item.querySelectorAll('[id], [name], [onchange]').forEach(el => {
-            if (el.id) {
-                el.id = el.id.replace(`_${oldIndex}`, `_${newIndex}`);
-            }
-            if (el.name) {
-                el.name = el.name.replace(`_${oldIndex}`, `_${newIndex}`).replace(`[${oldIndex}]`, `[${newIndex}]`);
-            }
-            if (el.getAttribute('onchange')) {
-                el.setAttribute('onchange', el.getAttribute('onchange').replace(`(${oldIndex})`, `(${newIndex})`));
+// Inicializar Select2 para um item específico
+function initSelect2ForItem(itemId) {
+    if ($.fn.select2) {
+        // Produto
+        $(`select[name="produto_${itemId}"]`).select2({
+            width: '100%',
+            allowClear: true,
+            placeholder: 'Digite para buscar produto...',
+            language: {
+                noResults: () => "Nenhum produto encontrado",
+                searching: () => "Pesquisando..."
             }
         });
-    });
-}
-
-function calcularTotais() {
-    let totalProdutos = 0;
-    let quantidadeItens = 0;
-    
-    const items = document.querySelectorAll('.produto-item');
-    items.forEach((item, i) => {
-        const quantidadeEl = document.getElementById(`quantidade_${i}`);
-        const valorUnitarioEl = document.getElementById(`valor_unitario_${i}`);
-        const totalItemEl = document.getElementById(`total_item_${i}`);
         
-        if (quantidadeEl && valorUnitarioEl && totalItemEl) {
-            const quantidade = parseFloat(quantidadeEl.value || 0);
-            const valorUnitario = parseFloat(valorUnitarioEl.value || 0);
-            const totalItem = quantidade * valorUnitario;
-            
-            totalItemEl.value = totalItem.toFixed(2);
-            totalProdutos += totalItem;
-            quantidadeItens++;
-            
-            // Atualizar JSON do item
-            atualizarJsonItem(i);
-        }
-    });
-    
-    // Atualizar campos de totais
-    document.getElementById('totalProdutos').value = totalProdutos.toFixed(2);
-    document.getElementById('totalICMS').value = '0.00';
-    document.getElementById('totalNFe').value = totalProdutos.toFixed(2);
-    document.getElementById('quantidadeItens').value = quantidadeItens;
-}
-
-function atualizarJsonItem(index) {
-    const produtoIdEl = document.getElementById(`produto_${index}`);
-    const quantidadeEl = document.getElementById(`quantidade_${index}`);
-    const valorUnitarioEl = document.getElementById(`valor_unitario_${index}`);
-    const jsonFieldEl = document.getElementById(`item_json_${index}`);
-    
-    if (produtoIdEl && quantidadeEl && valorUnitarioEl && jsonFieldEl) {
-        const produtoId = produtoIdEl.value;
-        const quantidade = quantidadeEl.value;
-        const valorUnitario = valorUnitarioEl.value;
+        // CFOP
+        $(`select[name="cfop_${itemId}"]`).select2({
+            width: '100%',
+            allowClear: true,
+            placeholder: 'Digite para buscar CFOP...',
+            language: {
+                noResults: () => "Nenhum CFOP encontrado",
+                searching: () => "Pesquisando..."
+            }
+        });
         
-        if (produtoId && quantidade && valorUnitario) {
-            const produto = window.produtosDisponiveis.find(p => p.produto_id == produtoId);
-            
-            const itemData = {
-                produto_id: produtoId,
-                quantidade: quantidade,
-                valor_unitario: valorUnitario,
-                produto_data: produto
-            };
-            
-            jsonFieldEl.value = JSON.stringify(itemData);
-        }
+        // CST
+        $(`select[name="cst_icms_${itemId}"]`).select2({
+            width: '100%',
+            allowClear: true,
+            placeholder: 'Digite para buscar CST...',
+            language: {
+                noResults: () => "Nenhum CST encontrado",
+                searching: () => "Pesquisando..."
+            }
+        });
+        
+        console.log(`✅ Select2 inicializado para item ${itemId}`);
     }
 }
 
-// FUNÇÃO PARA EMITIR NFe COM AMBIENTE
-function emitirNFe(ambiente) {
-    // Validar formulário
-    if (!validarFormulario()) {
+// Abrir modal de busca NCM
+function abrirBuscaNCM(itemId) {
+    currentNcmItemId = itemId;
+    carregarTodosNCM();
+    $('#ncmModal').modal('show');
+}
+
+// Carregar todos os NCMs no modal
+function carregarTodosNCM() {
+    const resultsDiv = document.getElementById('ncmResults');
+    let html = '';
+    
+    ncmDatabase.forEach(ncm => {
+        html += `
+            <div class="ncm-item p-2 border-bottom" style="cursor: pointer;" onclick="selecionarNCM('${ncm.codigo}', '${ncm.descricao}')">
+                <strong>${ncm.codigo}</strong> - ${ncm.descricao}
+            </div>
+        `;
+    });
+    
+    resultsDiv.innerHTML = html;
+}
+
+// Buscar NCM
+function buscarNCM() {
+    const searchTerm = document.getElementById('ncmSearch').value.toLowerCase();
+    const resultsDiv = document.getElementById('ncmResults');
+    
+    if (searchTerm.length < 2) {
+        carregarTodosNCM();
         return;
     }
     
-    // Confirmar emissão
-    let mensagem = '';
-    if (ambiente === 'producao') {
-        mensagem = '⚠️ ATENÇÃO - AMBIENTE DE PRODUÇÃO ⚠️\n\n' +
-                  'Você está prestes a emitir uma NFe REAL!\n\n' +
-                  'Esta operação gerará uma NFe oficial com valor fiscal.\n\n' +
-                  'TEM CERTEZA ABSOLUTA de que deseja continuar?';
-    } else {
-        mensagem = '🧪 EMISSÃO EM HOMOLOGAÇÃO\n\n' +
-                  'Você está emitindo uma NFe de TESTE.\n\n' +
-                  'Esta NFe NÃO tem valor fiscal.\n\n' +
-                  'Confirma a emissão de teste?';
+    const filteredNCMs = ncmDatabase.filter(ncm => 
+        ncm.codigo.includes(searchTerm) || 
+        ncm.descricao.toLowerCase().includes(searchTerm)
+    );
+    
+    let html = '';
+    filteredNCMs.forEach(ncm => {
+        html += `
+            <div class="ncm-item p-2 border-bottom" style="cursor: pointer;" onclick="selecionarNCM('${ncm.codigo}', '${ncm.descricao}')">
+                <strong>${ncm.codigo}</strong> - ${ncm.descricao}
+            </div>
+        `;
+    });
+    
+    if (filteredNCMs.length === 0) {
+        html = '<div class="p-2 text-muted">Nenhum NCM encontrado</div>';
     }
     
-    if (!confirm(mensagem)) {
-        return;
-    }
-    
-    // Atualizar todos os JSONs
-    const items = document.querySelectorAll('.produto-item');
-    items.forEach((item, i) => atualizarJsonItem(i));
-    
-    // Adicionar campos ao formulário
-    const form = document.getElementById('formNFe');
-    
-    // Remover campos anteriores
-    const existingAmbiente = form.querySelector('input[name="ambiente"]');
-    const existingAction = form.querySelector('input[name="action"][value="emitir"]');
-    
-    if (existingAmbiente) existingAmbiente.remove();
-    if (existingAction) existingAction.remove();
-    
-    // Adicionar novos campos
-    const ambienteInput = document.createElement('input');
-    ambienteInput.type = 'hidden';
-    ambienteInput.name = 'ambiente';
-    ambienteInput.value = ambiente;
-    form.appendChild(ambienteInput);
-    
-    const actionInput = document.createElement('input');
-    actionInput.type = 'hidden';
-    actionInput.name = 'action';
-    actionInput.value = 'emitir';
-    form.appendChild(actionInput);
-    
-    // Submeter formulário
-    form.submit();
+    resultsDiv.innerHTML = html;
 }
 
+// Selecionar NCM
+function selecionarNCM(codigo, descricao) {
+    if (currentNcmItemId) {
+        document.querySelector(`input[name="ncm_${currentNcmItemId}"]`).value = codigo;
+        document.querySelector(`input[name="ncm_${currentNcmItemId}"]`).title = `${codigo} - ${descricao}`;
+        $('#ncmModal').modal('hide');
+        
+        // Atualizar JSON do item
+        atualizarItemJSON(currentNcmItemId);
+    }
+}
+
+// Carregar dados do produto selecionado
+function carregarProduto(itemId) {
+    const select = document.querySelector(`select[name="produto_${itemId}"]`);
+    const option = select.options[select.selectedIndex];
+    
+    if (option.value) {
+        document.querySelector(`input[name="codigo_produto_${itemId}"]`).value = option.dataset.codigo;
+        document.querySelector(`input[name="descricao_${itemId}"]`).value = option.dataset.descricao;
+        document.querySelector(`input[name="valor_unitario_${itemId}"]`).value = option.dataset.preco;
+        document.querySelector(`input[name="unidade_${itemId}"]`).value = option.dataset.unidade;
+    }
+}
+
+// Calcular total do item
+function calcularTotal(itemId) {
+    const quantidade = parseFloat(document.querySelector(`input[name="quantidade_${itemId}"]`).value) || 0;
+    const valorUnitario = parseFloat(document.querySelector(`input[name="valor_unitario_${itemId}"]`).value) || 0;
+    const total = quantidade * valorUnitario;
+    
+    document.querySelector(`input[name="valor_total_${itemId}"]`).value = total.toFixed(2);
+    
+    // Calcular ICMS
+    const aliquotaIcms = parseFloat(document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value) || 0;
+    const bcIcms = total;
+    const valorIcms = bcIcms * (aliquotaIcms / 100);
+    
+    document.querySelector(`input[name="bc_icms_${itemId}"]`).value = bcIcms.toFixed(2);
+    document.querySelector(`input[name="valor_icms_${itemId}"]`).value = valorIcms.toFixed(2);
+    
+    // Atualizar JSON do item
+    atualizarItemJSON(itemId);
+    
+    // Recalcular total geral
+    calcularTotalGeral();
+}
+
+// Atualizar JSON do item
+function atualizarItemJSON(itemId) {
+    const itemData = {
+        codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`).value,
+        descricao: document.querySelector(`input[name="descricao_${itemId}"]`).value,
+        unidade: document.querySelector(`input[name="unidade_${itemId}"]`).value,
+        quantidade: document.querySelector(`input[name="quantidade_${itemId}"]`).value,
+        valor_unitario: document.querySelector(`input[name="valor_unitario_${itemId}"]`).value,
+        valor_total: document.querySelector(`input[name="valor_total_${itemId}"]`).value,
+        ncm: document.querySelector(`input[name="ncm_${itemId}"]`).value,
+        cfop: document.querySelector(`select[name="cfop_${itemId}"]`).value,
+        origem: document.querySelector(`select[name="origem_${itemId}"]`).value,
+        cst_icms: document.querySelector(`select[name="cst_icms_${itemId}"]`).value,
+        aliquota_icms: document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value,
+        bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`).value,
+        valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`).value
+    };
+    
+    document.getElementById(`item_json_${itemId}`).value = JSON.stringify(itemData);
+}
+
+// Remover item
+function removerItem(itemId) {
+    const itemDiv = document.getElementById(`item-${itemId}`);
+    if (itemDiv) {
+        itemDiv.remove();
+        calcularTotalGeral();
+    }
+}
+
+// Calcular total geral
+function calcularTotalGeral() {
+    let total = 0;
+    const itens = document.querySelectorAll('input[name*="valor_total_"]');
+    
+    itens.forEach(input => {
+        if (input.value) {
+            total += parseFloat(input.value);
+        }
+    });
+    
+    document.getElementById('totalGeral').textContent = total.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    });
+    
+    // Atualizar valor do pagamento
+    document.getElementById('valorPagamento').value = total.toFixed(2);
+    
+    totalGeral = total;
+}
+
+// Validar formulário
 function validarFormulario() {
-    // Validar campos obrigatórios
-    const camposObrigatorios = ['tpNF', 'finNFe', 'dataEmissao', 'serie', 'natOp', 'destinatario'];
+    const itens = document.querySelectorAll('[id^="item-"]');
     
-    for (const campo of camposObrigatorios) {
-        const elemento = document.getElementById(campo);
-        if (!elemento || !elemento.value.trim()) {
-            const label = elemento ? elemento.previousElementSibling : null;
-            const nomeCampo = label ? label.textContent : campo;
-            alert(`❌ Campo obrigatório não preenchido:\n\n${nomeCampo}`);
-            if (elemento) elemento.focus();
-            return false;
-        }
-    }
-    
-    // Validar se tem pelo menos um produto
-    const items = document.querySelectorAll('.produto-item');
-    if (items.length === 0) {
-        alert('❌ Nenhum produto adicionado!\n\nPor favor, adicione pelo menos um produto/serviço à NFe.');
+    if (itens.length === 0) {
+        alert('Adicione pelo menos um item à NFe');
         return false;
     }
     
-    // Validar cada item
-    for (let i = 0; i < items.length; i++) {
-        const produtoEl = document.getElementById(`produto_${i}`);
-        const quantidadeEl = document.getElementById(`quantidade_${i}`);
-        const valorEl = document.getElementById(`valor_unitario_${i}`);
-        
-        if (!produtoEl || !produtoEl.value) {
-            alert(`❌ Produto não selecionado no item ${i + 1}!`);
-            if (produtoEl) produtoEl.focus();
-            return false;
-        }
-        
-        if (!quantidadeEl || !quantidadeEl.value || parseFloat(quantidadeEl.value) <= 0) {
-            alert(`❌ Quantidade inválida no item ${i + 1}!`);
-            if (quantidadeEl) quantidadeEl.focus();
-            return false;
-        }
-        
-        if (!valorEl || !valorEl.value || parseFloat(valorEl.value) <= 0) {
-            alert(`❌ Valor inválido no item ${i + 1}!`);
-            if (valorEl) valorEl.focus();
-            return false;
-        }
-    }
+    // Atualizar JSON de todos os itens
+    itens.forEach(item => {
+        const itemId = item.id.split('-')[1];
+        atualizarItemJSON(itemId);
+    });
     
     return true;
 }
 
+// Visualizar XML (funcionalidade futura)
 function previewXML() {
-    alert('🚧 Funcionalidade em desenvolvimento\n\nO preview do XML será implementado em breve.');
+    alert('Funcionalidade de visualização XML em desenvolvimento');
 }
-
-// Calcular totais ao carregar
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(calcularTotais, 100);
-});
 </script>
 {% endblock %}
