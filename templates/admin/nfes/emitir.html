@@ -45,16 +45,6 @@
     right: -5px;
     font-size: 0.6em;
 }
-.debug-info {
-    background: #e7f3ff;
-    border: 1px solid #bee5eb;
-    border-radius: 4px;
-    padding: 10px;
-    margin: 10px 0;
-    font-family: monospace;
-    font-size: 12px;
-    color: #0c5460;
-}
 </style>
 {% endblock %}
 
@@ -78,18 +68,6 @@
                 </div>
                 
                 <div class="card-body">
-                    <!-- ✅ DEBUG INFO VISÍVEL PARA VERIFICAR DADOS -->
-                    <div class="debug-info">
-                        <strong>🔍 Status dos Dados:</strong><br>
-                        • Emitente: {% if emitente_data %}✅ {{ emitente_data.razao_social }}{% else %}❌ Não encontrado{% endif %}<br>
-                        • Destinatários: {% if destinatarios %}✅ {{ destinatarios|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
-                        • Produtos: {% if produtos %}✅ {{ produtos|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
-                        • CFOPs: {% if all_cfops %}✅ {{ all_cfops|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
-                        • CSTs: {% if all_csts %}✅ {{ all_csts|length }} encontrados{% else %}❌ Nenhum{% endif %}<br>
-                        • CSOSNs: {% if all_csosns %}✅ {{ all_csosns|length }} encontrados{% else %}❌ Nenhum{% endif %}
-                        <button type="button" class="btn btn-sm btn-outline-secondary float-right" onclick="this.parentElement.style.display='none'">Ocultar Debug</button>
-                    </div>
-                    
                     <form method="POST" id="formNFe">
                         
                         <!-- Campo oculto para cliente_id -->
@@ -159,7 +137,7 @@
                             </div>
                         </div>
                         
-                        <!-- ✅ NATUREZA DA OPERAÇÃO COMO SELECT COM CFOPs -->
+                        <!-- NATUREZA DA OPERAÇÃO -->
                         <div class="row">
                             <div class="col-md-12">
                                 <div class="form-group">
@@ -370,7 +348,7 @@
     </div>
 </div>
 
-<!-- ✅ DADOS EM FORMATO JSON PARA JAVASCRIPT -->
+<!-- DADOS EM FORMATO JSON PARA JAVASCRIPT -->
 <script type="application/json" id="data-produtos">
 {% if produtos %}{{ produtos|tojson|safe }}{% else %}[]{% endif %}
 </script>
@@ -398,12 +376,12 @@
 
 {% block extra_js %}
 <script>
-console.log('🔍 Iniciando carregamento da página de emissão NFe...');
+// Inicializar variáveis globais
+window.produtosSelecionados = [];
 
-// ✅ FUNÇÃO MELHORADA PARA CARREGAR DADOS JSON
+// FUNÇÃO PARA CARREGAR DADOS JSON
 function carregarDados() {
     try {
-        // Buscar e parsear dados JSON de forma mais segura
         const produtosEl = document.getElementById('data-produtos');
         const cfopsEl = document.getElementById('data-cfops');
         const cstsEl = document.getElementById('data-csts');
@@ -411,77 +389,18 @@ function carregarDados() {
         const destinatariosEl = document.getElementById('data-destinatarios');
         const initialItemsEl = document.getElementById('data-initial-items');
         
-        // Parse com try/catch individual
-        try {
-            window.produtosDisponiveis = produtosEl ? JSON.parse(produtosEl.textContent || '[]') : [];
-            console.log('✅ Produtos carregados:', window.produtosDisponiveis.length);
-        } catch (e) {
-            console.warn('⚠️ Erro ao parsear produtos:', e);
-            window.produtosDisponiveis = [];
-        }
-        
-        try {
-            window.allCfops = cfopsEl ? JSON.parse(cfopsEl.textContent || '[]') : [];
-            console.log('✅ CFOPs carregados:', window.allCfops.length);
-        } catch (e) {
-            console.warn('⚠️ Erro ao parsear CFOPs:', e);
-            window.allCfops = [];
-        }
-        
-        try {
-            window.allCsts = cstsEl ? JSON.parse(cstsEl.textContent || '[]') : [];
-            console.log('✅ CSTs carregados:', window.allCsts.length);
-        } catch (e) {
-            console.warn('⚠️ Erro ao parsear CSTs:', e);
-            window.allCsts = [];
-        }
-        
-        try {
-            window.allCsosns = csosnsEl ? JSON.parse(csosnsEl.textContent || '[]') : [];
-            console.log('✅ CSOSNs carregados:', window.allCsosns.length);
-        } catch (e) {
-            console.warn('⚠️ Erro ao parsear CSOSNs:', e);
-            window.allCsosns = [];
-        }
-        
-        try {
-            window.destinatariosDisponiveis = destinatariosEl ? JSON.parse(destinatariosEl.textContent || '[]') : [];
-            console.log('✅ Destinatários carregados:', window.destinatariosDisponiveis.length);
-            
-            // ✅ DEBUG ADICIONAL PARA DESTINATÁRIOS
-            if (window.destinatariosDisponiveis.length > 0) {
-                console.log('🔍 Primeiro destinatário:', window.destinatariosDisponiveis[0]);
-                console.log('🔍 Campos disponíveis:', Object.keys(window.destinatariosDisponiveis[0]));
-            }
-        } catch (e) {
-            console.warn('⚠️ Erro ao parsear destinatários:', e);
-            window.destinatariosDisponiveis = [];
-        }
-        
-        try {
-            window.initialNfeItems = initialItemsEl ? JSON.parse(initialItemsEl.textContent || '[]') : [];
-            console.log('✅ Itens iniciais carregados:', window.initialNfeItems.length);
-        } catch (e) {
-            console.warn('⚠️ Erro ao parsear itens iniciais:', e);
-            window.initialNfeItems = [];
-        }
-        
-        // Log final
-        console.log('🎉 Dados carregados com sucesso:', {
-            produtos: window.produtosDisponiveis.length,
-            cfops: window.allCfops.length,
-            csts: window.allCsts.length,
-            csosns: window.allCsosns.length,
-            destinatarios: window.destinatariosDisponiveis.length,
-            items: window.initialNfeItems.length
-        });
+        window.produtosDisponiveis = produtosEl ? JSON.parse(produtosEl.textContent || '[]') : [];
+        window.allCfops = cfopsEl ? JSON.parse(cfopsEl.textContent || '[]') : [];
+        window.allCsts = cstsEl ? JSON.parse(cstsEl.textContent || '[]') : [];
+        window.allCsosns = csosnsEl ? JSON.parse(csosnsEl.textContent || '[]') : [];
+        window.destinatariosDisponiveis = destinatariosEl ? JSON.parse(destinatariosEl.textContent || '[]') : [];
+        window.initialNfeItems = initialItemsEl ? JSON.parse(initialItemsEl.textContent || '[]') : [];
         
         return true;
         
     } catch (error) {
-        console.error('❌ Erro crítico ao carregar dados:', error);
+        console.error('Erro ao carregar dados:', error);
         
-        // Inicializar com arrays vazios mesmo com erro
         window.produtosDisponiveis = [];
         window.allCfops = [];
         window.allCsts = [];
@@ -493,20 +412,10 @@ function carregarDados() {
     }
 }
 
-// Inicializar variáveis globais
-window.produtosSelecionados = [];
-
-// ✅ AGUARDAR DOM CARREGAR
+// AGUARDAR DOM CARREGAR
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 DOM carregado, iniciando aplicação...');
-    
     // Carregar dados primeiro
-    const dadosCarregados = carregarDados();
-    
-    if (!dadosCarregados) {
-        console.error('❌ Falha no carregamento de dados');
-        alert('⚠️ Alguns dados podem não ter sido carregados.\nA aplicação pode não funcionar corretamente.');
-    }
+    carregarDados();
     
     // Inicializar data atual
     const dataEmissaoEl = document.getElementById('dataEmissao');
@@ -516,64 +425,48 @@ document.addEventListener('DOMContentLoaded', function() {
                              String(hoje.getMonth() + 1).padStart(2, '0') + '-' + 
                              String(hoje.getDate()).padStart(2, '0');
         dataEmissaoEl.value = dataFormatada;
-        console.log('✅ Data atual definida:', dataFormatada);
     }
     
     // Verificar se jQuery existe
     if (typeof jQuery !== 'undefined') {
-        console.log('✅ jQuery disponível:', $.fn.jquery);
         loadSelect2();
     } else {
-        console.warn('⚠️ jQuery não encontrado, carregando...');
         loadJQueryThenSelect2();
     }
 });
 
 function loadJQueryThenSelect2() {
-    // Tentar carregar jQuery se não existir
     const script = document.createElement('script');
     script.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
     script.onload = function() {
-        console.log('✅ jQuery carregado');
         loadSelect2();
     };
     script.onerror = function() {
-        console.error('❌ Erro ao carregar jQuery');
-        console.log('🔧 Continuando sem Select2...');
-        populateSelects(); // Povoar selects mesmo sem Select2
+        populateSelects();
     };
     document.head.appendChild(script);
 }
 
 function loadSelect2() {
-    // Carregar Select2
     const select2Script = document.createElement('script');
     select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
     select2Script.onload = function() {
-        console.log('✅ Select2 carregado');
-        populateSelects(); // Povoar selects primeiro
-        initSelect2(); // Depois inicializar Select2
+        populateSelects();
+        initSelect2();
     };
     select2Script.onerror = function() {
-        console.warn('⚠️ Erro ao carregar Select2, usando selects normais');
-        populateSelects(); // Povoar selects mesmo sem Select2
+        populateSelects();
     };
     document.head.appendChild(select2Script);
 }
 
-// ...existing code...
-
-// ✅ FUNÇÃO PARA POVOAR OS SELECTS - VERSÃO CORRIGIDA PARA DESTINATÁRIOS
+// FUNÇÃO PARA POVOAR OS SELECTS
 function populateSelects() {
-    console.log('🔄 Populando selects...');
-    
-    // ✅ POVOAR SELECT DE CFOPS (NATUREZA DA OPERAÇÃO)
+    // POVOAR SELECT DE CFOPS
     const natOpSelect = document.getElementById('natOp');
     if (natOpSelect && window.allCfops && window.allCfops.length > 0) {
-        // Limpar options existentes (exceto o primeiro)
         natOpSelect.innerHTML = '<option value="">Selecione o CFOP da operação...</option>';
         
-        // Ordenar CFOPs por código
         const cfopsOrdenados = window.allCfops.sort((a, b) => {
             const codigoA = a.cfop || a.codigo || '';
             const codigoB = b.cfop || b.codigo || '';
@@ -592,141 +485,38 @@ function populateSelects() {
             
             natOpSelect.appendChild(option);
         });
-        
-        console.log('✅ CFOPs adicionados ao select:', cfopsOrdenados.length);
-    } else {
-        console.warn('⚠️ Nenhum CFOP disponível para o select de Natureza da Operação');
     }
     
-    // ✅ POVOAR SELECT DE DESTINATÁRIOS - MAPEAMENTO CORRIGIDO
+    // POVOAR SELECT DE DESTINATÁRIOS - CORRIGIDO CONFORME MODELO
     const destinatarioSelect = document.getElementById('destinatario');
     const destinatariosCount = document.getElementById('destinatarios-count');
     
     if (destinatarioSelect && window.destinatariosDisponiveis) {
-        console.log('🔍 Processando destinatários:', window.destinatariosDisponiveis);
-        
-        // Limpar options existentes (exceto o primeiro)
         destinatarioSelect.innerHTML = '<option value="">Selecione um destinatário...</option>';
         
         if (window.destinatariosDisponiveis.length > 0) {
-            // ✅ PRIMEIRO VAMOS VER A ESTRUTURA REAL DOS DADOS
-            console.log('🔍 Estrutura do primeiro destinatário:', window.destinatariosDisponiveis[0]);
-            console.log('🔍 Todas as chaves disponíveis:', Object.keys(window.destinatariosDisponiveis[0]));
-            
-            window.destinatariosDisponiveis.forEach((dest, index) => {
-                console.log(`🔍 Processando destinatário ${index}:`, dest);
-                
+            window.destinatariosDisponiveis.forEach((dest) => {
                 const option = document.createElement('option');
                 
-                // ✅ MAPEAR TODOS OS CAMPOS POSSÍVEIS (MAIS ABRANGENTE)
-                const destinatarioId = dest.destinatario_id || dest.id || dest.dest_id || dest.pk || '';
-                
-                // ✅ TENTAR VÁRIOS NOMES POSSÍVEIS PARA RAZÃO SOCIAL
-                let razaoSocial = '';
-                const possiveisNomes = [
-                    'razao_social_ou_nome', 'razao_social', 'nome_razao_social', 
-                    'nome', 'nome_fantasia', 'empresa', 'cliente', 'destinatario',
-                    'razao', 'social', 'nome_completo', 'nome_empresa'
-                ];
-                
-                for (const campo of possiveisNomes) {
-                    if (dest[campo] && dest[campo].toString().trim() !== '') {
-                        razaoSocial = dest[campo].toString().trim();
-                        console.log(`✅ Nome encontrado no campo '${campo}': ${razaoSocial}`);
-                        break;
-                    }
-                }
-                
-                // ✅ TENTAR VÁRIOS NOMES POSSÍVEIS PARA CNPJ/CPF
-                let cnpjCpf = '';
-                const possiveisDocumentos = [
-                    'cnpj_cpf', 'cnpj', 'cpf', 'documento', 'doc', 
-                    'num_documento', 'numero_documento', 'inscricao'
-                ];
-                
-                for (const campo of possiveisDocumentos) {
-                    if (dest[campo] && dest[campo].toString().trim() !== '') {
-                        cnpjCpf = dest[campo].toString().trim();
-                        console.log(`✅ Documento encontrado no campo '${campo}': ${cnpjCpf}`);
-                        break;
-                    }
-                }
-                
-                // ✅ FALLBACK PARA VALORES PADRÃO SE NÃO ENCONTRAR
-                if (!razaoSocial) {
-                    razaoSocial = `Destinatário ${index + 1}`;
-                    console.warn(`⚠️ Nome não encontrado, usando fallback: ${razaoSocial}`);
-                }
-                
-                if (!cnpjCpf) {
-                    cnpjCpf = 'Documento não informado';
-                    console.warn(`⚠️ Documento não encontrado, usando fallback: ${cnpjCpf}`);
-                }
-                
-                // Logs para debug
-                console.log(`  • ID final: ${destinatarioId}`);
-                console.log(`  • Razão/Nome final: ${razaoSocial}`);
-                console.log(`  • CNPJ/CPF final: ${cnpjCpf}`);
+                // USAR OS CAMPOS CORRETOS DO MODELO
+                const destinatarioId = dest.destinatario_id || '';
+                const nomeRazaoSocial = dest.nome_razao_social || 'Nome não informado';
+                const cpfCnpj = dest.cpf_cnpj || 'Documento não informado';
                 
                 option.value = destinatarioId;
-                option.textContent = `${razaoSocial} - ${cnpjCpf}`;
+                option.textContent = `${nomeRazaoSocial} - ${cpfCnpj}`;
                 
                 // Adicionar dados extras como atributos
-                option.setAttribute('data-razao-social', razaoSocial);
-                option.setAttribute('data-cnpj-cpf', cnpjCpf);
+                option.setAttribute('data-nome', nomeRazaoSocial);
+                option.setAttribute('data-documento', cpfCnpj);
                 
-                // ✅ ENDEREÇO COMPLETO COM MÚLTIPLAS TENTATIVAS
-                const possiveisEnderecos = {
-                    logradouro: ['logradouro', 'rua', 'endereco', 'end', 'address'],
-                    numero: ['numero', 'num', 'number', 'n'],
-                    bairro: ['bairro', 'distrito', 'neighborhood'],
-                    municipio: ['nome_municipio', 'municipio', 'cidade', 'city'],
-                    uf: ['uf', 'estado', 'state']
-                };
+                // Endereço completo
+                const logradouro = dest.logradouro || '';
+                const numero = dest.numero || '';
+                const bairro = dest.bairro || '';
+                const municipio = dest.nome_municipio || '';
+                const uf = dest.uf || '';
                 
-                let logradouro = '', numero = '', bairro = '', municipio = '', uf = '';
-                
-                // Buscar logradouro
-                for (const campo of possiveisEnderecos.logradouro) {
-                    if (dest[campo] && dest[campo].toString().trim() !== '') {
-                        logradouro = dest[campo].toString().trim();
-                        break;
-                    }
-                }
-                
-                // Buscar número
-                for (const campo of possiveisEnderecos.numero) {
-                    if (dest[campo] && dest[campo].toString().trim() !== '') {
-                        numero = dest[campo].toString().trim();
-                        break;
-                    }
-                }
-                
-                // Buscar bairro
-                for (const campo of possiveisEnderecos.bairro) {
-                    if (dest[campo] && dest[campo].toString().trim() !== '') {
-                        bairro = dest[campo].toString().trim();
-                        break;
-                    }
-                }
-                
-                // Buscar município
-                for (const campo of possiveisEnderecos.municipio) {
-                    if (dest[campo] && dest[campo].toString().trim() !== '') {
-                        municipio = dest[campo].toString().trim();
-                        break;
-                    }
-                }
-                
-                // Buscar UF
-                for (const campo of possiveisEnderecos.uf) {
-                    if (dest[campo] && dest[campo].toString().trim() !== '') {
-                        uf = dest[campo].toString().trim();
-                        break;
-                    }
-                }
-                
-                // Montar endereço apenas com campos disponíveis
                 let enderecoCompleto = '';
                 if (logradouro) enderecoCompleto += logradouro;
                 if (numero) enderecoCompleto += (enderecoCompleto ? ', ' : '') + numero;
@@ -743,15 +533,11 @@ function populateSelects() {
                 destinatarioSelect.appendChild(option);
             });
             
-            console.log('✅ Destinatários adicionados ao select:', window.destinatariosDisponiveis.length);
-            
             // Atualizar contador
             if (destinatariosCount) {
                 destinatariosCount.textContent = `${window.destinatariosDisponiveis.length} destinatário(s) encontrado(s)`;
             }
         } else {
-            console.warn('⚠️ Nenhum destinatário disponível no array');
-            
             // Adicionar option informativa
             const option = document.createElement('option');
             option.value = '';
@@ -765,28 +551,17 @@ function populateSelects() {
                 destinatariosCount.style.color = 'red';
             }
         }
-    } else {
-        console.warn('⚠️ Select de destinatários não encontrado ou dados não disponíveis');
-        console.log('  • destinatarioSelect existe?', !!destinatarioSelect);
-        console.log('  • window.destinatariosDisponiveis existe?', !!window.destinatariosDisponiveis);
-        console.log('  • window.destinatariosDisponiveis:', window.destinatariosDisponiveis);
     }
-    
-    console.log('✅ Selects populados com sucesso!');
 }
-
-// ...existing code...
 
 function initSelect2() {
     if (typeof $ === 'undefined' || !$.fn.select2) {
-        console.warn('⚠️ Select2 não disponível');
         return;
     }
     
     $('.js-select2').each(function() {
         const $this = $(this);
         try {
-            // Configuração específica para cada tipo de select
             let config = {
                 width: '100%',
                 allowClear: true,
@@ -802,7 +577,6 @@ function initSelect2() {
                 config.templateResult = function(state) {
                     if (!state.id) return state.text;
                     
-                    // Destacar código e descrição
                     const parts = state.text.split(' - ');
                     if (parts.length >= 2) {
                         return $(`
@@ -834,20 +608,18 @@ function initSelect2() {
                     return state.text;
                 };
             }
-            // Configuração padrão para produtos
             else {
                 config.placeholder = 'Digite para pesquisar...';
             }
             
             $this.select2(config);
-            console.log('✅ Select2 inicializado em:', $this.attr('id'));
         } catch (error) {
-            console.error('❌ Erro ao inicializar Select2:', error);
+            console.error('Erro ao inicializar Select2:', error);
         }
     });
 }
 
-// ✅ FUNÇÃO PARA ADICIONAR PRODUTO
+// FUNÇÃO PARA ADICIONAR PRODUTO
 function adicionarProduto() {
     if (!window.produtosDisponiveis || window.produtosDisponiveis.length === 0) {
         alert('⚠️ Nenhum produto cadastrado!\n\nPara emitir uma NFe, é necessário ter produtos cadastrados.\n\nClique no link "Gerenciar produtos" para cadastrar produtos.');
@@ -870,8 +642,6 @@ function adicionarProduto() {
     
     // Adicionar ao array
     window.produtosSelecionados.push({});
-    
-    console.log('✅ Produto adicionado:', index);
 }
 
 function criarHtmlProduto(index, item = null) {
@@ -1010,7 +780,7 @@ function calcularTotais() {
     
     // Atualizar campos de totais
     document.getElementById('totalProdutos').value = totalProdutos.toFixed(2);
-    document.getElementById('totalICMS').value = '0.00'; // Por enquanto
+    document.getElementById('totalICMS').value = '0.00';
     document.getElementById('totalNFe').value = totalProdutos.toFixed(2);
     document.getElementById('quantidadeItens').value = quantidadeItens;
 }
@@ -1041,10 +811,8 @@ function atualizarJsonItem(index) {
     }
 }
 
-// ✅ FUNÇÃO PARA EMITIR NFe COM AMBIENTE
+// FUNÇÃO PARA EMITIR NFe COM AMBIENTE
 function emitirNFe(ambiente) {
-    console.log('🚀 Emitindo NFe em ambiente:', ambiente);
-    
     // Validar formulário
     if (!validarFormulario()) {
         return;
@@ -1157,7 +925,5 @@ function previewXML() {
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(calcularTotais, 100);
 });
-
-console.log('✅ Script de NFe carregado com sucesso!');
 </script>
 {% endblock %}

@@ -6,7 +6,7 @@ from sqlalchemy import text
 from datetime import datetime
 from database.connection import get_db
 from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms
-from auth.decorators import permission_required, admin_required  # ✅ IMPORTAR ADMIN_REQUIRED
+from auth.decorators import permission_required, admin_required
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
 from services.nfe_service import generate_nfe_xml, sign_xml, send_to_sefaz
@@ -15,181 +15,343 @@ from config.settings import SEFAZ_AMBIENTE_HOMOLOGACAO
 
 nfe_bp = Blueprint('nfe', __name__)
 
-# ✅ ADICIONAR ROTA CREATE COMO ALIAS PARA EMITIR_NFE
+# ALIAS PARA COMPATIBILIDADE
 @nfe_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 @permission_required('nfe.issue')
 def create():
     """Alias para emitir_nfe - para compatibilidade com templates"""
+    # ✅ SE USUÁRIO NÃO É ADMIN, USAR PRIMEIRO CLIENTE ACESSÍVEL
+    if not current_user.is_admin:
+        db = next(get_db())
+        try:
+            accessible_clients = get_accessible_client_ids(db)
+            if accessible_clients:
+                cliente_id = accessible_clients[0]
+                print(f"🔍 Usuário não-admin, redirecionando para cliente: {cliente_id}")
+                return redirect(url_for('nfe.emitir_nfe', cliente_id=cliente_id))
+        finally:
+            db.close()
+    
+    # Para admin, passar cliente_id se vier da URL
+    cliente_id = request.args.get('cliente_id')
+    if cliente_id:
+        return redirect(url_for('nfe.emitir_nfe', cliente_id=cliente_id))
+    
     return emitir_nfe()
 
 @nfe_bp.route('/emitir', methods=['GET', 'POST'])
 @login_required
 @permission_required('nfe.issue')
 def emitir_nfe():
-    # ✅ INICIALIZAR DB PRIMEIRO
     db = next(get_db())
     
     try:
-        accessible_client_ids = get_accessible_client_ids(db)
+        # ✅ DETERMINAR CLIENTE - LÓGICA SIMPLIFICADA
+        emitente_cliente_id = None
         
-        if not accessible_client_ids:
-            flash('Você não está associado a nenhum cliente ou não tem permissão para emitir NF-e.', 'danger')
-            return redirect(url_for('main.home'))
+        # 1. Tentar pegar cliente_id da URL
+        cliente_id_from_url = request.args.get('cliente_id')
+        if cliente_id_from_url:
+            try:
+                emitente_cliente_id = int(cliente_id_from_url)
+                print(f"🔍 Cliente ID da URL: {emitente_cliente_id}")
+            except ValueError:
+                flash('ID do cliente inválido', 'danger')
+                return redirect(url_for('home.home'))
         
-        emitente_cliente_id = accessible_client_ids[0]
-        emitente_data = db.query(Cliente).options(joinedload(Cliente.regime_tributario)).filter_by(cliente_id=emitente_cliente_id).first()
+        # 2. Se não tem cliente_id, definir baseado no tipo de usuário
+        if not emitente_cliente_id:
+            accessible_clients = get_accessible_client_ids(db)
+            
+            if not accessible_clients:
+                flash('Você não tem acesso a nenhum cliente.', 'danger')
+                return redirect(url_for('home.home'))
+            
+            if current_user.is_admin:
+                # Admin precisa especificar cliente
+                flash('Selecione um cliente para emitir NFe', 'warning')
+                return redirect(url_for('home.home'))
+            else:
+                # Usuário comum usa primeiro cliente acessível
+                emitente_cliente_id = accessible_clients[0]
+                print(f"🔍 Usuário não-admin, usando cliente: {emitente_cliente_id}")
         
+        # 3. Verificar se usuário tem acesso ao cliente especificado
+        accessible_clients = get_accessible_client_ids(db)
+        if emitente_cliente_id not in accessible_clients:
+            flash('Você não tem acesso a este cliente.', 'danger')
+            return redirect(url_for('home.home'))
+        
+        # 4. Buscar dados do cliente
+        emitente_data = db.query(Cliente).filter_by(cliente_id=emitente_cliente_id).first()
         if not emitente_data:
-            flash('Dados do emitente não encontrados.', 'danger')
-            return redirect(url_for('main.home'))
+            flash('Cliente não encontrado', 'danger')
+            return redirect(url_for('home.home'))
         
+        print(f"✅ Emitente encontrado: {emitente_data.razao_social}")
+        
+        # CONVERTER EMITENTE PARA DICIONÁRIO
         emitente_data_for_template = {
-            "cliente_id": emitente_data.cliente_id,
-            "razao_social": emitente_data.razao_social,
-            "cnpj": emitente_data.cnpj,
-            "inscricao_estadual": emitente_data.inscricao_estadual,
-            "logradouro": emitente_data.logradouro,
-            "numero": emitente_data.numero,
-            "bairro": emitente_data.bairro,
-            "cep": emitente_data.cep,
-            "nome_municipio": emitente_data.nome_municipio,
-            "uf": emitente_data.uf,
-            "cnae": emitente_data.cnae,
-            "regime_tributario_nome": emitente_data.regime_tributario.nome if emitente_data.regime_tributario else 'N/A',
-            "regime_tributario_id": emitente_data.regime_tributario_id,
-            "uf_codigo": get_uf_ibge_code(emitente_data.uf),
-            "codigo_municipio": emitente_data.codigo_municipio
+            'cliente_id': emitente_data.cliente_id,
+            'razao_social': emitente_data.razao_social,
+            'cnpj': emitente_data.cnpj,
+            'nome_fantasia': emitente_data.nome_fantasia,
+            'logradouro': emitente_data.logradouro,
+            'numero': emitente_data.numero,
+            'bairro': emitente_data.bairro,
+            'cep': emitente_data.cep,
+            'codigo_municipio': emitente_data.codigo_municipio,
+            'nome_municipio': emitente_data.nome_municipio,
+            'uf': emitente_data.uf,
+            'inscricao_estadual': emitente_data.inscricao_estadual
         }
         
-        destinatarios_obj = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
-        destinatarios_for_template = [d.to_dict() for d in destinatarios_obj]
-        
-        produtos_obj = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).options(
-            joinedload(Produto.ncm), 
-            joinedload(Produto.cfop),
-            joinedload(Produto.origem),
-            joinedload(Produto.csts_icms),
-            joinedload(Produto.csosns_icms)
-        ).all()
-        
-        produtos_for_template_and_js = [produto_to_dict_for_template(p) for p in produtos_obj]
-        
-        all_cfops_data = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in db.query(Cfop).all()]
-        all_csts_data = [{"cst_id": c.cst_id, "codigo": c.codigo, "descricao": c.descricao} for c in db.query(Csticms).all()]
-        all_csosns_data = [{"csosn_id": c.csosn_id, "codigo": c.codigo, "descricao": c.descricao} for c in db.query(Csosnicms).all()]
-
-        form_data_initial = {}
-        initial_nfe_items = []
-        
-        # ✅ ADICIONAR DATA ATUAL PARA O TEMPLATE
-        now = datetime.now()
-        
-        # ✅ DEBUG - PRINT DOS DADOS SENDO ENVIADOS
-        print(f"🔍 DEBUG - Dados sendo enviados:")
-        print(f"   Emitente: {emitente_data_for_template.get('razao_social', 'N/A')}")
-        print(f"   Destinatários: {len(destinatarios_for_template) if destinatarios_for_template else 0}")
-        print(f"   Produtos: {len(produtos_for_template_and_js) if produtos_for_template_and_js else 0}")
-        print(f"   CFOPs: {len(all_cfops_data) if all_cfops_data else 0}")
-        print(f"   CSTs: {len(all_csts_data) if all_csts_data else 0}")
-        print(f"   CSOSNs: {len(all_csosns_data) if all_csosns_data else 0}")
-        
         if request.method == 'POST':
-            form_data_initial = request.form.to_dict()
+            # CAPTURAR DADOS DO FORMULÁRIO
+            form_data_initial = {
+                'tpNF': request.form.get('tpNF', '1'),
+                'finNFe': request.form.get('finNFe', '1'),
+                'dataEmissao': request.form.get('dataEmissao'),
+                'serie': request.form.get('serie', '1'),
+                'natOp': request.form.get('natOp'),
+                'infCpl': request.form.get('infCpl', '')
+            }
             
-            nfe_items_raw = []
-            for key in request.form:
-                if key.startswith('items[') and key.endswith('][json]'):
-                    try:
-                        nfe_items_raw.append(json.loads(request.form[key]))
-                    except json.JSONDecodeError as e:
-                        flash(f"Erro ao decodificar item JSON: {request.form[key]} - {e}", 'danger')
-                        initial_nfe_items = nfe_items_raw
-                        return render_template('admin/nfes/emitir.html',
-                                               emitente_data=emitente_data_for_template,
-                                               destinatarios=destinatarios_for_template,
-                                               produtos=produtos_for_template_and_js,
-                                               all_cfops=all_cfops_data,
-                                               all_csts=all_csts_data,
-                                               all_csosns=all_csosns_data,
-                                               form_data=form_data_initial,
-                                               initial_nfe_items=initial_nfe_items,
-                                               now=now)
-            initial_nfe_items = nfe_items_raw
-            
+            # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
             action = request.form.get('action')
+            ambiente = request.form.get('ambiente', 'homologacao')
             
-            # Validações básicas
-            if not form_data_initial.get('natOp') or not form_data_initial.get('finNFe'):
-                flash('Os campos "Natureza da Operação" e "Finalidade da Emissão" são obrigatórios.', 'danger')
-                return render_template('admin/nfes/emitir.html',
-                                       emitente_data=emitente_data_for_template,
-                                       destinatarios=destinatarios_for_template,
-                                       produtos=produtos_for_template_and_js,
-                                       all_cfops=all_cfops_data,
-                                       all_csts=all_csts_data,
-                                       all_csosns=all_csosns_data,
-                                       form_data=form_data_initial,
-                                       initial_nfe_items=initial_nfe_items,
-                                       now=now)
-            
-            if not initial_nfe_items:
-                flash('É necessário adicionar pelo menos um item à nota fiscal.', 'danger')
-                return render_template('admin/nfes/emitir.html',
-                                       emitente_data=emitente_data_for_template,
-                                       destinatarios=destinatarios_for_template,
-                                       produtos=produtos_for_template_and_js,
-                                       all_cfops=all_cfops_data,
-                                       all_csts=all_csts_data,
-                                       all_csosns=all_csosns_data,
-                                       form_data=form_data_initial,
-                                       initial_nfe_items=initial_nfe_items,
-                                       now=now)
-            
-            # ✅ PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
-            ambiente = request.form.get('ambiente', 'homologacao')  # Default para homologação
+            print(f"🔍 DEBUG - Ação recebida: {action}, Ambiente: {ambiente}")
             
             if action == 'emitir':
-                # Emitir NFe nos ambientes específicos
                 try:
-                    # Aqui viria a lógica de emissão da NFe
-                    flash(f'NFe emitida com sucesso no ambiente de {ambiente}!', 'success')
-                    return redirect(url_for('nfe.list_nfes'))
-                except Exception as e:
-                    flash(f'Erro ao emitir NFe: {str(e)}', 'danger')
+                    # PROCESSAR EMISSÃO DA NFE
+                    tp_amb = 2 if ambiente == 'homologacao' else 1
                     
+                    # Buscar destinatário selecionado
+                    destinatario_id = request.form.get('destinatario')
+                    if not destinatario_id:
+                        flash('Destinatário é obrigatório para emitir NFe', 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                    
+                    destinatario = db.query(DestinatarioNFe).filter_by(
+                        destinatario_id=destinatario_id,
+                        cliente_id=emitente_cliente_id
+                    ).first()
+                    
+                    if not destinatario:
+                        flash('Destinatário não encontrado', 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                    
+                    destinatario_data = {
+                        'nome_razao_social': destinatario.nome_razao_social,
+                        'cpf_cnpj': destinatario.cpf_cnpj,
+                        'logradouro': destinatario.logradouro,
+                        'numero': destinatario.numero,
+                        'bairro': destinatario.bairro,
+                        'cep': destinatario.cep,
+                        'codigo_municipio': destinatario.codigo_municipio,
+                        'nome_municipio': destinatario.nome_municipio,
+                        'uf': destinatario.uf
+                    }
+                    
+                    # Processar itens da NFe
+                    nfe_items = []
+                    item_index = 0
+                    
+                    while f'items[{item_index}][json]' in request.form:
+                        item_json = request.form[f'items[{item_index}][json]']
+                        if item_json:
+                            try:
+                                item_data = json.loads(item_json)
+                                nfe_items.append(item_data)
+                            except json.JSONDecodeError:
+                                flash(f'Erro no formato do item {item_index + 1}', 'danger')
+                                return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                        item_index += 1
+                    
+                    if not nfe_items:
+                        flash('Adicione pelo menos um item à NFe', 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                    
+                    print(f"📦 Processando {len(nfe_items)} itens")
+                    
+                    # 1. GERAR XML DA NFE
+                    print("🔧 Gerando XML da NFe...")
+                    xml_nfe = generate_nfe_xml(
+                        form_data_initial, 
+                        emitente_data_for_template, 
+                        destinatario_data, 
+                        nfe_items, 
+                        tp_amb, 
+                        'emitir'
+                    )
+                    
+                    # 2. BUSCAR CERTIFICADO ATIVO
+                    print("🔐 Buscando certificado digital...")
+                    certificado = get_active_certificate_for_client(db, emitente_cliente_id)
+                    
+                    if not certificado:
+                        flash('Nenhum certificado digital ativo encontrado. Cadastre um certificado válido.', 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                    
+                    # 3. ASSINAR XML
+                    print("✍️ Assinando XML...")
+                    xml_assinado = sign_xml(xml_nfe, certificado)
+                    
+                    # 4. ENVIAR PARA SEFAZ
+                    print(f"📤 Enviando para Sefaz - Ambiente: {ambiente}")
+                    resultado_sefaz = send_to_sefaz(
+                        xml_assinado, 
+                        certificado, 
+                        emitente_data.cnpj, 
+                        tp_amb
+                    )
+                    
+                    # 5. SALVAR NO BANCO
+                    print("💾 Salvando NFe no banco...")
+                    
+                    status_nfe = 'AUTORIZADA' if resultado_sefaz.get('status') == '100' else 'REJEITADA'
+                    
+                    nova_nfe = NFeEmitidas(
+                        cliente_id=emitente_cliente_id,
+                        tipo_nfe=form_data_initial.get('tpNF', '1'),
+                        finalidade_emissao=int(form_data_initial.get('finNFe', '1')),
+                        natureza_operacao=form_data_initial.get('natOp', ''),
+                        destinatario_razao_social=destinatario_data['nome_razao_social'],
+                        destinatario_cnpj_cpf=destinatario_data['cpf_cnpj'],
+                        json_nfe={
+                            'xml_content': xml_assinado,
+                            'form_data': form_data_initial,
+                            'items': nfe_items,
+                            'ambiente': ambiente,
+                            'resultado_sefaz': resultado_sefaz
+                        },
+                        status=status_nfe,
+                        chave_acesso=resultado_sefaz.get('chave_acesso'),
+                        protocolo_sefaz=resultado_sefaz.get('protocolo'),
+                        mensagem_sefaz=resultado_sefaz.get('mensagem'),
+                        data_criacao=datetime.now(),
+                        data_autorizacao=datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else None,
+                        created_by_user_id=current_user.id,
+                        informacoes_adicionais=form_data_initial.get('infCpl')
+                    )
+                    
+                    db.add(nova_nfe)
+                    db.commit()
+                    
+                    # 6. FEEDBACK PARA O USUÁRIO
+                    if status_nfe == 'AUTORIZADA':
+                        flash(f'✅ NFe emitida com sucesso em {ambiente}! Protocolo: {resultado_sefaz.get("protocolo")}', 'success')
+                    else:
+                        flash(f'❌ NFe rejeitada: {resultado_sefaz.get("mensagem")}', 'danger')
+                    
+                    return redirect(url_for('nfe.list_nfes', cliente_id=emitente_cliente_id))
+                    
+                except Exception as e:
+                    db.rollback()
+                    print(f"❌ ERRO na emissão: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    flash(f'Erro ao emitir NFe: {str(e)}', 'danger')
+                    return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                        
             elif action == 'rascunho':
                 # Salvar como rascunho
                 try:
-                    # Aqui viria a lógica de salvar rascunho
+                    nova_nfe = NFeEmitidas(
+                        cliente_id=emitente_cliente_id,
+                        tipo_nfe=form_data_initial.get('tpNF', '1'),
+                        finalidade_emissao=int(form_data_initial.get('finNFe', '1')),
+                        natureza_operacao=form_data_initial.get('natOp', ''),
+                        json_nfe={'form_data': form_data_initial},
+                        status='RASCUNHO',
+                        data_criacao=datetime.now(),
+                        created_by_user_id=current_user.id,
+                        informacoes_adicionais=form_data_initial.get('infCpl')
+                    )
+                    
+                    db.add(nova_nfe)
+                    db.commit()
+                    
                     flash('NFe salva como rascunho!', 'success')
-                    return redirect(url_for('nfe.list_nfes'))
+                    return redirect(url_for('nfe.list_nfes', cliente_id=emitente_cliente_id))
+                    
                 except Exception as e:
+                    db.rollback()
                     flash(f'Erro ao salvar rascunho: {str(e)}', 'danger')
         
-        # ✅ RETORNO FINAL DO GET
+        # MÉTODO GET - CARREGAR DADOS PARA O FORMULÁRIO
+        
+        # BUSCAR DESTINATÁRIOS
+        destinatarios = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
+        destinatarios_data = []
+        for dest in destinatarios:
+            destinatarios_data.append({
+                'destinatario_id': dest.destinatario_id,
+                'nome_razao_social': dest.nome_razao_social,
+                'cpf_cnpj': dest.cpf_cnpj,
+                'logradouro': dest.logradouro,
+                'numero': dest.numero,
+                'bairro': dest.bairro,
+                'cep': dest.cep,
+                'codigo_municipio': dest.codigo_municipio,
+                'nome_municipio': dest.nome_municipio,
+                'uf': dest.uf
+            })
+        
+        # BUSCAR PRODUTOS
+        produtos = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).all()
+        produtos_data = []
+        for prod in produtos:
+            produtos_data.append({
+                'produto_id': prod.produto_id,
+                'codigo_interno': prod.codigo_interno,
+                'descricao': prod.descricao,
+                'preco_unitario_padrao': float(prod.preco_unitario_padrao) if prod.preco_unitario_padrao else 0.0,
+                'unidade_comercial': prod.unidade_comercial
+            })
+        
+        # BUSCAR CFOPs
+        all_cfops = db.query(Cfop).all()
+        cfops_data = []
+        for cfop in all_cfops:
+            cfops_data.append({
+                'cfop_id': cfop.cfop_id,
+                'cfop': cfop.cfop,
+                'descricao': cfop.descricao
+            })
+        
+        # BUSCAR CSTs E CSOSNs
+        all_csts = db.query(Csticms).all()
+        csts_data = [{'cst_id': cst.cst_id, 'cst': cst.cst, 'descricao': cst.descricao} for cst in all_csts]
+        
+        all_csosns = db.query(Csosnicms).all()
+        csosns_data = [{'csosn_id': csosn.csosn_id, 'csosn': csosn.csosn, 'descricao': csosn.descricao} for csosn in all_csosns]
+        
+        print(f"📋 Renderizando template com {len(destinatarios_data)} destinatários e {len(produtos_data)} produtos")
+        
         return render_template('admin/nfes/emitir.html',
-                               emitente_data=emitente_data_for_template,
-                               destinatarios=destinatarios_for_template,
-                               produtos=produtos_for_template_and_js,
-                               all_cfops=all_cfops_data,
-                               all_csts=all_csts_data,
-                               all_csosns=all_csosns_data,
-                               form_data=form_data_initial,
-                               initial_nfe_items=initial_nfe_items,
-                               now=now)
-    
+                             emitente_data=emitente_data_for_template,
+                             destinatarios=destinatarios_data,
+                             produtos=produtos_data,
+                             all_cfops=cfops_data,
+                             all_csts=csts_data,
+                             all_csosns=csosns_data,
+                             initial_nfe_items=[])
+        
     except Exception as e:
-        print(f"❌ ERRO na rota emitir_nfe: {e}")
+        print(f"❌ Erro geral em emitir_nfe: {e}")
         import traceback
         traceback.print_exc()
-        flash(f'Erro ao carregar dados: {str(e)}', 'error')
-        return redirect(url_for('main.home'))
-    
+        flash(f'Erro ao carregar formulário de NFe: {str(e)}', 'danger')
+        return redirect(url_for('home.home'))
     finally:
-        # ✅ FECHAR CONEXÃO DB
         if 'db' in locals():
             db.close()
+
+# ... resto do código permanece igual ...
 
 @nfe_bp.route('/list')
 @login_required
@@ -200,7 +362,7 @@ def list_nfes():
     try:
         cliente_id = request.args.get('cliente_id')
         
-        # ✅ BUSCAR NFEs COM SQL RAW para evitar problemas de ORM
+        # BUSCAR NFEs COM SQL RAW para evitar problemas de ORM
         if cliente_id:
             # Filtrar por cliente específico
             query = text("""
@@ -229,7 +391,7 @@ def list_nfes():
             accessible_client_ids = get_accessible_client_ids(db)
             if not accessible_client_ids:
                 flash('Você não tem acesso a nenhum cliente.', 'warning')
-                return redirect(url_for('main.home'))
+                return redirect(url_for('home.home'))
             
             # Usar placeholders seguros para evitar SQL injection
             placeholders = ','.join([f':id_{i}' for i in range(len(accessible_client_ids))])
@@ -287,7 +449,7 @@ def list_nfes():
         import traceback
         traceback.print_exc()
         flash(f'Erro ao listar NFes: {str(e)}', 'error')
-        return redirect(url_for('main.home'))
+        return redirect(url_for('home.home'))
     finally:
         if 'db' in locals():
             db.close()
