@@ -232,22 +232,24 @@
                             <tbody>
                                 {% for nfe in ultimas_nfes %}
                                 <tr>
-                                    <td><strong>{{ nfe.numero_nfe or nfe.nfe_id }}</strong></td>
+                                    <td><strong>{{ nfe.numero_nfe or nfe.nfe_id or nfe.nfe_emitida_id }}</strong></td>
                                     <td>{{ nfe.data_criacao.strftime('%d/%m/%Y %H:%M') if nfe.data_criacao else '-' }}</td>
-                                    <td>R$ {{ "%.2f"|format(nfe.valor_total or 0) }}</td>
+                                    <td>R$ {{ "%.2f"|format(nfe.valor_total or nfe.json_nfe.total.ICMSTot.vNF or 0) }}</td>
                                     <td>
-                                        {% if nfe.status == 'autorizada' %}
-                                            <span class="badge bg-success">{{ nfe.status.title() }}</span>
-                                        {% elif nfe.status == 'rejeitada' %}
-                                            <span class="badge bg-danger">{{ nfe.status.title() }}</span>
-                                        {% elif nfe.status == 'pendente' %}
-                                            <span class="badge bg-warning">{{ nfe.status.title() }}</span>
+                                        {% if nfe.status|upper == 'AUTORIZADA' %}
+                                            <span class="badge bg-success">Autorizada</span>
+                                        {% elif nfe.status|upper == 'REJEITADA' %}
+                                            <span class="badge bg-danger">Rejeitada</span>
+                                        {% elif nfe.status|upper == 'PROCESSANDO' %}
+                                            <span class="badge bg-warning">Processando</span>
+                                        {% elif nfe.status|upper == 'RASCUNHO' %}
+                                            <span class="badge bg-secondary">Rascunho</span>
                                         {% else %}
-                                            <span class="badge bg-secondary">{{ nfe.status.title() if nfe.status else 'N/A' }}</span>
+                                            <span class="badge bg-secondary">{{ nfe.status|title if nfe.status else 'N/A' }}</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <a href="{{ url_for('admin.view_nfe', nfe_id=nfe.nfe_id) }}" 
+                                        <a href="{{ url_for('nfe.view', nfe_id=nfe.nfe_emitida_id) }}" 
                                            class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-eye"></i>
                                         </a>
@@ -285,7 +287,7 @@
                     <h5 class="mb-0"><i class="fas fa-chart-line"></i> NFes por Mês (Últimos 6 meses)</h5>
                 </div>
                 <div class="card-body">
-                    {% if nfes_por_mes %}
+                    {% if nfes_por_mes and nfes_por_mes|length > 0 %}
                     <canvas id="nfesChart" width="400" height="200"></canvas>
                     {% else %}
                     <div class="text-center py-4">
@@ -300,7 +302,7 @@
     </div>
 </div>
 
-{% if nfes_por_mes %}
+{% if nfes_por_mes and nfes_por_mes|length > 0 %}
 <!-- Dados para JavaScript -->
 <script id="chart-data" type="application/json">
 {{ nfes_por_mes | tojson }}
@@ -320,8 +322,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             chartData.forEach(function(item) {
                 const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                labels.push(meses[item.mes - 1] + '/' + item.ano);
-                data.push(item.quantidade);
+                const mes = parseInt(item.mes) || parseInt(item.month) || 1;
+                const ano = item.ano || item.year || new Date().getFullYear();
+                labels.push(meses[mes - 1] + '/' + ano);
+                data.push(item.quantidade || item.count || 0);
             });
             
             const ctx = document.getElementById('nfesChart');
@@ -357,10 +361,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                 });
+            } else {
+                console.error('Elemento canvas para gráfico não encontrado');
             }
+        } else {
+            console.warn('Dados de gráfico vazios ou inválidos');
         }
     } catch (error) {
         console.error('Erro ao carregar gráfico:', error);
+        console.error('Dados brutos:', document.getElementById('chart-data') ? document.getElementById('chart-data').textContent : 'Nenhum dado');
     }
 });
 </script>

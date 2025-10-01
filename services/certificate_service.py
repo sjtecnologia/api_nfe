@@ -17,13 +17,13 @@ import hashlib
 def _get_encryption_key():
     """Gera chave de criptografia baseada em uma chave mestra"""
     # Use uma chave mestra do ambiente ou gere uma
-    master_key = os.environ.get('CERT_MASTER_KEY', 'default_master_key_change_in_production')
+    master_key = os.environ.get('CERT_MASTER_KEY', 'default_master_key_change_in_production_2024')
     
     # Deriva uma chave consistente
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=b'cert_salt_2024',  # Salt fixo para consistência
+        salt=b'cert_salt_nfe_2024',  # Salt fixo para consistência
         iterations=100000,
     )
     key = base64.urlsafe_b64encode(kdf.derive(master_key.encode()))
@@ -32,100 +32,240 @@ def _get_encryption_key():
 def _encrypt_password(password):
     """Criptografa a senha do certificado"""
     try:
+        print(f"🔐 _encrypt_password: Iniciando criptografia de senha com {len(password)} caracteres")
+        
+        if not password or len(password) == 0:
+            raise Exception("Senha vazia ou nula")
+        
         key = _get_encryption_key()
         f = Fernet(key)
-        encrypted = f.encrypt(password.encode('utf-8'))
-        return base64.b64encode(encrypted).decode('utf-8')
+        
+        # Garantir que é string UTF-8
+        if isinstance(password, bytes):
+            password_str = password.decode('utf-8')
+        else:
+            password_str = str(password)
+        
+        print(f"🔐 _encrypt_password: Senha preparada para criptografia: {len(password_str)} chars")
+        
+        # Criptografar
+        encrypted_bytes = f.encrypt(password_str.encode('utf-8'))
+        
+        # Codificar em base64 para armazenar no banco
+        encrypted_b64 = base64.b64encode(encrypted_bytes).decode('utf-8')
+        
+        print(f"✅ _encrypt_password: Senha criptografada - {len(encrypted_b64)} caracteres")
+        print(f"✅ _encrypt_password: Resultado: {encrypted_b64[:50]}...")
+        
+        return encrypted_b64
+        
     except Exception as e:
-        print(f"Erro ao criptografar senha: {e}")
-        # Fallback: usar base64 simples (menos seguro)
-        return base64.b64encode(password.encode('utf-8')).decode('utf-8')
+        print(f"❌ _encrypt_password: ERRO CRÍTICO: {e}")
+        import traceback
+        traceback.print_exc()
+        raise Exception(f"Falha crítica na criptografia da senha: {e}")
 
 def _decrypt_password(encrypted_password):
     """Descriptografa a senha do certificado"""
     try:
+        print(f"🔓 _decrypt_password: Iniciando descriptografia de {len(encrypted_password)} caracteres")
+        print(f"🔓 _decrypt_password: Dados: {encrypted_password[:50]}...")
+        
+        # ✅ USAR MESMA LÓGICA DO TESTE QUE FUNCIONOU
         key = _get_encryption_key()
         f = Fernet(key)
+        
+        # Decodificar base64
         encrypted_bytes = base64.b64decode(encrypted_password.encode('utf-8'))
-        decrypted = f.decrypt(encrypted_bytes)
-        return decrypted.decode('utf-8')
+        print(f"🔓 _decrypt_password: Base64 decodificado: {len(encrypted_bytes)} bytes")
+        
+        # Descriptografar com Fernet
+        decrypted_bytes = f.decrypt(encrypted_bytes)
+        decrypted_str = decrypted_bytes.decode('utf-8')
+        
+        print(f"✅ _decrypt_password: Fernet SUCCESS! Senha descriptografada: {len(decrypted_str)} chars")
+        return decrypted_str
+        
     except Exception as e:
-        print(f"Erro ao descriptografar senha: {e}")
-        # Fallback: tentar base64 simples
+        print(f"❌ _decrypt_password: Erro Fernet: {e}")
+        print(f"❌ _decrypt_password: Tentando fallback...")
+        return _decrypt_password_fallback(encrypted_password)
+
+def _decrypt_password_fallback(encrypted_password):
+    """Fallback para senhas antigas ou em texto plano"""
+    try:
+        print(f"🔄 _decrypt_password_fallback: Tentando fallback para {len(encrypted_password)} chars")
+        
+        # Tentar base64 simples (método antigo)
         try:
-            return base64.b64decode(encrypted_password.encode('utf-8')).decode('utf-8')
-        except:
-            return encrypted_password  # Retorna como está se não conseguir descriptografar
+            decoded = base64.b64decode(encrypted_password.encode('utf-8')).decode('utf-8')
+            print(f"✅ _decrypt_password_fallback: Base64 simples funcionou")
+            return decoded
+        except Exception as b64_e:
+            print(f"❌ _decrypt_password_fallback: Base64 falhou: {b64_e}")
+        
+        # Se não é base64, pode ser texto plano (senhas muito antigas)
+        print(f"⚠️ _decrypt_password_fallback: Assumindo texto plano")
+        return encrypted_password
+        
+    except Exception as e:
+        print(f"❌ _decrypt_password_fallback: Todos os fallbacks falharam: {e}")
+        return encrypted_password
 
 def process_certificate_upload(db_session, cliente_id, request_form, request_files):
     """Processa o upload de certificado digital"""
-    cert_file = request_files.get('conteudo_certificado_file')
+    print(f"🔍 process_certificate_upload: Iniciando para cliente {cliente_id}")
+    
+    # ✅ CORRIGIR NOMES DOS CAMPOS
+    cert_file = request_files.get('arquivo_certificado')  # ← CORRIGIDO!
     
     if cert_file and cert_file.filename != '':
         try:
+            print(f"📁 process_certificate_upload: Arquivo recebido: {cert_file.filename}")
+            
+            # ✅ LER COMO BINÁRIO
             file_content = cert_file.read()
-            cert_password = request_form.get('cert_senha_certificado')
+            cert_password = request_form.get('senha_certificado')  # ← CORRIGIDO!
+            
             if not cert_password:
                 flash('Senha do certificado é obrigatória ao fazer upload de um arquivo.', 'danger')
                 return False, None
             
-            # ✅ CRIPTOGRAFAR SENHA ANTES DE ARMAZENAR
-            encoded_content = base64.b64encode(file_content)
-            encrypted_password = _encrypt_password(cert_password)  # ✅ CRIPTOGRAFADO
+            print(f"📊 process_certificate_upload: Arquivo lido - {len(file_content)} bytes")
+            print(f"📊 process_certificate_upload: Primeiros 10 bytes: {file_content[:10].hex()}")
+            print(f"📊 process_certificate_upload: Senha recebida - {len(cert_password)} caracteres")
+            print(f"📊 process_certificate_upload: Senha (mascarada): {'*' * len(cert_password)}")
             
-            print(f"DEBUG SAVE: Conteúdo original lido (bytes): {len(file_content)} bytes")
-            print(f"DEBUG SAVE: Conteúdo codificado Base64 (bytes): {len(encoded_content)} bytes")
-            print(f"DEBUG SAVE: Senha original (string): {len(cert_password)} caracteres")
-            print(f"DEBUG SAVE: Senha criptografada: {len(encrypted_password)} caracteres")
-            
-            # Validar certificado
+            # ✅ VALIDAR FORMATO PKCS#12 ANTES DE SALVAR
+            print(f"🧪 process_certificate_upload: Validando PKCS#12...")
             try:
-                p12_tuple = pkcs12.load_key_and_certificates( 
+                private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
                     file_content,
-                    cert_password.encode('utf-8'), 
-                    default_backend()
+                    cert_password.encode('utf-8')
                 )
-                private_key = p12_tuple[0]
-                cert_x509_obj = p12_tuple[1]
-            except ValueError as val_err:
-                flash(f'Erro ao validar certificado: Formato de arquivo ou senha inválidos. Detalhes: {val_err}', 'danger')
-                return False, None
-            except Exception as other_err:
-                flash(f'Erro inesperado na validação do certificado: {other_err}', 'danger')
+                print("✅ process_certificate_upload: Certificado PKCS#12 validado com sucesso")
+            except Exception as val_err:
+                print(f"❌ process_certificate_upload: Erro na validação PKCS#12: {val_err}")
+                flash(f'Erro ao validar certificado: {val_err}', 'danger')
                 return False, None
             
-            if not cert_x509_obj:
-                flash(f'Não foi possível carregar o certificado do arquivo {cert_file.filename}.', 'danger')
+            # ✅ CODIFICAR ARQUIVO EM BASE64
+            encoded_content = base64.b64encode(file_content).decode('utf-8')
+            print(f"📊 process_certificate_upload: Arquivo codificado em Base64 - {len(encoded_content)} chars")
+            
+            # 🔐 CRIPTOGRAFAR SENHA - CRÍTICO!
+            print(f"🔐 process_certificate_upload: === INICIANDO CRIPTOGRAFIA DE SENHA ===")
+            print(f"🔐 process_certificate_upload: Senha original: '{cert_password}' (tipo: {type(cert_password)})")
+            print(f"🔐 process_certificate_upload: Tamanho: {len(cert_password)} caracteres")
+            
+            try:
+                encrypted_password = _encrypt_password(cert_password)
+                print(f"✅ process_certificate_upload: CRIPTOGRAFIA EXECUTADA!")
+                print(f"✅ process_certificate_upload: Resultado: {len(encrypted_password)} chars")
+                print(f"✅ process_certificate_upload: Primeiros 50 chars: {encrypted_password[:50]}")
+                
+                # ✅ TESTE IMEDIATO DE ROUND-TRIP
+                print(f"🧪 process_certificate_upload: Testando descriptografia imediata...")
+                test_decrypt = _decrypt_password(encrypted_password)
+                print(f"🧪 process_certificate_upload: Descriptografia testada: '{test_decrypt}'")
+                print(f"🧪 process_certificate_upload: Original == Descriptografada? {test_decrypt == cert_password}")
+                
+                if test_decrypt != cert_password:
+                    raise Exception(f"FALHA CRÍTICA: Round-trip falhou! Original: '{cert_password}', Descriptografada: '{test_decrypt}'")
+                
+                print(f"✅ process_certificate_upload: Teste de round-trip passou!")
+                    
+            except Exception as crypto_error:
+                print(f"❌ process_certificate_upload: ERRO CRÍTICO NA CRIPTOGRAFIA: {crypto_error}")
+                import traceback
+                traceback.print_exc()
+                flash(f'Erro crítico na criptografia da senha: {crypto_error}', 'danger')
                 return False, None
             
-            # Extrair informações do certificado
+            # ✅ EXTRAIR INFORMAÇÕES DO CERTIFICADO
+            print(f"📋 process_certificate_upload: Extraindo informações do certificado...")
             fingerprint = cert_x509_obj.fingerprint(hashes.SHA256()).hex()
             validade_inicio_final = cert_x509_obj.not_valid_before_utc.replace(tzinfo=None)
             validade_fim_final = cert_x509_obj.not_valid_after_utc.replace(tzinfo=None)
             
-            # Criar objeto certificado
+            print(f"📋 process_certificate_upload: Fingerprint: {fingerprint}")
+            print(f"📋 process_certificate_upload: Válido de {validade_inicio_final} até {validade_fim_final}")
+            
+            # ✅ DESATIVAR CERTIFICADOS ANTIGOS
+            print(f"🔄 process_certificate_upload: Desativando certificados antigos...")
+            old_certs_updated = db_session.query(CertificadoDigital).filter_by(
+                cliente_id=cliente_id,
+                ativo=True
+            ).update({'ativo': False})
+            print(f"🔄 process_certificate_upload: {old_certs_updated} certificados antigos desativados")
+            
+            # ✅ CRIAR OBJETO DO CERTIFICADO
+            print(f"💾 process_certificate_upload: Criando objeto certificado...")
             cert_obj = CertificadoDigital(
                 cliente_id=cliente_id,
                 fingerprint=fingerprint,
-                conteudo_certificado=encoded_content.decode('utf-8'),  # ✅ CORRIGIDO: converter para string
-                senha_certificado=encrypted_password,  # ✅ SENHA CRIPTOGRAFADA
+                conteudo_certificado=encoded_content,  # ✅ BASE64 LIMPO
+                senha_certificado=encrypted_password,   # 🔐 SENHA CRIPTOGRAFADA
                 validade_inicio=validade_inicio_final,
                 validade_fim=validade_fim_final,
-                ativo=request_form.get('cert_ativo') == 'on',
+                ativo=True,
                 data_upload=datetime.now(),
                 nome_arquivo_original=request_form.get('cert_nome_arquivo_original') or cert_file.filename,
                 created_by_user_id=current_user.id if current_user.is_authenticated else None
             )
             
+            print(f"💾 process_certificate_upload: Objeto criado - senha no objeto: {cert_obj.senha_certificado[:50]}...")
+            
+            # ✅ SALVAR NO BANCO
+            print(f"💾 process_certificate_upload: Salvando no banco...")
             db_session.add(cert_obj)
-            print("✅ Certificado salvo com senha criptografada")
+            db_session.commit()
+            
+            print(f"✅ process_certificate_upload: Certificado salvo com ID: {cert_obj.certificado_digital_id}")
+            
+            # ✅ VERIFICAÇÃO PÓS-SALVAMENTO
+            print(f"🔍 process_certificate_upload: Verificando dados salvos...")
+            cert_verificacao = db_session.query(CertificadoDigital).filter_by(
+                certificado_digital_id=cert_obj.certificado_digital_id
+            ).first()
+            
+            if cert_verificacao:
+                saved_password = cert_verificacao.senha_certificado
+                print(f"🔍 process_certificate_upload: Senha salva no banco: {len(saved_password)} chars")
+                print(f"🔍 process_certificate_upload: Primeiros 50 chars: {saved_password[:50]}")
+                
+                if saved_password.startswith('gAAAAA'):
+                    print("✅ process_certificate_upload: SENHA SALVA CRIPTOGRAFADA! ✅")
+                elif saved_password == cert_password:
+                    print("❌ process_certificate_upload: SENHA SALVA EM TEXTO PLANO! ❌")
+                else:
+                    print("⚠️ process_certificate_upload: Senha em formato desconhecido")
+                
+                # Teste final de descriptografia
+                try:
+                    final_test = _decrypt_password(saved_password)
+                    if final_test == cert_password:
+                        print("🎉 process_certificate_upload: TESTE FINAL PASSOU! Criptografia funcionando 100%")
+                    else:
+                        print("❌ process_certificate_upload: TESTE FINAL FALHOU!")
+                except Exception as final_e:
+                    print(f"❌ process_certificate_upload: ERRO NO TESTE FINAL: {final_e}")
+            
+            print("✅ process_certificate_upload: Upload concluído com sucesso!")
+            flash('Certificado enviado e validado com sucesso!', 'success')
             return True, cert_obj
             
         except Exception as e:
+            print(f"❌ process_certificate_upload: Erro inesperado: {e}")
+            import traceback
+            traceback.print_exc()
+            db_session.rollback()
             flash(f'Erro inesperado ao processar o certificado: {e}', 'danger')
-            current_app.logger.error(f"Certificate processing error: {e}", exc_info=True)
+            if current_app:
+                current_app.logger.error(f"Certificate processing error: {e}", exc_info=True)
             return False, None
     
+    print("ℹ️ process_certificate_upload: Nenhum arquivo fornecido")
     return True, None
 
 def get_active_certificate_for_client(db, cliente_id):
@@ -133,7 +273,7 @@ def get_active_certificate_for_client(db, cliente_id):
     Busca certificado digital ativo para o cliente
     """
     try:
-        print(f"🔐 Buscando certificado para cliente {cliente_id}")
+        print(f"🔐 get_active_certificate_for_client: Buscando certificado para cliente {cliente_id}")
         
         # Buscar certificado ativo
         certificado = db.query(CertificadoDigital).filter_by(
@@ -142,99 +282,85 @@ def get_active_certificate_for_client(db, cliente_id):
         ).first()
         
         if not certificado:
-            print(f"❌ Nenhum certificado ativo encontrado para cliente {cliente_id}")
+            print(f"❌ get_active_certificate_for_client: Nenhum certificado ativo encontrado")
             return None
         
-        # ✅ USAR CAMPO CORRETO certificado_digital_id
-        print(f"✅ Certificado encontrado: ID {certificado.certificado_digital_id}")
+        print(f"✅ get_active_certificate_for_client: Certificado encontrado: ID {certificado.certificado_digital_id}")
         
-        # ✅ CONVERTER PARA DICIONÁRIO COM CAMPOS CORRETOS
+        # ✅ CONVERTER PARA DICIONÁRIO
         certificado_dict = {
-            'certificado_id': certificado.certificado_digital_id,  # ✅ CAMPO CORRETO
+            'certificado_id': certificado.certificado_digital_id,
             'cliente_id': certificado.cliente_id,
             'common_name': getattr(certificado, 'common_name', None),
-            'valido_ate': certificado.validade_fim,  # ✅ CAMPO CORRETO
-            'arquivo_certificado': certificado.conteudo_certificado,  # ✅ CAMPO CORRETO
+            'valido_ate': certificado.validade_fim,
+            'arquivo_certificado': certificado.conteudo_certificado,
             'senha_certificado': certificado.senha_certificado,
             'ativo': certificado.ativo,
             'tipo_certificado': getattr(certificado, 'tipo_certificado', 'A1'),
-            'data_criacao': certificado.data_upload,  # ✅ CAMPO CORRETO
+            'data_criacao': certificado.data_upload,
             'fingerprint': certificado.fingerprint,
             'validade_inicio': certificado.validade_inicio,
             'nome_arquivo_original': certificado.nome_arquivo_original
         }
         
-        print(f"✅ Certificado convertido para dict: {certificado_dict.get('nome_arquivo_original', 'Sem nome')}")
+        print(f"✅ get_active_certificate_for_client: Certificado convertido: {certificado_dict.get('nome_arquivo_original', 'Sem nome')}")
         
-        # ✅ PARA TESTES: SIMULAR CERTIFICADO VÁLIDO
-        # (Remover quando tiver certificado real)
+        # ✅ VERIFICAR SE CERTIFICADO ESTÁ COMPLETO
         if not certificado_dict['arquivo_certificado'] or not certificado_dict['senha_certificado']:
-            print("⚠️ Certificado incompleto - usando modo simulado")
-            certificado_dict.update({
-                'modo_simulado': True,
-                'arquivo_certificado': 'SIMULADO',
-                'senha_certificado': 'SIMULADO',
-                'common_name': certificado_dict.get('nome_arquivo_original', 'CERTIFICADO SIMULADO'),
-                'private_key': 'SIMULADO',
-                'certificate': 'SIMULADO'
-            })
+            print("⚠️ get_active_certificate_for_client: Certificado incompleto - modo simulado")
+            certificado_dict['modo_simulado'] = False
             return certificado_dict
         
         # ✅ TENTAR CARREGAR CERTIFICADO REAL
         try:
+            print("🔍 get_active_certificate_for_client: Tentando carregar certificado real...")
+            
             # Decodificar arquivo do certificado
             cert_data = _decode_certificate_data(certificado_dict['arquivo_certificado'])
-            senha_data = _decode_password_data(certificado_dict['senha_certificado'])
+            if not cert_data:
+                raise Exception("Falha ao decodificar dados do certificado")
             
-            if cert_data and senha_data:
-                # Tentar validar PKCS#12
-                private_key, certificate, additional_certificates = _validate_pkcs12(cert_data, senha_data)
-                
-                if private_key and certificate:
-                    certificado_dict.update({
-                        'private_key': private_key,
-                        'certificate': certificate,
-                        'additional_certificates': additional_certificates,
-                        'modo_simulado': False
-                    })
-                    print(f"✅ Certificado real carregado com sucesso")
-                    return certificado_dict
-                else:
-                    print("⚠️ Falha na validação PKCS#12 - usando modo simulado")
+            # Descriptografar senha
+            senha_descriptografada = _decrypt_password(certificado_dict['senha_certificado'])
+            if not senha_descriptografada:
+                raise Exception("Falha ao descriptografar senha")
+            
+            print(f"🔍 get_active_certificate_for_client: Dados decodificados - cert: {len(cert_data)} bytes, senha: {len(senha_descriptografada)} chars")
+            
+            # Tentar validar PKCS#12
+            private_key, certificate, additional_certificates = _validate_pkcs12_simple(cert_data, senha_descriptografada)
+            
+            if private_key and certificate:
+                certificado_dict.update({
+                    'private_key': private_key,
+                    'certificate': certificate,
+                    'additional_certificates': additional_certificates,
+                    'modo_simulado': False
+                })
+                print(f"✅ get_active_certificate_for_client: Certificado real carregado com sucesso")
+                return certificado_dict
             else:
-                print("⚠️ Falha na decodificação - usando modo simulado")
+                raise Exception("Falha na validação PKCS#12")
         
         except Exception as e:
-            print(f"⚠️ Erro ao carregar certificado real: {e}")
+            print(f"⚠️ get_active_certificate_for_client: Erro ao carregar certificado real: {e}")
         
         # ✅ FALLBACK: MODO SIMULADO
-        print("🔄 Usando modo simulado para desenvolvimento")
-        certificado_dict.update({
-            'modo_simulado': True,
-            'private_key': 'SIMULADO',
-            'certificate': 'SIMULADO',
-            'common_name': certificado_dict.get('nome_arquivo_original', 'CERTIFICADO SIMULADO')
-        })
+        print("🔄 get_active_certificate_for_client: Usando modo simulado")
+        
         
         return certificado_dict
         
     except Exception as e:
-        print(f"❌ Erro ao buscar certificado: {e}")
+        print(f"❌ get_active_certificate_for_client: Erro crítico: {e}")
         import traceback
         traceback.print_exc()
         
-        # ✅ FALLBACK COMPLETO: CERTIFICADO SIMULADO
-        print("🆘 Criando certificado simulado de emergência...")
+        # ✅ FALLBACK COMPLETO
         return {
             'certificado_id': 'SIMULADO',
             'cliente_id': cliente_id,
             'common_name': 'CERTIFICADO SIMULADO DE EMERGÊNCIA',
-            'valido_ate': None,
-            'arquivo_certificado': 'SIMULADO',
-            'senha_certificado': 'SIMULADO',
-            'ativo': True,
-            'tipo_certificado': 'A1',
-            'data_criacao': datetime.now(),
             'modo_simulado': True,
             'private_key': 'SIMULADO',
             'certificate': 'SIMULADO'
@@ -245,6 +371,8 @@ def _decode_certificate_data(cert_data_encoded):
     if not cert_data_encoded:
         return None
     
+    print(f"🔍 _decode_certificate_data: Decodificando {len(cert_data_encoded)} caracteres")
+    
     methods = [
         ('base64', lambda x: base64.b64decode(x)),
         ('hex_direct', lambda x: binascii.unhexlify(x)),
@@ -254,73 +382,46 @@ def _decode_certificate_data(cert_data_encoded):
     for method_name, decode_func in methods:
         try:
             result = decode_func(cert_data_encoded)
-            print(f"DEBUG certificado: Sucesso com método '{method_name}' - tamanho: {len(result)} bytes")
+            print(f"✅ _decode_certificate_data: Sucesso com método '{method_name}' - {len(result)} bytes")
             return result
         except Exception as e:
-            print(f"DEBUG certificado: Método '{method_name}' falhou: {e}")
+            print(f"❌ _decode_certificate_data: Método '{method_name}' falhou: {e}")
     
     return None
 
-def _decode_password_data(password_encoded):
-    """Decodifica senha do certificado com múltiplos métodos"""
-    if not password_encoded:
-        return None
-    
-    # ✅ PRIMEIRO TENTAR DESCRIPTOGRAFAR
+def _validate_pkcs12_simple(cert_data, password):
+    """Valida certificado PKCS#12 de forma simples"""
     try:
-        decrypted_password = _decrypt_password(password_encoded)
-        print(f"DEBUG senha: Senha descriptografada com sucesso")
-        return decrypted_password.encode('utf-8')
-    except Exception as e:
-        print(f"DEBUG senha: Falha na descriptografia: {e}")
-    
-    # ✅ FALLBACK: MÉTODOS ANTIGOS
-    methods = [
-        ('base64', lambda x: base64.b64decode(x)),
-        ('hex_direct', lambda x: binascii.unhexlify(x)),
-        ('utf8', lambda x: x.encode('utf-8') if isinstance(x, str) else x)
-    ]
-    
-    for method_name, decode_func in methods:
-        try:
-            result = decode_func(password_encoded)
-            print(f"DEBUG senha: Sucesso com método '{method_name}' - tamanho: {len(result)} bytes")
-            return result
-        except Exception as e:
-            print(f"DEBUG senha: Método '{method_name}' falhou: {e}")
-    
-    return None
-
-def _validate_pkcs12(cert_data, password_data):
-    """Valida certificado PKCS#12 com múltiplas variantes de senha"""
-    print("DEBUG: Validando PKCS#12 com diferentes abordagens...")
-    
-    # Variantes de senha para testar
-    password_variants = [
-        ('bytes_direct', password_data),
-        ('utf8_decode', password_data.decode('utf-8') if isinstance(password_data, bytes) else str(password_data)),
-        ('latin1_decode', password_data.decode('latin-1') if isinstance(password_data, bytes) else str(password_data)),
-        ('empty_string', ''),
-        ('empty_bytes', b''),
-        ('none', None),
-        ('test_123456', '123456'),
-        ('test_password', 'password'),
-    ]
-    
-    for variant_name, password in password_variants:
-        try:
-            print(f"DEBUG: Testando senha variant '{variant_name}': {type(password)}")
-            
-            private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
-                cert_data, password
-            )
-            
-            print(f"✅ SUCESSO com variant '{variant_name}'!")
+        print(f"🧪 _validate_pkcs12_simple: Validando com senha de {len(password)} chars")
+        
+        private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
+            cert_data, 
+            password.encode('utf-8') if isinstance(password, str) else password
+        )
+        
+        if private_key and certificate:
+            print(f"✅ _validate_pkcs12_simple: PKCS#12 válido! Subject: {certificate.subject}")
             return private_key, certificate, additional_certificates
+        else:
+            print(f"❌ _validate_pkcs12_simple: PKCS#12 carregado mas incompleto")
+            return None, None, None
             
-        except Exception as e:
-            print(f"DEBUG: Variant '{variant_name}' falhou: {e}")
+    except Exception as e:
+        print(f"❌ _validate_pkcs12_simple: Erro na validação: {e}")
+        return None, None, None
+
+# ✅ MANTER FUNÇÃO ANTIGA PARA COMPATIBILIDADE
+def _validate_pkcs12(cert_data, password_data):
+    """Valida certificado PKCS#12 com múltiplas variantes de senha (compatibilidade)"""
+    print("🔄 _validate_pkcs12: Usando método de compatibilidade...")
     
-    print("⚠️ AVISO: Nenhuma variante de senha funcionou para validar PKCS#12")
-    print("Continuando mesmo assim para permitir modo simulado...")
-    return None, None, None
+    # Converter para string se necessário
+    if isinstance(password_data, bytes):
+        try:
+            password_str = password_data.decode('utf-8')
+        except:
+            password_str = password_data.decode('latin-1')
+    else:
+        password_str = str(password_data)
+    
+    return _validate_pkcs12_simple(cert_data, password_str)

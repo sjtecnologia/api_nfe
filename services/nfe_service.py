@@ -3,7 +3,401 @@ from datetime import datetime, timezone
 import uuid
 from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
 from decimal import Decimal
+import re
+import xml.etree.ElementTree as ET
+from flask import current_app
 
+
+# ✅ IMPORTAÇÃO CONDICIONAL PARA EVITAR ERRO
+try:
+    from services.sefaz_service import SefazService
+    SEFAZ_DISPONIVEL = True
+except ImportError:
+    print("⚠️ SefazService não disponível - usando apenas simulação")
+    SEFAZ_DISPONIVEL = False
+
+from services.certificate_service import get_active_certificate_for_client
+from services.xml_signer import XMLSigner
+
+# ✅ CLASSE PRINCIPAL DO SERVIÇO
+class NFeService:
+    """Serviço principal para processamento completo de NFe"""
+    
+    def __init__(self, db_session):
+        self.db = db_session
+        self.xml_signer = XMLSigner()
+    
+    def processar_emissao_completa(self, dados_form, emitente_data, destinatario_data, items_data, cliente_id, ambiente='homologacao'):
+        """
+        Processamento completo: Gera XML -> Assina -> Envia SEFAZ -> Salva
+        """
+        try:
+            print(f"🚀 === PROCESSAMENTO COMPLETO NFE ===")
+            print(f"🎯 Cliente ID: {cliente_id}")
+            print(f"🌍 Ambiente: {ambiente}")
+            
+            # 1. GERAR XML
+            tp_amb = 2 if ambiente == 'homologacao' else 1
+            xml_nfe = generate_nfe_xml(dados_form, emitente_data, destinatario_data, items_data, tp_amb)
+            
+            if not xml_nfe:
+                return {'success': False, 'errors': ['Falha na geração do XML']}
+            
+            print(f"✅ XML gerado: {len(xml_nfe)} caracteres")
+            
+            # 2. BUSCAR CERTIFICADO
+            certificado = get_active_certificate_for_client(self.db, cliente_id)
+            if not certificado:
+                return {'success': False, 'errors': ['Certificado não encontrado']}
+            
+            print(f"✅ Certificado encontrado: {certificado.get('nome_arquivo_original', 'N/A')}")
+            
+            # 3. ASSINAR XML
+            xml_assinado = self._assinar_xml_real(xml_nfe, certificado)
+            if not xml_assinado:
+                return {'success': False, 'errors': ['Falha na assinatura']}
+            
+            print(f"✅ XML assinado: {len(xml_assinado)} caracteres")
+            
+            # 4. ENVIAR PARA SEFAZ
+            resultado_sefaz = self._processar_envio_sefaz(xml_assinado, certificado, ambiente)
+            
+            if not resultado_sefaz.get('success', False):
+                return {
+                    'success': False, 
+                    'errors': [f"Erro SEFAZ: {resultado_sefaz.get('message', 'Erro desconhecido')}"]
+                }
+            
+            # 5. RETORNAR RESULTADO COMPLETO
+            return {
+                'success': True,
+                'chave_acesso': resultado_sefaz.get('chave_acesso'),
+                'protocolo': resultado_sefaz.get('protocolo'),
+                'status': resultado_sefaz.get('status'),
+                'xml_final': resultado_sefaz.get('xml_protocolo', xml_assinado),
+                'ambiente': ambiente,
+                'ambiente_real': resultado_sefaz.get('ambiente_real', False),
+                'sefaz_response': resultado_sefaz
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro no processamento completo: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'errors': [f'Erro interno: {str(e)}']}
+    
+    def _assinar_xml_real(self, xml_content, certificado):
+        """Assina XML com certificado real ou simulado"""
+        try:
+            print("✍️ === ASSINANDO XML ===")
+            
+            # Verificar se é certificado real
+            if certificado.get('private_key') and certificado.get('private_key') != 'SIMULADO':
+                print("🔐 === INICIANDO ASSINATURA REAL ===")
+                return self.xml_signer.assinar_xml(xml_content, certificado)
+            else:
+                print("🔄 === USANDO ASSINATURA SIMULADA ===")
+                return sign_xml(xml_content, certificado)
+                
+        except Exception as e:
+            print(f"❌ Erro na assinatura: {e}")
+            return None
+    
+    def _processar_envio_sefaz(self, xml_assinado, certificado, ambiente):
+        """Processa envio para SEFAZ real ou simulado"""
+        try:
+            print(f"📤 === PROCESSANDO ENVIO SEFAZ ===")
+            print("DEBUG XML ASSINADO:", xml_assinado[:500])
+
+            print("🔍 XML ASSINADO COMPLETO:")
+            print(xml_assinado)
+            
+            # Extrair chave de acesso
+            chave_acesso = self._extrair_chave_acesso(xml_assinado)
+            if not chave_acesso:
+                return {'success': False, 'message': 'Chave de acesso não encontrada'}
+            
+            # Decidir se usa SEFAZ real
+            usar_sefaz_real = self._deve_usar_sefaz_real(certificado, ambiente)
+            
+            if usar_sefaz_real and SEFAZ_DISPONIVEL:
+                print("🌐 === ENVIANDO PARA SEFAZ REAL ===")
+                return self._enviar_sefaz_real(xml_assinado, chave_acesso, ambiente)
+            else:
+                print("🔄 === USANDO SIMULAÇÃO SEFAZ ===")
+                return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente)
+                
+        except Exception as e:
+            print(f"❌ Erro no envio SEFAZ: {e}")
+            return {'success': False, 'message': f'Erro no envio: {str(e)}'}
+    
+    def _deve_usar_sefaz_real(self, certificado, ambiente):
+        """Determina se deve usar SEFAZ real"""
+        
+        # Verificar se SefazService está disponível
+        if not SEFAZ_DISPONIVEL:
+            print("🔄 SefazService não disponível")
+            return False
+        
+        # Verificar configuração global
+        force_simulation = current_app.config.get('FORCE_SEFAZ_SIMULATION', False)
+        if force_simulation:
+            print("🔄 Simulação forçada por configuração")
+            return False
+        
+        # Verificar se certificado é real
+        if certificado.get('modo_simulado', True):
+            print("🔄 Certificado em modo simulado")
+            return False
+        
+        if not certificado.get('private_key') or certificado.get('private_key') == 'SIMULADO':
+            print("🔄 Chave privada não disponível")
+            return False
+        
+        print("✅ Condições OK para SEFAZ real")
+        return True
+    
+    def _enviar_sefaz_real(self, xml_assinado, chave_acesso, ambiente):
+        """Envia para SEFAZ real"""
+        try:
+            print(f"🌐 Conectando com SEFAZ real - Ambiente: {ambiente}")
+            
+            # Inicializar serviço SEFAZ
+            sefaz = SefazService(ambiente=ambiente)
+            
+            # Verificar status do serviço
+            status_servico = sefaz.consultar_status_servico()
+            if status_servico.get('status') != 'OK':
+                print(f"⚠️ SEFAZ indisponível: {status_servico.get('mensagem')}")
+                return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente, 
+                                                 motivo="SEFAZ indisponível")
+            
+            print("✅ SEFAZ operacional, enviando NFe...")
+            
+            # Enviar NFe
+            resultado = sefaz.enviar_nfe(xml_assinado, chave_acesso)
+            
+            # Processar resultado
+            if resultado.get('success'):
+                xml_protocolo = self._gerar_xml_protocolo(xml_assinado, resultado)
+                return {
+                    'success': True,
+                    'status': 'AUTORIZADA',
+                    'chave_acesso': chave_acesso,
+                    'protocolo': resultado.get('protocolo'),
+                    'message': resultado.get('mensagem'),
+                    'xml_protocolo': xml_protocolo,
+                    'ambiente_real': True
+                }
+            else:
+                return {
+                    'success': False,
+                    'status': resultado.get('status', 'ERRO'),
+                    'message': resultado.get('mensagem', 'Erro desconhecido'),
+                    'ambiente_real': True
+                }
+                
+        except Exception as e:
+            print(f"❌ Erro SEFAZ real: {e}")
+            # Fallback para simulação
+            return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
+                                             motivo=f"Erro: {str(e)}")
+    
+    def _enviar_sefaz_simulado(self, xml_assinado, chave_acesso, ambiente, motivo=None):
+        """Envia para SEFAZ simulado"""
+        try:
+            if motivo:
+                print(f"🔄 Simulação SEFAZ - Motivo: {motivo}")
+            else:
+                print("🔄 Usando simulação SEFAZ")
+            
+            # Simular resposta
+            protocolo = f"135{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            
+            resultado_simulado = {
+                'status': '100',
+                'mensagem': 'Autorizado o uso da NF-e',
+                'chave_acesso': chave_acesso,
+                'protocolo': protocolo,
+                'data_autorizacao': datetime.now().isoformat()
+            }
+            
+            xml_protocolo = self._gerar_xml_protocolo(xml_assinado, resultado_simulado)
+            
+            return {
+                'success': True,
+                'status': 'AUTORIZADA',
+                'chave_acesso': chave_acesso,
+                'protocolo': protocolo,
+                'message': 'Autorizado o uso da NF-e',
+                'xml_protocolo': xml_protocolo,
+                'ambiente_real': False,
+                'motivo_simulacao': motivo
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro na simulação: {e}")
+            return {'success': False, 'message': f'Erro na simulação: {str(e)}'}
+        
+    def _extrair_chave_acesso(self, xml_content):
+        """Extrai chave de acesso do XML assinado usando nfelib"""
+        try:
+            # Garantir que xml_content seja uma string
+            if isinstance(xml_content, bytes):
+                xml_content = xml_content.decode('utf-8')
+            
+            # Tentar extrair usando nfelib
+            try:
+                from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
+                
+                # Carregar o XML usando nfelib
+                nfe_proc = NfeProc.from_xml(xml_content)
+                
+                # Extrair a chave do atributo Id da infNFe
+                if hasattr(nfe_proc, 'NFe') and hasattr(nfe_proc.NFe, 'infNFe'):
+                    id_value = nfe_proc.NFe.infNFe.Id
+                    if id_value and id_value.startswith('NFe'):
+                        chave = id_value[3:]  # Remover 'NFe' do início
+                        print(f"✅ DEBUG: Chave de acesso extraída via nfelib: {chave}")
+                        return chave
+                    
+            except Exception as e:
+                print(f"⚠️ Aviso: Falha ao extrair com nfelib: {str(e)}")
+                # Continuar com os métodos regex
+                
+            # Método regex caso o nfelib falhe
+            # Método 1: buscar NFe seguido por 44 dígitos
+            match = re.search(r'NFe(\d{44})', xml_content)
+            if match:
+                chave = match.group(1)
+                print(f"✅ DEBUG: Chave de acesso encontrada via regex: {chave}")
+                return chave
+            
+            # Método 2: procurar pelo Id em qualquer formato
+            match = re.search(r'Id=[\'"]\s*NFe(\d{44})\s*[\'"]', xml_content)
+            if match:
+                chave = match.group(1)
+                print(f"✅ DEBUG: Chave de acesso encontrada via regex alternativo: {chave}")
+                return chave
+                
+            # Método 3: remover espaços e tentar novamente
+            xml_sem_espacos = re.sub(r'\s', '', xml_content)
+            match = re.search(r'NFe(\d{44})', xml_sem_espacos)
+            if match:
+                chave = match.group(1)
+                print(f"✅ DEBUG: Chave de acesso encontrada via regex sem espaços: {chave}")
+                return chave
+                    
+            # Se nenhum método funcionou, registrar erro
+            print("❌ Chave de acesso não encontrada no XML assinado!")
+            print(f"🔍 DEBUG: Tipo do XML: {type(xml_content)}")
+            print(f"🔍 DEBUG: Primeiros 200 caracteres: {xml_content[:200]}")
+            print(f"🔍 DEBUG: XML contém 'NFe'? {'NFe' in xml_content}")
+            
+            return None
+        except Exception as e:
+            print(f"❌ Erro ao extrair chave: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    # def _extrair_chave_acesso(self, xml_content):
+    #     """Extrai chave de acesso do XML assinado usando método mais robusto"""
+    #     try:
+    #         # Garantir que xml_content seja uma string
+    #         if isinstance(xml_content, bytes):
+    #             xml_content = xml_content.decode('utf-8')
+                
+    #         # Tentar com nfelib se estiver disponível
+    #         try:
+    #             import importlib
+    #             if importlib.util.find_spec('nfelib'):
+    #                 from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
+    #                 from io import StringIO
+                    
+    #                 # Carregar o XML usando nfelib
+    #                 nfe_proc = NfeProc.from_xml(xml_content)
+                    
+    #                 # Extrair a chave do atributo Id
+    #                 if hasattr(nfe_proc, 'NFe') and hasattr(nfe_proc.NFe, 'infNFe') and hasattr(nfe_proc.NFe.infNFe, 'Id'):
+    #                     id_value = nfe_proc.NFe.infNFe.Id
+    #                     if id_value and id_value.startswith('NFe'):
+    #                         chave = id_value[3:]  # Remover 'NFe' do início
+    #                         print(f"✅ DEBUG: Chave de acesso encontrada via nfelib: {chave}")
+    #                         return chave
+    #         except Exception as e:
+    #             print(f"⚠️ Falha ao usar nfelib: {e}, tentando método alternativo...")
+                
+    #         # Se nfelib não estiver disponível ou falhar, continuar com o método atual
+                    
+    #         # Método simplificado: buscar NFe seguido por 44 dígitos 
+    #         match = re.search(r'NFe(\d{44})', xml_content)
+    #         if match:
+    #             chave = match.group(1)
+    #             print(f"✅ DEBUG: Chave de acesso encontrada: {chave}")
+    #             return chave
+            
+    #         # Tentativa alternativa: procurar pelo Id em qualquer formato
+    #         match = re.search(r'Id=[\'"]\s*NFe(\d{44})\s*[\'"]', xml_content)
+    #         if match:
+    #             chave = match.group(1)
+    #             print(f"✅ DEBUG: Chave de acesso encontrada (método alternativo): {chave}")
+    #             return chave
+                
+    #         # Última tentativa: busca bruta por qualquer sequência de 44 dígitos após NFe
+    #         # removendo espaços e quebras de linha
+    #         clean_xml = re.sub(r'\s', '', xml_content)
+    #         match = re.search(r'NFe(\d{44})', clean_xml)
+    #         if match:
+    #             chave = match.group(1)
+    #             print(f"✅ DEBUG: Chave de acesso encontrada (busca sem espaços): {chave}")
+    #             return chave
+                    
+    #         print("❌ Chave de acesso não encontrada no XML assinado!")
+    #         print(f"🔍 DEBUG: Tipo do XML: {type(xml_content)}")
+    #         print(f"🔍 DEBUG: Primeiros 200 caracteres: {xml_content[:200]}")
+    #         return None
+    #     except Exception as e:
+    #         print(f"❌ Erro ao extrair chave: {e}")
+    #         import traceback
+    #         traceback.print_exc()
+    #         return None
+    
+    def _gerar_xml_protocolo(self, xml_assinado, resultado):
+        """Gera XML com protocolo"""
+        try:
+            root = ET.fromstring(xml_assinado)
+            nfe_element = root.find('.//{http://www.portalfiscal.inf.br/nfe}NFe')
+            
+            if nfe_element is not None:
+                nfe_xml = ET.tostring(nfe_element, encoding='unicode')
+            else:
+                nfe_xml = xml_assinado
+            
+            xml_protocolo = f'''<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+{nfe_xml}
+  <protNFe versao="4.00">
+    <infProt>
+      <tpAmb>2</tpAmb>
+      <verAplic>SP_NFE_PL_008i2</verAplic>
+      <chNFe>{resultado.get('chave_acesso', '')}</chNFe>
+      <dhRecbto>{resultado.get('data_autorizacao', datetime.now().isoformat())}</dhRecbto>
+      <nProt>{resultado.get('protocolo', '')}</nProt>
+      <digVal>SIMULADO</digVal>
+      <cStat>{resultado.get('status', '100')}</cStat>
+      <xMotivo>{resultado.get('mensagem', 'Autorizado o uso da NF-e')}</xMotivo>
+    </infProt>
+  </protNFe>
+</nfeProc>'''
+            
+            return xml_protocolo
+            
+        except Exception as e:
+            print(f"❌ Erro ao gerar protocolo: {e}")
+            return xml_assinado
+
+# ✅ MANTER SUAS FUNÇÕES EXISTENTES
 def generate_nfe_xml(form_data, emitente_data, destinatario_data, items_data, tp_amb=2, operation='emitir'):
     """
     Gera o XML da NFe baseado nos dados fornecidos

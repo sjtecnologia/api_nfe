@@ -67,7 +67,7 @@
                                         <div class="d-flex justify-content-between">
                                             <div>
                                                 <h6 class="card-title mb-0">Autorizadas</h6>
-                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'autorizada')|list|length }}</h4>
+                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'AUTORIZADA')|list|length }}</h4>
                                             </div>
                                             <div class="align-self-center">
                                                 <i class="fas fa-check-circle fa-2x"></i>
@@ -82,7 +82,7 @@
                                         <div class="d-flex justify-content-between">
                                             <div>
                                                 <h6 class="card-title mb-0">Em Processamento</h6>
-                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'processando')|list|length }}</h4>
+                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'PROCESSANDO')|list|length }}</h4>
                                             </div>
                                             <div class="align-self-center">
                                                 <i class="fas fa-clock fa-2x"></i>
@@ -97,7 +97,7 @@
                                         <div class="d-flex justify-content-between">
                                             <div>
                                                 <h6 class="card-title mb-0">Rejeitadas</h6>
-                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'rejeitada')|list|length }}</h4>
+                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'REJEITADA')|list|length }}</h4>
                                             </div>
                                             <div class="align-self-center">
                                                 <i class="fas fa-times-circle fa-2x"></i>
@@ -153,19 +153,19 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                {% if nfe.status == 'autorizada' %}
+                                                {% if nfe.status|upper == 'AUTORIZADA' %}
                                                     <span class="badge badge-success">
                                                         <i class="fas fa-check-circle"></i> Autorizada
                                                     </span>
-                                                {% elif nfe.status == 'rejeitada' %}
+                                                {% elif nfe.status|upper == 'REJEITADA' %}
                                                     <span class="badge badge-danger">
                                                         <i class="fas fa-times-circle"></i> Rejeitada
                                                     </span>
-                                                {% elif nfe.status == 'processando' %}
+                                                {% elif nfe.status|upper == 'PROCESSANDO' %}
                                                     <span class="badge badge-warning">
                                                         <i class="fas fa-clock"></i> Processando
                                                     </span>
-                                                {% elif nfe.status == 'rascunho' %}
+                                                {% elif nfe.status|upper == 'RASCUNHO' %}
                                                     <span class="badge badge-secondary">
                                                         <i class="fas fa-edit"></i> Rascunho
                                                     </span>
@@ -196,31 +196,41 @@
                                                 <div class="btn-group" role="group">
                                                     <!-- ✅ VISUALIZAR NFE -->
                                                     <a href="{{ url_for('nfe.view', nfe_id=nfe.nfe_emitida_id) }}" 
-                                                       class="btn btn-sm btn-outline-info" 
-                                                       title="Visualizar">
+                                                    class="btn btn-sm btn-outline-info" 
+                                                    title="Visualizar">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
                                                     
                                                     <!-- ✅ EDITAR APENAS SE FOR RASCUNHO -->
-                                                    {% if nfe.status == 'rascunho' %}
+                                                    {% if nfe.status|upper == 'RASCUNHO' %}
                                                     <a href="{{ url_for('nfe.edit', nfe_id=nfe.nfe_emitida_id) }}" 
-                                                       class="btn btn-sm btn-outline-primary" 
-                                                       title="Editar">
+                                                    class="btn btn-sm btn-outline-primary" 
+                                                    title="Editar">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
                                                     {% endif %}
                                                     
+                                                    <!-- ✅ GERAR DANFE SE AUTORIZADA -->
+                                                    {% if nfe.status|upper == 'AUTORIZADA' %}
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-success btn-gerar-danfe"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            title="Gerar DANFE">
+                                                        <i class="fas fa-file-pdf"></i>
+                                                    </button>
+                                                    {% endif %}
+                                                    
                                                     <!-- ✅ DOWNLOAD XML SE AUTORIZADA -->
-                                                    {% if nfe.status == 'autorizada' and nfe.chave_acesso %}
+                                                    {% if nfe.status|upper == 'AUTORIZADA' and nfe.chave_acesso %}
                                                     <a href="{{ url_for('nfe.download', nfe_id=nfe.nfe_emitida_id) }}" 
-                                                       class="btn btn-sm btn-outline-success" 
-                                                       title="Download XML">
+                                                    class="btn btn-sm btn-outline-success" 
+                                                    title="Download XML">
                                                         <i class="fas fa-download"></i>
                                                     </a>
                                                     {% endif %}
                                                     
                                                     <!-- ✅ REENVIAR SE REJEITADA -->
-                                                    {% if nfe.status == 'rejeitada' %}
+                                                    {% if nfe.status|upper == 'REJEITADA' %}
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-warning btn-reenviar"
                                                             data-nfe-id="{{ nfe.nfe_emitida_id }}"
@@ -303,6 +313,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // ✅ CONFIGURAR BOTÕES DE REENVIO
@@ -312,7 +323,14 @@ document.addEventListener('DOMContentLoaded', function() {
             reenviarNFe(nfeId);
         });
     });
-
+    
+    // ✅ CONFIGURAR BOTÕES DE GERAR DANFE
+    document.querySelectorAll('.btn-gerar-danfe').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const nfeId = this.getAttribute('data-nfe-id');
+            gerarDANFE(nfeId, this);
+        });
+    });
     // ✅ CONFIGURAR DROPDOWN BOOTSTRAP (caso não esteja carregado)
     if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
         // Bootstrap 5
@@ -322,6 +340,122 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ✅ FUNÇÃO PARA GERAR DANFE
+function gerarDANFE(nfeId, buttonEl) {
+    // Alterar o botão para indicar processamento
+    const originalHtml = buttonEl.innerHTML;
+    buttonEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    buttonEl.disabled = true;
+    
+    // Mostrar overlay de carregamento
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'loading-overlay';
+    loadingOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        color: white;
+    `;
+    loadingOverlay.innerHTML = `
+        <div class="spinner-border text-light" role="status">
+            <span class="sr-only">Gerando DANFE...</span>
+        </div>
+        <h4 class="mt-3">Gerando DANFE...</h4>
+        <p>Isso pode levar alguns segundos.</p>
+    `;
+    document.body.appendChild(loadingOverlay);
+    
+    // Fazer a requisição para gerar o DANFE
+    fetch('/admin/nfe/generate-danfe/' + nfeId, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ nfe_id: nfeId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Remover o overlay
+        document.body.removeChild(loadingOverlay);
+        
+        if (data.success) {
+            // Criar modal para mostrar o DANFE
+            const modalHtml = `
+                <div class="modal fade" id="danfeModal${nfeId}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">DANFE - NFe #${nfeId}</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="embed-responsive embed-responsive-1by1" style="min-height: 800px;">
+                                    <iframe class="embed-responsive-item" src="${data.pdf_url}" allowfullscreen></iframe>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                                <a href="${data.pdf_url}" class="btn btn-primary" download="danfe-${nfeId}.pdf">
+                                    <i class="fas fa-download"></i> Download PDF
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Adicionar modal ao DOM
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Mostrar o modal
+            $(`#danfeModal${nfeId}`).modal('show');
+            
+            // Restaurar o botão
+            buttonEl.innerHTML = originalHtml;
+            buttonEl.disabled = false;
+            
+            // Adicionar evento para remover o modal quando fechado
+            $(`#danfeModal${nfeId}`).on('hidden.bs.modal', function () {
+                $(this).remove();
+            });
+            
+            // Mostrar uma notificação de sucesso
+            mostrarToast('DANFE gerado com sucesso!', 'success');
+        } else {
+            // Restaurar o botão
+            buttonEl.innerHTML = originalHtml;
+            buttonEl.disabled = false;
+            
+            // Mostrar mensagem de erro
+            mostrarToast('Erro: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        // Remover o overlay
+        if (document.getElementById('loading-overlay')) {
+            document.body.removeChild(document.getElementById('loading-overlay'));
+        }
+        
+        // Restaurar o botão
+        buttonEl.innerHTML = originalHtml;
+        buttonEl.disabled = false;
+        
+        // Mostrar mensagem de erro
+        console.error('Erro:', error);
+        mostrarToast('Erro ao gerar DANFE. Tente novamente mais tarde.', 'error');
+    });
+}
 
 // ✅ FUNÇÃO PARA COPIAR CHAVE DE ACESSO
 function copiarChave(chave) {

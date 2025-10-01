@@ -307,12 +307,25 @@ input[readonly] {
             </div>
         </div>
 
+        <div class="card mt-3">
+                <div class="card-header">
+                    <h5>⚙️ Opções adicionais</h5>
+                </div>
+                <div class="card-body">
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="gerarDanfeAuto" name="gerar_danfe_auto" value="true">
+                        <label class="custom-control-label" for="gerarDanfeAuto">Gerar DANFE automaticamente após emissão</label>
+                        <small class="form-text text-muted">Se marcado, o sistema gerará o DANFE PDF automaticamente após a emissão bem-sucedida da NFe</small>
+                    </div>
+                </div>
+            </div>
+
         <!-- ✅ BOTÕES DE AÇÃO -->
         <div class="card mt-3">
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-12 text-center">
-                        <button type="submit" name="action" value="rascunho" class="btn btn-secondary">
+                        <button type="submit" name="action" value="rascunho" class="btn btn-outline-secondary">
                             <i class="fas fa-save"></i> Salvar como Rascunho
                         </button>
                         <button type="button" class="btn btn-info" onclick="previewXML()">

@@ -1,4 +1,44 @@
+# typing_extensions==4.15.0
+# xsdata==25.7
+# # Dependências básicas
+# Flask==2.0.1
+# SQLAlchemy==1.4.23
+ #lxml==6.0.1
+# nfelib==2.2.0
+# Jinja2==3.0.1
+# python-dotenv==0.19.0
+# Werkzeug==2.0.1
+
+# # Para autenticação e gerenciamento de sessão
+# Flask-Login==0.5.0
+# Flask-Session==0.4.0
+
+# # Para geração de PDFs e processamento de arquivos
+# Pillow==8.3.1
+
+# # Para banco de dados
+# psycopg2-binary==2.9.1
+# SQLAlchemy-Utils==0.37.8
+
+# # Para processamento de XML e NFe (escolher pelo menos uma)
+# # Opção 1: python-nfe (mais completa, mas pode ser mais difícil de instalar)
+# # python-nfe==0.4.0
+
+# # Opção 2: pysped (alternativa)
+# # -e git+https://github.com/akretion/pysped.git#egg=pysped
+
+# # Opção 3: python-brasil (moderna e ativa)
+# # python-brasil==0.1.0
+
+# # Dependências para desenvolvimento
+# pytest==6.2.5
+# black==21.8b0
+# flake8==3.9.2
+
+# Dependências básicas existentes
 lxml==6.0.1
-nfelib==2.2.0
-typing_extensions==4.15.0
-xsdata==25.7
+pytz>=2022.1
+reportlab>=3.6.9
+
+# PyNFe para geração de DANFE
+pynfe>=0.4.1

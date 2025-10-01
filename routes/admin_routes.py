@@ -1032,6 +1032,9 @@ def salvar_certificado():
         cliente_id = request.form.get('cliente_id')
         
         print(f"💾 Salvando certificado para cliente: {cliente_id}")
+        # ✅ DEBUG - VAMOS VER O QUE ESTÁ CHEGANDO
+        print(f"🔍 ROTA DEBUG: Form data: {dict(request.form)}")
+        print(f"🔍 ROTA DEBUG: Files data: {dict(request.files)}")
         
         # Verificar se foi enviado arquivo
         if 'arquivo_certificado' not in request.files:
@@ -1048,26 +1051,59 @@ def salvar_certificado():
             flash('Arquivo deve ser .pfx ou .p12', 'error')
             return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
         
-        # ✅ GERAR FINGERPRINT E VALIDAR CERTIFICADO
+        # ✅ IMPORTS NECESSÁRIOS
         import hashlib
         import base64
         from datetime import datetime
+        from cryptography.hazmat.primitives.serialization import pkcs12
+        from services.certificate_service import _encrypt_password  # ← IMPORTAR FUNÇÃO
         
         # Ler conteúdo do arquivo
         conteudo_arquivo = arquivo.read()
         senha = request.form.get('senha_certificado', '')
         nome_arquivo = arquivo.filename
         
+        print(f"🔐 ROTA: Senha recebida: {len(senha)} caracteres")
+        
+        # ✅ VALIDAR CERTIFICADO ANTES DE SALVAR
+        try:
+            print("🧪 ROTA: Validando certificado PKCS#12...")
+            private_key, cert_x509, additional_certs = pkcs12.load_key_and_certificates(
+                conteudo_arquivo,
+                senha.encode('utf-8')
+            )
+            
+            if not private_key or not cert_x509:
+                flash('Certificado ou senha inválidos!', 'error')
+                return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
+            
+            print("✅ ROTA: Certificado validado com sucesso!")
+            
+            # Extrair dados reais do certificado
+            validade_inicio = cert_x509.not_valid_before_utc.replace(tzinfo=None)
+            validade_fim = cert_x509.not_valid_after_utc.replace(tzinfo=None)
+            
+        except Exception as val_e:
+            print(f"❌ ROTA: Erro na validação: {val_e}")
+            flash(f'Certificado ou senha inválidos: {val_e}', 'error')
+            return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
+        
+        # ✅ CRIPTOGRAFAR SENHA
+        try:
+            print("🔐 ROTA: Criptografando senha...")
+            senha_criptografada = _encrypt_password(senha)
+            print(f"✅ ROTA: Senha criptografada: {len(senha_criptografada)} chars")
+            print(f"✅ ROTA: Primeiros 20 chars: {senha_criptografada[:20]}")
+        except Exception as crypto_e:
+            print(f"❌ ROTA: Erro na criptografia: {crypto_e}")
+            flash(f'Erro ao criptografar senha: {crypto_e}', 'error')
+            return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
+        
         # Gerar fingerprint (hash do conteúdo)
         fingerprint = hashlib.sha256(conteudo_arquivo).hexdigest()
         
         # Converter para base64 para armazenamento
         conteudo_base64 = base64.b64encode(conteudo_arquivo).decode('utf-8')
-        
-        # TODO: Aqui você pode adicionar validação do certificado
-        # Para extrair validade_inicio e validade_fim usando cryptography
-        validade_inicio = datetime.now()  # Placeholder
-        validade_fim = datetime.now().replace(year=datetime.now().year + 1)  # Placeholder
         
         connection = next(get_db())
         
@@ -1086,10 +1122,18 @@ def salvar_certificado():
             flash('Este certificado já foi cadastrado para este cliente.', 'warning')
             return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
         
+        # ✅ DESATIVAR CERTIFICADOS ANTIGOS
+        print("🔄 ROTA: Desativando certificados antigos...")
+        update_query = text("""
+            UPDATE certificados_digitais 
+            SET ativo = false 
+            WHERE cliente_id = :cliente_id AND ativo = true
+        """)
+        connection.execute(update_query, {'cliente_id': cliente_id})
+        
         # ✅ DESCOBRIR O ATRIBUTO CORRETO DO USER_ID
         user_id = None
         try:
-            # Tentar várias possibilidades de atributos
             if hasattr(current_user, 'user_id'):
                 user_id = current_user.user_id
             elif hasattr(current_user, 'id'):
@@ -1105,7 +1149,7 @@ def salvar_certificado():
         
         print(f"🔍 DEBUG: user_id determinado: {user_id}")
         
-        # ✅ INSERT COM CAMPOS CORRETOS
+        # ✅ INSERT COM SENHA CRIPTOGRAFADA
         query = text("""
             INSERT INTO certificados_digitais (
                 cliente_id, 
@@ -1136,9 +1180,9 @@ def salvar_certificado():
             'cliente_id': cliente_id,
             'fingerprint': fingerprint,
             'conteudo_certificado': conteudo_base64,
-            'senha_certificado': senha,
-            'validade_inicio': validade_inicio,
-            'validade_fim': validade_fim,
+            'senha_certificado': senha_criptografada,  # ✅ AGORA CRIPTOGRAFADA!
+            'validade_inicio': validade_inicio,         # ✅ DADOS REAIS DO CERTIFICADO
+            'validade_fim': validade_fim,               # ✅ DADOS REAIS DO CERTIFICADO
             'ativo': True,
             'nome_arquivo_original': nome_arquivo,
             'created_by_user_id': user_id
@@ -1146,7 +1190,8 @@ def salvar_certificado():
         
         connection.commit()
         
-        print(f"✅ Certificado salvo com fingerprint: {fingerprint[:16]}...")
+        print(f"✅ ROTA: Certificado salvo com fingerprint: {fingerprint[:16]}...")
+        print(f"✅ ROTA: Senha criptografada salva: {senha_criptografada[:30]}...")
         flash('Certificado enviado com sucesso!', 'success')
         return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
         

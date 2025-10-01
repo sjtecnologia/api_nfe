@@ -1,5 +1,5 @@
 import json
-from flask import Blueprint, request, render_template, redirect, url_for, flash
+from flask import Blueprint, jsonify, request, render_template, redirect, session, url_for, flash
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
@@ -9,7 +9,7 @@ from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop
 from auth.decorators import permission_required, admin_required
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
-from services.nfe_service import generate_nfe_xml, sign_xml, send_to_sefaz
+from services.nfe_service import NFeService, generate_nfe_xml, sign_xml, send_to_sefaz
 from utils.helpers import produto_to_dict_for_template, get_uf_ibge_code
 from utils.nfe_validators import validar_dados_nfe, validar_xml_nfe
 from config.settings import SEFAZ_AMBIENTE_HOMOLOGACAO
@@ -244,26 +244,25 @@ def emitir_nfe():
                         flash(f'Erro ao buscar certificado: {str(e)}', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
-                    # 3. ASSINAR XML
+                   # 3. ASSINAR XML
                     print("✍️ === ASSINANDO XML ===")
                     try:
-                        xml_assinado = sign_xml(xml_nfe, certificado)
+                        from services.xml_signature_service import xml_signature_service
+                        xml_assinado = xml_signature_service.sign_nfe_xml(xml_nfe, db, emitente_cliente_id)  # ✅ CORRIGIDO
                         print(f"✅ XML assinado: {len(xml_assinado)} caracteres")
                     except Exception as e:
-                        print(f"❌ ERRO ao assinar XML: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        flash(f'Erro ao assinar XML: {str(e)}', 'danger')
-                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                        print(f"❌ Erro na assinatura: {e}")
+                        flash(f'Erro na assinatura do XML: {e}', 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))  # ✅ CORRIGIDO
                     
                     # 4. ENVIAR PARA SEFAZ
                     print(f"📤 === ENVIANDO PARA SEFAZ ===")
                     try:
-                        resultado_sefaz = send_to_sefaz(
-                            xml_assinado, 
-                            certificado, 
-                            emitente_data.cnpj, 
-                            tp_amb
+                        nfe_service = NFeService(db)
+                        resultado_sefaz = nfe_service._processar_envio_sefaz(
+                            xml_assinado,
+                            certificado,
+                            ambiente
                         )
                         print(f"📨 Resultado SEFAZ: {resultado_sefaz}")
                     except Exception as e:
@@ -276,7 +275,8 @@ def emitir_nfe():
                     # 5. SALVAR NO BANCO
                     print("💾 === SALVANDO NO BANCO ===")
                     try:
-                        status_nfe = 'AUTORIZADA' if resultado_sefaz.get('status') == '100' else 'REJEITADA'
+                        # CORREÇÃO: Usar o status retornado pelo serviço em vez de verificar apenas o código
+                        status_nfe = resultado_sefaz.get('status', 'REJEITADA') if resultado_sefaz.get('success', False) else 'REJEITADA'
                         print(f"📊 Status NFe: {status_nfe}")
                         
                         nova_nfe = NFeEmitidas(
@@ -296,7 +296,7 @@ def emitir_nfe():
                             status=status_nfe,
                             chave_acesso=resultado_sefaz.get('chave_acesso'),
                             protocolo_sefaz=resultado_sefaz.get('protocolo'),
-                            mensagem_sefaz=resultado_sefaz.get('mensagem'),
+                            mensagem_sefaz=resultado_sefaz.get('message'),
                             data_criacao=datetime.now(),
                             data_autorizacao=datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else None,
                             created_by_user_id=current_user.id,
@@ -321,8 +321,29 @@ def emitir_nfe():
                         msg = f'✅ NFe emitida com sucesso em {ambiente}! Protocolo: {resultado_sefaz.get("protocolo")}'
                         print(msg)
                         flash(msg, 'success')
+                        # Se o DANFE deve ser gerado automaticamente, faça isso aqui
+                        gerar_danfe_automatico = request.form.get('gerar_danfe_auto', 'false')
+                        if gerar_danfe_automatico == 'true':
+                            try:
+                                from services.danfe_service import generate_danfe
+                                pdf_path = generate_danfe(xml_assinado, nova_nfe.nfe_emitida_id)
+                                pdf_url = url_for('static', filename=f'danfe/danfe_{nova_nfe.nfe_emitida_id}.pdf')
+                                
+                                # Adicionar URL do DANFE à sessão para mostrar no template de lista
+                                if 'danfes_gerados' not in session:
+                                    session['danfes_gerados'] = {}
+                                session['danfes_gerados'][nova_nfe.nfe_emitida_id] = {
+                                    'url': pdf_url,
+                                    'timestamp': datetime.now().timestamp()
+                                }
+                                
+                                # Adicionar mensagem de sucesso
+                                flash(f'✅ DANFE gerado automaticamente! <a href="{pdf_url}" target="_blank">Visualizar</a>', 'success')
+                            except Exception as e:
+                                print(f"❌ Erro ao gerar DANFE automático: {e}")
+                                flash(f'⚠️ NFe emitida com sucesso, mas houve um erro ao gerar o DANFE: {str(e)}', 'warning')
                     else:
-                        msg = f'❌ NFe rejeitada: {resultado_sefaz.get("mensagem")}'
+                        msg = f'❌ NFe rejeitada: {resultado_sefaz.get("message")}'
                         print(msg)
                         flash(msg, 'danger')
                     
@@ -601,16 +622,150 @@ def view(nfe_id):
             flash('NFe não encontrada.', 'error')
             return redirect(url_for('nfe.list_nfes'))
         
-        # Converter para dict
-        nfe_data = dict(nfe._mapping)
+        # Converter para dict - CORREÇÃO AQUI
+        try:
+            # Se _mapping é um método, precisamos chamá-lo
+            if hasattr(nfe, '_mapping') and callable(nfe._mapping):
+                nfe_data = dict(nfe._mapping())
+            # Se _mapping é um atributo
+            elif hasattr(nfe, '_mapping'):
+                nfe_data = dict(nfe._mapping)
+            # Fallback para row._asdict() que alguns drivers SQL usam
+            elif hasattr(nfe, '_asdict') and callable(nfe._asdict):
+                nfe_data = nfe._asdict()
+            # Último recurso: converter manualmente
+            else:
+                nfe_data = {column: getattr(nfe, column) for column in nfe._fields}
+        except Exception as e:
+            print(f"Erro ao converter resultado para dict: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback simples
+            nfe_data = {key: getattr(nfe, key) for key in dir(nfe) if not key.startswith('_') and not callable(getattr(nfe, key))}
         
-        return render_template('nfe/xml_preview.html', nfe=nfe_data)
+        return render_template('admin/nfes/xml_preview.html', nfe=nfe_data)
         
     except Exception as e:
+        print(f"Erro ao visualizar NFe: {str(e)}")
+        import traceback
+        traceback.print_exc()
         flash(f'Erro ao visualizar NFe: {str(e)}', 'error')
         return redirect(url_for('nfe.list_nfes'))
     finally:
         db.close()
+
+@nfe_bp.route('/generate-danfe/<int:nfe_id>', methods=['POST'])
+@login_required
+@permission_required('nfe.read')
+def generate_danfe(nfe_id):
+    """Gerar PDF do DANFE para uma NFe"""
+    db = next(get_db())
+    try:
+        # Buscar NFe
+        query = text("""
+            SELECT 
+                n.*,
+                c.razao_social as cliente_nome
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+        
+        # Converter para dict
+        nfe_data = dict(nfe._mapping)
+        
+        # Verificar se tem XML
+        if not nfe_data.get('json_nfe') or not nfe_data['json_nfe'].get('xml_content'):
+            return jsonify({'success': False, 'message': 'XML não disponível para esta NFe'}), 400
+        
+        # Gerar DANFE usando a biblioteca Python NFe
+        from services.danfe_service import generate_danfe
+        
+        try:
+            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id)
+            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
+            
+            return jsonify({
+                'success': True,
+                'pdf_url': pdf_url,
+                'message': 'DANFE gerado com sucesso'
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'Erro ao gerar DANFE: {str(e)}'}), 500
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
+    finally:
+        db.close()        
+
+@nfe_bp.route('/generate-danfe-after-issue', methods=['POST'])
+@login_required
+@permission_required('nfe.read')
+def generate_danfe_after_issue():
+    """Gerar PDF do DANFE para uma NFe recém emitida"""
+    db = next(get_db())
+    try:
+        # Obter dados do request
+        data = request.json
+        nfe_id = data.get('nfe_id')
+        
+        if not nfe_id:
+            return jsonify({'success': False, 'message': 'ID da NFe não informado'}), 400
+            
+        # Buscar NFe
+        query = text("""
+            SELECT 
+                n.*,
+                c.razao_social as cliente_nome
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+        
+        # Converter para dict
+        nfe_data = dict(nfe._mapping)
+        
+        # Verificar se tem XML
+        if not nfe_data.get('json_nfe') or not nfe_data['json_nfe'].get('xml_content'):
+            return jsonify({'success': False, 'message': 'XML não disponível para esta NFe'}), 400
+        
+        # Gerar DANFE usando o serviço
+        from services.danfe_service import generate_danfe
+        
+        try:
+            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id)
+            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
+            
+            return jsonify({
+                'success': True,
+                'pdf_url': pdf_url,
+                'message': 'DANFE gerado com sucesso'
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'Erro ao gerar DANFE: {str(e)}'}), 500
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
+    finally:
+        db.close()        
 
 @nfe_bp.route('/edit/<int:nfe_id>')
 @login_required
@@ -627,3 +782,95 @@ def download(nfe_id):
     """Download do XML da NFe"""
     flash('Funcionalidade de download em desenvolvimento.', 'info')
     return redirect(url_for('nfe.list_nfes'))
+
+@nfe_bp.route('/reenviar', methods=['POST'])
+@login_required
+@permission_required('nfe.issue')
+def reenviar_nfe():
+    """Reenviar uma NFe rejeitada"""
+    db = next(get_db())
+    try:
+        nfe_id = request.form.get('nfe_id')
+        if not nfe_id:
+            return jsonify({'success': False, 'message': 'ID da NFe não informado'}), 400
+        
+        # Buscar NFe
+        query = text("""
+            SELECT 
+                n.*,
+                c.razao_social as cliente_nome
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+        
+        # Verificar se a NFe está rejeitada
+        if nfe.status.upper() != 'REJEITADA':
+            return jsonify({'success': False, 'message': 'Apenas NFes rejeitadas podem ser reenviadas'}), 400
+            
+        # Obter dados da NFe
+        nfe_data = dict(nfe._mapping)
+        
+        # Verificar se tem XML
+        if not nfe_data.get('json_nfe') or not nfe_data['json_nfe'].get('xml_content'):
+            return jsonify({'success': False, 'message': 'XML não disponível para reenvio'}), 400
+        
+        # Buscar certificado ativo
+        certificado = get_active_certificate_for_client(db, nfe.cliente_id)
+        if not certificado:
+            return jsonify({'success': False, 'message': 'Nenhum certificado digital ativo encontrado'}), 400
+        
+        # Reenviar para SEFAZ
+        nfe_service = NFeService(db)
+        ambiente = nfe_data['json_nfe'].get('ambiente', 'homologacao')
+        resultado_sefaz = nfe_service._processar_envio_sefaz(
+            nfe_data['json_nfe']['xml_content'],
+            certificado,
+            ambiente
+        )
+        
+        # Atualizar status no banco de dados
+        status_nfe = resultado_sefaz.get('status', 'REJEITADA') if resultado_sefaz.get('success', False) else 'REJEITADA'
+        
+        # Atualizar NFe no banco de dados
+        update_query = text("""
+            UPDATE nfe_emitidas 
+            SET status = :status,
+                chave_acesso = :chave_acesso,
+                protocolo_sefaz = :protocolo,
+                mensagem_sefaz = :mensagem,
+                data_autorizacao = :data_autorizacao,
+                updated_at = :updated_at
+            WHERE nfe_emitida_id = :nfe_id
+        """)
+        
+        db.execute(update_query, {
+            'status': status_nfe,
+            'chave_acesso': resultado_sefaz.get('chave_acesso'),
+            'protocolo': resultado_sefaz.get('protocolo'),
+            'mensagem': resultado_sefaz.get('message'),
+            'data_autorizacao': datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else None,
+            'updated_at': datetime.now(),
+            'nfe_id': nfe_id
+        })
+        
+        db.commit()
+        
+        return jsonify({
+            'success': True,
+            'status': status_nfe,
+            'message': resultado_sefaz.get('message', 'NFe processada com sucesso')
+        })
+        
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
+    finally:
+        db.close()

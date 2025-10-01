@@ -1,9 +1,12 @@
 from flask import Blueprint, render_template, redirect, url_for, session, request, flash, jsonify, g
 from flask_login import login_required, current_user
 from auth.decorators import client_access_required
+from auth.permissions import get_accessible_client_ids
 from database.connection import get_db
-from sqlalchemy import text
-from datetime import datetime
+from sqlalchemy import func, text
+from datetime import datetime, timedelta
+
+from database.models import CertificadoDigital, Cliente, DestinatarioNFe, Produto, RegraTributacao
 
 cliente_bp = Blueprint('cliente', __name__)
 
@@ -11,175 +14,212 @@ cliente_bp = Blueprint('cliente', __name__)
 @login_required
 @client_access_required()
 def dashboard(cliente_id):
-    """Dashboard específico do cliente - ESTRUTURAS REAIS"""
+    """Dashboard principal do cliente"""
+    db = next(get_db())
+    
     try:
+        # Verificar se o usuário tem acesso a este cliente
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            flash('Você não tem permissão para acessar este cliente.', 'danger')
+            return redirect(url_for('home.home'))
+        
+        print(f"✅ Acesso permitido ao cliente {cliente_id} para usuário {current_user.username}")
         print(f"🎯 DASHBOARD: Entrando no dashboard do cliente {cliente_id}")
-        db = next(get_db())
         
         # Buscar dados do cliente
-        cliente_result = db.execute(text("""
-            SELECT cliente_id, razao_social, nome_fantasia, cnpj,
-                   inscricao_estadual, inscricao_municipal,
-                   logradouro, numero, complemento, bairro, 
-                   nome_municipio, uf, cep,
-                   telefone_contato, email_contato, data_cadastro
-            FROM clientes 
-            WHERE cliente_id = :cliente_id AND ativo = true
-        """), {"cliente_id": cliente_id})
-        
-        cliente_data = cliente_result.first()
-        if not cliente_data:
+        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        if not cliente:
             flash('Cliente não encontrado.', 'danger')
-            return redirect(url_for('auth.login'))
-            
-        cliente = dict(cliente_data._mapping)
-        print(f"✅ Cliente: {cliente['razao_social']}")
+            return redirect(url_for('home.home'))
         
-        # ===== ESTATÍSTICAS COM ESTRUTURAS CORRETAS =====
+        print(f"✅ Cliente: {cliente.razao_social}")
         
-        # 1. PRODUTOS (tem coluna 'ativo')
-        produtos_result = db.execute(text("""
+        # Estatísticas
+        total_produtos = db.query(func.count(Produto.produto_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        total_destinatarios = db.query(func.count(DestinatarioNFe.destinatario_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        total_regras = db.query(func.count(RegraTributacao.regra_tributacao_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        total_certificados = db.query(func.count(CertificadoDigital.certificado_digital_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        
+        # Contagem de NFes - Usar SQL Nativo para garantir resultados corretos
+        # CORRIGIDO: Usar formato MAIÚSCULO para os status para garantir compatibilidade
+        query_nfes_total = text("""
             SELECT COUNT(*) as total
-            FROM produtos 
-            WHERE cliente_id = :cliente_id AND ativo = true
-        """), {"cliente_id": cliente_id})
-        total_produtos = produtos_result.first().total or 0
-        
-        # 2. DESTINATÁRIOS NFE (NÃO tem coluna 'ativo')
-        destinatarios_result = db.execute(text("""
-            SELECT COUNT(*) as total
-            FROM destinatarios_nfe 
+            FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
-        """), {"cliente_id": cliente_id})
-        total_destinatarios = destinatarios_result.first().total or 0
+        """)
         
-        # 3. REGRAS TRIBUTÁRIAS (tem coluna 'ativo')
-        regras_result = db.execute(text("""
+        query_nfes_ano = text("""
             SELECT COUNT(*) as total
-            FROM regras_tributacao 
-            WHERE cliente_id = :cliente_id AND ativo = true
-        """), {"cliente_id": cliente_id})
-        total_regras = regras_result.first().total or 0
-        
-        # 4. CERTIFICADOS DIGITAIS (tem coluna 'ativo')
-        cert_result = db.execute(text("""
-            SELECT COUNT(*) as total,
-                   COUNT(CASE WHEN validade_fim > CURRENT_DATE THEN 1 END) as validos
-            FROM certificados_digitais 
-            WHERE cliente_id = :cliente_id AND ativo = true
-        """), {"cliente_id": cliente_id})
-        cert_data = cert_result.first()
-        total_certificados = cert_data.total or 0
-        cert_validos = cert_data.validos or 0
-        
-        # 5. NFEs (NÃO tem coluna 'ativo')
-        nfes_result = db.execute(text("""
-            SELECT COUNT(*) as total,
-                   COUNT(CASE WHEN status = 'Autorizada' THEN 1 END) as autorizadas
-            FROM nfe_emitidas 
+            FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
-        """), {"cliente_id": cliente_id})
-        nfes_data = nfes_result.first()
-        total_nfes = nfes_data.total or 0
-        nfes_autorizadas = nfes_data.autorizadas or 0
+            AND EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
+        """)
+        
+        query_nfes_mes = text("""
+            SELECT COUNT(*) as total
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+            AND EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
+            AND EXTRACT(MONTH FROM data_criacao) = EXTRACT(MONTH FROM CURRENT_DATE)
+        """)
+        
+        total_nfes = db.execute(query_nfes_total, {"cliente_id": cliente_id}).fetchone()[0] or 0
+        nfes_ano = db.execute(query_nfes_ano, {"cliente_id": cliente_id}).fetchone()[0] or 0
+        nfes_mes = db.execute(query_nfes_mes, {"cliente_id": cliente_id}).fetchone()[0] or 0
         
         print(f"📊 Contagens: {total_produtos}P, {total_destinatarios}D, {total_regras}R, {total_certificados}C, {total_nfes}N")
         
-        # ===== DADOS RECENTES =====
-        
-        # Produtos recentes (com coluna 'ativo')
-        produtos_recentes_result = db.execute(text("""
-            SELECT produto_id, descricao, unidade_comercial as unidade, 
-                   preco_unitario_padrao as preco_unitario, 
-                   (SELECT codigo FROM ncms WHERE ncm_id = produtos.ncm_id) as ncm_codigo,
-                   produto_id as data_cadastro
-            FROM produtos 
-            WHERE cliente_id = :cliente_id AND ativo = true
-            ORDER BY produto_id DESC
-            
-        """), {"cliente_id": cliente_id})
-        produtos_recentes = [dict(row._mapping) for row in produtos_recentes_result]
-        
-        # Destinatários recentes (SEM coluna 'ativo', nomes corretos)
-        dest_recentes_result = db.execute(text("""
-            SELECT destinatario_id, nome_razao_social as razao_social, 
-                   cpf_cnpj as cnpj_cpf, nome_municipio, uf, data_cadastro
-            FROM destinatarios_nfe 
-            WHERE cliente_id = :cliente_id
-            ORDER BY data_cadastro DESC
-            
-        """), {"cliente_id": cliente_id})
-        destinatarios_recentes = [dict(row._mapping) for row in dest_recentes_result]
-        
-        # Estatísticas para o template
+        # Estatísticas agrupadas
         stats = {
-            'total_nfes': total_nfes,
-            'nfes_ano': total_nfes,
-            'nfes_mes': 0,
-            'nfes_autorizadas': nfes_autorizadas,
-            'nfes_pendentes': total_nfes - nfes_autorizadas,
             'total_produtos': total_produtos,
             'total_destinatarios': total_destinatarios,
             'total_regras': total_regras,
             'total_certificados': total_certificados,
-            'cert_validos': cert_validos,
-            'cert_vencidos': total_certificados - cert_validos,
-            'valor_total': 0.0
+            'total_nfes': total_nfes,
+            'nfes_ano': nfes_ano,
+            'nfes_mes': nfes_mes
         }
         
-        print(f"✅ DASHBOARD: Dados carregados - {total_produtos} produtos, {total_destinatarios} destinatários")
+        # CORRIGIDO: Últimas NFes - Usar SQL nativo para garantir dados corretos
+        query_ultimas_nfes = text("""
+            SELECT 
+                nfe_emitida_id,
+                cliente_id,
+                status,
+                data_criacao,
+                chave_acesso,
+                protocolo_sefaz,
+                destinatario_razao_social,
+                destinatario_cnpj_cpf,
+                json_nfe
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+            ORDER BY data_criacao DESC
+            LIMIT 5
+        """)
         
-        # Definir cliente atual
-        session['current_client_id'] = cliente_id
-        g.current_client = cliente
+        ultimas_nfes_result = db.execute(query_ultimas_nfes, {"cliente_id": cliente_id})
+        ultimas_nfes = []
+        
+        for row in ultimas_nfes_result:
+            nfe_dict = dict(row._mapping)
+            
+            # CORRIGIDO: Extrair valor da NFe do JSON
+            try:
+                import json
+                json_data = json.loads(nfe_dict['json_nfe']) if isinstance(nfe_dict['json_nfe'], str) else nfe_dict['json_nfe']
+                
+                # Tentar extrair o valor total de diferentes formas possíveis na estrutura JSON
+                valor_total = None
+                if isinstance(json_data, dict):
+                    # Verificar várias possíveis localizações do valor total
+                    if 'total' in json_data and isinstance(json_data['total'], dict):
+                        if 'ICMSTot' in json_data['total'] and isinstance(json_data['total']['ICMSTot'], dict):
+                            valor_total = json_data['total']['ICMSTot'].get('vNF')
+                    
+                    # Verificar na estrutura form_data -> valorPagamento
+                    elif 'form_data' in json_data and isinstance(json_data['form_data'], dict):
+                        valor_total = json_data['form_data'].get('valorPagamento')
+                
+                if valor_total is not None:
+                    try:
+                        nfe_dict['valor_total'] = float(valor_total)
+                    except (ValueError, TypeError):
+                        nfe_dict['valor_total'] = 0.0
+                else:
+                    nfe_dict['valor_total'] = 0.0
+                    
+            except Exception as e:
+                print(f"⚠️ Erro ao processar JSON da NFe {nfe_dict['nfe_emitida_id']}: {e}")
+                nfe_dict['valor_total'] = 0.0
+            
+            ultimas_nfes.append(nfe_dict)
+        
+        # CORRIGIDO: NFes por mês - últimos 6 meses
+        hoje = datetime.now()
+        seis_meses_atras = hoje - timedelta(days=180)
+        
+        query_nfes_por_mes = text("""
+            SELECT 
+                EXTRACT(MONTH FROM data_criacao) as mes,
+                EXTRACT(YEAR FROM data_criacao) as ano,
+                COUNT(*) as quantidade
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+            AND data_criacao >= :data_inicio
+            GROUP BY EXTRACT(YEAR FROM data_criacao), EXTRACT(MONTH FROM data_criacao)
+            ORDER BY EXTRACT(YEAR FROM data_criacao), EXTRACT(MONTH FROM data_criacao)
+        """)
+        
+        nfes_por_mes_result = db.execute(query_nfes_por_mes, {
+            "cliente_id": cliente_id,
+            "data_inicio": seis_meses_atras
+        })
+        
+        nfes_por_mes = []
+        for row in nfes_por_mes_result:
+            nfes_por_mes.append({
+                'mes': int(row[0]),
+                'ano': int(row[1]),
+                'quantidade': int(row[2])
+            })
+        
+        # CORRIGIDO: Se não houver dados para os últimos 6 meses, criar dados vazios
+        if not nfes_por_mes:
+            for i in range(6):
+                mes_atual = hoje - timedelta(days=30 * i)
+                nfes_por_mes.insert(0, {
+                    'mes': mes_atual.month,
+                    'ano': mes_atual.year,
+                    'quantidade': 0
+                })
+        
+        print(f"✅ DASHBOARD: Dados carregados - {total_produtos} produtos, {total_destinatarios} destinatários, {len(ultimas_nfes)} NFes recentes")
         
         return render_template('cliente/dashboard.html', 
-                             cliente=cliente,
+                             cliente=cliente, 
                              stats=stats,
-                             nfes_recentes=[],
-                             produtos_recentes=produtos_recentes,
-                             destinatarios_recentes=destinatarios_recentes,
-                             current_user=current_user)
-        
+                             ultimas_nfes=ultimas_nfes,
+                             nfes_por_mes=nfes_por_mes)
+                             
     except Exception as e:
-        print(f"❌ ERRO no dashboard: {e}")
+        db.rollback()
+        print(f"❌ Erro no dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
-        flash('Erro interno do servidor.', 'error')
-        return redirect(url_for('auth.login'))
-        
+        flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
+        return redirect(url_for('home.home'))
     finally:
-        if 'db' in locals():
-            db.close()
+        db.close()
 
 @cliente_bp.route('/resumo/<int:cliente_id>')
 @login_required
 @client_access_required()
 def resumo(cliente_id):
-    """Resumo do cliente"""
+    """Página de resumo do cliente"""
+    db = next(get_db())
+    
     try:
-        db = next(get_db())
+        # Verificar se o usuário tem acesso a este cliente
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            flash('Você não tem permissão para acessar este cliente.', 'danger')
+            return redirect(url_for('home.home'))
         
-        cliente_data = db.execute(text("""
-            SELECT cliente_id, razao_social, nome_fantasia
-            FROM clientes 
-            WHERE cliente_id = :cliente_id
-        """), {"cliente_id": cliente_id}).first()
+        # Buscar dados do cliente
+        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        if not cliente:
+            flash('Cliente não encontrado.', 'danger')
+            return redirect(url_for('home.home'))
         
-        if not cliente_data:
-            return jsonify({'error': 'Cliente não encontrado'}), 404
-            
-        return jsonify({
-            'cliente_id': cliente_data.cliente_id,
-            'razao_social': cliente_data.razao_social,
-            'nome_fantasia': cliente_data.nome_fantasia
-        })
+        return render_template('cliente/resumo.html', cliente=cliente)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        flash(f'Erro ao carregar dados do cliente: {str(e)}', 'danger')
+        return redirect(url_for('home.home'))
     finally:
-        if 'db' in locals():
-            db.close()
+        db.close()
 
 @cliente_bp.route('/api/estatisticas/<int:cliente_id>')
 @login_required
