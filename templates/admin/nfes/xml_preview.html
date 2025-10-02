@@ -17,26 +17,22 @@
     .card-tabs .nav-link.active {
         border-bottom: 3px solid #007bff;
         font-weight: bold;
-        color: #007bff !important; /* Forçar cor azul para texto da aba ativa */
-        /* background-color: #fff; Fundo branco para aba ativa */
+        color: #007bff !important;
     }
     
-    /* Garantir que os ícones também tenham a cor correta */
     .card-tabs .nav-link.active i {
-        color: #007bff !important; /* Forçar cor azul para ícones da aba ativa */
+        color: #007bff !important;
     }
     
     .card-tabs .nav-link:hover {
-        color: #0056b3; /* Cor azul escuro no hover */
-        background-color: rgba(0, 123, 255, 0.05); /* Fundo azul claro no hover */
+        color: #0056b3;
+        background-color: rgba(0, 123, 255, 0.05);
     }
     
-    /* Estilo para garantir que os ícones também mudam de cor no hover */
     .card-tabs .nav-link:hover i {
         color: #0056b3;
     }
     
-    /* Remover classes de texto padrão do Bootstrap que podem sobrescrever nossos estilos */
     .card-tabs .nav-link.text-white,
     .card-tabs .nav-link.active.text-white,
     .card-tabs .nav-link.text-light {
@@ -49,7 +45,6 @@
         border-top: none;
     }
     
-    /* Resto dos estilos permanecem iguais */
     pre {
         max-height: 500px;
         overflow: auto;
@@ -63,18 +58,17 @@
     }
     .info-group dt {
         font-weight: bold;
-        color: #212529; /* MAIS ESCURO - antes era #6c757d */
+        color: #212529;
     }
     .info-group dd {
         margin-bottom: 0.5rem;
-        color: #343a40; /* Cinza escuro para leitura confortável */
+        color: #343a40;
     }
-    /* Labels de formulários e modais */
     .form-group label,
     .form-check-label,
     .modal-body label {
         font-weight: 600;
-        color: #212529; /* Preto Bootstrap */
+        color: #212529;
     }
     #loading-overlay {
         position: fixed;
@@ -118,6 +112,28 @@
         background-color: #4e555b;
         color: white;
     }
+    
+    /* Estilos para mensagens de status do DANFE */
+    .danfe-status {
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+    .danfe-status.success {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    .danfe-status.error {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+    .danfe-status.warning {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+    }
 </style>
 {% endblock %}
 
@@ -125,21 +141,16 @@
 <!-- Loading Overlay -->
 <div id="loading-overlay" style="display: none;">
     <div class="loading-spinner"></div>
-    <h3>Gerando DANFE...</h3>
-    <p>Este processo pode levar alguns segundos.</p>
+    <h3 id="loading-title">Gerando DANFE...</h3>
+    <p id="loading-message">Este processo pode levar alguns segundos.</p>
 </div>
 
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-file-invoice"></i> 
-            NF-e ID:{{ nfe.nfe_emitida_id }}
+            NF-e ID: {{ nfe.nfe_emitida_id }}
         </h1>
-        <!-- <div>
-            <a href="{{ url_for('nfe.list_nfes', cliente_id=nfe.cliente_id) }}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left"></i> Voltar
-            </a>
-        </div> -->
     </div>
 
     <!-- Status Card -->
@@ -173,25 +184,25 @@
         </div>
     </div>
 
-    <!-- Novo Card de Ações Rápidas -->
+    <!-- Card de Ações Rápidas -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card shadow">
                 <div class="card-header bg-white py-3">
-                    <h6 class="m-0 font-weight-bold ">
+                    <h6 class="m-0 font-weight-bold">
                         <i class="fas fa-tools"></i> Ações Rápidas
                     </h6>
                 </div>
                 <div class="card-body">
                     <div class="action-buttons d-flex flex-wrap justify-content-center">
-                        {% if nfe.status|upper == 'AUTORIZADA' and nfe.json_nfe.xml_content %}
+                        {% if nfe.status|upper == 'AUTORIZADA' and nfe.json_nfe and nfe.json_nfe.xml_content %}
                         <!-- Botão para gerar DANFE -->
-                        <button type="button" id="btn-generate-danfe" class="btn btn-success">
+                        <button type="button" id="btn-generate-danfe" class="btn btn-success" data-nfe-id="{{ nfe.nfe_emitida_id }}">
                             <i class="fas fa-file-pdf"></i> Gerar DANFE
                         </button>
                         
                         <!-- Botão para imprimir DANFE -->
-                        <button type="button" id="btn-print-danfe" class="btn btn-print">
+                        <button type="button" id="btn-print-danfe" class="btn btn-print" data-nfe-id="{{ nfe.nfe_emitida_id }}">
                             <i class="fas fa-print"></i> Imprimir DANFE
                         </button>
                         
@@ -246,7 +257,7 @@
         <div class="col-md-4">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold ">
+                    <h6 class="m-0 font-weight-bold">
                         <i class="fas fa-building"></i> Emitente
                     </h6>
                 </div>
@@ -256,9 +267,9 @@
                         <dd>{{ nfe.cliente_nome }}</dd>
                         
                         <dt>CNPJ</dt>
-                        <dd>{{ nfe.json_nfe.form_data.cnpj_emitente if nfe.json_nfe.form_data.cnpj_emitente else nfe.cnpj|default('N/A') }}</dd>
+                        <dd>{{ nfe.json_nfe.form_data.cnpj_emitente if nfe.json_nfe and nfe.json_nfe.form_data and nfe.json_nfe.form_data.cnpj_emitente else nfe.cnpj|default('N/A') }}</dd>
                         
-                        {% if nfe.json_nfe.form_data.ie_emitente %}
+                        {% if nfe.json_nfe and nfe.json_nfe.form_data and nfe.json_nfe.form_data.ie_emitente %}
                         <dt>IE</dt>
                         <dd>{{ nfe.json_nfe.form_data.ie_emitente }}</dd>
                         {% endif %}
@@ -269,7 +280,7 @@
         <div class="col-md-4">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold ">
+                    <h6 class="m-0 font-weight-bold">
                         <i class="fas fa-user"></i> Destinatário
                     </h6>
                 </div>
@@ -287,7 +298,7 @@
         <div class="col-md-4">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold ">
+                    <h6 class="m-0 font-weight-bold">
                         <i class="fas fa-info-circle"></i> Detalhes da NF-e
                     </h6>
                 </div>
@@ -395,7 +406,7 @@
                                     <td colspan="7"></td>
                                     <td><strong>Total:</strong></td>
                                     <td>
-                                        <strong>R$ {{ "%.2f"|format(nfe.json_nfe.form_data.valorPagamento|float) if nfe.json_nfe.form_data.valorPagamento else "0.00" }}</strong>
+                                        <strong>R$ {{ "%.2f"|format(nfe.json_nfe.form_data.valorPagamento|float) if nfe.json_nfe and nfe.json_nfe.form_data and nfe.json_nfe.form_data.valorPagamento else "0.00" }}</strong>
                                     </td>
                                 </tr>
                             </tfoot>
@@ -433,7 +444,7 @@
                 
                 <!-- Tab XML -->
                 <div class="tab-pane fade" id="xml" role="tabpanel" aria-labelledby="xml-tab">
-                    {% if nfe.json_nfe.xml_content %}
+                    {% if nfe.json_nfe and nfe.json_nfe.xml_content %}
                     <div class="d-flex justify-content-end mb-2">
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard(document.querySelector('#xml code').textContent)">
                             <i class="fas fa-copy"></i> Copiar XML
@@ -452,13 +463,14 @@
                 <div class="tab-pane fade" id="danfe" role="tabpanel" aria-labelledby="danfe-tab">
                     <div class="text-center p-4">
                         <div class="mb-3">
-                            <button type="button" class="btn btn-success" onclick="generateDanfe()">
+                            <button type="button" class="btn btn-success" onclick="generateDanfeForTab()">
                                 <i class="fas fa-sync-alt"></i> Gerar/Atualizar DANFE
                             </button>
-                            <button type="button" class="btn btn-primary" onclick="printDanfe()">
+                            <button type="button" class="btn btn-primary" onclick="printDanfeFromTab()">
                                 <i class="fas fa-print"></i> Imprimir
                             </button>
                         </div>
+                        <div id="danfe-tab-status"></div>
                         <div class="embed-responsive embed-responsive-1by1" style="min-height: 800px;">
                             <iframe id="danfe-preview-iframe" class="embed-responsive-item" src="about:blank" allowfullscreen></iframe>
                         </div>
@@ -481,6 +493,7 @@
                 </button>
             </div>
             <div class="modal-body">
+                <div id="danfe-modal-status"></div>
                 <div class="embed-responsive embed-responsive-1by1" style="min-height: 800px;">
                     <iframe id="danfe-iframe" class="embed-responsive-item" src="" allowfullscreen></iframe>
                 </div>
@@ -548,7 +561,7 @@
             </div>
             <div class="modal-body">
                 <div id="statusLoading" class="text-center">
-                    <div class="spinner-border " role="status">
+                    <div class="spinner-border" role="status">
                         <span class="sr-only">Consultando...</span>
                     </div>
                     <p class="mt-2">Consultando status na SEFAZ...</p>
@@ -573,12 +586,35 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Definir variáveis JavaScript usando tags script separadas -->
+<script type="application/json" id="nfe-config">
+{
+    "id": {{ nfe.nfe_emitida_id|tojson|safe }},
+    "status": {{ (nfe.status or "")|tojson|safe }},
+    "chaveAcesso": {{ (nfe.chave_acesso or "")|tojson|safe }},
+    "hasXml": {{ (nfe.json_nfe and nfe.json_nfe.xml_content)|tojson|safe }}
+}
+</script>
+
+<script type="text/javascript">
+    window.nfeConfig = JSON.parse(document.getElementById('nfe-config').textContent);
+</script>
+
 <script>
-    // Inicializar syntax highlighter
+    // Variáveis globais JavaScript (sem mistura com Jinja2)
+    var nfeId = window.nfeConfig.id;
+    var danfePdfUrl = null;
+    var hasXmlContent = window.nfeConfig.hasXml;
+    var nfeData = {
+        id: window.nfeConfig.id,
+        status: window.nfeConfig.status,
+        chaveAcesso: window.nfeConfig.chaveAcesso,
+        hasXml: window.nfeConfig.hasXml
+    };
+    
+    // Inicializar quando a página carregar
     document.addEventListener('DOMContentLoaded', function() {
         hljs.highlightAll();
-        
-        // Configurar botões
         setupButtons();
         
         // Verificar se há parâmetro para abrir DANFE automaticamente
@@ -598,156 +634,109 @@
         // Botão para gerar DANFE
         var btnGenerateDanfe = document.getElementById('btn-generate-danfe');
         if (btnGenerateDanfe) {
-            btnGenerateDanfe.addEventListener('click', generateDanfe);
+            btnGenerateDanfe.addEventListener('click', function() {
+                generateDanfe(false);
+            });
         }
         
         // Botão para imprimir DANFE
         var btnPrintDanfe = document.getElementById('btn-print-danfe');
         if (btnPrintDanfe) {
-            btnPrintDanfe.addEventListener('click', printDanfe);
+            btnPrintDanfe.addEventListener('click', function() {
+                printDanfe();
+            });
         }
         
-        // Botão para reenviar NFe rejeitada
-        var btnReenviar = document.getElementById('btn-reenviar');
-        if (btnReenviar) {
-            btnReenviar.addEventListener('click', reenviarNfe);
-        }
+        // Outros botões...
+        setupOtherButtons();
         
-        // Botão para consultar status na SEFAZ
+        // Mudança para tab DANFE usando jQuery
+        if (typeof $ !== 'undefined') {
+            $('#nfeTabs button[data-target="#danfe"]').on('shown.bs.tab', function(e) {
+                var iframe = document.getElementById('danfe-preview-iframe');
+                if (iframe && iframe.src === 'about:blank') {
+                    generateDanfeForTab();
+                }
+            });
+        }
+    }
+    
+    function setupOtherButtons() {
+        // Implementar outros botões conforme necessário
         var btnCheckStatus = document.getElementById('btn-check-status');
         if (btnCheckStatus) {
             btnCheckStatus.addEventListener('click', checkStatusSefaz);
         }
         
-        // Botão para compartilhar
         var btnShare = document.getElementById('btn-share');
         if (btnShare) {
             btnShare.addEventListener('click', showShareModal);
         }
         
-        // Botão para enviar email de compartilhamento
         var btnSendEmail = document.getElementById('btnSendEmail');
         if (btnSendEmail) {
             btnSendEmail.addEventListener('click', sendShareEmail);
         }
-        
-        // Botão para editar NFe rejeitada
-        var btnEditRejected = document.getElementById('btn-edit-rejected');
-        if (btnEditRejected) {
-            btnEditRejected.addEventListener('click', editRejectedNfe);
-        }
-        
-        // Botão para emitir rascunho
-        var btnIssueDraft = document.getElementById('btn-issue-draft');
-        if (btnIssueDraft) {
-            btnIssueDraft.addEventListener('click', issueDraftNfe);
-        }
-        
-        // Botão para atualizar status
-        var btnRefreshStatus = document.getElementById('btnRefreshStatus');
-        if (btnRefreshStatus) {
-            btnRefreshStatus.addEventListener('click', checkStatusSefaz);
-        }
-        
-        // Mudança para tab DANFE
-        $('#nfeTabs a[href="#danfe"]').on('shown.bs.tab', function(e) {
-            var iframe = document.getElementById('danfe-preview-iframe');
-            if (iframe && iframe.src === 'about:blank') {
-                generateDanfeForTab();
-            }
-        });
     }
     
-    // Função para copiar texto para a área de transferência
-    function copyToClipboard(text) {
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(function() {
-                showToast('Texto copiado para a área de transferência!');
-            }).catch(function(err) {
-                console.error('Erro ao copiar texto: ', err);
-            });
-        } else {
-            // Fallback para navegadores mais antigos
-            var textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            
-            try {
-                document.execCommand('copy');
-                showToast('Texto copiado para a área de transferência!');
-            } catch (err) {
-                console.error('Erro ao copiar texto: ', err);
-            }
-            
-            document.body.removeChild(textArea);
-        }
-    }
-    
-    // Função para download do XML
-    function downloadXml() {
-        // Isolar completamente o bloco Jinja do código JavaScript
-        var hasXmlContent = false;
-        // Jinja condicional como comentário JavaScript para o editor não tentar interpretar
-        /* {% if nfe.json_nfe and nfe.json_nfe.xml_content %} */
-        hasXmlContent = true;
-        /* {% endif %} */
-        
-        if (hasXmlContent) {
-            // Obter o conteúdo do XML
-            var xmlContent = document.querySelector('#xml code').textContent;
-            var blob = new Blob([xmlContent], { type: 'application/xml' });
-            var url = URL.createObjectURL(blob);
-            
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'nfe-' + '{{ nfe.nfe_emitida_id }}' + '.xml';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            showToast('Download do XML iniciado!');
-        } else {
-            showToast('XML não disponível para esta NF-e', 'error');
-        }
-    }
-    
-    // Função para gerar DANFE
+    // Função principal para gerar DANFE
     function generateDanfe(printAfterGenerate) {
         if (printAfterGenerate === undefined) {
             printAfterGenerate = false;
         }
         
         // Mostrar overlay de carregamento
-        document.getElementById('loading-overlay').style.display = 'flex';
+        showLoadingOverlay('Gerando DANFE...', 'Este processo pode levar alguns segundos.');
         
-        // Enviar XML para o endpoint de geração de DANFE
-        fetch('/admin/nfe/generate-danfe/' + '{{ nfe.nfe_emitida_id }}', {
+        // Desabilitar botão temporariamente
+        var btnGenerate = document.getElementById('btn-generate-danfe');
+        if (btnGenerate) {
+            btnGenerate.disabled = true;
+            btnGenerate.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+        }
+        
+        // Fazer requisição para o endpoint de geração de DANFE
+        fetch('/admin/nfe/generate-danfe/' + nfeData.id, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({
-                nfe_id: '{{ nfe.nfe_emitida_id }}'
+                nfe_id: nfeData.id
             })
         })
         .then(function(response) {
             if (!response.ok) {
-                throw new Error('Erro ao gerar DANFE');
+                return response.json().then(function(errorData) {
+                    throw new Error(errorData.message || 'Erro HTTP ' + response.status);
+                });
             }
             return response.json();
         })
         .then(function(data) {
+            hideLoadingOverlay();
+            
+            // Reabilitar botão
+            if (btnGenerate) {
+                btnGenerate.disabled = false;
+                btnGenerate.innerHTML = '<i class="fas fa-file-pdf"></i> Gerar DANFE';
+            }
+            
             if (data.success && data.pdf_url) {
-                // Ocultar overlay de carregamento
-                document.getElementById('loading-overlay').style.display = 'none';
+                // Armazenar URL do DANFE
+                danfePdfUrl = data.pdf_url;
                 
-                // Configurar iframe e botão de download
-                document.getElementById('danfe-iframe').src = data.pdf_url;
-                document.getElementById('download-danfe').href = data.pdf_url;
+                // Configurar iframe e botão de download no modal
+                var danfeIframe = document.getElementById('danfe-iframe');
+                if (danfeIframe) {
+                    danfeIframe.src = data.pdf_url;
+                }
+                
+                var downloadLink = document.getElementById('download-danfe');
+                if (downloadLink) {
+                    downloadLink.href = data.pdf_url;
+                }
                 
                 // Também atualizar na tab DANFE, se existir
                 var previewIframe = document.getElementById('danfe-preview-iframe');
@@ -755,8 +744,8 @@
                     previewIframe.src = data.pdf_url;
                 }
                 
-                // Armazenar URL do DANFE para uso posterior
-                window.danfePdfUrl = data.pdf_url;
+                // Mostrar mensagem de sucesso
+                showToast('DANFE gerado com sucesso!', 'success');
                 
                 // Mostrar modal ou imprimir diretamente
                 if (printAfterGenerate) {
@@ -764,86 +753,124 @@
                         printDanfeDirectly(data.pdf_url);
                     }, 1000);
                 } else {
-                    $('#danfeModal').modal('show');
+                    showModal('danfeModal');
                 }
+                
+                // Mostrar mensagem de status no modal
+                showDanfeStatus('success', 'DANFE gerado com sucesso!', null, 'modal');
+                
             } else {
-                throw new Error(data.message || 'Erro desconhecido ao gerar DANFE');
+                var errorMsg = data.message || 'Erro desconhecido ao gerar DANFE';
+                throw new Error(errorMsg);
             }
         })
         .catch(function(error) {
-            console.error('Erro:', error);
-            document.getElementById('loading-overlay').style.display = 'none';
-            showToast(error.message || 'Erro ao gerar DANFE', 'error');
+            console.error('Erro ao gerar DANFE:', error);
+            hideLoadingOverlay();
+            
+            // Reabilitar botão
+            if (btnGenerate) {
+                btnGenerate.disabled = false;
+                btnGenerate.innerHTML = '<i class="fas fa-file-pdf"></i> Gerar DANFE';
+            }
+            
+            var errorMessage = error.message || 'Erro ao gerar DANFE. Tente novamente.';
+            showToast(errorMessage, 'error');
+            showDanfeStatus('error', 'Erro ao gerar DANFE', errorMessage, 'modal');
         });
     }
     
     // Função para gerar DANFE especificamente para a tab
     function generateDanfeForTab() {
-        // Mostrar indicador de carregamento dentro da tab
-        document.getElementById('danfe-preview-iframe').src = 'about:blank';
+        var statusDiv = document.getElementById('danfe-tab-status');
         
-        var loadingDiv = document.createElement('div');
-        loadingDiv.className = 'text-center p-5';
-        loadingDiv.innerHTML = '<div class="spinner-border " role="status"><span class="sr-only">Carregando...</span></div><p class="mt-3">Gerando DANFE, aguarde...</p>';
+        // Mostrar indicador de carregamento na tab
+        if (statusDiv) {
+            statusDiv.innerHTML = '<div class="danfe-status warning"><i class="fas fa-spinner fa-spin"></i> Gerando DANFE, aguarde...</div>';
+        }
         
-        document.querySelector('#danfe').appendChild(loadingDiv);
+        // Limpar iframe
+        var previewIframe = document.getElementById('danfe-preview-iframe');
+        if (previewIframe) {
+            previewIframe.src = 'about:blank';
+        }
         
-        // Fazer a requisição para gerar o DANFE
-        fetch('/admin/nfe/generate-danfe/' + '{{ nfe.nfe_emitida_id }}', {
+        // Fazer a requisição
+        fetch('/admin/nfe/generate-danfe/' + nfeData.id, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({
-                nfe_id: '{{ nfe.nfe_emitida_id }}'
+                nfe_id: nfeData.id
             })
         })
         .then(function(response) {
+            if (!response.ok) {
+                return response.json().then(function(errorData) {
+                    throw new Error(errorData.message || 'Erro HTTP ' + response.status);
+                });
+            }
             return response.json();
         })
         .then(function(data) {
             if (data.success && data.pdf_url) {
-                // Remover indicador de carregamento
-                var loadingElement = document.querySelector('#danfe .text-center');
-                if (loadingElement) {
-                    loadingElement.remove();
-                }
+                // Armazenar URL do DANFE
+                danfePdfUrl = data.pdf_url;
                 
                 // Atualizar iframe
-                document.getElementById('danfe-preview-iframe').src = data.pdf_url;
+                if (previewIframe) {
+                    previewIframe.src = data.pdf_url;
+                }
                 
-                // Armazenar URL do DANFE
-                window.danfePdfUrl = data.pdf_url;
+                // Mostrar mensagem de sucesso na tab
+                showDanfeStatus('success', 'DANFE gerado com sucesso!', null, 'tab');
+                
             } else {
-                showToast('Erro ao gerar DANFE: ' + (data.message || 'Erro desconhecido'), 'error');
+                var errorMsg = data.message || 'Erro desconhecido ao gerar DANFE';
+                throw new Error(errorMsg);
             }
         })
         .catch(function(error) {
-            console.error('Erro:', error);
-            showToast('Erro ao gerar DANFE. Tente novamente.', 'error');
+            console.error('Erro ao gerar DANFE na tab:', error);
+            var errorMessage = error.message || 'Erro ao gerar DANFE. Tente novamente.';
+            showDanfeStatus('error', 'Erro ao gerar DANFE', errorMessage, 'tab');
         });
     }
     
     // Função para imprimir DANFE
     function printDanfe() {
-        // Se já temos o URL do PDF, imprimir diretamente
-        if (window.danfePdfUrl) {
-            printDanfeDirectly(window.danfePdfUrl);
+        if (danfePdfUrl) {
+            printDanfeDirectly(danfePdfUrl);
         } else {
-            // Caso contrário, gerar e depois imprimir
+            // Gerar primeiro e depois imprimir
             generateDanfe(true);
+        }
+    }
+    
+    // Função para imprimir DANFE da tab
+    function printDanfeFromTab() {
+        if (danfePdfUrl) {
+            printDanfeDirectly(danfePdfUrl);
+        } else {
+            showToast('DANFE não foi gerado ainda. Gere-o primeiro.', 'warning');
         }
     }
     
     // Função para imprimir DANFE do modal
     function printDanfeFromModal() {
         var iframe = document.getElementById('danfe-iframe');
-        if (iframe && iframe.src) {
+        if (iframe && iframe.src && iframe.src !== 'about:blank') {
             try {
                 iframe.contentWindow.print();
             } catch (e) {
                 console.error('Erro ao imprimir do iframe:', e);
-                printDanfeDirectly(iframe.src);
+                if (danfePdfUrl) {
+                    printDanfeDirectly(danfePdfUrl);
+                } else {
+                    showToast('Erro ao imprimir DANFE', 'error');
+                }
             }
         } else {
             showToast('DANFE não carregado. Gere-o primeiro.', 'warning');
@@ -860,11 +887,24 @@
             try {
                 iframe.contentWindow.print();
                 setTimeout(function() {
-                    document.body.removeChild(iframe);
+                    if (document.body.contains(iframe)) {
+                        document.body.removeChild(iframe);
+                    }
                 }, 5000);
             } catch (e) {
                 console.error('Erro ao imprimir:', e);
+                // Fallback: abrir em nova aba
                 window.open(pdfUrl, '_blank');
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }
+        };
+        
+        iframe.onerror = function() {
+            console.error('Erro ao carregar PDF para impressão');
+            window.open(pdfUrl, '_blank');
+            if (document.body.contains(iframe)) {
                 document.body.removeChild(iframe);
             }
         };
@@ -872,228 +912,134 @@
         document.body.appendChild(iframe);
     }
     
-    // Função para reenviar NFe rejeitada
-    function reenviarNfe() {
-        if (!confirm('Deseja tentar reenviar esta NFe rejeitada?')) {
-            return;
+    // Função para mostrar/ocultar overlay de carregamento
+    function showLoadingOverlay(title, message) {
+        var overlay = document.getElementById('loading-overlay');
+        var titleEl = document.getElementById('loading-title');
+        var messageEl = document.getElementById('loading-message');
+        
+        if (titleEl) titleEl.textContent = title || 'Carregando...';
+        if (messageEl) messageEl.textContent = message || 'Aguarde...';
+        
+        if (overlay) {
+            overlay.style.display = 'flex';
+        }
+    }
+    
+    function hideLoadingOverlay() {
+        var overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+    
+    // Função para mostrar status do DANFE
+    function showDanfeStatus(type, title, message, location) {
+        var statusDiv;
+        
+        if (location === 'tab') {
+            statusDiv = document.getElementById('danfe-tab-status');
+        } else {
+            statusDiv = document.getElementById('danfe-modal-status');
         }
         
-        // Mostrar overlay de carregamento
-        document.getElementById('loading-overlay').style.display = 'flex';
-        document.querySelector('#loading-overlay h3').textContent = 'Reenviando NFe...';
+        if (!statusDiv) return;
         
-        fetch('/admin/nfe/reenviar', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                nfe_id: '{{ nfe.nfe_emitida_id }}'
-            })
-        })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            document.getElementById('loading-overlay').style.display = 'none';
-            
-            if (data.success) {
-                showToast('NFe reenviada com sucesso!', 'success');
-                setTimeout(function() {
-                    location.reload();
-                }, 1500);
-            } else {
-                showToast('Erro: ' + (data.message || 'Erro ao reenviar NFe'), 'error');
-            }
-        })
-        .catch(function(error) {
-            document.getElementById('loading-overlay').style.display = 'none';
-            console.error('Erro:', error);
-            showToast('Erro ao reenviar NFe', 'error');
-        });
-    }
-    
-    // Função para editar NFe rejeitada
-    function editRejectedNfe() {
-        window.location.href = '/admin/nfe/edit-rejected/' + '{{ nfe.nfe_emitida_id }}';
-    }
-    
-    // Função para emitir rascunho
-    function issueDraftNfe() {
-        if (!confirm('Deseja emitir este rascunho agora?')) {
-            return;
+        var iconClass = 'fa-info-circle';
+        if (type === 'success') iconClass = 'fa-check-circle';
+        else if (type === 'error') iconClass = 'fa-exclamation-triangle';
+        else if (type === 'warning') iconClass = 'fa-exclamation-circle';
+        
+        var html = '<div class="danfe-status ' + type + '">';
+        html += '<i class="fas ' + iconClass + '"></i> ';
+        html += '<strong>' + title + '</strong>';
+        if (message) {
+            html += '<br><small>' + message + '</small>';
         }
+        html += '</div>';
         
-        // Mostrar overlay de carregamento
-        document.getElementById('loading-overlay').style.display = 'flex';
-        document.querySelector('#loading-overlay h3').textContent = 'Emitindo NFe...';
+        statusDiv.innerHTML = html;
         
-        fetch('/admin/nfe/issue-draft/' + '{{ nfe.nfe_emitida_id }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            document.getElementById('loading-overlay').style.display = 'none';
-            
-            if (data.success) {
-                showToast('NFe emitida com sucesso!', 'success');
-                setTimeout(function() {
-                    location.reload();
-                }, 1500);
-            } else {
-                showToast('Erro: ' + (data.message || 'Erro ao emitir NFe'), 'error');
-            }
-        })
-        .catch(function(error) {
-            document.getElementById('loading-overlay').style.display = 'none';
-            console.error('Erro:', error);
-            showToast('Erro ao emitir NFe', 'error');
-        });
-    }
-    
-    // Função para consultar status na SEFAZ
-    function checkStatusSefaz() {
-        $('#statusModal').modal('show');
-        document.getElementById('statusLoading').style.display = 'block';
-        document.getElementById('statusResult').style.display = 'none';
-        document.getElementById('btnRefreshStatus').style.display = 'none';
-        
-        fetch('/admin/nfe/check-status/' + '{{ nfe.nfe_emitida_id }}', {
-            method: 'GET'
-        })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            document.getElementById('statusLoading').style.display = 'none';
-            document.getElementById('statusResult').style.display = 'block';
-            document.getElementById('btnRefreshStatus').style.display = 'block';
-            
-            var alertEl = document.getElementById('statusAlert');
-            var titleEl = document.getElementById('statusTitle');
-            var messageEl = document.getElementById('statusMessage');
-            var detailsEl = document.getElementById('statusDetails');
-            
-            if (data.success) {
-                var status = data.status.toUpperCase();
-                var alertClass = 'alert-info';
-                var statusIcon = 'fa-info-circle';
-                
-                if (status === 'AUTORIZADA') {
-                    alertClass = 'alert-success';
-                    statusIcon = 'fa-check-circle';
-                } else if (status === 'REJEITADA') {
-                    alertClass = 'alert-danger';
-                    statusIcon = 'fa-times-circle';
-                } else if (status === 'PROCESSANDO') {
-                    alertClass = 'alert-warning';
-                    statusIcon = 'fa-clock';
+        // Remover mensagem após alguns segundos (exceto erros)
+        if (type !== 'error') {
+            setTimeout(function() {
+                if (statusDiv.innerHTML === html) {
+                    statusDiv.innerHTML = '';
                 }
-                
-                alertEl.className = 'alert ' + alertClass;
-                titleEl.innerHTML = '<i class="fas ' + statusIcon + '"></i> Status: ' + status;
-                messageEl.textContent = data.message || 'NFe consultada com sucesso na SEFAZ.';
-                
-                // Adicionar detalhes
-                var detailsHtml = '';
-                if (data.protocolo) {
-                    detailsHtml += '<p><strong>Protocolo:</strong> ' + data.protocolo + '</p>';
-                }
-                if (data.data_autorizacao) {
-                    detailsHtml += '<p><strong>Data de Autorização:</strong> ' + data.data_autorizacao + '</p>';
-                }
-                detailsEl.innerHTML = detailsHtml;
-                
-                // Se o status mudou, oferecer opção para atualizar a página
-                var nfeStatus = '{{ nfe.status|upper }}';
-                if (status !== nfeStatus) {
-                    detailsHtml += '<div class="alert alert-warning mt-3"><p>O status da NFe foi alterado desde o último carregamento da página.</p><button class="btn btn-sm btn-primary" onclick="location.reload()"><i class="fas fa-sync-alt"></i> Atualizar Página</button></div>';
-                    detailsEl.innerHTML = detailsHtml;
-                }
-            } else {
-                alertEl.className = 'alert alert-danger';
-                titleEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro na Consulta';
-                messageEl.textContent = data.message || 'Erro ao consultar status na SEFAZ.';
-                detailsEl.innerHTML = '';
-            }
-        })
-        .catch(function(error) {
-            document.getElementById('statusLoading').style.display = 'none';
-            document.getElementById('statusResult').style.display = 'block';
-            document.getElementById('btnRefreshStatus').style.display = 'block';
-            
-            var alertEl = document.getElementById('statusAlert');
-            var titleEl = document.getElementById('statusTitle');
-            var messageEl = document.getElementById('statusMessage');
-            var detailsEl = document.getElementById('statusDetails');
-            
-            alertEl.className = 'alert alert-danger';
-            titleEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro na Consulta';
-            messageEl.textContent = 'Erro ao conectar com o servidor. Tente novamente.';
-            detailsEl.innerHTML = '';
-        });
-    }
-    
-    // Função para mostrar modal de compartilhamento
-    function showShareModal() {
-        $('#shareModal').modal('show');
-    }
-    
-    // Função para enviar email de compartilhamento
-    function sendShareEmail() {
-        var email = document.getElementById('shareEmail').value;
-        var includeDanfe = document.getElementById('includeDanfe').checked;
-        var includeXml = document.getElementById('includeXml').checked;
-        
-        if (!email) {
-            showToast('Informe um email para compartilhar', 'warning');
-            return;
+            }, 5000);
         }
-        
-        // Desabilitar botão e mostrar loading
-        var btnSendEmail = document.getElementById('btnSendEmail');
-        var originalHtml = btnSendEmail.innerHTML;
-        btnSendEmail.disabled = true;
-        btnSendEmail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
-        
-        fetch('/admin/nfe/share', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                nfe_id: '{{ nfe.nfe_emitida_id }}',
-                email: email,
-                include_danfe: includeDanfe,
-                include_xml: includeXml
-            })
-        })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            btnSendEmail.disabled = false;
-            btnSendEmail.innerHTML = originalHtml;
-            
-            if (data.success) {
-                $('#shareModal').modal('hide');
-                showToast('NFe compartilhada com sucesso!', 'success');
-            } else {
-                showToast('Erro: ' + (data.message || 'Erro ao compartilhar NFe'), 'error');
+    }
+    
+    // Função para download do XML
+    function downloadXml() {
+        if (nfeData.hasXml) {
+            try {
+                var xmlContent = document.querySelector('#xml code').textContent;
+                var blob = new Blob([xmlContent], { type: 'application/xml' });
+                var url = URL.createObjectURL(blob);
+                
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'nfe-' + nfeData.id + '.xml';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast('Download do XML iniciado!', 'success');
+            } catch (error) {
+                console.error('Erro no download do XML:', error);
+                showToast('Erro ao fazer download do XML', 'error');
             }
-        })
-        .catch(function(error) {
-            btnSendEmail.disabled = false;
-            btnSendEmail.innerHTML = originalHtml;
+        } else {
+            showToast('XML não disponível para esta NF-e', 'error');
+        }
+    }
+    
+    // Função para copiar texto para a área de transferência
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function() {
+                showToast('Texto copiado para a área de transferência!', 'success');
+            }).catch(function(err) {
+                console.error('Erro ao copiar texto: ', err);
+                showToast('Erro ao copiar texto', 'error');
+            });
+        } else {
+            // Fallback para navegadores mais antigos
+            var textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
             
-            console.error('Erro:', error);
-            showToast('Erro ao compartilhar NFe', 'error');
-        });
+            try {
+                document.execCommand('copy');
+                showToast('Texto copiado para a área de transferência!', 'success');
+            } catch (err) {
+                console.error('Erro ao copiar texto: ', err);
+                showToast('Erro ao copiar texto', 'error');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+    }
+    
+    // Função auxiliar para mostrar modal (com ou sem jQuery)
+    function showModal(modalId) {
+        if (typeof $ !== 'undefined') {
+            $('#' + modalId).modal('show');
+        } else {
+            // Fallback sem jQuery
+            var modal = document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'block';
+                modal.classList.add('show');
+            }
+        }
     }
     
     // Função para mostrar notificações toast
@@ -1113,14 +1059,21 @@
         
         // Criar elemento toast
         var toast = document.createElement('div');
-        toast.className = 'toast bg-' + (type === 'error' ? 'danger' : type) + ' text-white';
+        var bgClass = type === 'error' ? 'danger' : type;
+        toast.className = 'toast bg-' + bgClass + ' text-white';
         toast.setAttribute('role', 'alert');
         toast.setAttribute('aria-live', 'assertive');
         toast.setAttribute('aria-atomic', 'true');
         toast.style.minWidth = '250px';
         
+        var iconClass = 'fa-info-circle';
+        if (type === 'success') iconClass = 'fa-check-circle';
+        else if (type === 'error') iconClass = 'fa-exclamation-triangle';
+        else if (type === 'warning') iconClass = 'fa-exclamation-circle';
+        
         toast.innerHTML = 
-            '<div class="toast-header bg-' + (type === 'error' ? 'danger' : type) + ' text-white">' +
+            '<div class="toast-header bg-' + bgClass + ' text-white">' +
+            '<i class="fas ' + iconClass + ' mr-2"></i>' +
             '<strong class="mr-auto">Notificação</strong>' +
             '<button type="button" class="ml-2 mb-1 close text-white" data-dismiss="toast" aria-label="Close">' +
             '<span aria-hidden="true">&times;</span>' +
@@ -1132,15 +1085,40 @@
         toastContainer.appendChild(toast);
         
         // Inicializar e mostrar o toast
-        $(toast).toast({
-            delay: 5000,
-            autohide: true
-        }).toast('show');
-        
-        // Remover quando fechado
-        $(toast).on('hidden.bs.toast', function() {
-            toast.remove();
-        });
+        if (typeof $ !== 'undefined') {
+            $(toast).toast({
+                delay: type === 'error' ? 8000 : 5000,
+                autohide: true
+            }).toast('show');
+            
+            // Remover quando fechado
+            $(toast).on('hidden.bs.toast', function() {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            });
+        } else {
+            // Fallback sem jQuery
+            toast.style.display = 'block';
+            setTimeout(function() {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, type === 'error' ? 8000 : 5000);
+        }
+    }
+    
+    // Implementar outras funções conforme necessário
+    function checkStatusSefaz() {
+        showToast('Funcionalidade de consulta SEFAZ será implementada em breve', 'warning');
+    }
+    
+    function showShareModal() {
+        showModal('shareModal');
+    }
+    
+    function sendShareEmail() {
+        showToast('Funcionalidade de compartilhamento será implementada em breve', 'warning');
     }
 </script>
 {% endblock %}

@@ -1,0 +1,5 @@
+{
+  "reportMissingImports": true,
+  "reportMissingModuleSource": false,
+  "ignore": ["pynfe.utils.danfe", "pynfe.processamento.danfce"]
+}

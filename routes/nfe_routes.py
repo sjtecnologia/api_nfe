@@ -305,7 +305,12 @@ def emitir_nfe():
                         
                         db.add(nova_nfe)
                         db.commit()
-                        print(f"✅ NFe salva no banco com ID: {nova_nfe.nfe_emitida_id}")
+                        
+                        # ✅ CORREÇÃO: Refresh para obter o ID real após commit
+                        db.refresh(nova_nfe)
+                        # Agora acessar o ID como inteiro
+                        nfe_id = int(nova_nfe.nfe_emitida_id)
+                        print(f"✅ NFe salva no banco com ID: {nfe_id}")
                         
                     except Exception as e:
                         print(f"❌ ERRO ao salvar no banco: {e}")
@@ -326,13 +331,13 @@ def emitir_nfe():
                         if gerar_danfe_automatico == 'true':
                             try:
                                 from services.danfe_service import generate_danfe
-                                pdf_path = generate_danfe(xml_assinado, nova_nfe.nfe_emitida_id)
-                                pdf_url = url_for('static', filename=f'danfe/danfe_{nova_nfe.nfe_emitida_id}.pdf')
-                                
+                                # ✅ CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
+                                pdf_path = generate_danfe(xml_assinado, nfe_id)
+                                pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
                                 # Adicionar URL do DANFE à sessão para mostrar no template de lista
                                 if 'danfes_gerados' not in session:
                                     session['danfes_gerados'] = {}
-                                session['danfes_gerados'][nova_nfe.nfe_emitida_id] = {
+                                session['danfes_gerados'][nfe_id] = {
                                     'url': pdf_url,
                                     'timestamp': datetime.now().timestamp()
                                 }
@@ -431,7 +436,7 @@ def emitir_nfe():
                 'produto_id': prod.produto_id,
                 'codigo_interno': prod.codigo_interno,
                 'descricao': prod.descricao,
-                'preco_unitario_padrao': float(prod.preco_unitario_padrao) if prod.preco_unitario_padrao else 0.0,
+                'preco_unitario_padrao': float(prod.preco_unitario_padrao) if prod.preco_unitario_padrao is not None else 0.0,
                 'unidade_comercial': prod.unidade_comercial
             })
         
