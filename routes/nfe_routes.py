@@ -1,4 +1,5 @@
 import json
+import os
 from flask import Blueprint, jsonify, request, render_template, redirect, session, url_for, flash
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
@@ -308,8 +309,28 @@ def emitir_nfe():
                         
                         # ✅ CORREÇÃO: Refresh para obter o ID real após commit
                         db.refresh(nova_nfe)
-                        # Agora acessar o ID como inteiro
-                        nfe_id = int(nova_nfe.nfe_emitida_id)
+                        # ✅ CORREÇÃO: Acessar o valor do ID corretamente
+                        nfe_id_raw = getattr(nova_nfe, 'nfe_emitida_id')
+                        
+                        # Verificar se o valor pode ser convertido para int
+                        if nfe_id_raw is None:
+                            raise ValueError("ID da NFe não pode ser None")
+                        
+                        # Conversão segura para int
+                        try:
+                            # Verificar tipo antes da conversão para evitar erro de tipo
+                            if isinstance(nfe_id_raw, (int, float)):
+                                nfe_id = int(nfe_id_raw)
+                            elif isinstance(nfe_id_raw, str):
+                                nfe_id = int(nfe_id_raw)
+                            elif hasattr(nfe_id_raw, '__int__'):
+                                nfe_id = nfe_id_raw.__int__()
+                            else:
+                                # Tentar conversão através de string
+                                nfe_id_str = str(nfe_id_raw)
+                                nfe_id = int(nfe_id_str)
+                        except (ValueError, TypeError, AttributeError) as e:
+                            raise ValueError(f"Não foi possível converter o ID da NFe para inteiro: {nfe_id_raw}, tipo: {type(nfe_id_raw)}") from e
                         print(f"✅ NFe salva no banco com ID: {nfe_id}")
                         
                     except Exception as e:
@@ -377,7 +398,7 @@ def emitir_nfe():
                             try:
                                 item_data = json.loads(item_json)
                                 rascunho_items.append(item_data)
-                            except json.JSONDecodeError:
+                            except (json.JSONDecodeError, ValueError):
                                 pass  # Ignorar erros em rascunho
                         item_index += 1
                     
@@ -432,11 +453,15 @@ def emitir_nfe():
         produtos = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).all()
         produtos_data = []
         for prod in produtos:
+            # Get the actual value from the Decimal column
+            preco_value = getattr(prod, 'preco_unitario_padrao', None)
+            preco_float = float(preco_value) if preco_value is not None else 0.0
+            
             produtos_data.append({
                 'produto_id': prod.produto_id,
                 'codigo_interno': prod.codigo_interno,
                 'descricao': prod.descricao,
-                'preco_unitario_padrao': float(prod.preco_unitario_padrao) if prod.preco_unitario_padrao is not None else 0.0,
+                'preco_unitario_padrao': preco_float,
                 'unidade_comercial': prod.unidade_comercial
             })
         
@@ -720,7 +745,7 @@ def generate_danfe_after_issue():
     db = next(get_db())
     try:
         # Obter dados do request
-        data = request.json
+        data = request.json or {}
         nfe_id = data.get('nfe_id')
         
         if not nfe_id:
@@ -788,16 +813,360 @@ def download(nfe_id):
     flash('Funcionalidade de download em desenvolvimento.', 'info')
     return redirect(url_for('nfe.list_nfes'))
 
-@nfe_bp.route('/reenviar', methods=['POST'])
+
+
+# ...existing code...
+
+
+
+@nfe_bp.route('/reenviar/<int:nfe_id>', methods=['POST'])
 @login_required
 @permission_required('nfe.issue')
-def reenviar_nfe():
-    """Reenviar uma NFe rejeitada"""
+def reenviar_nfe(nfe_id):
+    """Reenviar NFe rejeitada para a SEFAZ"""
     db = next(get_db())
     try:
-        nfe_id = request.form.get('nfe_id')
-        if not nfe_id:
-            return jsonify({'success': False, 'message': 'ID da NFe não informado'}), 400
+        # Buscar NFe
+        query = text("""
+            SELECT 
+                n.*,
+                c.razao_social as cliente_nome
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+        
+        # Converter para dict
+        try:
+            if hasattr(nfe, '_asdict'):
+                nfe_data = nfe._asdict()
+            elif hasattr(nfe, '_mapping'):
+                mapping = nfe._mapping
+                if callable(mapping):
+                    nfe_data = dict(mapping())
+                else:
+                    nfe_data = dict(mapping)
+            else:
+                nfe_data = {}
+                for key in nfe.keys():
+                    nfe_data[key] = nfe[key]
+        except Exception as e:
+            print(f"Erro ao converter NFe para dict: {e}")
+            return jsonify({'success': False, 'message': 'Erro ao processar dados da NFe'}), 500
+        
+        # Verificar se pode ser reenviada
+        if nfe_data.get('status', '').upper() not in ['REJEITADA', 'ERRO']:
+            return jsonify({
+                'success': False, 
+                'message': 'Apenas NFes rejeitadas podem ser reenviadas'
+            }), 400
+        
+        # Verificar se tem XML
+        json_nfe = nfe_data.get('json_nfe')
+        if not json_nfe:
+            return jsonify({'success': False, 'message': 'Dados da NFe não encontrados'}), 400
+        
+        # Se json_nfe for string, converter para dict
+        if isinstance(json_nfe, str):
+            try:
+                import json as json_module
+                json_nfe = json_module.loads(json_nfe)
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Dados JSON da NFe inválidos'}), 400
+        
+        xml_content = json_nfe.get('xml_content')
+        if not xml_content:
+            return jsonify({'success': False, 'message': 'XML não disponível'}), 400
+        
+        # Reenviar para SEFAZ
+        # Reenviar para SEFAZ
+        nfe_service = NFeService(db)
+        try:
+            # Buscar certificado para reenvio
+            certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
+            if not certificado:
+                return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
+            
+            # Determinar ambiente baseado nos dados originais
+            ambiente = json_nfe.get('ambiente', 'homologacao')
+            
+            # Tentar reenviar
+            resultado = nfe_service._processar_envio_sefaz(xml_content, certificado, ambiente)
+            
+            # Atualizar no banco
+            if resultado.get('success', False):
+                status = 'AUTORIZADA'
+                mensagem = resultado.get('message', 'NFe autorizada com sucesso')
+            else:
+                status = 'REJEITADA'
+                mensagem = resultado.get('message', 'NFe rejeitada novamente')
+            
+            # Atualizar dados no banco
+            update_query = text("""
+                UPDATE nfe_emitidas 
+                SET status = :status,
+                    protocolo_sefaz = :protocolo,
+                    mensagem_sefaz = :mensagem,
+                    data_autorizacao = :data_autorizacao,
+                    chave_acesso = :chave_acesso
+                WHERE nfe_emitida_id = :nfe_id
+            """)
+            
+            db.execute(update_query, {
+                'status': status,
+                'protocolo': resultado.get('protocolo'),
+                'mensagem': mensagem,
+                'data_autorizacao': datetime.fromisoformat(resultado['data_autorizacao']) if resultado.get('data_autorizacao') else None,
+                'chave_acesso': resultado.get('chave_acesso'),
+                'nfe_id': nfe_id
+            })
+            db.commit()
+            
+            return jsonify({
+                'success': resultado.get('success', False),
+                'message': mensagem,
+                'status': status,
+                'protocolo': resultado.get('protocolo'),
+                'chave_acesso': resultado.get('chave_acesso')
+            })
+            
+        except Exception as e:
+            print(f"Erro no reenvio: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao reenviar NFe: {str(e)}'
+            }), 500
+        
+    except Exception as e:
+        print(f"Erro geral no reenvio: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+    finally:
+        db.close()
+
+@nfe_bp.route('/emitir-rascunho/<int:nfe_id>', methods=['POST'])
+@login_required
+@permission_required('nfe.issue')
+def emitir_rascunho(nfe_id):
+    """Emitir um rascunho de NFe"""
+    db = next(get_db())
+    try:
+        # Buscar rascunho
+        query = text("""
+            SELECT 
+                n.*,
+                c.razao_social as cliente_nome
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'Rascunho não encontrado'}), 404
+        
+        # Converter para dict
+        try:
+            if hasattr(nfe, '_asdict'):
+                nfe_data = nfe._asdict()
+            elif hasattr(nfe, '_mapping'):
+                mapping = nfe._mapping
+                if callable(mapping):
+                    nfe_data = dict(mapping())
+                else:
+                    nfe_data = dict(mapping)
+            else:
+                nfe_data = {}
+                for key in nfe.keys():
+                    nfe_data[key] = nfe[key]
+        except Exception as e:
+            print(f"Erro ao converter NFe para dict: {e}")
+            return jsonify({'success': False, 'message': 'Erro ao processar dados da NFe'}), 500
+        
+        # Verificar se é realmente um rascunho
+        if nfe_data.get('status', '').upper() != 'RASCUNHO':
+            return jsonify({
+                'success': False, 
+                'message': 'Apenas rascunhos podem ser emitidos por esta função'
+            }), 400
+        
+        # Verificar se tem dados necessários
+        json_nfe = nfe_data.get('json_nfe')
+        if not json_nfe:
+            return jsonify({'success': False, 'message': 'Dados do rascunho não encontrados'}), 400
+        
+        # Se json_nfe for string, converter para dict
+        if isinstance(json_nfe, str):
+            try:
+                import json as json_module
+                json_nfe = json_module.loads(json_nfe)
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'message': 'Dados JSON do rascunho inválidos'}), 400
+        
+        form_data = json_nfe.get('form_data')
+        items = json_nfe.get('items')
+        
+        if not form_data or not items:
+            return jsonify({'success': False, 'message': 'Dados incompletos no rascunho'}), 400
+        
+        # Processar emissão usando o mesmo fluxo da emissão normal
+        try:
+            # Buscar dados do emitente
+            emitente_data = db.query(Cliente).filter_by(cliente_id=nfe_data['cliente_id']).first()
+            if not emitente_data:
+                return jsonify({'success': False, 'message': 'Dados do emitente não encontrados'}), 400
+            
+            # Converter emitente para dicionário
+            emitente_data_for_template = {
+                'cliente_id': emitente_data.cliente_id,
+                'razao_social': emitente_data.razao_social,
+                'cnpj': emitente_data.cnpj,
+                'nome_fantasia': emitente_data.nome_fantasia,
+                'logradouro': emitente_data.logradouro,
+                'numero': emitente_data.numero,
+                'bairro': emitente_data.bairro,
+                'cep': emitente_data.cep,
+                'codigo_municipio': emitente_data.codigo_municipio,
+                'nome_municipio': emitente_data.nome_municipio,
+                'uf': emitente_data.uf,
+                'inscricao_estadual': emitente_data.inscricao_estadual
+            }
+            
+            # 1. Gerar XML
+            ambiente = json_nfe.get('ambiente', 'homologacao')
+            tp_amb = 2 if ambiente == 'homologacao' else 1
+            
+            xml_gerado = generate_nfe_xml(
+                form_data, 
+                emitente_data_for_template, 
+                None,  # destinatario será extraído dos form_data
+                items, 
+                tp_amb, 
+                'emitir'
+            )
+            
+            if not xml_gerado:
+                return jsonify({'success': False, 'message': 'Erro ao gerar XML'}), 500
+            
+            # 2. Assinar XML
+            from services.xml_signature_service import xml_signature_service
+            xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
+            
+            if not xml_assinado:
+                return jsonify({'success': False, 'message': 'Erro ao assinar XML'}), 500
+            
+            # 3. Enviar para SEFAZ
+            certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
+            if not certificado:
+                return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
+            
+            nfe_service = NFeService(db)
+            resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente)
+            
+            # 4. Determinar status
+            if resultado_sefaz.get('success', False):
+                status = 'AUTORIZADA'
+                mensagem = resultado_sefaz.get('message', 'NFe autorizada com sucesso')
+            else:
+                status = 'REJEITADA'
+                mensagem = resultado_sefaz.get('message', 'NFe rejeitada')
+            
+            # Atualizar JSON com XML e resultado
+            json_nfe_atualizado = json_nfe.copy()
+            json_nfe_atualizado['xml_content'] = xml_assinado
+            json_nfe_atualizado['resultado_sefaz'] = resultado_sefaz
+            
+            # Atualizar no banco
+            update_query = text("""
+                UPDATE nfe_emitidas 
+                SET status = :status,
+                    protocolo_sefaz = :protocolo,
+                    mensagem_sefaz = :mensagem,
+                    data_autorizacao = :data_autorizacao,
+                    chave_acesso = :chave_acesso,
+                    json_nfe = :json_nfe
+                WHERE nfe_emitida_id = :nfe_id
+            """)
+            
+            import json as json_module
+            db.execute(update_query, {
+                'status': status,
+                'protocolo': resultado_sefaz.get('protocolo'),
+                'mensagem': mensagem,
+                'data_autorizacao': datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else None,
+                'chave_acesso': resultado_sefaz.get('chave_acesso'),
+                'json_nfe': json_module.dumps(json_nfe_atualizado) if isinstance(json_nfe_atualizado, dict) else json_nfe_atualizado,
+                'nfe_id': nfe_id
+            })
+            db.commit()
+            
+            return jsonify({
+                'success': resultado_sefaz.get('success', False),
+                'message': mensagem,
+                'status': status,
+                'protocolo': resultado_sefaz.get('protocolo'),
+                'chave_acesso': resultado_sefaz.get('chave_acesso'),
+                'nfe_id': nfe_id
+            })
+            
+        except Exception as e:
+            print(f"Erro na emissão do rascunho: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao emitir rascunho: {str(e)}'
+            }), 500
+        
+    except Exception as e:
+        print(f"Erro geral na emissão do rascunho: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+    finally:
+        db.close()
+
+@nfe_bp.route('/compartilhar/<int:nfe_id>', methods=['POST'])
+@login_required
+@permission_required('nfe.read')
+def compartilhar_nfe(nfe_id):
+    """Compartilhar NFe por email"""
+    db = next(get_db())
+    try:
+        # Obter dados do request
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Dados não recebidos'}), 400
+            
+        email_destino = data.get('email')
+        include_danfe = data.get('include_danfe', True)
+        include_xml = data.get('include_xml', True)
+        
+        print(f"📧 Compartilhando NFe {nfe_id} para {email_destino}")
+        
+        if not email_destino:
+            return jsonify({'success': False, 'message': 'Email não informado'}), 400
+        
+        # Validar email
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email_destino):
+            return jsonify({'success': False, 'message': 'Email inválido'}), 400
         
         # Buscar NFe
         query = text("""
@@ -814,68 +1183,248 @@ def reenviar_nfe():
         if not nfe:
             return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
         
-        # Verificar se a NFe está rejeitada
-        if nfe.status.upper() != 'REJEITADA':
-            return jsonify({'success': False, 'message': 'Apenas NFes rejeitadas podem ser reenviadas'}), 400
+        # Converter para dict
+        try:
+            if hasattr(nfe, '_asdict'):
+                nfe_data = nfe._asdict()
+            elif hasattr(nfe, '_mapping'):
+                mapping = nfe._mapping
+                if callable(mapping):
+                    nfe_data = dict(mapping())
+                else:
+                    nfe_data = dict(mapping)
+            else:
+                nfe_data = {}
+                for key in nfe.keys():
+                    nfe_data[key] = nfe[key]
+        except Exception as e:
+            print(f"Erro ao converter NFe para dict: {e}")
+            return jsonify({'success': False, 'message': 'Erro ao processar dados da NFe'}), 500
+        
+        # Verificar se NFe está autorizada
+        if nfe_data.get('status', '').upper() != 'AUTORIZADA':
+            return jsonify({
+                'success': False, 
+                'message': 'Apenas NFes autorizadas podem ser compartilhadas'
+            }), 400
+        
+        # Preparar anexos
+        anexos = []
+        
+        try:
+            # XML
+            if include_xml:
+                print(f"📄 Incluindo XML...")
+                json_nfe = nfe_data.get('json_nfe')
+                if json_nfe:
+                    # Se json_nfe for string, converter para dict
+                    if isinstance(json_nfe, str):
+                        try:
+                            json_nfe = json.loads(json_nfe)
+                        except json.JSONDecodeError as e:
+                            print(f"Erro ao decodificar JSON NFe: {e}")
+                            return jsonify({'success': False, 'message': 'Dados JSON da NFe inválidos'}), 400
+                    
+                    xml_content = json_nfe.get('xml_content')
+                    if xml_content:
+                        anexos.append({
+                            'nome': f'nfe_{nfe_id}.xml',
+                            'conteudo': xml_content.encode('utf-8'),
+                            'tipo': 'application/xml'
+                        })
+                        print(f"✅ XML adicionado aos anexos")
+                    else:
+                        print(f"⚠️ XML content não encontrado")
             
-        # Obter dados da NFe
-        nfe_data = dict(nfe._mapping)
-        
-        # Verificar se tem XML
-        if not nfe_data.get('json_nfe') or not nfe_data['json_nfe'].get('xml_content'):
-            return jsonify({'success': False, 'message': 'XML não disponível para reenvio'}), 400
-        
-        # Buscar certificado ativo
-        certificado = get_active_certificate_for_client(db, nfe.cliente_id)
-        if not certificado:
-            return jsonify({'success': False, 'message': 'Nenhum certificado digital ativo encontrado'}), 400
-        
-        # Reenviar para SEFAZ
-        nfe_service = NFeService(db)
-        ambiente = nfe_data['json_nfe'].get('ambiente', 'homologacao')
-        resultado_sefaz = nfe_service._processar_envio_sefaz(
-            nfe_data['json_nfe']['xml_content'],
-            certificado,
-            ambiente
-        )
-        
-        # Atualizar status no banco de dados
-        status_nfe = resultado_sefaz.get('status', 'REJEITADA') if resultado_sefaz.get('success', False) else 'REJEITADA'
-        
-        # Atualizar NFe no banco de dados
-        update_query = text("""
-            UPDATE nfe_emitidas 
-            SET status = :status,
-                chave_acesso = :chave_acesso,
-                protocolo_sefaz = :protocolo,
-                mensagem_sefaz = :mensagem,
-                data_autorizacao = :data_autorizacao,
-                updated_at = :updated_at
-            WHERE nfe_emitida_id = :nfe_id
-        """)
-        
-        db.execute(update_query, {
-            'status': status_nfe,
-            'chave_acesso': resultado_sefaz.get('chave_acesso'),
-            'protocolo': resultado_sefaz.get('protocolo'),
-            'mensagem': resultado_sefaz.get('message'),
-            'data_autorizacao': datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else None,
-            'updated_at': datetime.now(),
-            'nfe_id': nfe_id
-        })
-        
-        db.commit()
-        
-        return jsonify({
-            'success': True,
-            'status': status_nfe,
-            'message': resultado_sefaz.get('message', 'NFe processada com sucesso')
-        })
+            # DANFE PDF
+            if include_danfe:
+                print(f"📋 Incluindo DANFE...")
+                try:
+                    json_nfe = nfe_data.get('json_nfe')
+                    if json_nfe:
+                        if isinstance(json_nfe, str):
+                            json_nfe = json.loads(json_nfe)
+                        
+                        xml_content = json_nfe.get('xml_content')
+                        if xml_content:
+                            # ✅ CORREÇÃO: Usar caminho absoluto e verificar se existe
+                            from services.danfe_service import generate_danfe
+                            
+                            # Gerar DANFE
+                            pdf_path = generate_danfe(xml_content, nfe_id)
+                            print(f"📋 DANFE path: {pdf_path}")
+                            
+                            if pdf_path:
+                                # Verificar se é caminho absoluto
+                                if not os.path.isabs(pdf_path):
+                                    # Se for relativo, juntar com o diretório da aplicação
+                                    app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                                    pdf_path = os.path.join(app_root, pdf_path)
+                                
+                                print(f"📋 Caminho absoluto DANFE: {pdf_path}")
+                                
+                                if os.path.exists(pdf_path):
+                                    with open(pdf_path, 'rb') as pdf_file:
+                                        pdf_content = pdf_file.read()
+                                        anexos.append({
+                                            'nome': f'danfe_{nfe_id}.pdf',
+                                            'conteudo': pdf_content,
+                                            'tipo': 'application/pdf'
+                                        })
+                                        print(f"✅ DANFE adicionado aos anexos ({len(pdf_content)} bytes)")
+                                else:
+                                    print(f"❌ Arquivo DANFE não encontrado: {pdf_path}")
+                            else:
+                                print(f"❌ DANFE não foi gerado")
+                        else:
+                            print(f"⚠️ XML content não disponível para gerar DANFE")
+                except Exception as e:
+                    print(f"❌ Erro ao gerar DANFE para compartilhamento: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continuar sem o DANFE se houver erro
+            
+            if not anexos:
+                return jsonify({
+                    'success': False, 
+                    'message': 'Nenhum anexo disponível para envio'
+                }), 400
+            
+            print(f"📎 Total de anexos preparados: {len(anexos)}")
+            
+            # Enviar email
+            from services.email_service import EmailService
+            
+            email_service = EmailService()
+            
+            # Preparar dados do email
+            assunto = f'NFe #{nfe_id} - {nfe_data.get("cliente_nome", "")}'
+            
+            # Verificar se data_autorizacao não é None antes do strftime
+            data_autorizacao = nfe_data.get('data_autorizacao')
+            if data_autorizacao:
+                data_autorizacao_str = data_autorizacao.strftime('%d/%m/%Y %H:%M:%S')
+            else:
+                data_autorizacao_str = 'N/A'
+            
+            corpo_html = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <h2 style="color: #007bff; margin: 0;">📋 Nota Fiscal Eletrônica</h2>
+                    </div>
+                    
+                    <p>Prezado(a),</p>
+                    <p>Segue em anexo a Nota Fiscal Eletrônica conforme solicitado:</p>
+                    
+                    <div style="background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 8px; font-weight: bold; width: 40%;">Número NFe:</td>
+                                <td style="padding: 8px;">{nfe_id}</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 8px; font-weight: bold;">Emitente:</td>
+                                <td style="padding: 8px;">{nfe_data.get('cliente_nome', 'N/A')}</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 8px; font-weight: bold;">Destinatário:</td>
+                                <td style="padding: 8px;">{nfe_data.get('destinatario_razao_social', 'N/A')}</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 8px; font-weight: bold;">Chave de Acesso:</td>
+                                <td style="padding: 8px; font-family: monospace; font-size: 12px;">{nfe_data.get('chave_acesso', 'N/A')}</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 8px; font-weight: bold;">Protocolo:</td>
+                                <td style="padding: 8px;">{nfe_data.get('protocolo_sefaz', 'N/A')}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; font-weight: bold;">Data de Autorização:</td>
+                                <td style="padding: 8px;">{data_autorizacao_str}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; font-size: 14px;">
+                        <strong>📎 Anexos inclusos:</strong>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            {"<li>📋 DANFE (PDF)</li>" if include_danfe else ""}
+                            {"<li>📄 XML da NFe</li>" if include_xml else ""}
+                        </ul>
+                    </div>
+                    
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+                    <p style="font-size: 12px; color: #666; text-align: center;">
+                        Este email foi enviado automaticamente pelo Sistema de NFe.<br>
+                        Em caso de dúvidas, entre em contato conosco.
+                    </p>
+                </div>
+            </body>
+            </html>
+            """
+            
+            print(f"📧 Enviando email...")
+            
+            # Enviar
+            resultado = email_service.enviar_email(
+                destinatario=email_destino,
+                assunto=assunto,
+                corpo_html=corpo_html,
+                anexos=anexos
+            )
+            
+            print(f"📧 Resultado do envio: {resultado}")
+            
+            if resultado.get('success', False):
+                # Log do compartilhamento (opcional - se a tabela existir)
+                try:
+                    log_query = text("""
+                        INSERT INTO nfe_compartilhamentos 
+                        (nfe_id, cliente_id, email_destino, user_id, data_compartilhamento, include_danfe, include_xml)
+                        VALUES (:nfe_id, :cliente_id, :email, :user_id, :data, :danfe, :xml)
+                    """)
+                    db.execute(log_query, {
+                        'nfe_id': nfe_id,
+                        'cliente_id': nfe_data['cliente_id'],  # ✅ ADICIONADO
+                        'email': email_destino,
+                        'user_id': current_user.id,
+                        'data': datetime.now(),
+                        'danfe': include_danfe,
+                        'xml': include_xml
+                    })
+                    db.commit()
+                    print(f"✅ Log de compartilhamento salvo")
+                except Exception as e:
+                    print(f"⚠️ Erro ao salvar log de compartilhamento: {e}")            
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'NFe compartilhada com sucesso para {email_destino}'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': resultado.get('message', 'Erro ao enviar email')
+                }), 500
+                
+        except Exception as e:
+            print(f"❌ Erro no compartilhamento: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao preparar compartilhamento: {str(e)}'
+            }), 500
         
     except Exception as e:
-        db.rollback()
+        print(f"❌ Erro geral no compartilhamento: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
     finally:
         db.close()

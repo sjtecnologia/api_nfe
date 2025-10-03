@@ -142,15 +142,21 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                {% set finalidades = {
-                                                    '1': 'Normal',
-                                                    '2': 'Complementar',
-                                                    '3': 'Ajuste',
-                                                    '4': 'Devolução'
-                                                } %}
-                                                <span class="badge badge-light">
-                                                    {{ finalidades.get(nfe.finalidade_emissao, 'N/A') }}
-                                                </span>
+                                                {% if nfe.finalidade_emissao %}
+                                                    {% if nfe.finalidade_emissao == 1 or nfe.finalidade_emissao == '1' %}
+                                                        <span class="badge badge-primary">Normal</span>
+                                                    {% elif nfe.finalidade_emissao == 2 or nfe.finalidade_emissao == '2' %}
+                                                        <span class="badge badge-info">Complementar</span>
+                                                    {% elif nfe.finalidade_emissao == 3 or nfe.finalidade_emissao == '3' %}
+                                                        <span class="badge badge-warning">Ajuste</span>
+                                                    {% elif nfe.finalidade_emissao == 4 or nfe.finalidade_emissao == '4' %}
+                                                        <span class="badge badge-secondary">Devolução</span>
+                                                    {% else %}
+                                                        <span class="badge badge-light">{{ nfe.finalidade_emissao }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge badge-light">N/A</span>
+                                                {% endif %}
                                             </td>
                                             <td>
                                                 {% if nfe.status|upper == 'AUTORIZADA' %}
@@ -221,23 +227,23 @@
                                                     {% endif %}
                                                     
                                                     <!-- ✅ DOWNLOAD XML SE AUTORIZADA -->
-                                                    {% if nfe.status|upper == 'AUTORIZADA' and nfe.chave_acesso %}
+                                                    <!-- {% if nfe.status|upper == 'AUTORIZADA' and nfe.chave_acesso %}
                                                     <a href="{{ url_for('nfe.download', nfe_id=nfe.nfe_emitida_id) }}" 
                                                     class="btn btn-sm btn-outline-success" 
                                                     title="Download XML">
                                                         <i class="fas fa-download"></i>
                                                     </a>
-                                                    {% endif %}
+                                                    {% endif %} -->
                                                     
                                                     <!-- ✅ REENVIAR SE REJEITADA -->
-                                                    {% if nfe.status|upper == 'REJEITADA' %}
+                                                    <!-- {% if nfe.status|upper == 'REJEITADA' %}
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-warning btn-reenviar"
                                                             data-nfe-id="{{ nfe.nfe_emitida_id }}"
                                                             title="Reenviar">
                                                         <i class="fas fa-redo"></i>
                                                     </button>
-                                                    {% endif %}
+                                                    {% endif %} -->
                                                 </div>
                                             </td>
                                         </tr>

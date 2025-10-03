@@ -59,7 +59,7 @@ def list_routes():
     """Lista todas as rotas registradas na aplicação"""
     print("\n=== ROTAS REGISTRADAS ===")
     for rule in app.url_map.iter_rules():
-        methods = ', '.join(sorted(rule.methods))
+        methods = ', '.join(sorted(rule.methods or []))
         print(f"{methods:<20} {rule.rule:<50} -> {rule.endpoint}")
     print("=== FIM DAS ROTAS ===\n")
 
