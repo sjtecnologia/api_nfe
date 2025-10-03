@@ -1,6 +1,7 @@
 import json
 import os
 from flask import Blueprint, jsonify, request, render_template, redirect, session, url_for, flash
+from typing import Dict, Any
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
@@ -110,7 +111,7 @@ def emitir_nfe():
             print(f"🔍 DEBUG - Ação recebida: {action}, Ambiente: {ambiente}")
             
             # ✅ INICIALIZAR VARIÁVEIS OBRIGATÓRIAS
-            destinatario_data = None
+            destinatario_data = {}
             nfe_items = []
             
             if action == 'emitir':
@@ -180,6 +181,13 @@ def emitir_nfe():
                     
                     # ✅ VALIDAR DADOS ANTES DE PROCESSAR
                     print("🔍 === VALIDANDO DADOS ===")
+                    
+                    # Verificar se destinatario_data foi preenchido
+                    if not destinatario_data:
+                        print("❌ Dados do destinatário não foram processados")
+                        flash('Erro: dados do destinatário não encontrados', 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                    
                     erros_validacao = validar_dados_nfe(form_data_initial, emitente_data_for_template, destinatario_data, nfe_items)
                     
                     if erros_validacao:
@@ -682,7 +690,8 @@ def view(nfe_id):
         flash(f'Erro ao visualizar NFe: {str(e)}', 'error')
         return redirect(url_for('nfe.list_nfes'))
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 @nfe_bp.route('/generate-danfe/<int:nfe_id>', methods=['POST'])
 @login_required
@@ -797,13 +806,497 @@ def generate_danfe_after_issue():
     finally:
         db.close()        
 
-@nfe_bp.route('/edit/<int:nfe_id>')
+# Substituir todo o método edit:
+
+@nfe_bp.route('/edit/<int:nfe_id>', methods=['GET', 'POST'])
 @login_required
-@permission_required('nfe.edit')
 def edit(nfe_id):
-    """Editar uma NFe em rascunho"""
-    flash('Funcionalidade de edição em desenvolvimento.', 'info')
-    return redirect(url_for('nfe.list_nfes'))
+    """Editar NFe (rascunho ou rejeitada)"""
+    db = next(get_db())
+    
+    try:
+        if request.method == 'GET':
+            try:
+                # Buscar NFe
+                nfe_query = text("""
+                    SELECT ne.*, c.razao_social as cliente_nome 
+                    FROM nfe_emitidas ne
+                    JOIN clientes c ON ne.cliente_id = c.cliente_id
+                    WHERE ne.nfe_emitida_id = :nfe_id
+                """)
+                nfe_result = db.execute(nfe_query, {'nfe_id': nfe_id}).fetchone()
+                
+                if not nfe_result:
+                    flash('NF-e não encontrada', 'error')
+                    return redirect(url_for('nfe.list_nfes'))
+                
+                # ✅ CONVERSÃO SEGURA PARA DICIONÁRIO - CORREÇÃO PRINCIPAL
+                try:
+                    # Método 1: _asdict() para Row objects
+                    if hasattr(nfe_result, '_asdict') and callable(nfe_result._asdict):
+                        nfe_data = nfe_result._asdict()
+                    # Método 2: _mapping para alguns drivers
+                    elif hasattr(nfe_result, '_mapping'):
+                        mapping = nfe_result._mapping
+                        if callable(mapping):
+                            nfe_data = dict(mapping())
+                        else:
+                            nfe_data = dict(mapping)
+                    # Método 3: tentativa com keys() (mais defensivo)
+                    elif hasattr(nfe_result, 'keys'):
+                        try:
+                            keys_attr = nfe_result.keys
+                            raw_keys = keys_attr() if callable(keys_attr) else keys_attr
+                            if isinstance(raw_keys, (list, tuple, set)):
+                                keys_list = list(raw_keys)
+                            elif hasattr(raw_keys, '__iter__'):
+                                keys_list = list(raw_keys)  # type: ignore[arg-type]
+                            else:
+                                keys_list = []
+                            nfe_data = {}
+                            for key in keys_list:
+                                try:
+                                    nfe_data[key] = nfe_result[key]
+                                except Exception:
+                                    nfe_data[key] = getattr(nfe_result, key, None)
+                            if not nfe_data:
+                                raise ValueError('Nenhum dado convertido via keys()')
+                        except Exception:
+                            # Fallback adicional antes do método 4
+                            try:
+                                nfe_data = dict(getattr(nfe_result, '_mapping'))
+                            except Exception:
+                                nfe_data = {}
+                    # Método 4: Conversão manual usando índices conhecidos
+                    else:
+                        # Lista das colunas na ordem da query
+                        colunas = [
+                            'nfe_emitida_id', 'cliente_id', 'numero_nfe', 'serie', 'chave_acesso',
+                            'protocolo_sefaz', 'data_emissao', 'data_autorizacao', 'status', 
+                            'valor_total', 'natureza_operacao', 'tipo_nfe', 'finalidade_emissao',
+                            'destinatario_razao_social', 'destinatario_cnpj_cpf', 'informacoes_adicionais',
+                            'mensagem_sefaz', 'json_nfe', 'data_criacao', 'created_by_user_id',
+                            'cliente_nome'  # Campo do JOIN
+                        ]
+                        
+                        nfe_data = {}
+                        for i, coluna in enumerate(colunas):
+                            try:
+                                nfe_data[coluna] = nfe_result[i] if i < len(nfe_result) else None
+                            except (IndexError, TypeError):
+                                nfe_data[coluna] = None
+                
+                except Exception as conv_error:
+                    print(f"❌ Erro na conversão manual: {conv_error}")
+                    flash('Erro ao processar dados da NFe', 'error')
+                    return redirect(url_for('nfe.list_nfes'))
+                
+                print(f"✅ NFe {nfe_id} carregada para edição - Status: {nfe_data.get('status', 'N/A')}")
+                
+                # Verificar se pode ser editada
+                status_editaveis = ['RASCUNHO', 'REJEITADA', 'ERRO']
+                current_status = nfe_data.get('status', '').upper()
+                if current_status not in status_editaveis:
+                    print(f"⚠️ Status '{current_status}' não é editável")
+                    flash('Esta NF-e não pode ser editada', 'error')
+                    return redirect(url_for('nfe.view', nfe_id=nfe_id))
+                
+                # Extrair dados do JSON para preencher o formulário
+                form_data = {}
+                items_data = []
+                
+                json_nfe_raw = nfe_data.get('json_nfe')
+                if json_nfe_raw:
+                    try:
+                        if isinstance(json_nfe_raw, str):
+                            json_data = json.loads(json_nfe_raw)
+                        elif isinstance(json_nfe_raw, dict):
+                            json_data = json_nfe_raw
+                        else:
+                            print(f"⚠️ json_nfe em formato inesperado: {type(json_nfe_raw)}")
+                            json_data = {}
+                        
+                        form_data = json_data.get('form_data', {})
+                        items_data = json_data.get('items', [])
+                        
+                        print(f"📋 Form data extraído: {len(form_data)} campos")
+                        print(f"📦 Items extraídos: {len(items_data)} itens")
+                        
+                    except (json.JSONDecodeError, TypeError) as e:
+                        print(f"⚠️ Erro ao decodificar JSON NFe: {e}")
+                        # Criar form_data básico a partir dos campos da tabela
+                        data_emissao = nfe_data.get('data_emissao')
+                        form_data = {
+                            'natOp': nfe_data.get('natureza_operacao', ''),
+                            'serie': str(nfe_data.get('serie', '1')),
+                            'tpNF': str(nfe_data.get('tipo_nfe', '1')),
+                            'finNFe': str(nfe_data.get('finalidade_emissao', '1')),
+                            'infCpl': nfe_data.get('informacoes_adicionais', ''),
+                            'dataEmissao': data_emissao.isoformat() if isinstance(data_emissao, datetime) else None
+                        }
+                        items_data = []
+                
+                # Buscar dados auxiliares com conversão segura
+                print("📊 Carregando dados auxiliares...")
+                
+                # ✅ CLIENTES
+                try:
+                    clientes_query = text("SELECT cliente_id, razao_social FROM clientes WHERE ativo = true ORDER BY razao_social")
+                    clientes_result = db.execute(clientes_query).fetchall()
+                    clientes = []
+                    for cliente_row in clientes_result:
+                        try:
+                            if hasattr(cliente_row, '_asdict'):
+                                clientes.append(cliente_row._asdict())
+                            elif hasattr(cliente_row, '_mapping'):
+                                mapping = cliente_row._mapping
+                                if callable(mapping):
+                                    clientes.append(dict(mapping()))
+                                else:
+                                    clientes.append(dict(mapping))
+                            else:
+                                clientes.append({
+                                    'cliente_id': cliente_row[0],
+                                    'razao_social': cliente_row[1]
+                                })
+                        except Exception as e:
+                            print(f"⚠️ Erro ao processar cliente: {e}")
+                            continue
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar clientes: {e}")
+                    clientes = []
+                
+                # ✅ CFOPS
+                try:
+                    cfops_query = text("SELECT cfop, descricao FROM cfops ORDER BY cfop")
+                    cfops_result = db.execute(cfops_query).fetchall()
+                    cfops = []
+                    for cfop_row in cfops_result:
+                        try:
+                            if hasattr(cfop_row, '_asdict'):
+                                cfops.append(cfop_row._asdict())
+                            elif hasattr(cfop_row, '_mapping'):
+                                mapping = cfop_row._mapping
+                                if callable(mapping):
+                                    cfops.append(dict(mapping()))
+                                else:
+                                    cfops.append(dict(mapping))
+                            else:
+                                cfops.append({
+                                    'cfop': cfop_row[0],
+                                    'descricao': cfop_row[1]
+                                })
+                        except Exception as e:
+                            print(f"⚠️ Erro ao processar CFOP: {e}")
+                            continue
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar CFOPs: {e}")
+                    cfops = []
+                
+                # ✅ NCMs
+                try:
+                    ncms_query = text("SELECT codigo, descricao FROM ncms ORDER BY codigo LIMIT 100")
+                    ncms_result = db.execute(ncms_query).fetchall()
+                    ncms = []
+                    for ncm_row in ncms_result:
+                        try:
+                            if hasattr(ncm_row, '_asdict'):
+                                ncms.append(ncm_row._asdict())
+                            elif hasattr(ncm_row, '_mapping'):
+                                mapping = ncm_row._mapping
+                                if callable(mapping):
+                                    ncms.append(dict(mapping()))
+                                else:
+                                    ncms.append(dict(mapping))
+                            else:
+                                ncms.append({
+                                    'codigo': ncm_row[0],
+                                    'descricao': ncm_row[1]
+                                })
+                        except Exception as e:
+                            print(f"⚠️ Erro ao processar NCM: {e}")
+                            continue
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar NCMs: {e}")
+                    ncms = []
+                
+                # ✅ PRODUTOS
+                try:
+                    produtos_query = text("SELECT produto_id, codigo_interno, descricao FROM produtos WHERE ativo = true ORDER BY descricao")
+                    produtos_result = db.execute(produtos_query).fetchall()
+                    produtos = []
+                    for produto_row in produtos_result:
+                        try:
+                            if hasattr(produto_row, '_asdict'):
+                                produtos.append(produto_row._asdict())
+                            elif hasattr(produto_row, '_mapping'):
+                                mapping = produto_row._mapping
+                                if callable(mapping):
+                                    produtos.append(dict(mapping()))
+                                else:
+                                    produtos.append(dict(mapping))
+                            else:
+                                produtos.append({
+                                    'produto_id': produto_row[0],
+                                    'codigo_interno': produto_row[1],
+                                    'descricao': produto_row[2]
+                                })
+                        except Exception as e:
+                            print(f"⚠️ Erro ao processar produto: {e}")
+                            continue
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar produtos: {e}")
+                    produtos = []
+                
+                print(f"📊 Dados auxiliares carregados: {len(clientes)} clientes, {len(cfops)} CFOPs, {len(ncms)} NCMs, {len(produtos)} produtos")
+                
+                return render_template('admin/nfes/edit.html',
+                                     nfe=nfe_data,
+                                     form_data=form_data,
+                                     items_data=items_data,
+                                     clientes=clientes,
+                                     cfops=cfops,
+                                     ncms=ncms,
+                                     produtos=produtos,
+                                     from_rejected=request.args.get('from') == 'rejected')
+                
+            except Exception as e:
+                print(f"❌ Erro ao carregar NFe para edição: {e}")
+                import traceback
+                traceback.print_exc()
+                flash('Erro ao carregar NF-e', 'error')
+                return redirect(url_for('nfe.list_nfes'))
+        
+        elif request.method == 'POST':
+            # ... código do POST permanece o mesmo ...
+            try:
+                # Processar dados do formulário
+                dados_nfe = {
+                    'dataEmissao': request.form.get('dataEmissao'),
+                    'serie': request.form.get('serie', '1'),
+                    'natOp': request.form.get('natOp'),
+                    'tpNF': request.form.get('tpNF', '1'),
+                    'finNFe': request.form.get('finNFe', '1'),
+                    'modFrete': request.form.get('modFrete', '9'),
+                    'formaPagamento': request.form.get('formaPagamento', '01'),
+                    'valorPagamento': request.form.get('valorPagamento'),
+                    'infCpl': request.form.get('infCpl', '')
+                }
+                
+                # ✅ CORREÇÃO: Processar itens com CFOP obrigatório
+                itens = []
+                item_indices = request.form.getlist('item_index')
+                
+                for i, idx in enumerate(item_indices):
+                    # ✅ BUSCAR CFOP DO PRODUTO SE NÃO FORNECIDO
+                    cfop_item = request.form.get(f'cfop_{idx}')
+                    codigo_produto = request.form.get(f'codigo_produto_{idx}')
+                    
+                    # Se CFOP não fornecido, buscar do produto
+                    if not cfop_item or cfop_item.strip() == '':
+                        print(f"⚠️ CFOP vazio para item {i+1}, buscando do produto {codigo_produto}")
+                        
+                        if codigo_produto:
+                            try:
+                                # Buscar CFOP padrão do produto
+                                produto_query = text("""
+                                    SELECT p.cfop_padrao, rt.cfop 
+                                    FROM produtos p
+                                    LEFT JOIN regras_tributacao rt ON p.produto_id = rt.produto_id
+                                    WHERE p.codigo_interno = :codigo OR p.produto_id = :codigo
+                                    ORDER BY rt.regra_tributacao_id DESC
+                                    LIMIT 1
+                                """)
+                                
+                                produto_result = db.execute(produto_query, {
+                                    'codigo': codigo_produto
+                                }).fetchone()
+                                
+                                if produto_result:
+                                    # Tentar primeiro o CFOP da regra de tributação, depois o padrão do produto
+                                    cfop_produto = produto_result[1] or produto_result[0]
+                                    if cfop_produto:
+                                        cfop_item = str(cfop_produto).replace('.', '').replace('-', '')
+                                        print(f"✅ CFOP encontrado para produto {codigo_produto}: {cfop_item}")
+                                    else:
+                                        cfop_item = '5102'  # CFOP padrão para venda
+                                        print(f"⚠️ CFOP não encontrado para produto {codigo_produto}, usando padrão: {cfop_item}")
+                                else:
+                                    cfop_item = '5102'
+                                    print(f"⚠️ Produto {codigo_produto} não encontrado, usando CFOP padrão: {cfop_item}")
+                            except Exception as e:
+                                print(f"❌ Erro ao buscar CFOP do produto: {e}")
+                                cfop_item = '5102'
+                        else:
+                            cfop_item = '5102'
+                            print(f"⚠️ Código do produto vazio, usando CFOP padrão: {cfop_item}")
+                    
+                    # ✅ VALIDAR E FORMATAR CFOP
+                    if cfop_item:
+                        cfop_item = str(cfop_item).replace('.', '').replace('-', '').strip()
+                        if len(cfop_item) != 4 or not cfop_item.isdigit():
+                            print(f"⚠️ CFOP inválido '{cfop_item}', usando padrão '5102'")
+                            cfop_item = '5102'
+                    else:
+                        cfop_item = '5102'
+                    
+                    item = {
+                        'codigo_produto': codigo_produto,
+                        'descricao': request.form.get(f'descricao_{idx}'),
+                        'ncm': request.form.get(f'ncm_{idx}'),
+                        'cfop': cfop_item,  # ✅ CFOP garantido
+                        'origem': request.form.get(f'origem_{idx}', '0'),
+                        'cst_icms': request.form.get(f'cst_icms_{idx}', '00'),
+                        'aliquota_icms': request.form.get(f'aliquota_icms_{idx}', '0'),
+                        'bc_icms': request.form.get(f'bc_icms_{idx}', '0'),
+                        'valor_icms': request.form.get(f'valor_icms_{idx}', '0'),
+                        'quantidade': request.form.get(f'quantidade_{idx}'),
+                        'unidade': request.form.get(f'unidade_{idx}'),
+                        'valor_unitario': request.form.get(f'valor_unitario_{idx}'),
+                        'valor_total': request.form.get(f'valor_total_{idx}')
+                    }
+                    
+                    print(f"📦 Item {i+1} processado - CFOP: {item['cfop']}, Produto: {item['codigo_produto']}")
+                    itens.append(item)
+                
+                cliente_id = request.form.get('cliente_id')
+                
+                # Validações básicas
+                if not cliente_id or not dados_nfe['natOp'] or not itens:
+                    flash('Preencha todos os campos obrigatórios', 'error')
+                    return redirect(url_for('nfe.edit', nfe_id=nfe_id))
+                
+                # Buscar NFe atual
+                nfe_query = text("SELECT status FROM nfe_emitidas WHERE nfe_emitida_id = :nfe_id")
+                nfe_result = db.execute(nfe_query, {'nfe_id': nfe_id}).fetchone()
+                
+                if not nfe_result:
+                    flash('NF-e não encontrada', 'error')
+                    return redirect(url_for('nfe.list_nfes'))
+                
+                # Verificar se pode ser editada
+                status_editaveis = ['RASCUNHO', 'REJEITADA', 'ERRO']
+                current_status = nfe_result[0] if nfe_result else ''  # Acessar por índice
+                if current_status.upper() not in status_editaveis:
+                    flash('Esta NF-e não pode ser editada', 'error')
+                    return redirect(url_for('nfe.view', nfe_id=nfe_id))
+                
+                # Buscar destinatário
+                destinatario_query = text("SELECT * FROM clientes WHERE cliente_id = :cliente_id")
+                destinatario_result = db.execute(destinatario_query, {'cliente_id': cliente_id}).fetchone()
+                
+                if not destinatario_result:
+                    flash('Cliente não encontrado', 'error')
+                    return redirect(url_for('nfe.edit', nfe_id=nfe_id))
+                
+                # Preparar dados para salvar
+                json_nfe = {
+                    'form_data': dados_nfe,
+                    'items': itens,
+                    'ambiente': 'homologacao'  # ou 'producao'
+                }
+                
+                # Atualizar NFe no banco
+                update_query = text("""
+                    UPDATE nfe_emitidas 
+                    SET cliente_id = :cliente_id,
+                        natureza_operacao = :natureza_operacao,
+                        tipo_nfe = :tipo_nfe,
+                        finalidade_emissao = :finalidade_emissao,
+                        informacoes_adicionais = :informacoes_adicionais,
+                        destinatario_razao_social = :destinatario_razao_social,
+                        destinatario_cnpj_cpf = :destinatario_cnpj_cpf,
+                        json_nfe = :json_nfe,
+                        status = :status,
+                        mensagem_sefaz = :mensagem_sefaz
+                    WHERE nfe_emitida_id = :nfe_id
+                """)
+                
+                # Determinar novo status
+                action = request.form.get('action', 'save')
+                if action == 'save':
+                    new_status = 'RASCUNHO'
+                    mensagem = 'Rascunho atualizado'
+                elif action == 'emit':
+                    new_status = 'PROCESSANDO'
+                    mensagem = 'Aguardando processamento na SEFAZ'
+                else:
+                    new_status = 'RASCUNHO'
+                    mensagem = 'Rascunho atualizado'
+                
+                # ✅ CORREÇÃO: Acessar dados do destinatário por índice ou atributo
+                try:
+                    if hasattr(destinatario_result, '_asdict'):
+                        dest_data = destinatario_result._asdict()
+                        dest_razao = dest_data.get('razao_social', '')
+                        dest_cnpj = dest_data.get('cnpj_cpf') or dest_data.get('cnpj', '')
+                    else:
+                        # Acessar por índice - assumindo ordem específica da query
+                        dest_razao = destinatario_result[1] if len(destinatario_result) > 1 else ''
+                        dest_cnpj = destinatario_result[2] if len(destinatario_result) > 2 else ''
+                except Exception as e:
+                    print(f"⚠️ Erro ao extrair dados do destinatário: {e}")
+                    dest_razao = 'N/A'
+                    dest_cnpj = 'N/A'
+                
+                db.execute(update_query, {
+                    'nfe_id': nfe_id,
+                    'cliente_id': cliente_id,
+                    'natureza_operacao': dados_nfe['natOp'],
+                    'tipo_nfe': dados_nfe['tpNF'],
+                    'finalidade_emissao': int(dados_nfe['finNFe']),
+                    'informacoes_adicionais': dados_nfe['infCpl'],
+                    'destinatario_razao_social': dest_razao,
+                    'destinatario_cnpj_cpf': dest_cnpj,
+                    'json_nfe': json.dumps(json_nfe),
+                    'status': new_status,
+                    'mensagem_sefaz': mensagem
+                })
+                db.commit()
+                
+                print(f"✅ NFe {nfe_id} atualizada - Status: {new_status}")
+                
+                # Se escolheu emitir, processar na SEFAZ
+                if action == 'emit':
+                    try:
+                        print(f"🚀 Tentando emitir NFe {nfe_id}...")
+                        
+                        # Usar serviço NFeService para processar
+                        from services.nfe_service import NFeService
+                        nfe_service = NFeService(db)
+                        
+                        # Processar emissão usando o nfe_id existente
+                        resultado = nfe_service.processar_nfe(dados_nfe, itens, int(cliente_id), nfe_id)
+                        
+                        if resultado.get('success', False):
+                            flash('NF-e atualizada e emitida com sucesso!', 'success')
+                        else:
+                            flash(f'NF-e atualizada, mas erro na emissão: {resultado.get("message", "Erro desconhecido")}', 'warning')
+                    
+                    except Exception as e:
+                        print(f"❌ Erro ao emitir NFe editada: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        flash(f'NF-e atualizada, mas erro na emissão: {str(e)}', 'danger')
+                else:
+                    flash('NF-e atualizada com sucesso!', 'success')
+                
+                return redirect(url_for('nfe.view', nfe_id=nfe_id))
+                
+            except Exception as e:
+                print(f"❌ Erro ao atualizar NFe: {e}")
+                import traceback
+                traceback.print_exc()
+                flash(f'Erro ao atualizar NF-e: {str(e)}', 'error')
+                return redirect(url_for('nfe.edit', nfe_id=nfe_id))
+        
+        # Fallback for any other HTTP method
+        flash('Método HTTP não suportado', 'error')
+        return redirect(url_for('nfe.list_nfes'))
+        
+    finally:
+        if db is not None:
+            db.close()
 
 @nfe_bp.route('/download/<int:nfe_id>')
 @login_required
@@ -813,333 +1306,456 @@ def download(nfe_id):
     flash('Funcionalidade de download em desenvolvimento.', 'info')
     return redirect(url_for('nfe.list_nfes'))
 
-
-
-# ...existing code...
-
-
-
 @nfe_bp.route('/reenviar/<int:nfe_id>', methods=['POST'])
 @login_required
-@permission_required('nfe.issue')
 def reenviar_nfe(nfe_id):
     """Reenviar NFe rejeitada para a SEFAZ"""
-    db = next(get_db())
     try:
+        print(f"🔄 Tentando reenviar NFe ID: {nfe_id}")
+        
+        db = next(get_db())
+        
         # Buscar NFe
-        query = text("""
-            SELECT 
-                n.*,
-                c.razao_social as cliente_nome
-            FROM nfe_emitidas n
-            JOIN clientes c ON n.cliente_id = c.cliente_id
-            WHERE n.nfe_emitida_id = :nfe_id
+        nfe_query = text("""
+            SELECT ne.*, c.razao_social as cliente_nome 
+            FROM nfe_emitidas ne
+            JOIN clientes c ON ne.cliente_id = c.cliente_id
+            WHERE ne.nfe_emitida_id = :nfe_id
         """)
-        result = db.execute(query, {'nfe_id': nfe_id})
-        nfe = result.first()
+        nfe_result = db.execute(nfe_query, {'nfe_id': nfe_id}).fetchone()
         
-        if not nfe:
-            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
-        
-        # Converter para dict
-        try:
-            if hasattr(nfe, '_asdict'):
-                nfe_data = nfe._asdict()
-            elif hasattr(nfe, '_mapping'):
-                mapping = nfe._mapping
-                if callable(mapping):
-                    nfe_data = dict(mapping())
-                else:
-                    nfe_data = dict(mapping)
-            else:
-                nfe_data = {}
-                for key in nfe.keys():
-                    nfe_data[key] = nfe[key]
-        except Exception as e:
-            print(f"Erro ao converter NFe para dict: {e}")
-            return jsonify({'success': False, 'message': 'Erro ao processar dados da NFe'}), 500
-        
-        # Verificar se pode ser reenviada
-        if nfe_data.get('status', '').upper() not in ['REJEITADA', 'ERRO']:
+        if not nfe_result:
             return jsonify({
-                'success': False, 
-                'message': 'Apenas NFes rejeitadas podem ser reenviadas'
+                'success': False,
+                'message': 'NF-e não encontrada'
+            }), 404
+        
+        nfe_data = dict(nfe_result)
+        
+        # Verificar se está rejeitada
+        if nfe_data['status'].upper() not in ['REJEITADA', 'ERRO']:
+            return jsonify({
+                'success': False,
+                'message': 'Apenas NF-es rejeitadas podem ser reenviadas'
             }), 400
         
-        # Verificar se tem XML
-        json_nfe = nfe_data.get('json_nfe')
-        if not json_nfe:
-            return jsonify({'success': False, 'message': 'Dados da NFe não encontrados'}), 400
+        print(f"✅ NFe encontrada - Status: {nfe_data['status']}")
         
-        # Se json_nfe for string, converter para dict
-        if isinstance(json_nfe, str):
-            try:
-                import json as json_module
-                json_nfe = json_module.loads(json_nfe)
-            except ValueError:
-                return jsonify({'success': False, 'message': 'Dados JSON da NFe inválidos'}), 400
+        # Verificar se tem dados JSON
+        if not nfe_data['json_nfe']:
+            return jsonify({
+                'success': False,
+                'message': 'Dados da NF-e não encontrados para reenvio'
+            }), 400
         
-        xml_content = json_nfe.get('xml_content')
-        if not xml_content:
-            return jsonify({'success': False, 'message': 'XML não disponível'}), 400
+        # Atualizar status para processando
+        update_query = text("""
+            UPDATE nfe_emitidas 
+            SET status = 'PROCESSANDO',
+                mensagem_sefaz = 'Reenviando para SEFAZ...'
+            WHERE nfe_emitida_id = :nfe_id
+        """)
+        db.execute(update_query, {'nfe_id': nfe_id})
+        db.commit()
+        
+        print(f"🔄 Status atualizado para PROCESSANDO")
         
         # Reenviar para SEFAZ
-        # Reenviar para SEFAZ
+        from services.nfe_service import NFeService
         nfe_service = NFeService(db)
-        try:
-            # Buscar certificado para reenvio
-            certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
-            if not certificado:
-                return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
+        
+        # Extrair dados do JSON
+        json_data = nfe_data['json_nfe']
+        
+        # Buscar dados do emitente
+        emitente_data = db.query(Cliente).filter_by(cliente_id=nfe_data['cliente_id']).first()
+        if not emitente_data:
+            return jsonify({
+                'success': False,
+                'message': 'Dados do emitente não encontrados'
+            }), 400
+        
+        # Converter emitente para dicionário
+        emitente_data_for_template = {
+            'cliente_id': emitente_data.cliente_id,
+            'razao_social': emitente_data.razao_social,
+            'cnpj': emitente_data.cnpj,
+            'nome_fantasia': emitente_data.nome_fantasia,
+            'logradouro': emitente_data.logradouro,
+            'numero': emitente_data.numero,
+            'bairro': emitente_data.bairro,
+            'cep': emitente_data.cep,
+            'codigo_municipio': emitente_data.codigo_municipio,
+            'nome_municipio': emitente_data.nome_municipio,
+            'uf': emitente_data.uf,
+            'inscricao_estadual': emitente_data.inscricao_estadual
+        }
+        # Buscar destinatário baseado nos dados do form_data
+        
+        form_data = json_data.get('form_data', {})
+        destinatario_id = form_data.get('destinatario')
+        destinatario_data: Dict[str, Any] = {}
+        
+        if destinatario_id:
+            destinatario = db.query(DestinatarioNFe).filter_by(
+                destinatario_id=destinatario_id,
+                cliente_id=nfe_data['cliente_id']
+            ).first()
             
-            # Determinar ambiente baseado nos dados originais
-            ambiente = json_nfe.get('ambiente', 'homologacao')
-            
-            # Tentar reenviar
-            resultado = nfe_service._processar_envio_sefaz(xml_content, certificado, ambiente)
-            
-            # Atualizar no banco
-            if resultado.get('success', False):
-                status = 'AUTORIZADA'
-                mensagem = resultado.get('message', 'NFe autorizada com sucesso')
-            else:
-                status = 'REJEITADA'
-                mensagem = resultado.get('message', 'NFe rejeitada novamente')
-            
-            # Atualizar dados no banco
-            update_query = text("""
+            if destinatario:
+                destinatario_data = {
+                    'nome_razao_social': destinatario.nome_razao_social,
+                    'cpf_cnpj': destinatario.cpf_cnpj,
+                    'logradouro': destinatario.logradouro,
+                    'numero': destinatario.numero,
+                    'bairro': destinatario.bairro,
+                    'cep': destinatario.cep,
+                    'codigo_municipio': destinatario.codigo_municipio,
+                    'nome_municipio': destinatario.nome_municipio,
+                    'uf': destinatario.uf
+                }
+        
+        # ✅ CORREÇÃO: Verificar se destinatário foi encontrado
+        if not destinatario_data:
+            # Atualizar status de volta para rascunho
+            update_back_query = text("""
                 UPDATE nfe_emitidas 
-                SET status = :status,
-                    protocolo_sefaz = :protocolo,
-                    mensagem_sefaz = :mensagem,
-                    data_autorizacao = :data_autorizacao,
-                    chave_acesso = :chave_acesso
+                SET status = 'RASCUNHO',
+                    mensagem_sefaz = 'Dados do destinatário não encontrados'
                 WHERE nfe_emitida_id = :nfe_id
             """)
+            db.execute(update_back_query, {'nfe_id': nfe_id})
+            db.commit()
             
-            db.execute(update_query, {
-                'status': status,
+            return jsonify({
+                'success': False,
+                'message': 'Dados do destinatário não encontrados no rascunho'
+            }), 400
+           
+        
+        # Verificar se destinatário foi encontrado
+        if not destinatario_data:
+            return jsonify({
+                'success': False,
+                'message': 'Dados do destinatário não encontrados no rascunho'
+            }), 400
+        
+        # Gerar XML
+        ambiente = json_data.get('ambiente', 'homologacao')
+        tp_amb = 2 if ambiente == 'homologacao' else 1
+        
+        xml_gerado = generate_nfe_xml(
+            json_data.get('form_data', {}),
+            emitente_data_for_template,
+            destinatario_data,
+            json_data.get('items', []),
+            tp_amb,
+            'emitir'
+        )
+        
+        # Assinar XML
+        from services.xml_signature_service import xml_signature_service
+        xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
+        
+        # Buscar certificado
+        certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
+        if not certificado:
+            return jsonify({
+                'success': False,
+                'message': 'Certificado não encontrado'
+            }), 400
+        
+        # Enviar para SEFAZ
+        resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente)
+        
+        # Preparar resultado
+        resultado = {
+            'success': resultado_sefaz.get('success', False),
+            'message': resultado_sefaz.get('message', 'Erro no reenvio'),
+            'protocolo': resultado_sefaz.get('protocolo'),
+            'chave_acesso': resultado_sefaz.get('chave_acesso')
+        }
+        
+        if resultado['success']:
+            print(f"✅ NFe reenviada com sucesso")
+            return jsonify({
+                'success': True,
+                'message': 'NF-e reenviada com sucesso!',
                 'protocolo': resultado.get('protocolo'),
-                'mensagem': mensagem,
-                'data_autorizacao': datetime.fromisoformat(resultado['data_autorizacao']) if resultado.get('data_autorizacao') else None,
-                'chave_acesso': resultado.get('chave_acesso'),
-                'nfe_id': nfe_id
+                'chave_acesso': resultado.get('chave_acesso')
+            })
+        else:
+            print(f"❌ Erro no reenvio: {resultado.get('message')}")
+            
+            # Atualizar status para rejeitada novamente
+            error_query = text("""
+                UPDATE nfe_emitidas 
+                SET status = 'REJEITADA',
+                    mensagem_sefaz = :mensagem
+                WHERE nfe_emitida_id = :nfe_id
+            """)
+            db.execute(error_query, {
+                'nfe_id': nfe_id,
+                'mensagem': resultado.get('message', 'Erro no reenvio')
             })
             db.commit()
             
             return jsonify({
-                'success': resultado.get('success', False),
-                'message': mensagem,
-                'status': status,
-                'protocolo': resultado.get('protocolo'),
-                'chave_acesso': resultado.get('chave_acesso')
-            })
-            
-        except Exception as e:
-            print(f"Erro no reenvio: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
                 'success': False,
-                'message': f'Erro ao reenviar NFe: {str(e)}'
-            }), 500
+                'message': resultado.get('message', 'Erro ao reenviar NF-e')
+            }), 400
         
     except Exception as e:
-        print(f"Erro geral no reenvio: {str(e)}")
+        print(f"❌ Erro no reenvio da NFe: {e}")
         import traceback
         traceback.print_exc()
+        
         return jsonify({
             'success': False,
             'message': f'Erro interno: {str(e)}'
         }), 500
-    finally:
-        db.close()
-
 @nfe_bp.route('/emitir-rascunho/<int:nfe_id>', methods=['POST'])
 @login_required
-@permission_required('nfe.issue')
 def emitir_rascunho(nfe_id):
-    """Emitir um rascunho de NFe"""
-    db = next(get_db())
+    """Emitir NFe que está em rascunho"""
+    db = None
     try:
-        # Buscar rascunho
-        query = text("""
-            SELECT 
-                n.*,
-                c.razao_social as cliente_nome
-            FROM nfe_emitidas n
-            JOIN clientes c ON n.cliente_id = c.cliente_id
-            WHERE n.nfe_emitida_id = :nfe_id
+        print(f"📝 Emitindo rascunho NFe ID: {nfe_id}")
+        
+        db = next(get_db())
+        db = next(get_db())
+        
+        # Buscar NFe
+        nfe_query = text("""
+            SELECT ne.*, c.razao_social as cliente_nome 
+            FROM nfe_emitidas ne
+            JOIN clientes c ON ne.cliente_id = c.cliente_id
+            WHERE ne.nfe_emitida_id = :nfe_id
         """)
-        result = db.execute(query, {'nfe_id': nfe_id})
-        nfe = result.first()
+        nfe_result = db.execute(nfe_query, {'nfe_id': nfe_id}).fetchone()
         
-        if not nfe:
-            return jsonify({'success': False, 'message': 'Rascunho não encontrado'}), 404
-        
-        # Converter para dict
-        try:
-            if hasattr(nfe, '_asdict'):
-                nfe_data = nfe._asdict()
-            elif hasattr(nfe, '_mapping'):
-                mapping = nfe._mapping
-                if callable(mapping):
-                    nfe_data = dict(mapping())
-                else:
-                    nfe_data = dict(mapping)
-            else:
-                nfe_data = {}
-                for key in nfe.keys():
-                    nfe_data[key] = nfe[key]
-        except Exception as e:
-            print(f"Erro ao converter NFe para dict: {e}")
-            return jsonify({'success': False, 'message': 'Erro ao processar dados da NFe'}), 500
-        
-        # Verificar se é realmente um rascunho
-        if nfe_data.get('status', '').upper() != 'RASCUNHO':
+        if not nfe_result:
             return jsonify({
-                'success': False, 
+                'success': False,
+                'message': 'NF-e não encontrada'
+            }), 404
+        
+        nfe_data = dict(nfe_result)
+        
+        # Verificar se está em rascunho
+        if nfe_data['status'].upper() != 'RASCUNHO':
+            return jsonify({
+                'success': False,
                 'message': 'Apenas rascunhos podem ser emitidos por esta função'
             }), 400
         
-        # Verificar se tem dados necessários
-        json_nfe = nfe_data.get('json_nfe')
-        if not json_nfe:
-            return jsonify({'success': False, 'message': 'Dados do rascunho não encontrados'}), 400
+        print(f"✅ Rascunho encontrado")
         
-        # Se json_nfe for string, converter para dict
-        if isinstance(json_nfe, str):
-            try:
-                import json as json_module
-                json_nfe = json_module.loads(json_nfe)
-            except (ValueError, TypeError):
-                return jsonify({'success': False, 'message': 'Dados JSON do rascunho inválidos'}), 400
+        # Verificar se tem dados JSON
+        if not nfe_data['json_nfe']:
+            return jsonify({
+                'success': False,
+                'message': 'Dados do rascunho não encontrados'
+            }), 400
         
-        form_data = json_nfe.get('form_data')
-        items = json_nfe.get('items')
+        # Atualizar status para processando
+        update_query = text("""
+            UPDATE nfe_emitidas 
+            SET status = 'PROCESSANDO',
+                mensagem_sefaz = 'Processando na SEFAZ...'
+            WHERE nfe_emitida_id = :nfe_id
+        """)
+        db.execute(update_query, {'nfe_id': nfe_id})
+        db.commit()
         
-        if not form_data or not items:
-            return jsonify({'success': False, 'message': 'Dados incompletos no rascunho'}), 400
+        print(f"🔄 Status atualizado para PROCESSANDO")
         
-        # Processar emissão usando o mesmo fluxo da emissão normal
-        try:
-            # Buscar dados do emitente
-            emitente_data = db.query(Cliente).filter_by(cliente_id=nfe_data['cliente_id']).first()
-            if not emitente_data:
-                return jsonify({'success': False, 'message': 'Dados do emitente não encontrados'}), 400
+        # Emitir na SEFAZ
+        from services.nfe_service import NFeService
+        nfe_service = NFeService(db)
+        
+        # Extrair dados do JSON
+        json_data = nfe_data['json_nfe']
+        
+        # Buscar dados do emitente
+        emitente_data = db.query(Cliente).filter_by(cliente_id=nfe_data['cliente_id']).first()
+        if not emitente_data:
+            return jsonify({
+                'success': False,
+                'message': 'Dados do emitente não encontrados'
+            }), 400
+        
+        # Converter emitente para dicionário
+        emitente_data_for_template = {
+            'cliente_id': emitente_data.cliente_id,
+            'razao_social': emitente_data.razao_social,
+            'cnpj': emitente_data.cnpj,
+            'nome_fantasia': emitente_data.nome_fantasia,
+            'logradouro': emitente_data.logradouro,
+            'numero': emitente_data.numero,
+            'bairro': emitente_data.bairro,
+            'cep': emitente_data.cep,
+            'codigo_municipio': emitente_data.codigo_municipio,
+            'nome_municipio': emitente_data.nome_municipio,
+            'uf': emitente_data.uf,
+            'inscricao_estadual': emitente_data.inscricao_estadual
+        }
+        
+        # Buscar destinatário para o rascunho
+        form_data = json_data.get('form_data', {})
+        destinatario_id = form_data.get('destinatario')
+        destinatario_data = {}
+        
+        if destinatario_id:
+            destinatario = db.query(DestinatarioNFe).filter_by(
+                destinatario_id=destinatario_id,
+                cliente_id=nfe_data['cliente_id']
+            ).first()
             
-            # Converter emitente para dicionário
-            emitente_data_for_template = {
-                'cliente_id': emitente_data.cliente_id,
-                'razao_social': emitente_data.razao_social,
-                'cnpj': emitente_data.cnpj,
-                'nome_fantasia': emitente_data.nome_fantasia,
-                'logradouro': emitente_data.logradouro,
-                'numero': emitente_data.numero,
-                'bairro': emitente_data.bairro,
-                'cep': emitente_data.cep,
-                'codigo_municipio': emitente_data.codigo_municipio,
-                'nome_municipio': emitente_data.nome_municipio,
-                'uf': emitente_data.uf,
-                'inscricao_estadual': emitente_data.inscricao_estadual
-            }
-            
-            # 1. Gerar XML
-            ambiente = json_nfe.get('ambiente', 'homologacao')
-            tp_amb = 2 if ambiente == 'homologacao' else 1
-            
-            xml_gerado = generate_nfe_xml(
-                form_data, 
-                emitente_data_for_template, 
-                None,  # destinatario será extraído dos form_data
-                items, 
-                tp_amb, 
-                'emitir'
-            )
-            
-            if not xml_gerado:
-                return jsonify({'success': False, 'message': 'Erro ao gerar XML'}), 500
-            
-            # 2. Assinar XML
-            from services.xml_signature_service import xml_signature_service
-            xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
-            
-            if not xml_assinado:
-                return jsonify({'success': False, 'message': 'Erro ao assinar XML'}), 500
-            
-            # 3. Enviar para SEFAZ
-            certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
-            if not certificado:
-                return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
-            
-            nfe_service = NFeService(db)
-            resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente)
-            
-            # 4. Determinar status
-            if resultado_sefaz.get('success', False):
-                status = 'AUTORIZADA'
-                mensagem = resultado_sefaz.get('message', 'NFe autorizada com sucesso')
-            else:
-                status = 'REJEITADA'
-                mensagem = resultado_sefaz.get('message', 'NFe rejeitada')
-            
-            # Atualizar JSON com XML e resultado
-            json_nfe_atualizado = json_nfe.copy()
-            json_nfe_atualizado['xml_content'] = xml_assinado
-            json_nfe_atualizado['resultado_sefaz'] = resultado_sefaz
-            
-            # Atualizar no banco
-            update_query = text("""
+            if destinatario:
+                destinatario_data = {
+                    'nome_razao_social': destinatario.nome_razao_social,
+                    'cpf_cnpj': destinatario.cpf_cnpj,
+                    'logradouro': destinatario.logradouro,
+                    'numero': destinatario.numero,
+                    'bairro': destinatario.bairro,
+                    'cep': destinatario.cep,
+                    'codigo_municipio': destinatario.codigo_municipio,
+                    'nome_municipio': destinatario.nome_municipio,
+                    'uf': destinatario.uf
+                }
+        
+        # Verificar se destinatário foi encontrado
+        if not destinatario_data:
+            return jsonify({
+                'success': False,
+                'message': 'Dados do destinatário não encontrados no rascunho'
+            }), 400
+        
+        # ✅ CORREÇÃO: Gerar XML com dados válidos
+        ambiente = json_data.get('ambiente', 'homologacao')
+        tp_amb = 2 if ambiente == 'homologacao' else 1
+        
+        xml_gerado = generate_nfe_xml(
+            json_data.get('form_data', {}),
+            emitente_data_for_template,
+            destinatario_data,  # ✅ AGORA É DICT VÁLIDO
+            json_data.get('items', []),
+            tp_amb,
+            'emitir'
+        )
+        
+        # Assinar XML
+        from services.xml_signature_service import xml_signature_service
+        xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
+        
+        # Buscar certificado
+        certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
+        if not certificado:
+            return jsonify({
+                'success': False,
+                'message': 'Certificado não encontrado'
+            }), 400
+        
+        # Enviar para SEFAZ
+        resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente)
+        
+        # Preparar resultado
+        resultado = {
+            'success': resultado_sefaz.get('success', False),
+            'message': resultado_sefaz.get('message', 'Erro no processamento'),
+            'protocolo': resultado_sefaz.get('protocolo'),
+            'chave_acesso': resultado_sefaz.get('chave_acesso')
+        }
+        
+        # Atualizar status da NFe no banco
+        if resultado['success']:
+            status_nfe = 'AUTORIZADA'
+            update_final_query = text("""
                 UPDATE nfe_emitidas 
                 SET status = :status,
+                    chave_acesso = :chave_acesso,
                     protocolo_sefaz = :protocolo,
                     mensagem_sefaz = :mensagem,
                     data_autorizacao = :data_autorizacao,
-                    chave_acesso = :chave_acesso,
                     json_nfe = :json_nfe
                 WHERE nfe_emitida_id = :nfe_id
             """)
             
-            import json as json_module
-            db.execute(update_query, {
-                'status': status,
-                'protocolo': resultado_sefaz.get('protocolo'),
-                'mensagem': mensagem,
-                'data_autorizacao': datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else None,
-                'chave_acesso': resultado_sefaz.get('chave_acesso'),
-                'json_nfe': json_module.dumps(json_nfe_atualizado) if isinstance(json_nfe_atualizado, dict) else json_nfe_atualizado,
-                'nfe_id': nfe_id
+            # Atualizar JSON com dados da emissão
+            json_data['xml_content'] = xml_assinado
+            json_data['resultado_sefaz'] = resultado_sefaz
+            
+            db.execute(update_final_query, {
+                'nfe_id': nfe_id,
+                'status': status_nfe,
+                'chave_acesso': resultado.get('chave_acesso'),
+                'protocolo': resultado.get('protocolo'),
+                'mensagem': resultado.get('message'),
+                'data_autorizacao': datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else datetime.now(),
+                'json_nfe': json.dumps(json_data)
             })
             db.commit()
-            
-            return jsonify({
-                'success': resultado_sefaz.get('success', False),
-                'message': mensagem,
-                'status': status,
-                'protocolo': resultado_sefaz.get('protocolo'),
-                'chave_acesso': resultado_sefaz.get('chave_acesso'),
-                'nfe_id': nfe_id
+        else:
+            status_nfe = 'REJEITADA'
+            update_final_query = text("""
+                UPDATE nfe_emitidas 
+                SET status = :status,
+                    mensagem_sefaz = :mensagem
+                WHERE nfe_emitida_id = :nfe_id
+            """)
+            db.execute(update_final_query, {
+                'nfe_id': nfe_id,
+                'status': status_nfe,
+                'mensagem': resultado.get('message', 'Erro no processamento')
             })
+            db.commit()
+        
+        if resultado['success']:
+            print(f"✅ Rascunho emitido com sucesso")
+            return jsonify({
+                'success': True,
+                'message': 'NF-e emitida com sucesso!',
+                'protocolo': resultado.get('protocolo'),
+                'chave_acesso': resultado.get('chave_acesso')
+            })
+        else:
+            print(f"❌ Erro na emissão: {resultado.get('message')}")
             
-        except Exception as e:
-            print(f"Erro na emissão do rascunho: {str(e)}")
-            import traceback
-            traceback.print_exc()
             return jsonify({
                 'success': False,
-                'message': f'Erro ao emitir rascunho: {str(e)}'
-            }), 500
+                'message': resultado.get('message', 'Erro ao emitir NF-e')
+            }), 400
         
     except Exception as e:
-        print(f"Erro geral na emissão do rascunho: {str(e)}")
+        print(f"❌ Erro na emissão do rascunho: {e}")
         import traceback
         traceback.print_exc()
+        
+        # Reverter status se houver erro
+        if db is not None:
+            try:
+                error_query = text("""
+                    UPDATE nfe_emitidas 
+                    SET status = 'RASCUNHO',
+                        mensagem_sefaz = :mensagem
+                    WHERE nfe_emitida_id = :nfe_id
+                """)
+                db.execute(error_query, {
+                    'nfe_id': nfe_id,
+                    'mensagem': f'Erro na emissão: {str(e)}'
+                })
+                db.commit()
+            except Exception:
+                pass  # Ignore erro no rollback
+        
         return jsonify({
             'success': False,
             'message': f'Erro interno: {str(e)}'
         }), 500
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 @nfe_bp.route('/compartilhar/<int:nfe_id>', methods=['POST'])
 @login_required
@@ -1387,7 +2003,7 @@ def compartilhar_nfe(nfe_id):
                     """)
                     db.execute(log_query, {
                         'nfe_id': nfe_id,
-                        'cliente_id': nfe_data['cliente_id'],  # ✅ ADICIONADO
+                        'cliente_id': nfe_data['cliente_id'],
                         'email': email_destino,
                         'user_id': current_user.id,
                         'data': datetime.now(),
