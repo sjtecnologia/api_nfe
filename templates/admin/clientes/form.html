@@ -178,7 +178,7 @@
                         Adicionar Novo Produto
                     </button>
                     
-                    {% include 'admin_produtos_list_partial.html' %}
+                    {% include 'admin/produtos/list_partial.html' %}
                 </div>
 
                 <!-- Aba: Certificados -->
@@ -193,7 +193,7 @@
                     {# Para simplificar, vou remover o "Upload Rápido" duplicado aqui, pois o modal já faz isso #}
                     {# Se precisar, pode ser re-adicionado com AJAX POST direto para admin_clientes_edit #}
 
-                    {% include 'admin_certificados_list_partial.html' %}
+                    {% include 'admin/certificados/list_partial.html' %}
                 </div>
 
                 <!-- Aba: Regras Tributárias -->
@@ -204,7 +204,7 @@
                         Adicionar Nova Regra
                     </button>
                     
-                    {% include 'admin_regras_tributacao_list_partial.html' %}
+                    {% include 'admin/regras_tributacao/list_partial.html' %}
                 </div>
 
                 <!-- Aba: Destinatários NF-e -->
@@ -212,20 +212,20 @@
                     <h5 class="mt-3">Destinatários NF-e Associados</h5>
                     <p>Gerencie os destinatários de NF-e para este cliente.</p>
                     {# Por enquanto, manter o link para o formulário de destinatário, mas pode ser convertido para modal também #}
-                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary btn-sm mb-3">Adicionar Novo Destinatário</a>
+                    <a href="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary btn-sm mb-3">Adicionar Novo Destinatário</a>
                     
-                    {% include 'admin_destinatario_list.html' %}
+                    {% include 'admin/destinatarios/list.html' %}
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    {# Overlay de carregamento para a busca de CEP #}
+    <!-- {# Overlay de carregamento para a busca de CEP #}
     <div class="loading-overlay hidden" id="loadingOverlay">
         <div class="spinner"></div>
         <p class="mt-3">Buscando CEP...</p>
-    </div>
+    </div> -->
 
     {# MODAL GENÉRICO PARA ADIÇÃO DE PRODUTOS/CERTIFICADOS/REGRAS #}
     <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">

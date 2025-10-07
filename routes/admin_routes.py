@@ -1,1624 +1,1361 @@
-from auth.decorators import permission_required, admin_required
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from __future__ import annotations
+from typing import Optional, Dict, Any, List, Generator
+from flask import (
+    Blueprint, render_template, request, redirect, url_for,
+    flash, jsonify, session, current_app
+)
 from flask_login import login_required, current_user
-from database.connection import get_db
 from sqlalchemy import text
-from sqlalchemy.engine import Result
-from typing import Optional, Any
+from datetime import datetime
+import sys
+from pathlib import Path
+import importlib
 
-
-admin_bp = Blueprint('admin', __name__)
-
-# ========== DASHBOARD ==========
-@admin_bp.route('/')
-@login_required  
-def admin_home():
-    """Dashboard administrativo"""
-    db = None
+# Importe o decorator permission_required
+try:
+    import sys
+    from pathlib import Path
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    core_dir = BASE_DIR / "core"
+    if str(BASE_DIR) not in sys.path:
+        sys.path.append(str(BASE_DIR))
+    if str(core_dir) not in sys.path:
+        sys.path.append(str(core_dir))
+    # Certifique-se que core/permissions.py existe e core tem __init__.py
+    # Se o erro persistir, tente importar via caminho relativo:
     try:
-        db = next(get_db())
-        
-        # Estatísticas gerais da plataforma
-        stats = {}
-        
-        # Total de clientes
-        clientes_result = db.execute(text("SELECT COUNT(*) as total FROM clientes WHERE ativo = true"))
-        clientes_row = clientes_result.first()
-        stats['total_clientes'] = clientes_row.total if clientes_row else 0
-        
-        # Total de NFes (todos os clientes)
-        nfes_result = db.execute(text("SELECT COUNT(*) as total FROM nfe_emitidas"))
-        nfes_row = nfes_result.first()
-        stats['total_nfes'] = nfes_row.total if nfes_row else 0
-        
-        # NFes no ano atual
-        nfes_ano_result = db.execute(text("""
-            SELECT COUNT(*) as total FROM nfe_emitidas 
-            WHERE EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
-        """))
-        nfes_ano_row = nfes_ano_result.first()
-        stats['nfes_ano'] = nfes_ano_row.total if nfes_ano_row else 0
-        
-        # NFes no mês atual
-        nfes_mes_result = db.execute(text("""
-            SELECT COUNT(*) as total FROM nfe_emitidas 
-            WHERE EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
-            AND EXTRACT(MONTH FROM data_criacao) = EXTRACT(MONTH FROM CURRENT_DATE)
-        """))
-        nfes_mes_row = nfes_mes_result.first()
-        stats['nfes_mes'] = nfes_mes_row.total if nfes_mes_row else 0
-        
-        # Últimos clientes cadastrados
-        ultimos_clientes = db.execute(text("""
-            SELECT cliente_id, razao_social, nome_fantasia, cnpj, data_cadastro
-            FROM clientes 
-            WHERE ativo = true
-            ORDER BY data_cadastro DESC 
-            
-        """))
-        
-        return render_template('admin/dashboard.html', 
-                             stats=stats,
-                             ultimos_clientes=[dict(row._mapping) for row in ultimos_clientes])
-                             
+        # Tente importar via caminho relativo se estiver dentro de um pacote
+        try:
+            from ..core.permissions import permission_required  # type: ignore
+        except ImportError:
+            # Fallback: tente importar absoluto se sys.path estiver correto
+            try:
+                from ..core.permissions import permission_required  # type: ignore
+            except ImportError:
+                # Defina um stub para evitar erro de importação (ajuste conforme sua implementação real)
+                def permission_required(permission):
+                    def decorator(f):
+                        return f
+                    return decorator
+    except ImportError:
+        try:
+            from ..core.permissions import permission_required  # type: ignore
+        except ImportError:
+            # Defina um stub para evitar erro de importação (ajuste conforme sua implementação real)
+            def permission_required(permission):
+                def decorator(f):
+                    return f
+                return decorator
+except ImportError:
+    # Defina um stub para evitar erro de importação (ajuste conforme sua implementação real)
+    def permission_required(permission):
+        def decorator(f):
+            return f
+        return decorator
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.append(str(BASE_DIR))
+
+def _locate_get_db():
+    """
+    Tenta localizar função get_db em módulos comuns.
+    Retorna a função (generator factory) ou lança RuntimeError.
+    """
+    candidate_modules = [
+        'db',
+        'database',
+        'core.db',
+        'core.database',
+        'app.db',
+        'app.database'
+    ]
+    
+    # Primeiro tenta importar do diretório pai (raiz do projeto)
+    try:
+        sys.path.insert(0, str(BASE_DIR))
+        root_db = importlib.import_module('core.db')
+        if hasattr(root_db, 'get_db'):
+            return root_db.get_db
+    except ImportError as e:
+        print(f"❌ Não conseguiu importar db do diretório raiz: {e}")
+        pass
+    
+    # Tenta outros módulos candidatos
+    for mod_name in candidate_modules:
+        try:
+            mod = importlib.import_module(mod_name)
+            if hasattr(mod, 'get_db'):
+                print(f"✅ Encontrou get_db em {mod_name}")
+                return getattr(mod, 'get_db')
+        except ImportError:
+            continue
+    
+    # Tenta relative (caso pacote tenha __init__.py no root)
+    try:
+        from .. import db as rel_db  # type: ignore
+        if hasattr(rel_db, 'get_db'):
+            return rel_db.get_db
+    except Exception:
+        pass
+    
+    # Fallback engine em config
+    def _fallback():
+        engine = current_app.config.get('SQLALCHEMY_ENGINE')
+        if engine is None:
+            print("❌ SQLALCHEMY_ENGINE não encontrado em current_app.config")
+            print("❌ Estrutura de diretórios:")
+            print(f"   BASE_DIR: {BASE_DIR}")
+            print(f"   sys.path inclui: {BASE_DIR in sys.path}")
+            raise RuntimeError("get_db não encontrado. Ajuste caminhos ou verifique se módulo db.py existe.")
+        conn = engine.connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
+    return _fallback
+
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+# -------------------------------------------------------------------
+# HELPERS
+# -------------------------------------------------------------------
+
+def _safe_row_to_dict(row, columns: Optional[List[str]] = None) -> Dict[str, Any]:
+    if not row:
+        return {}
+    if hasattr(row, '_mapping'):
+        return dict(row._mapping)
+    if hasattr(row, '_asdict'):
+        return row._asdict()
+    if columns:
+        return {col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)}
+    try:
+        return dict(row)
+    except Exception:
+        return {}
+
+def resolve_cliente_id(param_name: str = 'cliente_id', required: bool = False) -> Optional[int]:
+    cid = request.args.get(param_name) or request.form.get(param_name) or session.get('active_cliente_id')
+    if cid is None:
+        return None
+    try:
+        return int(cid)
+    except (TypeError, ValueError):
+        if required:
+            raise
+        return None
+
+# Inicializa get_db na primeira chamada
+from database.connection import get_db
+# get_db = _locate_get_db()
+
+def _get_db():
+    return next(get_db())
+
+# -------------------------------------------------------------------
+# DASHBOARD ADMIN
+# -------------------------------------------------------------------
+
+@admin_bp.route('/')
+@login_required
+def admin_home():
+    db = None
+    stats = {
+        'total_clientes': 0,
+        'total_nfes': 0,
+        'nfes_ano': 0,
+        'nfes_mes': 0
+    }
+    ultimas_nfes: List[Dict[str, Any]] = []
+    ultimos_clientes: List[Dict[str, Any]] = []
+    try:
+        db = _get_db()
+
+        # Total clientes (excluindo destinatários, ajuste se necessário)
+        stats['total_clientes'] = db.execute(text("""
+            SELECT COUNT(*) FROM clientes WHERE ativo = TRUE
+        """)).scalar() or 0
+
+        # Total NFes
+        stats['total_nfes'] = db.execute(text("SELECT COUNT(*) FROM nfe_emitidas")).scalar() or 0
+
+        ano_atual = datetime.now().year
+        mes_atual = datetime.now().month
+
+        stats['nfes_ano'] = db.execute(text("""
+            SELECT COUNT(*) FROM nfe_emitidas
+            WHERE EXTRACT(YEAR FROM data_criacao) = :ano
+        """), {'ano': ano_atual}).scalar() or 0
+
+        stats['nfes_mes'] = db.execute(text("""
+            SELECT COUNT(*) FROM nfe_emitidas
+            WHERE EXTRACT(YEAR FROM data_criacao) = :ano
+              AND EXTRACT(MONTH FROM data_criacao) = :mes
+        """), {'ano': ano_atual, 'mes': mes_atual}).scalar() or 0
+
+        # Últimas NFes
+        rows_nfe = db.execute(text("""
+            SELECT nfe_emitida_id, status, data_criacao
+            FROM nfe_emitidas
+            ORDER BY nfe_emitida_id DESC
+            LIMIT 10
+        """)).fetchall()
+        for r in rows_nfe:
+            ultimas_nfes.append(_safe_row_to_dict(r, [
+                'nfe_emitida_id','status','data_criacao'
+            ]))
+
+        # Últimos clientes
+        rows_cli = db.execute(text("""
+            SELECT cliente_id,
+                   razao_social,
+                   nome_fantasia,
+                   cnpj AS cnpj,
+                   data_cadastro AS data_cadastro
+            FROM clientes
+            WHERE ativo = TRUE
+            ORDER BY cliente_id DESC
+            LIMIT 8
+        """)).fetchall()
+        for r in rows_cli:
+            ultimos_clientes.append(_safe_row_to_dict(r, [
+                'cliente_id','razao_social','nome_fantasia','cnpj','data_cadastro'
+            ]))
+
+        return render_template('admin/dashboard.html',
+                               stats=stats,
+                               ultimas_nfes=ultimas_nfes,
+                               ultimos_clientes=ultimos_clientes)
     except Exception as e:
-        flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
-        return render_template('admin/dashboard.html', 
-                             stats={'total_clientes': 0, 'total_nfes': 0, 'nfes_ano': 0, 'nfes_mes': 0},
-                             ultimos_clientes=[])
+        print(f"❌ Erro dashboard admin: {e}")
+        flash('Erro ao carregar dashboard', 'error')
+        return render_template('admin/dashboard.html',
+                               stats=stats,
+                               ultimas_nfes=ultimas_nfes,
+                               ultimos_clientes=ultimos_clientes)
     finally:
         if db:
             db.close()
 
-# ========== PRODUTOS ==========
+@admin_bp.route('/nfes')
+@login_required
+def list_nfes():
+    flash('Lista de NFes (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/ncms')
+@login_required
+def list_ncms():
+    """
+    Stub para evitar BuildError em base.html.
+    Ajuste futuramente para exibir lista real (ou consumir /api/ncms).
+    """
+    flash('Lista de NCMs (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/cst')
+@login_required
+def list_cst():
+    """
+    Stub para evitar BuildError de url_for('admin.list_cst') usado em base.html.
+    Substitua depois por listagem real de códigos CST ICMS.
+    """
+    flash('Lista de CST (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/cst/pis-cofins')
+@login_required
+def list_cst_pis_cofins():
+    """
+    Caso o template venha a referenciar admin.list_cst_pis_cofins no futuro.
+    """
+    flash('Lista de CST PIS/COFINS (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/cfops')
+@login_required
+def list_cfops():
+    """Lista CFOPs"""
+    db = _get_db()
+    try:
+        rows = db.execute(text("""
+            SELECT cfop_id, cfop, descricao, observacao, tipooperacao, identificadordestinooperacao, created_at
+            FROM cfops
+            ORDER BY cfop
+        """)).fetchall()
+        cfops = [_safe_row_to_dict(r, [
+            'cfop_id','cfop','descricao','observacao','tipooperacao','identificadordestinooperacao','created_at'
+        ]) for r in rows]
+        return render_template('admin/cfops/list.html', cfops=cfops)
+    except Exception as e:
+        print(f"❌ Erro list_cfops: {e}")
+        flash('Erro ao carregar CFOPs', 'error')
+        return render_template('admin/cfops/list.html', cfops=[])
+    finally:
+        db.close()
+
+@admin_bp.route('/cfops/novo')
+@login_required
+def create_cfop():
+    return render_template('admin/cfops/form.html', cfop=None)
+
+@admin_bp.route('/cfops/salvar', methods=['POST'])
+@login_required
+def save_cfop():
+    db = _get_db()
+    try:
+        data = {
+            'cfop': request.form.get('cfop'),
+            'descricao': request.form.get('descricao'),
+            'observacao': request.form.get('observacao'),
+            'tipooperacao': request.form.get('tipooperacao'),
+            'identificadordestinooperacao': request.form.get('identificadordestinooperacao')
+        }
+        
+        cfop_id = request.form.get('cfop_id')
+        if cfop_id:  # Editar
+            data['cfop_id'] = cfop_id
+            db.execute(text("""
+                UPDATE cfops SET cfop=:cfop, descricao=:descricao, observacao=:observacao,
+                tipooperacao=:tipooperacao, identificadordestinooperacao=:identificadordestinooperacao
+                WHERE cfop_id=:cfop_id
+            """), data)
+            flash('CFOP atualizado', 'success')
+        else:  # Criar
+            db.execute(text("""
+                INSERT INTO cfops (cfop, descricao, observacao, tipooperacao, identificadordestinooperacao, created_at)
+                VALUES (:cfop, :descricao, :observacao, :tipooperacao, :identificadordestinooperacao, NOW())
+            """), data)
+            flash('CFOP criado', 'success')
+        
+        db.commit()
+        return redirect(url_for('admin.list_cfops'))
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro save_cfop: {e}")
+        flash('Erro ao salvar CFOP', 'error')
+        return redirect(url_for('admin.list_cfops'))
+    finally:
+        db.close()
+
+@admin_bp.route('/cfops/editar/<int:cfop_id>')
+@login_required
+def edit_cfop(cfop_id):
+    db = _get_db()
+    try:
+        row = db.execute(text("SELECT * FROM cfops WHERE cfop_id = :id"), {'id': cfop_id}).fetchone()
+        if not row:
+            flash('CFOP não encontrado', 'error')
+            return redirect(url_for('admin.list_cfops'))
+        
+        cfop = _safe_row_to_dict(row, [
+            'cfop_id','cfop','descricao','observacao','tipooperacao','identificadordestinooperacao','created_at'
+        ])
+        return render_template('admin/cfops/form.html', cfop=cfop)
+    except Exception as e:
+        print(f"❌ Erro edit_cfop: {e}")
+        flash('Erro ao carregar CFOP', 'error')
+        return redirect(url_for('admin.list_cfops'))
+    finally:
+        db.close()
+
+@admin_bp.route('/cfops/excluir/<int:cfop_id>', methods=['POST'])
+@login_required
+def delete_cfop(cfop_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM cfops WHERE cfop_id = :id"), {'id': cfop_id})
+        db.commit()
+        flash('CFOP excluído', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_cfop: {e}")
+        flash('Erro ao excluir CFOP', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_cfops'))
+
+@admin_bp.route('/usuarios')
+@login_required
+def list_users():
+    flash('Gestão de usuários (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/clientes/<int:cliente_id>')
+@login_required
+def view_cliente(cliente_id: int):
+    flash(f'Visualização do cliente {cliente_id} (stub).', 'info')
+    return redirect(url_for('admin.list_clientes'))
+
+@admin_bp.route('/csosn')
+@login_required
+def list_csosn():
+    """
+    Stub para evitar BuildError de url_for('admin.list_csosn') usado em base.html.
+    CSOSN = Código de Situação da Operação do Simples Nacional.
+    """
+    flash('Lista de CSOSN (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+
+@admin_bp.route('/regimes-tributarios')
+@login_required
+@permission_required('regimes_tributarios.view')
+def list_regimes_tributarios():
+    """Lista regimes tributários"""
+    db = _get_db()
+    try:
+        rows = db.execute(text("""
+            SELECT regime_tributario_id, nome, descricao, ativo, created_at
+            FROM regimes_tributarios
+            ORDER BY nome
+        """)).fetchall()
+        regimes = [_safe_row_to_dict(r, [
+            'regime_tributario_id','nome','descricao','ativo','created_at'
+        ]) for r in rows]
+        return render_template('admin/regimes_tributarios/list.html', regimes=regimes)
+    except Exception as e:
+        print(f"❌ Erro list_regimes_tributarios: {e}")
+        flash('Erro ao carregar regimes tributários', 'error')
+        return render_template('admin/regimes_tributarios/list.html', regimes=[])
+    finally:
+        db.close()
+
+@admin_bp.route('/regimes-tributarios/novo')
+@login_required
+@permission_required('regimes_tributarios.create')
+def novo_regime_tributario():
+    return render_template('admin/regimes_tributarios/form.html', regime=None)
+
+@admin_bp.route('/regimes-tributarios/salvar', methods=['POST'])
+@login_required
+@permission_required('regimes_tributarios.create')
+def salvar_regime_tributario():
+    db = _get_db()
+    try:
+        data = {
+            'nome': request.form.get('nome'),
+            'descricao': request.form.get('descricao'),
+            'ativo': True
+        }
+        db.execute(text("""
+            INSERT INTO regimes_tributarios (nome, descricao, ativo, created_at)
+            VALUES (:nome, :descricao, :ativo, NOW())
+        """), data)
+        db.commit()
+        flash('Regime tributário salvo', 'success')
+        return redirect(url_for('admin.list_regimes_tributarios'))
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro salvar_regime_tributario: {e}")
+        flash('Erro ao salvar regime tributário', 'error')
+        return redirect(url_for('admin.novo_regime_tributario'))
+    finally:
+        db.close()
+
+@admin_bp.route('/roles')
+@login_required
+def list_roles():
+    """
+    Stub para evitar BuildError de url_for('admin.list_roles') usado em base.html.
+    Gestão de roles/papéis de usuários no sistema.
+    """
+    flash('Lista de Roles (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/permissions')
+@login_required
+def list_permissions():
+    """
+    Stub para evitar BuildError de url_for('admin.list_permissions') usado em base.html.
+    Gestão de permissões do sistema.
+    """
+    flash('Lista de Permissões (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/user-permissions')
+@login_required
+def list_user_permissions():
+    """
+    Stub para evitar BuildError de url_for('admin.list_user_permissions') usado em base.html.
+    Gestão de permissões por usuário.
+    """
+    flash('Lista de Permissões de Usuário (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/logs')
+@login_required
+def list_logs():
+    """
+    Stub para evitar BuildError de url_for('admin.list_logs') usado em base.html.
+    Logs do sistema.
+    """
+    flash('Lista de Logs (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/configuracoes')
+@login_required
+def configuracoes():
+    """
+    Stub para evitar BuildError de url_for('admin.configuracoes') usado em base.html.
+    Configurações do sistema.
+    """
+    flash('Configurações do Sistema (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/auditoria')
+@login_required
+def auditoria():
+    """
+    Stub para evitar BuildError de url_for('admin.auditoria') usado em base.html.
+    Auditoria do sistema.
+    """
+    flash('Auditoria (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/backup')
+@login_required
+def backup():
+    """
+    Stub para evitar BuildError de url_for('admin.backup') usado em base.html.
+    Sistema de backup.
+    """
+    flash('Sistema de Backup (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/motivos-desoneracao')
+@login_required
+def list_motivos_desoneracao():
+    """
+    Stub para evitar BuildError de url_for('admin.list_motivos_desoneracao') usado em base.html.
+    Motivos de desoneração do ICMS (códigos 1-16 conforme tabela SEFAZ).
+    """
+    flash('Lista de Motivos de Desoneração (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/origens-mercadoria')
+@login_required
+def list_origens_mercadoria():
+    """
+    Stub para evitar BuildError de url_for('admin.list_origens_mercadoria') usado em base.html.
+    Origens de mercadoria para NFe (0=Nacional, 1=Estrangeira-Importação direta, etc).
+    """
+    flash('Lista de Origens de Mercadoria (stub).', 'info')
+    return redirect(url_for('admin.admin_home'))
+# Opcional: função utilitária para checar endpoints (pode usar em templates se desejar)
+def has_endpoint(name: str) -> bool:
+    return name in current_app.view_functions
+
+# Registra no Jinja (coloque isto após criação do blueprint se quiser usar em templates)
+@admin_bp.record_once
+def _register_template_utils(setup_state):
+    setup_state.app.jinja_env.globals['has_endpoint'] = has_endpoint
+
+# -------------------------------------------------------------------
+# CLIENTES
+# -------------------------------------------------------------------
+
+@admin_bp.route('/clientes', methods=['GET'])
+@login_required
+@permission_required('clientes.view')
+def list_clientes():
+    db = _get_db()
+    try:
+        rows = db.execute(text("""
+            SELECT cliente_id, razao_social, cnpj, ativo, data_cadastro
+            FROM clientes
+            ORDER BY razao_social
+        """)).fetchall()
+        clientes = [_safe_row_to_dict(r, [
+            'cliente_id','razao_social','cnpj','ativo','data_cadastro'
+        ]) for r in rows]
+        return render_template('admin/clientes/list.html', clientes=clientes)
+    except Exception as e:
+        print(f"❌ Erro list_clientes: {e}")
+        flash('Erro ao carregar clientes', 'error')
+        return render_template('admin/clientes/list.html', clientes=[])
+    finally:
+        db.close()
+
+
+
+@admin_bp.route('/clientes/novo')
+@login_required
+@permission_required('clientes.create')
+def create_cliente():
+    db = _get_db()
+    try:
+        # Monta form_data vazio
+        form_data = {
+            'razao_social': '',
+            'nome_fantasia': '',
+            'cnpj': '',
+            'inscricao_estadual': '',
+            'inscricao_municipal': '',
+            'regime_tributario_id': '',
+            'cnae': '',
+            'cep': '',
+            'logradouro': '',
+            'numero': '',
+            'complemento': '',
+            'bairro': '',
+            'nome_municipio': '',
+            'codigo_municipio': '',
+            'uf': '',
+            'email_contato': '',
+            'telefone_contato': '',
+            'ativo': True,
+        }
+        # Carrega regimes tributários para o select
+        regimes_rows = db.execute(text("SELECT regime_tributario_id, nome FROM regimes_tributarios")).fetchall()
+        regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
+        
+        return render_template(
+            'admin/clientes/form.html',
+            cliente=None,
+            form_data=form_data,
+            regimes_tributarios=regimes_tributarios
+        )
+    except Exception as e:
+        print(f"❌ Erro create_cliente: {e}")
+        flash('Erro ao carregar formulário de cliente', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    finally:
+        db.close()
+
+
+
+def _cliente_to_form_data(cliente_row):
+    """Converte o resultado do banco para o dict esperado pelo form_data do template."""
+    return {
+        'razao_social': cliente_row.get('razao_social', ''),
+        'nome_fantasia': cliente_row.get('nome_fantasia', ''),
+        'cnpj': cliente_row.get('cnpj', ''),
+        'inscricao_estadual': cliente_row.get('inscricao_estadual', ''),
+        'inscricao_municipal': cliente_row.get('inscricao_municipal', ''),
+        'regime_tributario_id': cliente_row.get('regime_tributario_id', ''),
+        'cnae': cliente_row.get('cnae', ''),
+        'cep': cliente_row.get('cep', ''),
+        'logradouro': cliente_row.get('logradouro', ''),
+        'numero': cliente_row.get('numero', ''),
+        'complemento': cliente_row.get('complemento', ''),
+        'bairro': cliente_row.get('bairro', ''),
+        'nome_municipio': cliente_row.get('nome_municipio', ''),
+        'codigo_municipio': cliente_row.get('codigo_municipio', ''),
+        'uf': cliente_row.get('uf', ''),
+        'email_contato': cliente_row.get('email_contato', ''),
+        'telefone_contato': cliente_row.get('telefone_contato', ''),
+        'ativo': cliente_row.get('ativo', True),
+    }
+
+@admin_bp.route('/clientes/<int:cliente_id>/edit', methods=['GET', 'POST'])
+@login_required
+@permission_required('clientes.edit')
+def edit_cliente(cliente_id: int):
+    db = _get_db()
+    try:
+        row = db.execute(text("SELECT * FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
+        if row:
+            cliente = dict(row._mapping)
+        else:
+            cliente = None
+
+        if not cliente:
+            flash('Cliente não encontrado', 'warning')
+            return redirect(url_for('admin.list_clientes'))
+
+        form_data = _cliente_to_form_data(cliente)
+        certificados_existentes = db.execute(text("""
+            SELECT * FROM certificados_digitais WHERE cliente_id = :cid
+        """), {'cid': cliente_id}).fetchall()
+        
+        # Consultar produtos cadastrados para o cliente
+        prod_rows = db.execute(text("""
+            SELECT produto_id, descricao, codigo_interno, ncm_id, cfop_id, unidade_comercial
+            FROM produtos
+            WHERE cliente_id = :cid
+            ORDER BY descricao
+        """), {'cid': cliente_id}).fetchall()
+        produtos = [dict(row._mapping) for row in prod_rows]
+        
+        # Consultar regras tributárias para o cliente
+        regras_rows = db.execute(text("""
+            SELECT * FROM regras_tributacao WHERE cliente_id = :cid
+        """), {'cid': cliente_id}).fetchall()
+        regras_tributarias = [dict(row._mapping) for row in regras_rows]
+
+        # Consultar destinatários para o cliente
+        destinatarios_rows = db.execute(text("""
+            SELECT * FROM destinatarios_nfe WHERE cliente_id = :cid
+        """), {'cid': cliente_id}).fetchall()
+        destinatarios = [dict(row._mapping) for row in destinatarios_rows]
+
+        regimes_rows = db.execute(text("SELECT regime_tributario_id, nome FROM regimes_tributarios")).fetchall()
+        regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
+        certificados_existentes = [dict(row._mapping) for row in certificados_existentes]
+       
+        return render_template(
+            'admin/clientes/form.html',
+            cliente=cliente,
+            form_data=form_data,
+            regimes_tributarios=regimes_tributarios,
+            certificados_existentes=certificados_existentes,
+            produtos=produtos,
+            regras_tributarias=regras_tributarias,
+            destinatarios=destinatarios
+        )
+    except Exception as e:
+        print(f"❌ Erro edit_cliente: {e}")
+        flash('Erro ao carregar cliente', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    finally:
+        db.close()
+
+@admin_bp.route('/clientes/<int:cliente_id>/delete', methods=['POST'])
+@login_required
+@permission_required('clientes.delete')
+def delete_cliente(cliente_id: int):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id})
+        db.commit()
+        flash('Cliente excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_cliente: {e}")
+        flash('Erro ao excluir cliente', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_clientes'))
+
+@admin_bp.route('/certificados/novo/<int:cliente_id>')
+@login_required
+@permission_required('certificados.create')
+def create_certificado(cliente_id: int):
+    modal = request.args.get('modal', False)
+    return render_template(
+        'admin/certificados/form.html',
+        certificado=None,
+        cliente_id=cliente_id,
+        modal=modal
+    )
+
+@admin_bp.route('/certificados/<int:certificado_digital_id>/edit/<int:cliente_id>', methods=['GET'])
+@login_required
+@permission_required('certificados.edit')
+def edit_certificado(certificado_digital_id: int, cliente_id: int):
+    db = _get_db()
+    try:
+        row = db.execute(text("""
+            SELECT * FROM certificados_digitais WHERE certificado_digital_id = :cid
+        """), {'cid': certificado_digital_id}).fetchone()
+        certificado = dict(row._mapping) if row else None
+        if not certificado:
+            flash('Certificado não encontrado', 'warning')
+            return redirect(url_for('admin.list_certificados'))
+        return render_template(
+            'admin/certificados/form.html',
+            certificado=certificado,
+            cliente_id=cliente_id
+        )
+    except Exception as e:
+        print(f"❌ Erro edit_certificado: {e}")
+        flash('Erro ao carregar certificado', 'error')
+        return redirect(url_for('admin.list_certificados'))
+    finally:
+        db.close()
+
+@admin_bp.route('/certificados/<int:certificado_digital_id>/delete', methods=['POST'])
+@login_required
+@permission_required('certificados.delete')
+def delete_certificado(certificado_digital_id: int):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM certificados_digitais WHERE certificado_digital_id = :cid"),
+                   {'cid': certificado_digital_id})
+        db.commit()
+        flash('Certificado excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_certificado: {e}")
+        flash('Erro ao excluir certificado', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_certificados'))
+
+@admin_bp.route('/regras-tributacao/nova/<int:cliente_id>')
+@login_required
+@permission_required('regras_tributacao.create')
+def create_regra_tributacao(cliente_id: int):
+    modal = request.args.get('modal', False)
+    return render_template(
+        'admin/regras_tributacao/form.html',
+        regra=None,
+        cliente_id=cliente_id,
+        modal=modal
+    )
+
+@admin_bp.route('/regras-tributacao/<int:regra_tributacao_id>/edit', methods=['GET'])
+@login_required
+@permission_required('regras_tributacao.edit')
+def edit_regra_tributacao(regra_tributacao_id: int):
+    db = _get_db()
+    try:
+        row = db.execute(text("""
+            SELECT * FROM regras_tributacao WHERE regra_tributacao_id = :rid
+        """), {'rid': regra_tributacao_id}).fetchone()
+        regra = dict(row._mapping) if row else None
+        if not regra:
+            flash('Regra de tributação não encontrada', 'warning')
+            return redirect(url_for('admin.list_regras_tributacao'))
+        return render_template('admin/regras_tributacao/form.html', regra=regra)
+    except Exception as e:
+        print(f"❌ Erro edit_regra_tributacao: {e}")
+        flash('Erro ao carregar regra', 'error')
+        return redirect(url_for('admin.list_regras_tributacao'))
+    finally:
+        db.close()
+
+@admin_bp.route('/regras-tributacao/<int:regra_tributacao_id>/delete', methods=['POST'])
+@login_required
+@permission_required('regras_tributacao.delete')
+def delete_regra_tributacao(regra_tributacao_id: int):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM regras_tributacao WHERE regra_tributacao_id=:rid"),
+                   {'rid': regra_tributacao_id})
+        db.commit()
+        flash('Regra excluída com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_regra_tributacao: {e}")
+        flash('Erro ao excluir regra', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_regras_tributacao'))
+
+@admin_bp.route('/destinatarios/add/<int:cliente_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('destinatarios_nfe.create')
+def admin_destinatarios_nfe_add(cliente_id: int):
+    if request.method == 'POST':
+        db = _get_db()
+        try:
+            data = {
+                'cliente_id': cliente_id,
+                'tipo_pessoa': request.form.get('tipo_pessoa'),  # Adicionado
+                'nome_razao_social': request.form.get('nome_razao_social'),  # Adicionado
+                'cpf_cnpj': request.form.get('cpf_cnpj'),
+                'ie': request.form.get('ie'),  # Adicionado
+                'ie_indicador_nfe': request.form.get('ie_indicador_nfe', 'C'),  # Adicionado
+                'email': request.form.get('email'),  # Adicionado
+                'telefone': request.form.get('telefone'),  # Adicionado
+                'logradouro': request.form.get('logradouro'),
+                'numero': request.form.get('numero'),
+                'complemento': request.form.get('complemento'),  # Adicionado
+                'bairro': request.form.get('bairro'),
+                'cep': request.form.get('cep'),
+                'codigo_municipio': request.form.get('codigo_municipio'),
+                'nome_municipio': request.form.get('nome_municipio'),
+                'uf': request.form.get('uf'),
+                'codigo_uf': request.form.get('codigo_uf'),  # Adicionado
+                'codigo_pais': request.form.get('codigo_pais', '1058'),  # Adicionado
+                'nome_pais': request.form.get('nome_pais', 'Brasil'),  # Adicionado
+                'data_cadastro': datetime.now(),  # Adicionado
+                'created_by_user_id': current_user.id
+            }
+            db.execute(text("""
+                INSERT INTO destinatarios_nfe (cliente_id, tipo_pessoa, nome_razao_social, cpf_cnpj, ie,
+                                                ie_indicador_nfe, email, telefone, logradouro, numero,
+                                                complemento, bairro, cep, codigo_municipio, nome_municipio,
+                                                uf, codigo_uf, codigo_pais, nome_pais, data_cadastro, created_by_user_id)
+                VALUES (:cliente_id, :tipo_pessoa, :nome_razao_social, :cpf_cnpj, :ie,
+                        :ie_indicador_nfe, :email, :telefone, :logradouro, :numero,
+                        :complemento, :bairro, :cep, :codigo_municipio, :nome_municipio,
+                        :uf, :codigo_uf, :codigo_pais, :nome_pais, :data_cadastro, :created_by_user_id)
+            """), data)
+            db.commit()
+            flash('Destinatário adicionado com sucesso', 'success')
+            return redirect(url_for('admin.list_destinatarios'))
+        except Exception as e:
+            db.rollback()
+            print(f"❌ Erro admin_destinatarios_nfe_add: {e}")
+            flash('Erro ao adicionar destinatário', 'error')
+            return redirect(url_for('admin.list_destinatarios'))
+        finally:
+            db.close()
+    else:
+        return render_template('admin/destinatarios/form.html', destinatario=None, cliente_id=cliente_id)
+
+
+
+@admin_bp.route('/destinatarios/<int:destinatario_id>/delete', methods=['POST'])
+@login_required
+@permission_required('destinatarios_nfe.delete')
+def delete_destinatario(destinatario_id: int):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM destinatarios_nfe WHERE destinatario_id = :cid"),
+                   {'cid': destinatario_id})
+        db.commit()
+        flash('Destinatário excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_destinatario: {e}")
+        flash('Erro ao excluir destinatário', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_destinatarios'))
+# -------------------------------------------------------------------
+# PRODUTOS
+# -------------------------------------------------------------------
 
 @admin_bp.route('/produtos')
 @login_required
-@admin_required()
+@permission_required('produtos.view')
 def list_produtos():
-    """Listar produtos"""
-    db = None
-    cliente_id: int = int(request.args.get('cliente_id', 5))
-    
+    db = _get_db()
     try:
-        db = next(get_db())
-        
-        print(f"🔍 DEBUG list_produtos:")
-        print(f"  • Cliente ID recebido: {cliente_id}")
-        
-        # Query dos produtos
-        produtos_result = db.execute(text("""
-            SELECT p.produto_id, p.codigo_interno, p.descricao, 
-                   p.unidade_comercial, p.preco_unitario_padrao,
-                   p.ativo, n.codigo as ncm_codigo
-            FROM produtos p
-            LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
-            WHERE p.cliente_id = :cliente_id
-            ORDER BY p.descricao
-        """), {"cliente_id": cliente_id})
-        
-        produtos = [dict(row._mapping) for row in produtos_result]
-        
-        # Buscar nome do cliente
-        cliente_result = db.execute(text("""
-            SELECT razao_social FROM clientes WHERE cliente_id = :cliente_id
-        """), {"cliente_id": cliente_id})
-        
-        cliente_data = cliente_result.first()
-        cliente_nome = cliente_data.razao_social if cliente_data else f"Cliente {cliente_id}"
-        
-        return render_template('admin/produtos/list.html', 
-                             produtos=produtos,
-                             cliente_id=cliente_id,
-                             cliente_nome=cliente_nome)
-        
+        rows = db.execute(text("""
+            SELECT produto_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
+                   ncm_id, cfop_id, ativo
+            FROM produtos
+            ORDER BY descricao
+        """)).fetchall()
+        produtos = [_safe_row_to_dict(r, [
+            'produto_id','codigo_interno','descricao','unidade_comercial',
+            'preco_unitario_padrao','ncm_id','cfop_id','ativo'
+        ]) for r in rows]
+        return render_template('admin/produtos/list.html', produtos=produtos)
     except Exception as e:
-        print(f"❌ Erro ao listar produtos: {e}")
-        flash('Erro ao carregar produtos.', 'error')
-        return render_template('admin/produtos/list.html', 
-                             produtos=[], 
-                             cliente_id=cliente_id,
-                             cliente_nome=f"Cliente {cliente_id}")
+        print(f"❌ Erro list_produtos: {e}")
+        flash('Erro ao carregar produtos', 'error')
+        return render_template('admin/produtos/list.html', produtos=[])
     finally:
-        if db:
-            db.close()
+        db.close()
 
-# ✅ ROTA DE CRIAÇÃO TAMBÉM PRECISA SER CORRIGIDA
-@admin_bp.route('/produtos/add')
+@admin_bp.route('/produtos/add', methods=['GET'])
 @login_required
-@admin_required()
+@permission_required('produtos.create')
 def create_produto():
-    """Formulário para criar novo produto"""
-    db = None
-    cliente_id: int = int(request.args.get('cliente_id', 5))
-    
-    try:
-        db = next(get_db())
-        
-        print(f"🔍 DEBUG create_produto:")
-        print(f"  • Cliente ID recebido: {cliente_id}")
-        
-        # ✅ BUSCAR TODOS OS DADOS PARA OS SELECTS
-        # NCMs
-        ncms_result = db.execute(text("""
-            SELECT ncm_id, codigo, descricao 
-            FROM ncms 
-            ORDER BY codigo 
-            
-        """))
-        ncms = [dict(row._mapping) for row in ncms_result]
-        
-        # CFOPs
-        cfops_result = db.execute(text("""
-            SELECT cfop_id, cfop as codigo, descricao 
-            FROM cfops 
-            ORDER BY 
-                CASE 
-                    WHEN cfop ~ '^[0-9]+$' THEN CAST(cfop AS INTEGER)
-                    ELSE 9999
-                END,
-                cfop
-        """))
-        cfops = [dict(row._mapping) for row in cfops_result]
-        
-        # ✅ CSTs ICMS (CORRIGIDO)
-        csts_result = db.execute(text("""
-            SELECT cst_id, codigo, descricao 
-            FROM cst_icms 
-            ORDER BY codigo
-        """))
-        csts = [dict(row._mapping) for row in csts_result]
-        
-        # ✅ CSOSNs (CORRIGIDO)
-        csosns_result = db.execute(text("""
-            SELECT csosn_id, codigo, descricao 
-            FROM csosn_icms 
-            ORDER BY codigo
-        """))
-        csosns = [dict(row._mapping) for row in csosns_result]
-        
-        # Origens Mercadoria
-        origens_result = db.execute(text("""
-            SELECT codigo, descricao 
-            FROM origens_mercadoria 
-            ORDER BY codigo
-        """))
-        origens_mercadoria = [dict(row._mapping) for row in origens_result]
-        
-        print(f"📋 Dados carregados para formulário:")
-        print(f"  • NCMs: {len(ncms)}")
-        print(f"  • CFOPs: {len(cfops)}")
-        print(f"  • CSTs ICMS: {len(csts)}")
-        print(f"  • CSOSNs: {len(csosns)}")
-        print(f"  • Origens: {len(origens_mercadoria)}")
-        
-        return render_template('admin/produtos/form.html',
-                             ncms=ncms,
-                             cfops=cfops,
-                             csts=csts,      # ✅ Agora sendo passado
-                             csosns=csosns,  # ✅ Agora sendo passado
-                             origens_mercadoria=origens_mercadoria,
-                             cliente_id=cliente_id)
-        
-    except Exception as e:
-        print(f"❌ Erro ao carregar dados para criação: {e}")
-        import traceback
-        traceback.print_exc()
-        flash('Erro ao carregar formulário.', 'error')
-        return redirect(url_for('admin.list_produtos'))
-    finally:
-        if db:
-            db.close()
+    return render_template('admin/produtos/form.html', produto=None)
 
-@admin_bp.route('/produtos/<int:produto_id>/edit')
-@login_required
-@admin_required()
-def edit_produto(produto_id: int):
-    """Formulário para editar produto existente"""
-    db = None
-    
-    try:
-        db = next(get_db())
-        
-        print(f"🔍 DEBUG edit_produto:")
-        print(f"  • Produto ID recebido: {produto_id}")
-        
-        # ✅ BUSCAR O PRODUTO COM TODOS OS DADOS
-        produto_result = db.execute(text("""
-            SELECT p.produto_id, p.codigo_interno, p.descricao, 
-                   p.unidade_comercial, p.preco_unitario_padrao,
-                   p.ncm_id, p.cest, p.origem_mercadoria, p.tipo_item, 
-                   p.ativo, p.cliente_id, p.cfop_id, p.cst_id, p.csosn_id
-            FROM produtos p
-            WHERE p.produto_id = :produto_id
-        """), {"produto_id": produto_id})
-        
-        produto_data = produto_result.first()
-        
-        if not produto_data:
-            print(f"❌ Produto {produto_id} não encontrado!")
-            flash('Produto não encontrado!', 'error')
-            return redirect(url_for('admin.list_produtos'))
-        
-        produto = dict(produto_data._mapping)
-        cliente_id = produto['cliente_id']
-        
-        print(f"✅ Produto encontrado: {produto['descricao']}")
-        
-        # ✅ CONVERTER ORIGEM PARA STRING PARA COMPATIBILIDADE COM TEMPLATE
-        if produto['origem_mercadoria'] is not None:
-            produto['origem_mercadoria'] = str(produto['origem_mercadoria'])
-            print(f"🔧 Origem convertida para string: '{produto['origem_mercadoria']}'")
-        
-        print(f"🔍 DEBUG - Origem da Mercadoria no produto:")
-        print(f"  • Valor no banco: '{produto['origem_mercadoria']}'")
-        print(f"  • Tipo do valor: {type(produto['origem_mercadoria'])}")
-        print(f"  • Repr do valor: {repr(produto['origem_mercadoria'])}")
-        print(f"  • É None? {produto['origem_mercadoria'] is None}")
-        print(f"  • É string vazia? {produto['origem_mercadoria'] == ''}")
-        
-        # ✅ BUSCAR NCMs
-        ncms_result = db.execute(text("""
-            SELECT ncm_id, codigo, descricao 
-            FROM ncms 
-            ORDER BY codigo 
-        """))
-        ncms = [dict(row._mapping) for row in ncms_result]
-        
-        # ✅ BUSCAR CFOPs
-        cfops_result = db.execute(text("""
-            SELECT cfop_id, cfop as codigo, descricao 
-            FROM cfops 
-            ORDER BY cfop
-        """))
-        cfops = [dict(row._mapping) for row in cfops_result]
-        
-        # ✅ BUSCAR CSTs ICMS (CORRIGIDO)
-        csts_result = db.execute(text("""
-            SELECT cst_id, codigo, descricao 
-            FROM cst_icms 
-            ORDER BY codigo
-        """))
-        csts = [dict(row._mapping) for row in csts_result]
-        
-        # ✅ BUSCAR CSOSNs (CORRIGIDO)
-        csosns_result = db.execute(text("""
-            SELECT csosn_id, codigo, descricao 
-            FROM csosn_icms 
-            ORDER BY codigo
-        """))
-        csosns = [dict(row._mapping) for row in csosns_result]
-        
-        # ✅ BUSCAR ORIGENS MERCADORIA
-        origens_result = db.execute(text("""
-            SELECT codigo, descricao 
-            FROM origens_mercadoria 
-            ORDER BY codigo
-        """))
-        origens_mercadoria = [dict(row._mapping) for row in origens_result]
-        
-        print(f"📋 Dados carregados para formulário:")
-        print(f"  • NCMs: {len(ncms)}")
-        print(f"  • CFOPs: {len(cfops)}")
-        print(f"  • CSTs ICMS: {len(csts)}")
-        print(f"  • CSOSNs: {len(csosns)}")
-        print(f"  • Origens: {len(origens_mercadoria)}")
-        
-        # ✅ DEBUG ESPECÍFICO DAS ORIGENS DISPONÍVEIS
-        print(f"🔍 Origens de Mercadoria disponíveis:")
-        for i, origem in enumerate(origens_mercadoria):
-            print(f"    • [{i}] Código: '{origem['codigo']}' (tipo: {type(origem['codigo'])}) - {origem['descricao']}")
-            # Verificar se é igual ao valor do produto
-            if produto['origem_mercadoria'] is not None:
-                iguais_str = str(produto['origem_mercadoria']) == str(origem['codigo'])
-                iguais_int = produto['origem_mercadoria'] == origem['codigo']  
-                print(f"      → Igual ao produto (str)? {iguais_str}")
-                print(f"      → Igual ao produto (valor)? {iguais_int}")
-            if i >= 4:  # Mostrar apenas os primeiros 5
-                break
-        
-        # ✅ DEBUG DOS CSTs E CSOSNs
-        print(f"🔍 CSTs encontrados:")
-        for cst in csts[:5]:  # Mostra apenas os primeiros 5
-            print(f"    • ID: {cst['cst_id']}, Código: {cst['codigo']}, Descrição: {cst['descricao']}")
-        
-        print(f"🔍 CSOSNs encontrados:")
-        for csosn in csosns[:5]:  # Mostra apenas os primeiros 5
-            print(f"    • ID: {csosn['csosn_id']}, Código: {csosn['codigo']}, Descrição: {csosn['descricao']}")
-        
-        return render_template('admin/produtos/form.html',
-                             produto=produto,
-                             ncms=ncms,
-                             cfops=cfops,
-                             csts=csts,      # ✅ Agora sendo passado
-                             csosns=csosns,  # ✅ Agora sendo passado
-                             origens_mercadoria=origens_mercadoria,
-                             cliente_id=cliente_id)
-        
-    except Exception as e:
-        print(f"❌ Erro ao carregar produto para edição: {e}")
-        import traceback
-        traceback.print_exc()
-        flash('Erro ao carregar produto.', 'error')
-        return redirect(url_for('admin.list_produtos'))
-    finally:
-        if db:
-            db.close()
-
-# ✅ NOVA ROTA - SALVAR PRODUTO (POST)
 @admin_bp.route('/produtos/add', methods=['POST'])
 @login_required
-@admin_required()
+@permission_required('produtos.create')
 def store_produto():
-    """Salvar novo produto"""
-    db = None
-    cliente_id: Optional[str] = None
-    
+    db = _get_db()
     try:
-        db = next(get_db())
-        
-        # Dados do formulário
-        cliente_id = request.form.get('cliente_id')
-        codigo_interno = request.form.get('codigo_interno')
-        descricao = request.form.get('descricao')
-        ncm_id = request.form.get('ncm_id')
-        cest = request.form.get('cest')
-        unidade_comercial = request.form.get('unidade_comercial')
-        preco_unitario_padrao = request.form.get('preco_unitario_padrao') or '0'
-        origem_mercadoria = request.form.get('origem_mercadoria')
-        tipo_item = request.form.get('tipo_item')
-        ativo = 'ativo' in request.form
-        cfop_id = request.form.get('cfop_id')
-        cst_id = request.form.get('cst_id')
-        csosn_id = request.form.get('csosn_id')
-        
-        print(f"💾 CRIANDO NOVO PRODUTO:")
-        print(f"  • Cliente ID: {cliente_id}")
-        print(f"  • Descrição: {descricao}")
-        print(f"  • NCM ID: {ncm_id}")
-        print(f"  • CFOP ID: {cfop_id}")
-        
-        # Validação básica
-        if not all([cliente_id, codigo_interno, descricao, ncm_id, origem_mercadoria, tipo_item, cfop_id]):
-            flash('Preencha todos os campos obrigatórios', 'error')
-            return redirect(url_for('admin.create_produto', cliente_id=cliente_id or 5))
-        
-        # Converter tipos com validação
-        cliente_id_int = int(cliente_id) if cliente_id else 5
-        ncm_id_int = int(ncm_id) if ncm_id else 0
-        cfop_id_int = int(cfop_id) if cfop_id else 0
-        origem_mercadoria_int = int(origem_mercadoria) if origem_mercadoria else 0
-        preco_float = float(preco_unitario_padrao) if preco_unitario_padrao else 0.0
-        cst_id_int = int(cst_id) if cst_id and cst_id.strip() else None
-        csosn_id_int = int(csosn_id) if csosn_id and csosn_id.strip() else None
-        
-        # Inserir produto
+        data = {
+            'codigo_interno': request.form.get('codigo_interno'),
+            'descricao': request.form.get('descricao'),
+            'unidade_comercial': request.form.get('unidade_comercial','UN'),
+            'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
+            'ncm_id': request.form.get('ncm_id'),
+            'cfop_id': request.form.get('cfop_id'),
+            'ativo': True
+        }
         db.execute(text("""
-            INSERT INTO produtos (
-                cliente_id, codigo_interno, descricao, ncm_id, cest,
-                unidade_comercial, preco_unitario_padrao, origem_mercadoria,
-                tipo_item, ativo, created_by_user_id, cfop_id, cst_id, csosn_id
-            ) VALUES (
-                :cliente_id, :codigo_interno, :descricao, :ncm_id, :cest,
-                :unidade_comercial, :preco_unitario_padrao, :origem_mercadoria,
-                :tipo_item, :ativo, :user_id, :cfop_id, :cst_id, :csosn_id
-            )
-        """), {
-            'cliente_id': cliente_id_int,
-            'codigo_interno': codigo_interno,
-            'descricao': descricao,
-            'ncm_id': ncm_id_int,
-            'cest': cest,
-            'unidade_comercial': unidade_comercial,
-            'preco_unitario_padrao': preco_float,
-            'origem_mercadoria': origem_mercadoria_int,
-            'tipo_item': tipo_item,
-            'ativo': ativo,
-            'user_id': current_user.id,
-            'cfop_id': cfop_id_int,
-            'cst_id': cst_id_int,
-            'csosn_id': csosn_id_int
-        })
-        
+            INSERT INTO produtos (codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
+                                  ncm_id, cfop_id, ativo)
+            VALUES (:codigo_interno, :descricao, :unidade_comercial, :preco_unitario_padrao,
+                    :ncm_id, :cfop_id, :ativo)
+        """), data)
         db.commit()
-        flash('Produto criado com sucesso!', 'success')
-        print(f"✅ Produto criado com sucesso!")
-        
-        return redirect(url_for('admin.list_produtos', cliente_id=cliente_id_int))
-        
+        flash('Produto criado', 'success')
+        return redirect(url_for('admin.list_produtos'))
     except Exception as e:
-        print(f"❌ Erro ao criar produto: {e}")
-        import traceback
-        traceback.print_exc()
-        if db:
-            db.rollback()
-        flash('Erro ao criar produto.', 'error')
-        return redirect(url_for('admin.create_produto', cliente_id=cliente_id or 5))
+        db.rollback()
+        print(f"❌ Erro store_produto: {e}")
+        flash('Erro ao criar produto', 'error')
+        return redirect(url_for('admin.create_produto'))
     finally:
-        if db:
-            db.close()
+        db.close()
 
-# ✅ NOVA ROTA - ATUALIZAR PRODUTO (POST)
+@admin_bp.route('/produtos/<int:produto_id>/edit', methods=['GET'])
+@login_required
+@permission_required('produtos.edit')
+def edit_produto(produto_id: int):
+    db = _get_db()
+    try:
+        row = db.execute(text("""
+            SELECT produto_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
+                   ncm_id, cfop_id, ativo
+            FROM produtos
+            WHERE produto_id = :pid
+        """), {'pid': produto_id}).fetchone()
+        produto = _safe_row_to_dict(row, [
+            'produto_id','codigo_interno','descricao','unidade_comercial','preco_unitario_padrao',
+            'ncm_id','cfop_id','ativo'
+        ])
+        if not produto:
+            flash('Produto não encontrado', 'warning')
+            return redirect(url_for('admin.list_produtos'))
+        return render_template('admin/produtos/form.html', produto=produto)
+    except Exception as e:
+        print(f"❌ Erro edit_produto: {e}")
+        flash('Erro ao carregar produto', 'error')
+        return redirect(url_for('admin.list_produtos'))
+    finally:
+        db.close()
+
 @admin_bp.route('/produtos/<int:produto_id>/edit', methods=['POST'])
 @login_required
-@admin_required()
+@permission_required('produtos.edit')
 def update_produto(produto_id: int):
-    """Atualizar produto existente"""
-    db = None
-    
+    db = _get_db()
     try:
-        db = next(get_db())
-        
-        # Dados do formulário
-        codigo_interno = request.form.get('codigo_interno')
-        descricao = request.form.get('descricao')
-        ncm_id = request.form.get('ncm_id')
-        cest = request.form.get('cest')
-        unidade_comercial = request.form.get('unidade_comercial')
-        preco_unitario_padrao = request.form.get('preco_unitario_padrao') or '0'
-        origem_mercadoria = request.form.get('origem_mercadoria')
-        tipo_item = request.form.get('tipo_item')
-        ativo = 'ativo' in request.form
-        cfop_id = request.form.get('cfop_id')
-        cst_id = request.form.get('cst_id')
-        csosn_id = request.form.get('csosn_id')
-        
-        print(f"📝 ATUALIZANDO PRODUTO ID {produto_id}:")
-        print(f"  • Descrição: {descricao}")
-        
-        # Converter tipos com validação
-        ncm_id_int = int(ncm_id) if ncm_id else 0
-        cfop_id_int = int(cfop_id) if cfop_id else 0
-        origem_mercadoria_int = int(origem_mercadoria) if origem_mercadoria else 0
-        preco_float = float(preco_unitario_padrao) if preco_unitario_padrao else 0.0
-        cst_id_int = int(cst_id) if cst_id and cst_id.strip() else None
-        csosn_id_int = int(csosn_id) if csosn_id and csosn_id.strip() else None
-        
-        # Atualizar produto
-        result: Result[Any] = db.execute(text("""
-            UPDATE produtos SET
-                codigo_interno = :codigo_interno,
-                descricao = :descricao,
-                ncm_id = :ncm_id,
-                cest = :cest,
-                unidade_comercial = :unidade_comercial,
-                preco_unitario_padrao = :preco_unitario_padrao,
-                origem_mercadoria = :origem_mercadoria,
-                tipo_item = :tipo_item,
-                ativo = :ativo,
-                cfop_id = :cfop_id,
-                cst_id = :cst_id,
-                csosn_id = :csosn_id
-            WHERE produto_id = :produto_id
-        """), {
+        data = {
             'produto_id': produto_id,
-            'codigo_interno': codigo_interno,
-            'descricao': descricao,
-            'ncm_id': ncm_id_int,
-            'cest': cest,
-            'unidade_comercial': unidade_comercial,
-            'preco_unitario_padrao': preco_float,
-            'origem_mercadoria': origem_mercadoria_int,
-            'tipo_item': tipo_item,
-            'ativo': ativo,
-            'cfop_id': cfop_id_int,
-            'cst_id': cst_id_int,
-            'csosn_id': csosn_id_int
-        })
-        
-        # ✅ CORREÇÃO: Usar getattr ao invés de hasattr para evitar erro do Pylance
-        rowcount = getattr(result, 'rowcount', None)
-        if rowcount is not None and rowcount == 0:
-            flash('Produto não encontrado!', 'error')
-            return redirect(url_for('admin.list_produtos'))
-        
+            'codigo_interno': request.form.get('codigo_interno'),
+            'descricao': request.form.get('descricao'),
+            'unidade_comercial': request.form.get('unidade_comercial','UN'),
+            'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
+            'ncm_id': request.form.get('ncm_id'),
+            'cfop_id': request.form.get('cfcfop_idop_padrao'),
+        }
+        db.execute(text("""
+            UPDATE produtos
+            SET codigo_interno=:codigo_interno,
+                descricao=:descricao,
+                unidade_comercial=:unidade_comercial,
+                preco_unitario_padrao=:preco_unitario_padrao,
+                ncm_id=:ncm_id,
+                cfop_id=:cfop_id
+            WHERE produto_id=:produto_id
+        """), data)
         db.commit()
-        flash('Produto atualizado com sucesso!', 'success')
-        print(f"✅ Produto {produto_id} atualizado com sucesso!")
-        
-        # Buscar cliente_id para redirect
-        cliente_result = db.execute(text("""
-            SELECT cliente_id FROM produtos WHERE produto_id = :produto_id
-        """), {"produto_id": produto_id})
-        cliente_data = cliente_result.first()
-        cliente_id = cliente_data.cliente_id if cliente_data else 5
-        
-        return redirect(url_for('admin.list_produtos', cliente_id=cliente_id))
-        
+        flash('Produto atualizado', 'success')
+        return redirect(url_for('admin.list_produtos'))
     except Exception as e:
-        print(f"❌ Erro ao atualizar produto: {e}")
-        import traceback
-        traceback.print_exc()
-        if db:
-            db.rollback()
-        flash('Erro ao atualizar produto.', 'error')
+        db.rollback()
+        print(f"❌ Erro update_produto: {e}")
+        flash('Erro ao atualizar produto', 'error')
         return redirect(url_for('admin.edit_produto', produto_id=produto_id))
     finally:
-        if db:
-            db.close()
+        db.close()
 
 @admin_bp.route('/produtos/alterar-status', methods=['POST'])
 @login_required
-@admin_required()
+@permission_required('produtos.edit')
 def alterar_status_produto():
-    """Alterar status ativo/inativo do produto"""
-    db = None
-    
+    db = _get_db()
     try:
-        db = next(get_db())
-        
         produto_id = request.form.get('produto_id')
         ativo = request.form.get('ativo') == 'true'
-        cliente_id = request.form.get('cliente_id')
-        
-        if not produto_id:
-            return jsonify({'success': False, 'message': 'ID do produto não informado'}), 400
-        
-        # Atualizar status
-        result: Result[Any] = db.execute(text("""
-            UPDATE produtos 
-            SET ativo = :ativo 
-            WHERE produto_id = :produto_id
-        """), {
-            'produto_id': int(produto_id),
-            'ativo': ativo
-        })
-        
-        # ✅ CORREÇÃO: Usar getattr ao invés de hasattr para evitar erro do Pylance
-        rowcount = getattr(result, 'rowcount', None)
-        if rowcount is not None and rowcount == 0:
-            return jsonify({'success': False, 'message': 'Produto não encontrado'}), 404
-        
+        db.execute(text("""
+            UPDATE produtos SET ativo = :ativo WHERE produto_id = :pid
+        """), {'ativo': ativo, 'pid': produto_id})
         db.commit()
-        
-        status_texto = "ativado" if ativo else "desativado"
-        
-        return jsonify({
-            'success': True,
-            'message': f'Produto {status_texto} com sucesso!'
-        })
-        
+        return jsonify({'success': True})
     except Exception as e:
-        print(f"❌ Erro ao alterar status: {e}")
-        if db:
-            db.rollback()
-        return jsonify({
-            'success': False,
-            'message': f'Erro interno: {str(e)}'
-        }), 500
+        db.rollback()
+        print(f"❌ Erro alterar_status_produto: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
     finally:
-        if db:
-            db.close()
+        db.close()
+
+# -------------------------------------------------------------------
+# DESTINATÁRIOS
+# -------------------------------------------------------------------
 
 @admin_bp.route('/destinatarios')
 @login_required
-@permission_required('destinatarios_nfe.read')
+@permission_required('destinatarios_nfe.view')
 def list_destinatarios():
-    connection = None
+    db = _get_db()
     try:
-        cliente_id = request.args.get('cliente_id')
-        
-        if not cliente_id and not current_user.is_admin():
-            cliente_id = session.get('current_client_id')
-        
-        if not cliente_id:
-            flash('Cliente não especificado.', 'error')
-            return redirect(url_for('home.home'))
-        
-        connection = next(get_db())
-        
-        # ✅ INCLUIR NOVOS CAMPOS NA CONSULTA
-        query = text("""
-            SELECT 
-                d.destinatario_id,
-                d.cpf_cnpj,
-                d.nome_razao_social,
-                d.tipo_pessoa,
-                d.ie,
-                d.email,
-                d.telefone,
-                d.logradouro,
-                d.numero,
-                d.complemento,
-                d.bairro,
-                d.cep,
-                d.nome_municipio,
-                d.codigo_municipio,
-                d.uf,
-                d.codigo_uf
-            FROM destinatarios_nfe d
-            WHERE d.cliente_id = :cliente_id
-            ORDER BY d.nome_razao_social
-        """)
-        
-        result = connection.execute(query, {'cliente_id': cliente_id})
-        destinatarios = [dict(row._mapping) for row in result]
-        
-        print(f"✅ Destinatários encontrados: {len(destinatarios)}")
-        
-        # Buscar nome do cliente  
-        cliente_result = connection.execute(text("""
-            SELECT razao_social FROM clientes WHERE cliente_id = :cliente_id
-        """), {"cliente_id": cliente_id})
-        
-        cliente_data = cliente_result.first()
-        cliente_nome = cliente_data.razao_social if cliente_data else f"Cliente {cliente_id}"
-        
-        return render_template('admin/destinatarios/list.html', 
-                             destinatarios=destinatarios,
-                             cliente_id=cliente_id,
-                             cliente_nome=cliente_nome)
-        
+        rows = db.execute(text("""
+            SELECT *
+            FROM destinatarios_nfe
+            WHERE tipo = 'DEST' OR tipo IS NULL
+            ORDER BY razao_social
+        """)).fetchall()
+        destinatarios = [_safe_row_to_dict(r, [
+            'cliente_id','nome_razao_social','cpf_cnpj','uf','nome_municipio'
+        ]) for r in rows]
+        return render_template('admin/destinatarios/list.html', destinatarios=destinatarios)
     except Exception as e:
-        print(f"❌ Erro ao listar destinatários: {e}")
-        flash(f'Erro ao carregar destinatários: {str(e)}', 'error')
-        return render_template('admin/destinatarios/list.html', 
-                             destinatarios=[],
-                             cliente_id=cliente_id if 'cliente_id' in locals() else None,
-                             cliente_nome=f"Cliente {cliente_id}" if 'cliente_id' in locals() else "Cliente")
+        print(f"❌ Erro list_destinatarios: {e}")
+        flash('Erro ao carregar destinatários', 'error')
+        return render_template('admin/destinatarios/list.html', destinatarios=[])
     finally:
-        if connection:
-            connection.close()
+        db.close()
 
-# ✅ ADICIONAR A ROTA QUE ESTAVA FALTANDO
-@admin_bp.route('/destinatarios/novo')
-@login_required  
-@permission_required('destinatarios_nfe.create')
-def novo_destinatario():
-    try:
-        cliente_id = request.args.get('cliente_id')
-        
-        if not cliente_id and not current_user.is_admin():
-            cliente_id = session.get('current_client_id')
-        
-        if not cliente_id:
-            flash('Cliente não especificado.', 'error')
-            return redirect(url_for('home.home'))
-        
-        print(f"✅ Abrindo formulário de novo destinatário para cliente {cliente_id}")
-        
-        return render_template('admin/destinatarios/form.html', 
-                             destinatario=None,
-                             cliente_id=cliente_id)
-        
-    except Exception as e:
-        print(f"❌ Erro ao abrir formulário de destinatário: {e}")
-        flash(f'Erro ao abrir formulário: {str(e)}', 'error')
-        return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
 
-# ...existing code...
 
 @admin_bp.route('/destinatarios/salvar', methods=['POST'])
 @login_required
-@permission_required('destinatarios_nfe.create') 
+@permission_required('destinatarios_nfe.create')
 def salvar_destinatario():
-    connection = None
+    db = _get_db()
     try:
+        data = {
+            'cliente_id': request.form.get('cliente_id'),
+            'tipo_pessoa': request.form.get('tipo_pessoa'),
+            'nome_razao_social': request.form.get('nome_razao_social'),
+            'cpf_cnpj': request.form.get('cpf_cnpj'),
+            'ie': request.form.get('ie'),
+            'ie_indicador_nfe': request.form.get('ie_indicador_nfe'),
+            'email': request.form.get('email'),
+            'telefone': request.form.get('telefone'),
+            'logradouro': request.form.get('logradouro'),
+            'numero': request.form.get('numero'),
+            'complemento': request.form.get('complemento'),
+            'bairro': request.form.get('bairro'),
+            'cep': request.form.get('cep'),
+            'nome_municipio': request.form.get('nome_municipio'),
+            'codigo_municipio': request.form.get('codigo_municipio'),
+            'uf': request.form.get('uf'),
+            'codigo_uf': request.form.get('codigo_uf'),
+            'codigo_pais': request.form.get('codigo_pais'),
+            'nome_pais': request.form.get('nome_pais'),
+            'data_cadastro': datetime.now(),
+            'data_atualizacao': datetime.now(),
+            'created_by_user_id': current_user.id
+        }
+        db.execute(text("""
+            INSERT INTO destinatarios_nfe (cliente_id,tipo_pessoa,nome_razao_social, cpf_cnpj, ie,
+                        ie_indicador_nfe, email,telefone,logradouro, numero,complemento, bairro,
+                                  cep, codigo_municipio, nome_municipio, uf, codigo_uf, codigo_pais, nome_pais, data_cadastro,
+                        data_atualizacao,created_by_user_id)
+            VALUES (:cliente_id, :tipo_pessoa, :nome_razao_social, :cpf_cnpj, :ie,
+                        :ie_indicador_nfe, :email, :telefone, :logradouro, :numero,
+                        :complemento, :bairro, :cep, :codigo_municipio, :nome_municipio,
+                        :uf, :codigo_uf, :codigo_pais, :nome_pais, :data_cadastro, :data_atualizacao, created_by_user_id)
+                        
+                        
+        """), data)
+        db.commit()
+        flash('Destinatário salvo', 'success')
+        return redirect(url_for('admin.list_destinatarios'))
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro salvar_destinatario: {e}")
+        flash('Erro ao salvar destinatário', 'error')
         cliente_id = request.form.get('cliente_id')
-        destinatario_id = request.form.get('destinatario_id')
-        
-        print(f"💾 Salvando destinatário - Cliente: {cliente_id}, ID: {destinatario_id}")
-        
-        # ✅ MAPEAMENTO UF → CÓDIGO IBGE
-        UF_CODES = {
-            'AC': 12, 'AL': 17, 'AP': 16, 'AM': 13, 'BA': 29,
-            'CE': 23, 'DF': 53, 'ES': 32, 'GO': 52, 'MA': 21,
-            'MT': 51, 'MS': 50, 'MG': 31, 'PA': 15, 'PB': 25,
-            'PR': 41, 'PE': 26, 'PI': 22, 'RJ': 33, 'RN': 24,
-            'RS': 43, 'RO': 11, 'RR': 14, 'SC': 42, 'SP': 35,
-            'SE': 28, 'TO': 27
-        }
-        
-        # ✅ LIMPAR E VALIDAR DADOS ANTES DE SALVAR
-        cpf_cnpj = request.form.get('cpf_cnpj', '').replace('.', '').replace('-', '').replace('/', '')
-        cep = request.form.get('cep', '').replace('-', '')
-        telefone = request.form.get('telefone', '').replace('(', '').replace(')', '').replace('-', '').replace(' ', '')
-        
-        # ✅ OBTER UF E CÓDIGO UF
-        uf = request.form.get('uf', 'SP')
-        codigo_uf = UF_CODES.get(uf, 35)  # Default SP = 35
-        
-        # Validar tamanhos
-        if len(cep) > 8:
-            flash(f'CEP muito longo: {cep}. Máximo 8 caracteres.', 'error')
-            return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
-        
-        if len(cpf_cnpj) > 14:
-            flash(f'CPF/CNPJ muito longo: {cpf_cnpj}. Máximo 14 caracteres.', 'error')
-            return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
-        
-        print(f"🔧 Dados limpos - CEP: '{cep}', CPF/CNPJ: '{cpf_cnpj}', UF: '{uf}', Código UF: {codigo_uf}")
-        
-        connection = next(get_db())
-        
-        if destinatario_id:
-            # ✅ EDITAR - INCLUIR UF E CODIGO_UF
-            query = text("""
-                UPDATE destinatarios_nfe SET
-                    cpf_cnpj = :cpf_cnpj,
-                    nome_razao_social = :nome_razao_social,
-                    tipo_pessoa = :tipo_pessoa,
-                    ie = :ie,
-                    ie_indicador_nfe = :ie_indicador_nfe,
-                    email = :email,
-                    telefone = :telefone,
-                    logradouro = :logradouro,
-                    numero = :numero,
-                    complemento = :complemento,
-                    bairro = :bairro,
-                    cep = :cep,
-                    codigo_municipio = :codigo_municipio,
-                    nome_municipio = :nome_municipio,
-                    uf = :uf,
-                    codigo_uf = :codigo_uf
-                WHERE destinatario_id = :destinatario_id AND cliente_id = :cliente_id
-            """)
-            
-            connection.execute(query, {
-                'cpf_cnpj': cpf_cnpj,
-                'nome_razao_social': request.form.get('nome_razao_social'),
-                'tipo_pessoa': request.form.get('tipo_pessoa', 'J'),
-                'ie': request.form.get('ie'),
-                'ie_indicador_nfe': request.form.get('ie_indicador_nfe', 'C'),
-                'email': request.form.get('email'),
-                'telefone': telefone,
-                'logradouro': request.form.get('logradouro'),
-                'numero': request.form.get('numero'),
-                'complemento': request.form.get('complemento'),
-                'bairro': request.form.get('bairro'),
-                'cep': cep,
-                'codigo_municipio': request.form.get('codigo_municipio'),
-                'nome_municipio': request.form.get('nome_municipio'),
-                'uf': uf,
-                'codigo_uf': codigo_uf,
-                'destinatario_id': destinatario_id,
-                'cliente_id': cliente_id
-            })
-            
-            flash('Destinatário atualizado com sucesso!', 'success')
-        else:
-            # ✅ CRIAR NOVO - INCLUIR UF E CODIGO_UF
-            query = text("""
-                INSERT INTO destinatarios_nfe (
-                    cliente_id, cpf_cnpj, nome_razao_social, tipo_pessoa,
-                    ie, ie_indicador_nfe, email, telefone,
-                    logradouro, numero, complemento, bairro, cep,
-                    codigo_municipio, nome_municipio, uf, codigo_uf
-                ) VALUES (
-                    :cliente_id, :cpf_cnpj, :nome_razao_social, :tipo_pessoa,
-                    :ie, :ie_indicador_nfe, :email, :telefone,
-                    :logradouro, :numero, :complemento, :bairro, :cep,
-                    :codigo_municipio, :nome_municipio, :uf, :codigo_uf
-                )
-            """)
-            
-            connection.execute(query, {
-                'cliente_id': cliente_id,
-                'cpf_cnpj': cpf_cnpj,
-                'nome_razao_social': request.form.get('nome_razao_social'),
-                'tipo_pessoa': request.form.get('tipo_pessoa', 'J'),
-                'ie': request.form.get('ie'),
-                'ie_indicador_nfe': request.form.get('ie_indicador_nfe', 'C'),
-                'email': request.form.get('email'),
-                'telefone': telefone,
-                'logradouro': request.form.get('logradouro'),
-                'numero': request.form.get('numero'),
-                'complemento': request.form.get('complemento'),
-                'bairro': request.form.get('bairro'),
-                'cep': cep,
-                'codigo_municipio': request.form.get('codigo_municipio'),
-                'nome_municipio': request.form.get('nome_municipio'),
-                'uf': uf,
-                'codigo_uf': codigo_uf
-            })
-            
-            flash('Destinatário criado com sucesso!', 'success')
-        
-        connection.commit()
-        return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
-        
-    except Exception as e:
-        print(f"❌ Erro ao salvar destinatário: {e}")
-        if connection:
-            connection.rollback()
-        flash(f'Erro ao salvar destinatário: {str(e)}', 'error')
-        return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
+        return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
     finally:
-        if connection:
-            connection.close()
-
-# ✅ ATUALIZAR API BUSCAR CEP PARA INCLUIR CODIGO_UF
-@admin_bp.route('/api/buscar-cep/<cep>')
-@login_required
-def buscar_cep(cep):
-    """Busca informações do CEP na API dos Correios"""
-    try:
-        import requests
-        
-        # ✅ MAPEAMENTO UF → CÓDIGO IBGE (MESMO DO BACKEND)
-        UF_CODES = {
-            'AC': 12, 'AL': 17, 'AP': 16, 'AM': 13, 'BA': 29,
-            'CE': 23, 'DF': 53, 'ES': 32, 'GO': 52, 'MA': 21,
-            'MT': 51, 'MS': 50, 'MG': 31, 'PA': 15, 'PB': 25,
-            'PR': 41, 'PE': 26, 'PI': 22, 'RJ': 33, 'RN': 24,
-            'RS': 43, 'RO': 11, 'RR': 14, 'SC': 42, 'SP': 35,
-            'SE': 28, 'TO': 27
-        }
-        
-        # Limpar CEP
-        cep_limpo = cep.replace('-', '').replace('.', '')
-        
-        if len(cep_limpo) != 8:
-            return jsonify({'error': 'CEP deve ter 8 dígitos'}), 400
-        
-        # Buscar na API do ViaCEP
-        url = f"https://viacep.com.br/ws/{cep_limpo}/json/"
-        response = requests.get(url, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            if 'erro' in data:
-                return jsonify({'error': 'CEP não encontrado'}), 404
-            
-            # Buscar código IBGE do município
-            codigo_municipio = data.get('ibge', '')
-            uf = data.get('uf', 'SP')
-            codigo_uf = UF_CODES.get(uf, 35)
-            
-            return jsonify({
-                'success': True,
-                'logradouro': data.get('logradouro', ''),
-                'bairro': data.get('bairro', ''),
-                'nome_municipio': data.get('localidade', ''),
-                'uf': uf,
-                'codigo_uf': codigo_uf,
-                'codigo_municipio': codigo_municipio,
-                'cep': cep_limpo
-            })
-        else:
-            return jsonify({'error': 'Erro ao consultar CEP'}), 500
-            
-    except Exception as e:
-        print(f"❌ Erro ao buscar CEP {cep}: {e}")
-        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
-
-# ...existing code...
-
+        db.close()
 
 @admin_bp.route('/destinatarios/<int:destinatario_id>/edit')
 @login_required
-@permission_required('destinatarios_nfe.update')
-def edit_destinatario(destinatario_id):
-    connection = None
+@permission_required('destinatarios_nfe.edit')
+def edit_destinatario(destinatario_id: int):
+    db = _get_db()
     try:
-        print(f"✏️ Editando destinatário ID: {destinatario_id}")
-        
-        connection = next(get_db())
-        
-        # ✅ INCLUIR NOVOS CAMPOS NA CONSULTA DE EDIÇÃO
-        query = text("""
-            SELECT d.*, c.razao_social as cliente_nome
-            FROM destinatarios_nfe d
-            JOIN clientes c ON d.cliente_id = c.cliente_id
-            WHERE d.destinatario_id = :destinatario_id
-        """)
-        
-        result = connection.execute(query, {'destinatario_id': destinatario_id})
-        destinatario = result.first()
-        
+        row = db.execute(text("""
+            SELECT cliente_id, nome_razao_social, cpf_cnpj, ie, ie_indicador_nfe
+                              email, telefone, logradouro, numero, complemento, bairro,
+                   cep, codigo_municipio, nome_municipio, uf, codigo_uf, codigo_pais, nome_pais,
+                              data_cadastro, data_atualizacao, created_by_user_id
+            FROM destinatarios_nfe
+            WHERE destinatario_id = :cid
+        """), {'cid': destinatario_id}).fetchone()
+        destinatario = _safe_row_to_dict(row, [
+            'cliente_id', 'nome_razao_social', 'cpf_cnpj', 'ie', 'ie_indicador_nfe'
+                              'email', 'telefone', 'logradouro', 'numero', 'complemento', 'bairro',
+                   'cep', 'codigo_municipio', 'nome_municipio', 'uf', 'codigo_uf', 'codigo_pais', 'nome_pais',
+                              'data_cadastro', 'data_atualizacao', 'created_by_user_id'
+        ])
         if not destinatario:
-            flash('Destinatário não encontrado!', 'error')
+            flash('Destinatário não encontrado', 'warning')
             return redirect(url_for('admin.list_destinatarios'))
-        
-        destinatario_dict = dict(destinatario._mapping)
-        
-        return render_template('admin/destinatarios/form.html', 
-                             destinatario=destinatario_dict,
-                             cliente_id=destinatario_dict['cliente_id'])
-        
+        return render_template('admin/destinatarios/form.html', destinatario=destinatario)
     except Exception as e:
-        print(f"❌ Erro ao carregar destinatário: {e}")
-        flash(f'Erro ao carregar destinatário: {str(e)}', 'error')
+        print(f"❌ Erro edit_destinatario: {e}")
+        flash('Erro ao carregar destinatário', 'error')
         return redirect(url_for('admin.list_destinatarios'))
     finally:
-        if connection:
-            connection.close()
-# ========== CERTIFICADOS ==========
-# ...existing code...
+        db.close()
+
+# -------------------------------------------------------------------
+# CERTIFICADOS
+# -------------------------------------------------------------------
 
 @admin_bp.route('/certificados')
 @login_required
-@permission_required('certificados_nfe.read')
+@permission_required('certificados.view')
 def list_certificados():
-    connection = None
+    db = _get_db()
     try:
-        print(f"✅ Acesso admin autorizado para {current_user.username} com roles: {[r.nome for r in current_user.roles]}")
-        
-        cliente_id = request.args.get('cliente_id')
-        
-        if not cliente_id and not current_user.is_admin():
-            cliente_id = session.get('current_client_id')
-        
-        if not cliente_id:
-            flash('Cliente não especificado.', 'error')
-            return redirect(url_for('home.home'))
-        
-        print(f"🔍 DEBUG list_certificados:")
-        print(f"  • Cliente ID recebido: {cliente_id}")
-        
-        connection = next(get_db())
-        
-        # ✅ QUERY CORRETA COM CAMPOS REAIS
-        query = text("""
-            SELECT 
-                c.certificado_digital_id,
-                c.fingerprint,
-                c.nome_arquivo_original,
-                c.validade_inicio,
-                c.validade_fim,
-                c.ativo,
-                c.data_upload,
-                c.created_by_user_id
-            FROM certificados_digitais c
-            WHERE c.cliente_id = :cliente_id
-            ORDER BY c.data_upload DESC NULLS LAST, c.certificado_digital_id DESC
-        """)
-        
-        result = connection.execute(query, {'cliente_id': cliente_id})
-        certificados = [dict(row._mapping) for row in result]
-        
-        print(f"✅ Certificados encontrados: {len(certificados)}")
-        
-        # Buscar nome do cliente
-        cliente_result = connection.execute(text("""
-            SELECT razao_social FROM clientes WHERE cliente_id = :cliente_id
-        """), {"cliente_id": cliente_id})
-        
-        cliente_data = cliente_result.first()
-        cliente_nome = cliente_data.razao_social if cliente_data else f"Cliente {cliente_id}"
-        
-        return render_template('admin/certificados/list.html',
-                             certificados=certificados,
-                             cliente_id=cliente_id,
-                             cliente_nome=cliente_nome)
-        
+        rows = db.execute(text("""
+            SELECT certificado_id, apelido, tipo, valido_ate, ativo, created_at
+            FROM certificados
+            ORDER BY certificado_id DESC
+        """)).fetchall()
+        certificados = [_safe_row_to_dict(r, [
+            'certificado_id','apelido','tipo','valido_ate','ativo','created_at'
+        ]) for r in rows]
+        return render_template('admin/certificados/list.html', certificados=certificados)
     except Exception as e:
-        print(f"❌ Erro ao listar certificados: {e}")
-        flash(f'Erro ao carregar certificados: {str(e)}', 'error')
-        try:
-            return render_template('admin/certificados/list.html',
-                                 certificados=[],
-                                 cliente_id=cliente_id if 'cliente_id' in locals() else None,
-                                 cliente_nome=f"Cliente {cliente_id}" if 'cliente_id' in locals() else "Cliente")
-        except Exception as template_error:
-            print(f"❌ Erro no template: {template_error}")
-            return f"<h1>Certificados Digitais</h1><p>Erro: {str(e)}</p><a href='/admin/certificados/novo?cliente_id={cliente_id}'>Novo Certificado</a>"
+        print(f"❌ Erro list_certificados: {e}")
+        flash('Erro ao carregar certificados', 'error')
+        return render_template('admin/certificados/list.html', certificados=[])
     finally:
-        if connection:
-            connection.close()
+        db.close()
 
 @admin_bp.route('/certificados/novo')
 @login_required
-@permission_required('certificados_nfe.create')
+@permission_required('certificados.create')
 def novo_certificado():
-    try:
-        cliente_id = request.args.get('cliente_id')
-        
-        if not cliente_id and not current_user.is_admin():
-            cliente_id = session.get('current_client_id')
-        
-        if not cliente_id:
-            flash('Cliente não especificado.', 'error')
-            return redirect(url_for('home.home'))
-        
-        print(f"✅ Abrindo formulário de novo certificado para cliente {cliente_id}")
-        
-        return render_template('admin/certificados/form.html', 
-                             certificado=None,
-                             cliente_id=cliente_id)
-        
-    except Exception as e:
-        print(f"❌ Erro ao abrir formulário de certificado: {e}")
-        flash(f'Erro ao abrir formulário: {str(e)}', 'error')
-        return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
+    return render_template('admin/certificados/form.html', certificado=None)
 
 @admin_bp.route('/certificados/salvar', methods=['POST'])
 @login_required
-@permission_required('certificados_nfe.create')
+@permission_required('certificados.create')
 def salvar_certificado():
-    connection = None
+    db = _get_db()
     try:
-        cliente_id = request.form.get('cliente_id')
-        
-        print(f"💾 Salvando certificado para cliente: {cliente_id}")
-        # ✅ DEBUG - VAMOS VER O QUE ESTÁ CHEGANDO
-        print(f"🔍 ROTA DEBUG: Form data: {dict(request.form)}")
-        print(f"🔍 ROTA DEBUG: Files data: {dict(request.files)}")
-        
-        # Verificar se foi enviado arquivo
-        if 'arquivo_certificado' not in request.files:
-            flash('Nenhum arquivo selecionado.', 'error')
-            return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
-        
-        arquivo = request.files['arquivo_certificado']
-        if arquivo.filename == '':
-            flash('Nenhum arquivo selecionado.', 'error')
-            return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
-        
-        # Validar extensão
-        if not arquivo.filename.lower().endswith(('.pfx', '.p12')):
-            flash('Arquivo deve ser .pfx ou .p12', 'error')
-            return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
-        
-        # ✅ IMPORTS NECESSÁRIOS
-        import hashlib
-        import base64
-        from datetime import datetime
-        from cryptography.hazmat.primitives.serialization import pkcs12
-        from services.certificate_service import _encrypt_password  # ← IMPORTAR FUNÇÃO
-        
-        # Ler conteúdo do arquivo
-        conteudo_arquivo = arquivo.read()
-        senha = request.form.get('senha_certificado', '')
-        nome_arquivo = arquivo.filename
-        
-        print(f"🔐 ROTA: Senha recebida: {len(senha)} caracteres")
-        
-        # ✅ VALIDAR CERTIFICADO ANTES DE SALVAR
-        try:
-            print("🧪 ROTA: Validando certificado PKCS#12...")
-            private_key, cert_x509, additional_certs = pkcs12.load_key_and_certificates(
-                conteudo_arquivo,
-                senha.encode('utf-8')
-            )
-            
-            if not private_key or not cert_x509:
-                flash('Certificado ou senha inválidos!', 'error')
-                return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
-            
-            print("✅ ROTA: Certificado validado com sucesso!")
-            
-            # Extrair dados reais do certificado
-            validade_inicio = cert_x509.not_valid_before_utc.replace(tzinfo=None)
-            validade_fim = cert_x509.not_valid_after_utc.replace(tzinfo=None)
-            
-        except Exception as val_e:
-            print(f"❌ ROTA: Erro na validação: {val_e}")
-            flash(f'Certificado ou senha inválidos: {val_e}', 'error')
-            return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
-        
-        # ✅ CRIPTOGRAFAR SENHA
-        try:
-            print("🔐 ROTA: Criptografando senha...")
-            senha_criptografada = _encrypt_password(senha)
-            print(f"✅ ROTA: Senha criptografada: {len(senha_criptografada)} chars")
-            print(f"✅ ROTA: Primeiros 20 chars: {senha_criptografada[:20]}")
-        except Exception as crypto_e:
-            print(f"❌ ROTA: Erro na criptografia: {crypto_e}")
-            flash(f'Erro ao criptografar senha: {crypto_e}', 'error')
-            return redirect(url_for('admin.novo_certificado', cliente_id=cliente_id))
-        
-        # Gerar fingerprint (hash do conteúdo)
-        fingerprint = hashlib.sha256(conteudo_arquivo).hexdigest()
-        
-        # Converter para base64 para armazenamento
-        conteudo_base64 = base64.b64encode(conteudo_arquivo).decode('utf-8')
-        
-        connection = next(get_db())
-        
-        # ✅ VERIFICAR SE JÁ EXISTE CERTIFICADO COM MESMO FINGERPRINT
-        check_query = text("""
-            SELECT certificado_digital_id FROM certificados_digitais 
-            WHERE fingerprint = :fingerprint AND cliente_id = :cliente_id
-        """)
-        
-        existing = connection.execute(check_query, {
-            'fingerprint': fingerprint,
-            'cliente_id': cliente_id
-        }).first()
-        
-        if existing:
-            flash('Este certificado já foi cadastrado para este cliente.', 'warning')
-            return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
-        
-        # ✅ DESATIVAR CERTIFICADOS ANTIGOS
-        print("🔄 ROTA: Desativando certificados antigos...")
-        update_query = text("""
-            UPDATE certificados_digitais 
-            SET ativo = false 
-            WHERE cliente_id = :cliente_id AND ativo = true
-        """)
-        connection.execute(update_query, {'cliente_id': cliente_id})
-        
-        # ✅ DESCOBRIR O ATRIBUTO CORRETO DO USER_ID
-        user_id = None
-        try:
-            if hasattr(current_user, 'user_id'):
-                user_id = current_user.user_id
-            elif hasattr(current_user, 'id'):
-                user_id = current_user.id
-            elif hasattr(current_user, 'usuario_id'):
-                user_id = current_user.usuario_id
-            else:
-                print(f"🔍 DEBUG: Atributos do current_user: {dir(current_user)}")
-                user_id = 1  # Fallback para admin
-        except Exception as e:
-            print(f"❌ Erro ao obter user_id: {e}")
-            user_id = 1  # Fallback
-        
-        print(f"🔍 DEBUG: user_id determinado: {user_id}")
-        
-        # ✅ INSERT COM SENHA CRIPTOGRAFADA
-        query = text("""
-            INSERT INTO certificados_digitais (
-                cliente_id, 
-                fingerprint, 
-                conteudo_certificado, 
-                senha_certificado, 
-                validade_inicio, 
-                validade_fim, 
-                ativo, 
-                data_upload, 
-                nome_arquivo_original,
-                created_by_user_id
-            ) VALUES (
-                :cliente_id, 
-                :fingerprint, 
-                :conteudo_certificado,
-                :senha_certificado, 
-                :validade_inicio, 
-                :validade_fim, 
-                :ativo, 
-                NOW(), 
-                :nome_arquivo_original,
-                :created_by_user_id
-            )
-        """)
-        
-        connection.execute(query, {
-            'cliente_id': cliente_id,
-            'fingerprint': fingerprint,
-            'conteudo_certificado': conteudo_base64,
-            'senha_certificado': senha_criptografada,  # ✅ AGORA CRIPTOGRAFADA!
-            'validade_inicio': validade_inicio,         # ✅ DADOS REAIS DO CERTIFICADO
-            'validade_fim': validade_fim,               # ✅ DADOS REAIS DO CERTIFICADO
-            'ativo': True,
-            'nome_arquivo_original': nome_arquivo,
-            'created_by_user_id': user_id
+        apelido = request.form.get('apelido')
+        tipo = request.form.get('tipo','A1')
+        valido_ate = request.form.get('valido_ate')
+        db.execute(text("""
+            INSERT INTO certificados (apelido, tipo, valido_ate, ativo, created_at)
+            VALUES (:apelido, :tipo, :valido_ate, TRUE, NOW())
+        """), {
+            'apelido': apelido,
+            'tipo': tipo,
+            'valido_ate': valido_ate
         })
-        
-        connection.commit()
-        
-        print(f"✅ ROTA: Certificado salvo com fingerprint: {fingerprint[:16]}...")
-        print(f"✅ ROTA: Senha criptografada salva: {senha_criptografada[:30]}...")
-        flash('Certificado enviado com sucesso!', 'success')
-        return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
-        
+        db.commit()
+        flash('Certificado salvo', 'success')
+        return redirect(url_for('admin.list_certificados'))
     except Exception as e:
-        print(f"❌ Erro ao salvar certificado: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        if connection:
-            connection.rollback()
-        flash(f'Erro ao salvar certificado: {str(e)}', 'error')
-        return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
+        db.rollback()
+        print(f"❌ Erro salvar_certificado: {e}")
+        flash('Erro ao salvar certificado', 'error')
+        return redirect(url_for('admin.novo_certificado'))
     finally:
-        if connection:
-            connection.close()
+        db.close()
 
-# ✅ ROTA PARA ATIVAR/DESATIVAR CERTIFICADO
 @admin_bp.route('/certificados/<int:certificado_id>/toggle-status', methods=['POST'])
 @login_required
-@permission_required('certificados_nfe.update')
-def toggle_certificado_status(certificado_id):
-    connection = None
+@permission_required('certificados.edit')
+def toggle_certificado_status(certificado_id: int):
+    db = _get_db()
     try:
-        cliente_id = request.form.get('cliente_id')
-        
-        connection = next(get_db())
-        
-        # Buscar certificado atual
-        query = text("""
-            SELECT ativo FROM certificados_digitais 
-            WHERE certificado_digital_id = :certificado_id AND cliente_id = :cliente_id
-        """)
-        
-        result = connection.execute(query, {
-            'certificado_id': certificado_id,
-            'cliente_id': cliente_id
-        }).first()
-        
-        if not result:
-            flash('Certificado não encontrado.', 'error')
-            return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
-        
-        # Alternar status
-        novo_status = not result.ativo
-        
-        update_query = text("""
-            UPDATE certificados_digitais 
-            SET ativo = :novo_status
-            WHERE certificado_digital_id = :certificado_id AND cliente_id = :cliente_id
-        """)
-        
-        connection.execute(update_query, {
-            'novo_status': novo_status,
-            'certificado_id': certificado_id,
-            'cliente_id': cliente_id
-        })
-        
-        connection.commit()
-        
-        status_text = "ativado" if novo_status else "desativado"
-        flash(f'Certificado {status_text} com sucesso!', 'success')
-        
-        return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
-        
+        row = db.execute(text("SELECT ativo FROM certificados WHERE certificado_id=:cid"),
+                         {'cid': certificado_id}).fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Não encontrado'}), 404
+        ativo_atual = row[0]
+        db.execute(text("""
+            UPDATE certificados SET ativo = :novo WHERE certificado_id=:cid
+        """), {'novo': not ativo_atual, 'cid': certificado_id})
+        db.commit()
+        return jsonify({'success': True, 'ativo': not ativo_atual})
     except Exception as e:
-        print(f"❌ Erro ao alterar status do certificado: {e}")
-        if connection:
-            connection.rollback()
-        flash(f'Erro ao alterar status: {str(e)}', 'error')
-        return redirect(url_for('admin.list_certificados', cliente_id=cliente_id))
+        db.rollback()
+        print(f"❌ Erro toggle_certificado_status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
     finally:
-        if connection:
-            connection.close()
+        db.close()
 
-# ...existing code...
+# -------------------------------------------------------------------
+# REGRAS TRIBUTAÇÃO
+# -------------------------------------------------------------------
 
-# ========== REGRAS DE TRIBUTAÇÃO ==========
 @admin_bp.route('/regras-tributacao')
 @login_required
-@permission_required('regras_tributacao.read')
+@permission_required('regras_tributacao.view')
 def list_regras_tributacao():
-    connection = None
+    db = _get_db()
     try:
-        print(f"✅ Acesso admin autorizado para {current_user.username} com roles: {[r.nome for r in current_user.roles]}")
-        
-        cliente_id = request.args.get('cliente_id')
-        
-        if not cliente_id and not current_user.is_admin():
-            cliente_id = session.get('current_client_id')
-        
-        if not cliente_id:
-            flash('Cliente não especificado.', 'error')
-            return redirect(url_for('home.home'))
-        
-        print(f"🔍 DEBUG list_regras_tributacao:")
-        print(f"  • Cliente ID recebido: {cliente_id}")
-        
-        connection = next(get_db())
-        
-        # ✅ QUERY CORRETA COM CAMPOS REAIS DA TABELA
-        query = text("""
-            SELECT 
-                rt.regra_tributacao_id,
-                rt.cliente_id,
-                rt.regime_tributario_id,
-                rt.cfop_id,
-                rt.ncm_id,
-                rt.uf_origem,
-                rt.uf_destino,
-                rt.tipo_item,
-                rt.prioridade,
-                rt.cst_icms,
-                rt.csosn_icms,
-                rt.aliquota_icms,
-                rt.reducao_base_icms,
-                rt.modalidade_bc_icms,
-                rt.motivo_desoneracao_icms,
-                rt.cst_pis,
-                rt.aliquota_pis,
-                c.cfop as cfop_codigo,
-                c.descricao as cfop_descricao,
-                n.codigo as ncm_codigo,
-                n.descricao as ncm_descricao
-            FROM regras_tributacao rt
-            LEFT JOIN cfops c ON rt.cfop_id = c.cfop_id
-            LEFT JOIN ncms n ON rt.ncm_id = n.ncm_id
-            WHERE rt.cliente_id = :cliente_id
-            ORDER BY rt.prioridade ASC, rt.regra_tributacao_id DESC
-        """)
-        
-        result = connection.execute(query, {'cliente_id': cliente_id})
-        regras = [dict(row._mapping) for row in result]
-        
-        print(f"✅ Regras de tributação encontradas: {len(regras)}")
-        
-        # 🔍 DEBUG: Imprimir primeira regra se existir
-        if regras:
-            print(f"📋 Primeira regra: {regras[0]}")
-        
-        # Buscar nome do cliente
-        cliente_result = connection.execute(text("""
-            SELECT razao_social FROM clientes WHERE cliente_id = :cliente_id
-        """), {"cliente_id": cliente_id})
-        
-        cliente_data = cliente_result.first()
-        cliente_nome = cliente_data.razao_social if cliente_data else f"Cliente {cliente_id}"
-        
-        return render_template('admin/regras_tributacao/list.html',
-                             regras=regras,
-                             cliente_id=cliente_id,
-                             cliente_nome=cliente_nome)
-        
+        rows = db.execute(text("""
+            SELECT regra_tributacao_id, produto_id, cliente_id, cfop, origem, cst_icms,
+                   aliquota_icms, created_at
+            FROM regras_tributacao
+            ORDER BY regra_tributacao_id DESC
+            LIMIT 100
+        """)).fetchall()
+        regras = [_safe_row_to_dict(r, [
+            'regra_tributacao_id','produto_id','cliente_id','cfop','origem',
+            'cst_icms','aliquota_icms','created_at'
+        ]) for r in rows]
+        return render_template('admin/regras_tributacao/list.html', regras=regras)
     except Exception as e:
-        print(f"❌ Erro ao listar regras de tributação: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        flash(f'Erro ao carregar regras de tributação: {str(e)}', 'error')
-        try:
-            return render_template('admin/regras_tributacao/list.html',
-                                 regras=[],
-                                 cliente_id=cliente_id if 'cliente_id' in locals() else None,
-                                 cliente_nome=f"Cliente {cliente_id}" if 'cliente_id' in locals() else "Cliente")
-        except Exception as template_error:
-            print(f"❌ Erro no template: {template_error}")
-            return f"""
-            <h1>Regras de Tributação - Cliente {cliente_id if 'cliente_id' in locals() else 'N/A'}</h1>
-            <p>Erro: {str(e)}</p>
-            <a href='/admin/regras-tributacao/nova?cliente_id={cliente_id if 'cliente_id' in locals() else 5}' class='btn btn-primary'>Nova Regra</a>
-            """
+        print(f"❌ Erro list_regras_tributacao: {e}")
+        flash('Erro ao carregar regras', 'error')
+        return render_template('admin/regras_tributacao/list.html', regras=[])
     finally:
-        if connection:
-            connection.close()
+        db.close()
 
 @admin_bp.route('/regras-tributacao/nova')
 @login_required
 @permission_required('regras_tributacao.create')
 def nova_regra_tributacao():
-    connection = None
-    try:
-        cliente_id = request.args.get('cliente_id')
-        
-        if not cliente_id and not current_user.is_admin():
-            cliente_id = session.get('current_client_id')
-        
-        if not cliente_id:
-            flash('Cliente não especificado.', 'error')
-            return redirect(url_for('home.home'))
-        
-        print(f"✅ Abrindo formulário de nova regra de tributação para cliente {cliente_id}")
-        
-        connection = next(get_db())
-        
-        # ✅ CORREÇÃO: Query correta baseada na estrutura real
-        cfops_result = connection.execute(text("""
-            SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
-        """))
-        cfops = [dict(row._mapping) for row in cfops_result]
-        
-        # ✅ CORREÇÃO: Query para NCMs (assumindo estrutura similar)
-        ncms_result = connection.execute(text("""
-            SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo 
-        """))
-        ncms = [dict(row._mapping) for row in ncms_result]
-        
-        return render_template('admin/regras_tributacao/form.html', 
-                             regra=None,
-                             cliente_id=cliente_id,
-                             cfops=cfops,
-                             ncms=ncms)
-        
-    except Exception as e:
-        print(f"❌ Erro ao abrir formulário de regra de tributação: {e}")
-        flash(f'Erro ao abrir formulário: {str(e)}', 'error')
-        return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
-    finally:
-        if connection:
-            connection.close()
+    return render_template('admin/regras_tributacao/form.html', regra=None)
 
-@admin_bp.route('/regras-tributacao/editar/<int:regra_id>')
-@login_required
-@permission_required('regras_tributacao.update')
-def editar_regra_tributacao(regra_id):
-    connection = None
-    try:
-        connection = next(get_db())
-        
-        # Buscar regra existente
-        regra_query = text("""
-            SELECT * FROM regras_tributacao 
-            WHERE regra_tributacao_id = :regra_id
-        """)
-        
-        regra_result = connection.execute(regra_query, {'regra_id': regra_id})
-        regra = regra_result.first()
-        
-        if not regra:
-            flash('Regra de tributação não encontrada.', 'error')
-            return redirect(url_for('admin.list_regras_tributacao'))
-        
-        regra_dict = dict(regra._mapping)
-        cliente_id = regra_dict['cliente_id']
-        
-        print(f"✅ Editando regra de tributação {regra_id} para cliente {cliente_id}")
-        
-        # ✅ CORREÇÃO: Query correta para CFOPs
-        cfops_result = connection.execute(text("""
-            SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
-        """))
-        cfops = [dict(row._mapping) for row in cfops_result]
-        
-        # ✅ CORREÇÃO: Query correta para NCMs
-        ncms_result = connection.execute(text("""
-            SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo
-        """))
-        ncms = [dict(row._mapping) for row in ncms_result]
-        
-        print(f"📋 CFOPs encontrados: {len(cfops)}")
-        print(f"📋 NCMs encontrados: {len(ncms)}")
-        
-        return render_template('admin/regras_tributacao/form.html', 
-                             regra=regra_dict,
-                             cliente_id=cliente_id,
-                             cfops=cfops,
-                             ncms=ncms)
-        
-    except Exception as e:
-        print(f"❌ Erro ao editar regra de tributação: {e}")
-        import traceback
-        traceback.print_exc()
-        flash(f'Erro ao carregar regra: {str(e)}', 'error')
-        return redirect(url_for('admin.list_regras_tributacao'))
-    finally:
-        if connection:
-            connection.close()
-
-# Atualizar a rota salvar para suportar edição
 @admin_bp.route('/regras-tributacao/salvar', methods=['POST'])
 @login_required
 @permission_required('regras_tributacao.create')
 def salvar_regra_tributacao():
-    connection = None
+    db = _get_db()
     try:
-        cliente_id = request.form.get('cliente_id')
-        regra_id = request.form.get('regra_tributacao_id')  # Para edição
-        
-        print(f"💾 Salvando regra de tributação para cliente: {cliente_id}, ID: {regra_id}")
-        
-        connection = next(get_db())
-        
-        # Converter valores vazios para None
-        def safe_int(value):
-            return int(value) if value and value.strip() else None
-        
-        def safe_float(value):
-            return float(value) if value and value.strip() else None
-        
-        def safe_str(value):
-            return value.strip() if value and value.strip() else None
-        
-        dados = {
-            'cliente_id': cliente_id,
-            'regime_tributario_id': safe_int(request.form.get('regime_tributario_id')) or 1,  # Default
-            'cfop_id': safe_int(request.form.get('cfop_id')),
-            'ncm_id': safe_int(request.form.get('ncm_id')),
-            'uf_origem': safe_str(request.form.get('uf_origem')),
-            'uf_destino': safe_str(request.form.get('uf_destino')),
-            'tipo_item': safe_str(request.form.get('tipo_item')),
-            'prioridade': safe_int(request.form.get('prioridade')) or 100,
-            'cst_icms': safe_str(request.form.get('cst_icms')),
-            'csosn_icms': safe_str(request.form.get('csosn_icms')),
-            'aliquota_icms': safe_float(request.form.get('aliquota_icms')),
-            'reducao_base_icms': safe_float(request.form.get('reducao_base_icms')),
-            'modalidade_bc_icms': safe_int(request.form.get('modalidade_bc_icms')),
-            'motivo_desoneracao_icms': safe_int(request.form.get('motivo_desoneracao_icms')),
-            'cst_pis': safe_str(request.form.get('cst_pis')),
-            'aliquota_pis': safe_float(request.form.get('aliquota_pis')),
-            'aliquota_cofins': safe_float(request.form.get('aliquota_cofins'))
+        data = {
+            'produto_id': request.form.get('produto_id'),
+            'cliente_id': request.form.get('cliente_id'),
+            'cfop': request.form.get('cfop'),
+            'origem': request.form.get('origem','0'),
+            'cst_icms': request.form.get('cst_icms','00'),
+            'aliquota_icms': request.form.get('aliquota_icms') or 0
         }
-        
-        if regra_id:
-            # UPDATE - Edição
-            query = text("""
-                UPDATE regras_tributacao SET
-                    regime_tributario_id = :regime_tributario_id,
-                    cfop_id = :cfop_id,
-                    ncm_id = :ncm_id,
-                    uf_origem = :uf_origem,
-                    uf_destino = :uf_destino,
-                    tipo_item = :tipo_item,
-                    prioridade = :prioridade,
-                    cst_icms = :cst_icms,
-                    csosn_icms = :csosn_icms,
-                    aliquota_icms = :aliquota_icms,
-                    reducao_base_icms = :reducao_base_icms,
-                    modalidade_bc_icms = :modalidade_bc_icms,
-                    motivo_desoneracao_icms = :motivo_desoneracao_icms,
-                    cst_pis = :cst_pis,
-                    aliquota_pis = :aliquota_pis,
-                    aliquota_cofins = :aliquota_cofins
-                WHERE regra_tributacao_id = :regra_id
-            """)
-            dados['regra_id'] = regra_id
-            flash('Regra de tributação atualizada com sucesso!', 'success')
-        else:
-            # INSERT - Nova regra
-            query = text("""
-                INSERT INTO regras_tributacao (
-                    cliente_id,
-                    regime_tributario_id,
-                    cfop_id,
-                    ncm_id,
-                    uf_origem,
-                    uf_destino,
-                    tipo_item,
-                    prioridade,
-                    cst_icms,
-                    csosn_icms,
-                    aliquota_icms,
-                    reducao_base_icms,
-                    modalidade_bc_icms,
-                    motivo_desoneracao_icms,
-                    cst_pis,
-                    aliquota_pis,
-                    aliquota_cofins
-                ) VALUES (
-                    :cliente_id,
-                    :regime_tributario_id,
-                    :cfop_id,
-                    :ncm_id,
-                    :uf_origem,
-                    :uf_destino,
-                    :tipo_item,
-                    :prioridade,
-                    :cst_icms,
-                    :csosn_icms,
-                    :aliquota_icms,
-                    :reducao_base_icms,
-                    :modalidade_bc_icms,
-                    :motivo_desoneracao_icms,
-                    :cst_pis,
-                    :aliquota_pis,
-                    :aliquota_cofins
-                )
-            """)
-            flash('Regra de tributação criada com sucesso!', 'success')
-        
-        connection.execute(query, dados)
-        connection.commit()
-        
-        return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
-        
+        db.execute(text("""
+            INSERT INTO regras_tributacao (produto_id, cliente_id, cfop, origem, cst_icms, aliquota_icms, created_at)
+            VALUES (:produto_id, :cliente_id, :cfop, :origem, :cst_icms, :aliquota_icms, NOW())
+        """), data)
+        db.commit()
+        flash('Regra salva', 'success')
+        return redirect(url_for('admin.list_regras_tributacao'))
     except Exception as e:
-        print(f"❌ Erro ao salvar regra de tributação: {e}")
-        import traceback
-        traceback.print_exc()
-        
-        if connection:
-            connection.rollback()
-        flash(f'Erro ao salvar regra: {str(e)}', 'error')
-        return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
+        db.rollback()
+        print(f"❌ Erro salvar_regra_tributacao: {e}")
+        flash('Erro ao salvar regra', 'error')
+        return redirect(url_for('admin.nova_regra_tributacao'))
     finally:
-        if connection:
-            connection.close()
+        db.close()
 
-# Adicionar ao admin_routes.py:
 @admin_bp.route('/regras-tributacao/excluir/<int:regra_id>', methods=['POST'])
 @login_required
 @permission_required('regras_tributacao.delete')
-def excluir_regra_tributacao(regra_id):
-    connection = None
+def excluir_regra_tributacao(regra_id: int):
+    db = _get_db()
     try:
-        cliente_id = request.form.get('cliente_id')
-        connection = next(get_db())
-        
-        query = text("DELETE FROM regras_tributacao WHERE regra_tributacao_id = :regra_id")
-        connection.execute(query, {'regra_id': regra_id})
-        connection.commit()
-        
-        flash('Regra de tributação excluída com sucesso!', 'success')
-        return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
-        
+        db.execute(text("DELETE FROM regras_tributacao WHERE regra_tributacao_id=:rid"),
+                   {'rid': regra_id})
+        db.commit()
+        flash('Regra excluída', 'success')
+        return redirect(url_for('admin.list_regras_tributacao'))
     except Exception as e:
-        if connection:
-            connection.rollback()
-        flash(f'Erro ao excluir regra: {str(e)}', 'error')
-        return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
+        db.rollback()
+        print(f"❌ Erro excluir_regra_tributacao: {e}")
+        flash('Erro ao excluir regra', 'error')
+        return redirect(url_for('admin.list_regras_tributacao'))
     finally:
-        if connection:
-            connection.close()
+        db.close()
+
+# -------------------------------------------------------------------
+# BUSCAR CEP (mock)
+# -------------------------------------------------------------------
+
+@admin_bp.route('/api/buscar-cep/<cep>')
+@login_required
+def buscar_cep(cep: str):
+    return jsonify({
+        'cep': cep,
+        'logradouro': 'Rua Exemplo',
+        'bairro': 'Centro',
+        'uf': 'SP',
+        'nome_municipio': 'São Paulo',
+        'codigo_municipio': '3550308'
+    })
+
+# -------------------------------------------------------------------
+# HEALTH
+# -------------------------------------------------------------------
+
+@admin_bp.route('/health')
+def admin_health():
+    return jsonify({'status': 'ok', 'role': getattr(current_user, 'role', None)})
