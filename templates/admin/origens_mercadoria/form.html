@@ -3,34 +3,43 @@
 {% block title %}{% if origem %}Editar Origem de Mercadoria{% else %}Nova Origem de Mercadoria{% endif %}{% endblock %}
 
 {% block content %}
-    <h1>{% if origem %}Editar Origem de Mercadoria (ID: {{ origem.origem_id }}){% else %}Nova Origem de Mercadoria{% endif %}</h1>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <form method="POST">
-        <fieldset>
-            <legend>Dados da Origem de Mercadoria</legend>
-
-            <div class="form-group">
-                <label for="codigo">Código:</label>
-                <input type="text" id="codigo" name="codigo" placeholder="Ex: 0" value="{{ origem.codigo if origem else (form_data.codigo if form_data else '') }}" maxlength="1" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="descricao">Descrição:</label>
-                <textarea id="descricao" name="descricao" placeholder="Descrição completa da Origem de Mercadoria" required>{{ origem.descricao if origem else (form_data.descricao if form_data else '') }}</textarea>
-            </div>
-        </fieldset>
-        
-        <div class="button-group">
-            <button type="submit" class="btn">Salvar Origem de Mercadoria</button>
-            <a href="{{ url_for('admin.list_origens_mercadoria') }}" class="btn btn-secondary">Cancelar</a>
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+            <h1 class="h3 mb-4">{% if origem %}Editar Origem ({{ origem.codigo }}){% else %}Nova Origem de Mercadoria{% endif %}</h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{% if origem %}{{ url_for('admin.edit_origem_mercadoria', origem_id=origem.origem_id) }}{% else %}{{ url_for('admin.create_origem_mercadoria') }}{% endif %}" class="card p-4 shadow-sm">
+                {% if origem %}
+                    <input type="hidden" name="origem_id" value="{{ origem.origem_id }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label for="codigo" class="form-label">Código:</label>
+                    <input type="text" id="codigo" name="codigo" class="form-control" maxlength="5" required
+                        value="{{ origem.codigo if origem else (form_data.codigo if form_data else '') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição:</label>
+                    <textarea id="descricao" name="descricao" class="form-control" rows="3" required>{{ origem.descricao if origem else (form_data.descricao if form_data else '') }}</textarea>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Origem
+                    </button>
+                    <a href="{{ url_for('admin.list_origens_mercadoria') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
         </div>
-    </form>
+    </div>
+</div>
 {% endblock %}

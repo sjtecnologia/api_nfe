@@ -12,18 +12,22 @@ class User(UserMixin):
         self.roles = roles or []
         self.clients = clients or []
 
+    @property
     def is_active(self):
         return self._is_active
 
     def is_admin(self):
         """Verifica se o usuário é administrador da plataforma"""
-        # Por enquanto, user_id = 1 é admin
-        return self.id == 1
+        admin_roles = ['admin']
+        return any(role.get('name', '').lower() == 'admin' for role in self.roles)
+    def is_super_admin(self):
+        return any(role.get('name', '').lower() == 'super_admin' for role in self.roles)
 
     def get_accessible_clients(self):
         """Retorna lista de clientes que o usuário pode acessar"""
-        if self.is_admin():
+        if self.is_super_admin():
             # Admin pode acessar todos os clientes
+            db = None
             try:
                 db = next(get_db())
                 result = db.execute(text("""
@@ -37,14 +41,15 @@ class User(UserMixin):
                 print(f"Erro ao buscar clientes: {e}")
                 return []
             finally:
-                db.close()
+                if db is not None:
+                    db.close()
         else:
             # Usuário comum só acessa clientes vinculados
             return self.clients
 
     def can_access_client(self, cliente_id):
         """Verifica se o usuário pode acessar um cliente específico"""
-        if self.is_admin():
+        if self.is_super_admin():
             return True
         
         return any(client.get('cliente_id') == cliente_id for client in self.clients)
@@ -56,20 +61,26 @@ class User(UserMixin):
 
     @staticmethod
     def get(user_id):
-        """Método para carregar usuário pelo ID (usado pelo login_manager)"""
+        db = None
         try:
             db = next(get_db())
-            
-            # Buscar usuário
             user_data = db.execute(text("""
                 SELECT u.id, u.username, u.email, u._is_active
                 FROM users u
                 WHERE u.id = :user_id AND u._is_active = true
             """), {"user_id": int(user_id)}).first()
-            
             if not user_data:
                 return None
-            
+
+            # Buscar roles do usuário
+            roles_data = db.execute(text("""
+                SELECT r.name
+                FROM user_roles ur
+                JOIN roles r ON ur.role_id = r.id
+                WHERE ur.user_id = :user_id
+            """), {"user_id": int(user_id)}).fetchall()
+            roles = [{'name': row.name} for row in roles_data]
+
             # Buscar clientes do usuário
             clients_data = db.execute(text("""
                 SELECT c.cliente_id, c.razao_social, c.nome_fantasia, c.cnpj
@@ -77,43 +88,46 @@ class User(UserMixin):
                 INNER JOIN user_clients uc ON c.cliente_id = uc.client_id
                 WHERE uc.user_id = :user_id AND c.ativo = true
             """), {"user_id": int(user_id)}).fetchall()
-            
             clients = [dict(row._mapping) for row in clients_data]
-            
+
             return User(
                 id=user_data.id,
                 username=user_data.username,
                 email=user_data.email,
                 _is_active=user_data._is_active,
-                roles=[],  # Simplificado por enquanto
+                roles=roles,
                 clients=clients
             )
-            
         except Exception as e:
             print(f"❌ Erro ao carregar usuário {user_id}: {e}")
             return None
         finally:
-            db.close()
+            if db is not None:
+                db.close()
 
     @staticmethod
     def authenticate(username, password):
-        """Autenticar usuário"""
-        if not username or not password:
-            return None
-            
+        # ...existing code...
+        db = None
         try:
             db = next(get_db())
-            
-            # Buscar usuário com dados do cliente
             user_data = db.execute(text("""
                 SELECT u.id, u.username, u.password_hash, u.email, u._is_active
                 FROM users u
                 WHERE u.username = :username AND u._is_active = true
             """), {"username": username}).first()
-            
             if user_data and check_password_hash(user_data.password_hash, password):
                 print(f"✅ Usuário autenticado: {username}")
-                
+
+                # Buscar roles do usuário
+                roles_data = db.execute(text("""
+                    SELECT r.name
+                    FROM user_roles ur
+                    JOIN roles r ON ur.role_id = r.id
+                    WHERE ur.user_id = :user_id
+                """), {"user_id": user_data.id}).fetchall()
+                roles = [{'name': row.name} for row in roles_data]
+
                 # Buscar clientes do usuário
                 clients_data = db.execute(text("""
                     SELECT c.cliente_id, c.razao_social, c.nome_fantasia, c.cnpj
@@ -121,26 +135,25 @@ class User(UserMixin):
                     INNER JOIN user_clients uc ON c.cliente_id = uc.client_id
                     WHERE uc.user_id = :user_id AND c.ativo = true
                 """), {"user_id": user_data.id}).fetchall()
-                
                 clients = [dict(row._mapping) for row in clients_data]
-                
+
                 return User(
                     id=user_data.id,
                     username=user_data.username,
                     email=user_data.email,
                     _is_active=user_data._is_active,
-                    roles=[],  # Simplificado por enquanto
+                    roles=roles,
                     clients=clients
                 )
             else:
                 print(f"❌ Falha na autenticação: {username}")
                 return None
-            
         except Exception as e:
             print(f"❌ Erro na autenticação: {e}")
             return None
         finally:
-            db.close()
+            if db is not None:
+                db.close()
 
     def get_primary_client(self):
         """Retorna o cliente principal do usuário"""

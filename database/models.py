@@ -60,17 +60,24 @@ class User(UserMixin):
         self.roles = roles or []
         self.clients = clients or []
 
+    @property
     def is_active(self):
         return self._is_active
 
     def is_admin(self):
         """Verifica se o usuário é administrador da plataforma"""
-        admin_roles = ['admin', 'super_admin', 'platform_admin']
+        admin_roles = ['admin']
         return any(role.name.lower() in admin_roles for role in self.roles)
+    
+    
+    
+    def is_super_admin(self):
+        """Verifica se o usuário tem a role super_admin"""
+        return any(role.get('name', '').lower() == 'super_admin' for role in self.roles)
 
     def get_accessible_clients(self):
         """Retorna lista de clientes que o usuário pode acessar"""
-        if self.is_admin():
+        if self.is_super_admin():
             # Admin pode acessar todos os clientes
             from database.connection import get_db  # ✅ CORREÇÃO: Import correto
             db = next(get_db())
@@ -87,14 +94,14 @@ class User(UserMixin):
 
     def can_access_client(self, cliente_id):
         """Verifica se o usuário pode acessar um cliente específico"""
-        if self.is_admin():
+        if self.is_super_admin():
             return True
         
         return any(client['cliente_id'] == cliente_id for client in self.clients)
 
     def has_permission(self, permission_name):
         """Verifica se o usuário tem uma permissão específica"""
-        if self.is_admin():
+        if self.is_super_admin():
             return True
         
         for role in self.roles:
@@ -499,8 +506,8 @@ class Ncm(Base):
     ncm_id = Column(Integer, primary_key=True)
     codigo = Column(String(20), unique=True, nullable=False)
     descricao = Column(Text, nullable=False)
-    data_Fim = Column(DateTime, nullable=True) 
-    data_Inicio = Column(DateTime, nullable=True)
+    data_fim = Column(DateTime, nullable=True) 
+    data_inicio = Column(DateTime, nullable=True)
     tipo_ato = Column(Text, nullable=True)
     numero_ato = Column(String(20), nullable=True)
     ano_ato = Column(String(4), nullable=True)

@@ -47,7 +47,7 @@ def get_produtos_cliente(cliente_id):
             "produto_id": p.produto_id,
             "codigo_interno": p.codigo_interno,
             "descricao": p.descricao,
-            "preco_unitario_padrao": float(p.preco_unitario_padrao or 0),
+            "preco_unitario_padrao": float(getattr(p, "preco_unitario_padrao", 0) or 0),
             "unidade_comercial": p.unidade_comercial,
             "ncm_codigo": p.ncm.codigo if p.ncm else None,
             "cfop": p.cfop.cfop if p.cfop else None

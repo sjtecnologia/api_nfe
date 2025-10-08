@@ -19,6 +19,8 @@ from routes.cliente_routes import cliente_bp
 from auth.login_manager import init_login_manager
 
 
+
+
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
@@ -32,6 +34,21 @@ app.register_blueprint(nfe_bp, url_prefix='/admin/nfe')
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(cliente_bp, url_prefix='/cliente')
 app.register_blueprint(home_bp)
+
+import re
+from markupsafe import Markup, escape
+
+def highlight(text, query):
+    if not query or not text:
+        return escape(text)
+    # Escape para HTML
+    text_escaped = escape(text)
+    query_escaped = escape(query)
+    # Regex para case-insensitive e todas ocorrências
+    pattern = re.compile(re.escape(query), re.IGNORECASE)
+    return Markup(pattern.sub(lambda m: f'<mark>{m.group(0)}</mark>', text_escaped))
+
+app.jinja_env.filters['highlight'] = highlight
 
 
 @app.context_processor

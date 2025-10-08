@@ -658,7 +658,15 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('home.home') }}">
+            
+            <a class="navbar-brand"
+                href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
+                        {{ url_for('admin.admin_home') }}
+                    {% elif current_user.is_authenticated and session.current_client_id %}
+                        {{ url_for('cliente.dashboard', cliente_id=session.current_client_id) }}
+                    {% else %}
+                        {{ url_for('home.home') }}
+                    {% endif %}">
                 <div class="logo">
                     <i class="fas fa-file-invoice"></i>
                 </div>
@@ -675,7 +683,7 @@
                     {% if current_user.is_authenticated %}
                         
                         <!-- Menu para Clientes (não admin) -->
-                        {% if not current_user.is_admin() %}
+                        {% if not current_user.is_super_admin() %}
                             
                             {% if session.current_client_id %}
                                 
@@ -750,9 +758,27 @@
                             {% endif %}
                             
                             <!-- Dropdown para Cadastros Fiscais -->
+                            <!-- {% set debug_permissions = {
+                                'cfops.read': has_permission('cfops.read'),
+                                'ncms.read': has_permission('ncms.read'),
+                                'cst.read': has_permission('cst.read'),
+                                'csosn.read': has_permission('csosn.read'),
+                                'origens_mercadoria.read': has_permission('origens_mercadoria.read'),
+                                'regimes_tributarios.read': has_permission('regimes_tributarios.read'),
+                                'motivos_desoneracao.read': has_permission('motivos_desoneracao.read')
+                            } %}
+                            <li class="nav-item">
+                                <span class="nav-link" style="color: #ff9800; font-size: 0.95rem;">
+                                    <strong>DEBUG has_permission:</strong>
+                                    <pre style="background: #fffbe6; color: #333; border-radius: 6px; padding: 6px; margin: 0;">
+                            {{ debug_permissions | tojson }}
+                                    </pre>
+                                </span>
+                            </li> -->
+                            
                             {% if has_permission('cfops.read') or has_permission('ncms.read') or has_permission('cst.read') or has_permission('csosn.read') %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                     <i class="fas fa-cogs"></i> Cadastros Fiscais
                                 </a>
                                 <div class="dropdown-menu">
@@ -798,7 +824,7 @@
                             <!-- Dropdown para Administração do Sistema -->
                             {% if has_permission('users.read') or has_permission('roles.read') %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                     <i class="fas fa-tools"></i> Sistema
                                 </a>
                                 <div class="dropdown-menu">
@@ -830,11 +856,11 @@
                 <ul class="navbar-nav">
                     {% if current_user.is_authenticated %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                 <i class="fas fa-user-circle"></i> {{ current_user.username }}
-                                {% if not current_user.is_admin() and session.current_client_id %}
+                                {% if not current_user.is_super_admin() and session.current_client_id %}
                                     <small class="badge badge-primary ml-1">Cliente</small>
-                                {% elif current_user.is_admin() %}
+                                {% elif current_user.is_super_admin() %}
                                     <small class="badge badge-danger ml-1">Admin</small>
                                 {% endif %}
                             </a>
@@ -844,7 +870,7 @@
                                 </h6>
                                 
                                 <!-- Informações do Cliente Atual -->
-                                {% if not current_user.is_admin() and session.current_client_id %}
+                                {% if not current_user.is_super_admin() and session.current_client_id %}
                                 <span class="dropdown-item-text">
                                     <small class="text-muted">Cliente Atual:</small><br>
                                     <strong>{{ session.current_client_name or 'Cliente Selecionado' }}</strong>
@@ -957,7 +983,7 @@
                 <i class="fas fa-code"></i> NfeSjtec - Sistema de Nota Fiscal Eletrônica
                 {% if current_user.is_authenticated %}
                     | Usuário: <strong>{{ current_user.username }}</strong>
-                    {% if current_user.is_admin() %}
+                    {% if current_user.is_super_admin() %}
                         <span class="badge badge-danger ml-1">Administrador</span>
                     {% elif session.current_client_id %}
                         <span class="badge badge-primary ml-1">{{ session.current_client_name or 'Cliente' }}</span>

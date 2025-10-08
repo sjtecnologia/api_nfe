@@ -64,7 +64,7 @@
                                             <td>
                                                 <div class="btn-group" role="group">
                                                     <!-- ✅ LINK CORRETO PARA EDITAR -->
-                                                    <a href="{{ url_for('admin.edit_produto', produto_id=produto.produto_id) }}" 
+                                                    <a href="{{ url_for('admin.edit_produto', produto_id=produto.produto_id, origem='list') }}"
                                                        class="btn btn-sm btn-outline-primary" 
                                                        title="Editar">
                                                         <i class="fas fa-edit"></i>

@@ -24,7 +24,7 @@ def home():
         return render_template('select_client.html', clientes=current_user.clients)
     
     # Se é admin, redirecionar para admin
-    if current_user.is_admin():
+    if current_user.is_super_admin():
         return redirect(url_for('admin.admin_home'))
     
     # Se não tem clientes nem é admin, fazer logout

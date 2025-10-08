@@ -1,41 +1,62 @@
 {% extends 'base.html' %}
 
-{% block title %}Regimes Tributários - Admin{% endblock %}
+{% block title %}Regimes Tributários{% endblock %}
+
 {% block content %}
-    <h1>Administração de Regimes Tributários</h1>
-    {% with messages = get_flashed_messages(with_categories=true) %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">Regimes Tributários</h1>
+        <a href="{{ url_for('admin.novo_regime_tributario') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Regime
+        </a>
+    </div>
+
+    <!-- {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
             {% endfor %}
         {% endif %}
-    {% endwith %}
-    <p><a href="{{ url_for('admin.create_regime_tributario') }}" class="btn">Adicionar Novo Regime</a></p>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>Descrição</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for regime in regimes %}
-            <tr>
-                <td>{{ regime.regime_tributario_id }}</td>
-                <td>{{ regime.nome }}</td>
-                <td>{{ regime.descricao }}</td>
-                <td>
-                    {# CORREÇÃO AQUI: 'regime_tributario_id' em vez de 'regime_id' #}
-                    <a href="{{ url_for('admin.edit_regime_tributario', regime_tributario_id=regime.regime_tributario_id) }}" class="btn btn-warning">Editar</a>
-                    {# CORREÇÃO AQUI: 'regime_tributario_id' em vez de 'regime_id' #}
-                    <form action="{{ url_for('admin.delete_regime_tributario', regime_tributario_id=regime.regime_tributario_id) }}" method="post" style="display:inline;">
-                        <button type="submit" class="btn btn-danger" onclick="return confirm('Tem certeza que deseja excluir este regime?');">Excluir</button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% endwith %} -->
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>Descrição</th>
+                    <th class="text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for regime in regimes %}
+                <tr>
+                    <td>{{ regime.regime_tributario_id }}</td>
+                    <td>{{ regime.nome }}</td>
+                    <td>{{ regime.descricao }}</td>
+                    <td class="text-center">
+                        <a href="{{ url_for('admin.novo_regime_tributario', regime_tributario_id=regime.regime_tributario_id) }}" class="btn btn-sm btn-warning me-1">
+                            <i class="fas fa-edit"></i> Editar
+                        </a>
+                        <form action="{{ url_for('admin.delete_regime_tributario', regime_tributario_id=regime.regime_tributario_id) }}" method="post" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('Tem certeza que deseja excluir o regime {{ regime.nome }}?');">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">Nenhum regime tributário cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}

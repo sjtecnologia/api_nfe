@@ -23,6 +23,7 @@ def admin_required():
                 flash('Acesso não autorizado. Faça login.', 'danger')
                 return redirect(url_for('auth.login'))
             
+            db = None
             try:
                 db = next(get_db())
                 
@@ -51,7 +52,7 @@ def admin_required():
                 flash('Erro na verificação de permissões.', 'error')
                 return redirect(url_for('auth.login'))
             finally:
-                if 'db' in locals():
+                if db is not None:
                     db.close()
                     
         return decorated_function
@@ -72,7 +73,7 @@ def client_access_required():
             if not cliente_id:
                 flash('Cliente não especificado.', 'danger')
                 return redirect(url_for('auth.login'))
-            
+            db = None
             try:
                 db = next(get_db())
                 
@@ -108,7 +109,8 @@ def client_access_required():
                 flash('Erro na verificação de permissões.', 'error')
                 return redirect(url_for('auth.login'))
             finally:
-                if 'db' in locals():
+                if db is not None:
+                    db.close()
                     db.close()
                     
         return decorated_function

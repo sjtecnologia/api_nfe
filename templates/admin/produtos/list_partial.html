@@ -6,10 +6,9 @@
                     <th>ID</th>
                     <th>Cód. Interno</th>
                     <th>Descrição</th>
-                    <th>NCM</th>
                     <th>Preço Padrão</th>
                     <th>Ativo</th>
-                    <th>Ações</th>
+                    <th width="150">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -17,27 +16,90 @@
                     <tr>
                         <td>{{ produto.produto_id }}</td>
                         <td>{{ produto.codigo_interno }}</td>
-                        <td>{{ produto.descricao | truncate(50, True, '...') }}</td>
-                        <td>{{ produto.ncm.codigo if produto.ncm else 'N/A' }}</td>
-                        <td>R$ {{ "%.2f"|format(produto.preco_unitario_padrao) }}</td>
+                        <td><strong>{{ produto.descricao | truncate(50, True, '...') }}</strong></td>
                         <td>
-                            {% if produto.ativo %}
-                                <span class="badge bg-success">Sim</span>
+                            {% if produto.preco_unitario_padrao %}
+                                R$ {{ "%.2f"|format(produto.preco_unitario_padrao) }}
                             {% else %}
-                                <span class="badge bg-danger">Não</span>
+                                -
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('admin.edit_produto', produto_id=produto.produto_id, cliente_id=cliente.cliente_id) }}" class="btn btn-sm btn-info me-2">Editar</a>
-                            <form action="{{ url_for('admin.delete_produto', produto_id=produto.produto_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este produto?');">
-                                <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
-                            </form>
+                            <span class="badge bg-{{ 'success' if produto.ativo else 'secondary' }}">
+                                {{ 'Ativo' if produto.ativo else 'Inativo' }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <!-- Editar -->
+                                <a href="{{ url_for('admin.edit_produto', produto_id=produto.produto_id, origem='list_partial') }}" 
+                                   class="btn btn-sm btn-outline-primary" 
+                                   title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <!-- Alterar Status -->
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-{{ 'danger' if produto.ativo else 'success' }} btn-toggle-status"
+                                        data-produto-id="{{ produto.produto_id }}"
+                                        data-novo-status="{{ 'false' if produto.ativo else 'true' }}"
+                                        data-cliente-id="{{ cliente_id }}"
+                                        title="{{ 'Desativar' if produto.ativo else 'Ativar' }}">
+                                    <i class="fas fa-{{ 'eye-slash' if produto.ativo else 'eye' }}"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
     {% else %}
-        <p class="alert alert-info mt-3">Nenhum produto associado a este cliente ainda.</p>
+        <div class="text-center py-4">
+            <i class="fas fa-box fa-3x text-muted mb-3"></i>
+            <h5>Nenhum produto cadastrado</h5>
+            <p class="text-muted">Comece adicionando um novo produto ao catálogo.</p>
+            <a href="{{ url_for('admin.create_produto', cliente_id=cliente_id) }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Adicionar Primeiro Produto
+            </a>
+        </div>
     {% endif %}
 </div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-toggle-status').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const produtoId = this.getAttribute('data-produto-id');
+            const novoStatus = this.getAttribute('data-novo-status');
+            const clienteId = this.getAttribute('data-cliente-id');
+            
+            alterarStatusProduto(produtoId, novoStatus, clienteId);
+        });
+    });
+});
+
+function alterarStatusProduto(produtoId, novoStatus, clienteId) {
+    if (confirm('Deseja alterar o status deste produto?')) {
+        fetch('/admin/produtos/alterar-status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'produto_id=' + produtoId + '&ativo=' + novoStatus + '&cliente_id=' + clienteId
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao alterar status do produto');
+        });
+    }
+}
+</script>
+{% endblock %}

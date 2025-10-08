@@ -247,22 +247,170 @@ def list_nfes():
 @admin_bp.route('/ncms')
 @login_required
 def list_ncms():
-    """
-    Stub para evitar BuildError em base.html.
-    Ajuste futuramente para exibir lista real (ou consumir /api/ncms).
-    """
-    flash('Lista de NCMs (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        rows = db.execute(text("""
+            SELECT ncm_id, codigo, descricao, data_inicio, data_fim, tipo_ato, numero_ato, ano_ato
+            FROM ncms
+            WHERE codigo ILIKE :q
+               OR descricao ILIKE :q
+               OR tipo_ato ILIKE :q
+               OR numero_ato::text ILIKE :q
+               OR ano_ato::text ILIKE :q
+            ORDER BY codigo
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT ncm_id, codigo, descricao, data_inicio, data_fim, tipo_ato, numero_ato, ano_ato
+            FROM ncms
+            ORDER BY codigo
+        """)).fetchall()
+    ncms = [dict(row._mapping) for row in rows]
+    return render_template('admin/ncms/list.html', ncms=ncms)
+
+@admin_bp.route('/ncms/novo')
+@login_required
+@permission_required('ncms.create')
+def create_ncm():
+    return render_template('admin/ncms/form.html', ncm=None)
+
+@admin_bp.route('/ncms/editar/<int:ncm_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('ncms.edit')
+def edit_ncm(ncm_id):
+    db = _get_db()
+    if request.method == 'POST':
+        # Recebe dados do formulário
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+        data_inicio = request.form.get('data_inicio') or None
+        data_fim = request.form.get('data_fim') or None
+        tipo_ato = request.form.get('tipo_ato')
+        numero_ato = request.form.get('numero_ato')
+        ano_ato = request.form.get('ano_ato')
+        try:
+            db.execute(text("""
+                UPDATE ncms SET
+                    codigo = :codigo,
+                    descricao = :descricao,
+                    data_inicio = :data_inicio,
+                    data_fim = :data_fim,
+                    tipo_ato = :tipo_ato,
+                    numero_ato = :numero_ato,
+                    ano_ato = :ano_ato
+                WHERE ncm_id = :ncm_id
+            """), {
+                'codigo': codigo,
+                'descricao': descricao,
+                'data_inicio': data_inicio,
+                'data_fim': data_fim,
+                'tipo_ato': tipo_ato,
+                'numero_ato': numero_ato,
+                'ano_ato': ano_ato,
+                'ncm_id': ncm_id
+            })
+            db.commit()
+            flash('NCM atualizado com sucesso!', 'success')
+            return redirect(url_for('admin.list_ncms'))
+        except Exception as e:
+            db.rollback()
+            flash('Erro ao atualizar NCM', 'danger')
+    row = db.execute(text("SELECT ncm_id, codigo, descricao, data_inicio, data_fim, tipo_ato, numero_ato, ano_ato FROM ncms WHERE ncm_id = :id"), {'id': ncm_id}).fetchone()
+    ncm = dict(row._mapping) if row else None
+    return render_template('admin/ncms/form.html', ncm=ncm)
+
+@admin_bp.route('/ncms/excluir/<int:ncm_id>', methods=['POST'])
+@login_required
+@permission_required('ncms.delete')
+def delete_ncm(ncm_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM ncms WHERE ncm_id = :id"), {'id': ncm_id})
+        db.commit()
+        flash('NCM excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_ncm: {e}")
+        flash('Erro ao excluir NCM', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_ncms'))        
 
 @admin_bp.route('/cst')
 @login_required
+@permission_required('cst.view')
 def list_cst():
-    """
-    Stub para evitar BuildError de url_for('admin.list_cst') usado em base.html.
-    Substitua depois por listagem real de códigos CST ICMS.
-    """
-    flash('Lista de CST (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        rows = db.execute(text("""
+            SELECT cst_id, codigo, descricao
+            FROM cst_icms
+            WHERE codigo ILIKE :q
+               OR descricao ILIKE :q
+            ORDER BY codigo
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT cst_id, codigo, descricao
+            FROM cst_icms
+            ORDER BY codigo
+        """)).fetchall()
+    csts = [dict(row._mapping) for row in rows]
+    return render_template('admin/cst/list.html', csts=csts)
+
+@admin_bp.route('/cst/novo')
+@login_required
+@permission_required('cst.create')
+def create_cst():
+    return render_template('admin/cst/form.html', cst=None)
+
+@admin_bp.route('/cst/editar/<int:cst_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('cst.edit')
+def edit_cst(cst_id):
+    db = _get_db()
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+        try:
+            db.execute(text("""
+                UPDATE cst_icms SET
+                    codigo = :codigo,
+                    descricao = :descricao
+                WHERE cst_id = :cst_id
+            """), {
+                'codigo': codigo,
+                'descricao': descricao,
+                'cst_id': cst_id
+            })
+            db.commit()
+            flash('CST atualizado com sucesso!', 'success')
+            return redirect(url_for('admin.list_cst'))
+        except Exception as e:
+            db.rollback()
+            flash('Erro ao atualizar CST', 'danger')
+    row = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms WHERE cst_id = :id"), {'id': cst_id}).fetchone()
+    cst = dict(row._mapping) if row else None
+    return render_template('admin/cst/form.html', cst=cst)
+
+@admin_bp.route('/cst/excluir/<int:cst_id>', methods=['POST'])
+@login_required
+@permission_required('cst.delete')
+def delete_cst(cst_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM cst_icms WHERE cst_id = :id"), {'id': cst_id})
+        db.commit()
+        flash('CST excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_cst: {e}")
+        flash('Erro ao excluir CST', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_cst'))
 
 @admin_bp.route('/cst/pis-cofins')
 @login_required
@@ -273,27 +421,31 @@ def list_cst_pis_cofins():
     flash('Lista de CST PIS/COFINS (stub).', 'info')
     return redirect(url_for('admin.admin_home'))
 
+
 @admin_bp.route('/cfops')
 @login_required
 def list_cfops():
-    """Lista CFOPs"""
     db = _get_db()
-    try:
+    q = request.args.get('q', '').strip()
+    if q:
         rows = db.execute(text("""
-            SELECT cfop_id, cfop, descricao, observacao, tipooperacao, identificadordestinooperacao, created_at
+            SELECT cfop_id, cfop, descricao, observacao, tipooperacao, identificadordestinooperacao
+            FROM cfops
+            WHERE cfop::text ILIKE :q
+               OR descricao ILIKE :q
+               OR observacao ILIKE :q
+               OR tipooperacao ILIKE :q
+               OR identificadordestinooperacao ILIKE :q
+            ORDER BY cfop
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT cfop_id, cfop, descricao, observacao, tipooperacao, identificadordestinooperacao
             FROM cfops
             ORDER BY cfop
         """)).fetchall()
-        cfops = [_safe_row_to_dict(r, [
-            'cfop_id','cfop','descricao','observacao','tipooperacao','identificadordestinooperacao','created_at'
-        ]) for r in rows]
-        return render_template('admin/cfops/list.html', cfops=cfops)
-    except Exception as e:
-        print(f"❌ Erro list_cfops: {e}")
-        flash('Erro ao carregar CFOPs', 'error')
-        return render_template('admin/cfops/list.html', cfops=[])
-    finally:
-        db.close()
+    cfops = [dict(row._mapping) for row in rows]
+    return render_template('admin/cfops/list.html', cfops=cfops)
 
 @admin_bp.route('/cfops/novo')
 @login_required
@@ -324,8 +476,8 @@ def save_cfop():
             flash('CFOP atualizado', 'success')
         else:  # Criar
             db.execute(text("""
-                INSERT INTO cfops (cfop, descricao, observacao, tipooperacao, identificadordestinooperacao, created_at)
-                VALUES (:cfop, :descricao, :observacao, :tipooperacao, :identificadordestinooperacao, NOW())
+                INSERT INTO cfops (cfop, descricao, observacao, tipooperacao, identificadordestinooperacao)
+                VALUES (:cfop, :descricao, :observacao, :tipooperacao, :identificadordestinooperacao)
             """), data)
             flash('CFOP criado', 'success')
         
@@ -350,7 +502,7 @@ def edit_cfop(cfop_id):
             return redirect(url_for('admin.list_cfops'))
         
         cfop = _safe_row_to_dict(row, [
-            'cfop_id','cfop','descricao','observacao','tipooperacao','identificadordestinooperacao','created_at'
+            'cfop_id','cfop','descricao','observacao','tipooperacao','identificadordestinooperacao'
         ])
         return render_template('admin/cfops/form.html', cfop=cfop)
     except Exception as e:
@@ -390,13 +542,78 @@ def view_cliente(cliente_id: int):
 
 @admin_bp.route('/csosn')
 @login_required
+@permission_required('csosn.view')
 def list_csosn():
-    """
-    Stub para evitar BuildError de url_for('admin.list_csosn') usado em base.html.
-    CSOSN = Código de Situação da Operação do Simples Nacional.
-    """
-    flash('Lista de CSOSN (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        rows = db.execute(text("""
+            SELECT csosn_id, codigo, descricao
+            FROM csosn_icms
+            WHERE codigo ILIKE :q
+               OR descricao ILIKE :q
+            ORDER BY codigo
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT csosn_id, codigo, descricao
+            FROM csosn_icms
+            ORDER BY codigo
+        """)).fetchall()
+    csosns = [dict(row._mapping) for row in rows]
+    return render_template('admin/csosn/list.html', csosns=csosns)
+
+@admin_bp.route('/csosn/novo')
+@login_required
+@permission_required('csosn.create')
+def create_csosn():
+    return render_template('admin/csosn/form.html', csosn=None)
+
+@admin_bp.route('/csosn/editar/<int:csosn_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('csosn.edit')
+def edit_csosn(csosn_id):
+    db = _get_db()
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+        try:
+            db.execute(text("""
+                UPDATE csosn_icms SET
+                    codigo = :codigo,
+                    descricao = :descricao
+                WHERE csosn_id = :csosn_id
+            """), {
+                'codigo': codigo,
+                'descricao': descricao,
+                'csosn_id': csosn_id
+            })
+            db.commit()
+            flash('CSOSN atualizado com sucesso!', 'success')
+            return redirect(url_for('admin.list_csosn'))
+        except Exception as e:
+            db.rollback()
+            flash('Erro ao atualizar CSOSN', 'danger')
+    row = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms WHERE csosn_id = :id"), {'id': csosn_id}).fetchone()
+    csosn = dict(row._mapping) if row else None
+    return render_template('admin/csosn/form.html', csosn=csosn)
+
+@admin_bp.route('/csosn/excluir/<int:csosn_id>', methods=['POST'])
+@login_required
+@permission_required('csosn.delete')
+def delete_csosn(csosn_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM csosn_icms WHERE csosn_id = :id"), {'id': csosn_id})
+        db.commit()
+        flash('CSOSN excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_csosn: {e}")
+        flash('Erro ao excluir CSOSN', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_csosn'))
 
 
 @admin_bp.route('/regimes-tributarios')
@@ -407,12 +624,12 @@ def list_regimes_tributarios():
     db = _get_db()
     try:
         rows = db.execute(text("""
-            SELECT regime_tributario_id, nome, descricao, ativo, created_at
+            SELECT regime_tributario_id, nome, descricao
             FROM regimes_tributarios
             ORDER BY nome
         """)).fetchall()
         regimes = [_safe_row_to_dict(r, [
-            'regime_tributario_id','nome','descricao','ativo','created_at'
+            'regime_tributario_id','nome','descricao'
         ]) for r in rows]
         return render_template('admin/regimes_tributarios/list.html', regimes=regimes)
     except Exception as e:
@@ -422,37 +639,74 @@ def list_regimes_tributarios():
     finally:
         db.close()
 
-@admin_bp.route('/regimes-tributarios/novo')
+@admin_bp.route('/regimes-tributarios/novo', defaults={'regime_tributario_id': None})
+@admin_bp.route('/regimes-tributarios/<int:regime_tributario_id>/editar')
 @login_required
 @permission_required('regimes_tributarios.create')
-def novo_regime_tributario():
-    return render_template('admin/regimes_tributarios/form.html', regime=None)
+def novo_regime_tributario(regime_tributario_id):
+    regime = None
+    if regime_tributario_id:
+        db = _get_db()
+        row = db.execute(text("""
+            SELECT regime_tributario_id, nome, descricao
+            FROM regimes_tributarios
+            WHERE regime_tributario_id = :rid
+        """), {'rid': regime_tributario_id}).first()
+        if row:
+            regime = _safe_row_to_dict(row, ['regime_tributario_id', 'nome', 'descricao'])
+        db.close()
+    return render_template('admin/regimes_tributarios/form.html', regime=regime)
 
 @admin_bp.route('/regimes-tributarios/salvar', methods=['POST'])
 @login_required
 @permission_required('regimes_tributarios.create')
 def salvar_regime_tributario():
     db = _get_db()
+    regime_tributario_id = request.form.get('regime_tributario_id')
+    nome = request.form.get('nome')
+    descricao = request.form.get('descricao')
     try:
-        data = {
-            'nome': request.form.get('nome'),
-            'descricao': request.form.get('descricao'),
-            'ativo': True
-        }
-        db.execute(text("""
-            INSERT INTO regimes_tributarios (nome, descricao, ativo, created_at)
-            VALUES (:nome, :descricao, :ativo, NOW())
-        """), data)
+        if regime_tributario_id:
+            db.execute(text("""
+                UPDATE regimes_tributarios
+                SET nome = :nome, descricao = :descricao
+                WHERE regime_tributario_id = :rid
+            """), {'nome': nome, 'descricao': descricao, 'rid': regime_tributario_id})
+            flash('Regime tributário atualizado com sucesso!', 'success')
+        else:
+            db.execute(text("""
+                INSERT INTO regimes_tributarios (nome, descricao)
+                VALUES (:nome, :descricao)
+            """), {'nome': nome, 'descricao': descricao})
+            flash('Regime tributário cadastrado com sucesso!', 'success')
         db.commit()
-        flash('Regime tributário salvo', 'success')
-        return redirect(url_for('admin.list_regimes_tributarios'))
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro salvar_regime_tributario: {e}")
-        flash('Erro ao salvar regime tributário', 'error')
-        return redirect(url_for('admin.novo_regime_tributario'))
+        if 'duplicate key value violates unique constraint' in str(e):
+            flash('Já existe um regime tributário com esse nome.', 'warning')
+        else:
+            flash('Erro ao salvar regime tributário.', 'danger')
     finally:
         db.close()
+    return redirect(url_for('admin.list_regimes_tributarios'))
+
+@admin_bp.route('/regimes-tributarios/<int:regime_tributario_id>/delete', methods=['POST'])
+@login_required
+@permission_required('regimes_tributarios.delete')
+def delete_regime_tributario(regime_tributario_id: int):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM regimes_tributarios WHERE regime_tributario_id = :rid"),
+                   {'rid': regime_tributario_id})
+        db.commit()
+        flash('Regime tributário excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_regime_tributario: {e}")
+        flash('Erro ao excluir regime tributário', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_regimes_tributarios'))
 
 @admin_bp.route('/roles')
 @login_required
@@ -526,23 +780,168 @@ def backup():
 
 @admin_bp.route('/motivos-desoneracao')
 @login_required
+@permission_required('motivos_desoneracao.view')
 def list_motivos_desoneracao():
-    """
-    Stub para evitar BuildError de url_for('admin.list_motivos_desoneracao') usado em base.html.
-    Motivos de desoneração do ICMS (códigos 1-16 conforme tabela SEFAZ).
-    """
-    flash('Lista de Motivos de Desoneração (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    try:
+        rows = db.execute(text("""
+            SELECT motivo_id, codigo, descricao
+            FROM motivos_desoneracao_icms
+            ORDER BY codigo
+        """)).fetchall()
+        motivos = [dict(row._mapping) for row in rows]
+        return render_template('admin/motivos_desoneracao/list.html', motivos=motivos)
+    except Exception as e:
+        print(f"❌ Erro list_motivos_desoneracao: {e}")
+        flash('Erro ao carregar motivos de desoneração', 'error')
+        return render_template('admin/motivos_desoneracao/list.html', motivos=[])
+    finally:
+        db.close()
+
+@admin_bp.route('/motivos-desoneracao/novo', defaults={'motivo_id': None})
+@admin_bp.route('/motivos-desoneracao/<int:motivo_id>/editar')
+@login_required
+@permission_required('motivos_desoneracao.create')
+def novo_motivo_desoneracao(motivo_id):
+    motivo = None
+    if motivo_id:
+        db = _get_db()
+        row = db.execute(text("""
+            SELECT motivo_id, codigo, descricao
+            FROM motivos_desoneracao_icms
+            WHERE motivo_id = :mid
+        """), {'mid': motivo_id}).first()
+        if row:
+            motivo = dict(row._mapping)
+        db.close()
+    return render_template('admin/motivos_desoneracao/form.html', motivo=motivo)
+
+@admin_bp.route('/motivos-desoneracao/salvar', methods=['POST'])
+@login_required
+@permission_required('motivos_desoneracao.create')
+def salvar_motivo_desoneracao():
+    db = _get_db()
+    motivo_id = request.form.get('motivo_id')
+    codigo = request.form.get('codigo')
+    descricao = request.form.get('descricao')
+    try:
+        if motivo_id:
+            db.execute(text("""
+                UPDATE motivos_desoneracao_icms
+                SET codigo = :codigo, descricao = :descricao
+                WHERE motivo_id = :mid
+            """), {'codigo': codigo, 'descricao': descricao, 'mid': motivo_id})
+            flash('Motivo de desoneração atualizado com sucesso!', 'success')
+        else:
+            db.execute(text("""
+                INSERT INTO motivos_desoneracao_icms (codigo, descricao)
+                VALUES (:codigo, :descricao)
+            """), {'codigo': codigo, 'descricao': descricao})
+            flash('Motivo de desoneração cadastrado com sucesso!', 'success')
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        if 'duplicate key value violates unique constraint' in str(e):
+            flash('Já existe um motivo de desoneração com esse código.', 'warning')
+        else:
+            flash('Erro ao salvar motivo de desoneração.', 'danger')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_motivos_desoneracao'))
+
+@admin_bp.route('/motivos-desoneracao/<int:motivo_id>/delete', methods=['POST'])
+@login_required
+@permission_required('motivos_desoneracao.delete')
+def delete_motivo_desoneracao(motivo_id: int):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM motivos_desoneracao_icms WHERE motivo_id = :mid"),
+                   {'mid': motivo_id})
+        db.commit()
+        flash('Motivo de desoneração excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_motivo_desoneracao: {e}")
+        flash('Erro ao excluir motivo de desoneração', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_motivos_desoneracao'))
 
 @admin_bp.route('/origens-mercadoria')
 @login_required
+@permission_required('origens_mercadoria.view')
 def list_origens_mercadoria():
-    """
-    Stub para evitar BuildError de url_for('admin.list_origens_mercadoria') usado em base.html.
-    Origens de mercadoria para NFe (0=Nacional, 1=Estrangeira-Importação direta, etc).
-    """
-    flash('Lista de Origens de Mercadoria (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        rows = db.execute(text("""
+            SELECT origem_id, codigo, descricao
+            FROM origens_mercadoria
+            WHERE codigo ILIKE :q
+               OR descricao ILIKE :q
+            ORDER BY codigo
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT origem_id, codigo, descricao
+            FROM origens_mercadoria
+            ORDER BY codigo
+        """)).fetchall()
+    origens = [dict(row._mapping) for row in rows]
+    return render_template('admin/origens_mercadoria/list.html', origens=origens)
+
+@admin_bp.route('/origens-mercadoria/novo')
+@login_required
+@permission_required('origens_mercadoria.create')
+def create_origem_mercadoria():
+    return render_template('admin/origens_mercadoria/form.html', origem=None)
+
+@admin_bp.route('/origens-mercadoria/editar/<int:origem_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('origens_mercadoria.edit')
+def edit_origem_mercadoria(origem_id):
+    db = _get_db()
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+        try:
+            db.execute(text("""
+                UPDATE origens_mercadoria SET
+                    codigo = :codigo,
+                    descricao = :descricao
+                WHERE origem_id = :origem_id
+            """), {
+                'codigo': codigo,
+                'descricao': descricao,
+                'origem_id': origem_id
+            })
+            db.commit()
+            flash('Origem de Mercadoria atualizada com sucesso!', 'success')
+            return redirect(url_for('admin.list_origens_mercadoria'))
+        except Exception as e:
+            db.rollback()
+            flash('Erro ao atualizar Origem de Mercadoria', 'danger')
+    row = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria WHERE origem_id = :id"), {'id': origem_id}).fetchone()
+    origem = dict(row._mapping) if row else None
+    return render_template('admin/origens_mercadoria/form.html', origem=origem)
+
+@admin_bp.route('/origens-mercadoria/excluir/<int:origem_id>', methods=['POST'])
+@login_required
+@permission_required('origens_mercadoria.delete')
+def delete_origem_mercadoria(origem_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM origens_mercadoria WHERE origem_id = :id"), {'id': origem_id})
+        db.commit()
+        flash('Origem de Mercadoria excluída com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_origem_mercadoria: {e}")
+        flash('Erro ao excluir Origem de Mercadoria', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_origens_mercadoria'))
+
 # Opcional: função utilitária para checar endpoints (pode usar em templates se desejar)
 def has_endpoint(name: str) -> bool:
     return name in current_app.view_functions
@@ -563,12 +962,12 @@ def list_clientes():
     db = _get_db()
     try:
         rows = db.execute(text("""
-            SELECT cliente_id, razao_social, cnpj, ativo, data_cadastro
+            SELECT cliente_id, razao_social, cnpj, ativo, data_cadastro, email_contato, telefone_contato
             FROM clientes
             ORDER BY razao_social
         """)).fetchall()
         clientes = [_safe_row_to_dict(r, [
-            'cliente_id','razao_social','cnpj','ativo','data_cadastro'
+            'cliente_id','razao_social','cnpj','ativo','data_cadastro','email_contato','telefone_contato'
         ]) for r in rows]
         return render_template('admin/clientes/list.html', clientes=clientes)
     except Exception as e:
@@ -672,18 +1071,18 @@ def edit_cliente(cliente_id: int):
         
         # Consultar produtos cadastrados para o cliente
         prod_rows = db.execute(text("""
-            SELECT produto_id, descricao, codigo_interno, ncm_id, cfop_id, unidade_comercial
+            SELECT *
             FROM produtos
             WHERE cliente_id = :cid
             ORDER BY descricao
         """), {'cid': cliente_id}).fetchall()
-        produtos = [dict(row._mapping) for row in prod_rows]
+        produtos_existentes = [dict(row._mapping) for row in prod_rows]
         
         # Consultar regras tributárias para o cliente
         regras_rows = db.execute(text("""
             SELECT * FROM regras_tributacao WHERE cliente_id = :cid
         """), {'cid': cliente_id}).fetchall()
-        regras_tributarias = [dict(row._mapping) for row in regras_rows]
+        regras_existentes = [dict(row._mapping) for row in regras_rows]
 
         # Consultar destinatários para o cliente
         destinatarios_rows = db.execute(text("""
@@ -701,8 +1100,8 @@ def edit_cliente(cliente_id: int):
             form_data=form_data,
             regimes_tributarios=regimes_tributarios,
             certificados_existentes=certificados_existentes,
-            produtos=produtos,
-            regras_tributarias=regras_tributarias,
+            produtos_existentes=produtos_existentes,
+            regras_existentes=regras_existentes,
             destinatarios=destinatarios
         )
     except Exception as e:
@@ -977,22 +1376,43 @@ def store_produto():
 @login_required
 @permission_required('produtos.edit')
 def edit_produto(produto_id: int):
+    origem = request.args.get('origem', 'list')
     db = _get_db()
     try:
         row = db.execute(text("""
             SELECT produto_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
-                   ncm_id, cfop_id, ativo
+                   tipo_item, ncm_id, cest, cfop_id, origem_mercadoria,
+                   cst_id, csosn_id, ativo
             FROM produtos
             WHERE produto_id = :pid
         """), {'pid': produto_id}).fetchone()
-        produto = _safe_row_to_dict(row, [
-            'produto_id','codigo_interno','descricao','unidade_comercial','preco_unitario_padrao',
-            'ncm_id','cfop_id','ativo'
-        ])
+        produto = dict(row._mapping) if row else None
+
         if not produto:
             flash('Produto não encontrado', 'warning')
             return redirect(url_for('admin.list_produtos'))
-        return render_template('admin/produtos/form.html', produto=produto)
+
+        # Se precisar de listas para selects (NCM, CFOP, etc), busque aqui:
+        ncm_lista = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms")).fetchall()
+        cfop_lista = db.execute(text("SELECT cfop_id, cfop ,descricao FROM cfops")).fetchall()
+        origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria")).fetchall()
+        csts_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms")).fetchall()
+        csosns_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms")).fetchall()
+
+        # ... outros selects ...
+
+        return render_template(
+            'admin/produtos/form.html',
+            produto=produto,
+            ncms=[dict(ncm._mapping) for ncm in ncm_lista],
+            cfops=[dict(cfop._mapping) for cfop in cfop_lista],
+            origens_mercadoria = [dict(origens._mapping) for origens in origens_list],
+            csts = [dict(csts._mapping) for csts in csts_list],
+            csosns = [dict(csosns._mapping) for csosns in csosns_list],
+            voltar_para=origem
+
+            # ... outros contextos ...
+        )
     except Exception as e:
         print(f"❌ Erro edit_produto: {e}")
         flash('Erro ao carregar produto', 'error')
@@ -1056,30 +1476,47 @@ def alterar_status_produto():
     finally:
         db.close()
 
+@admin_bp.route('/produtos/<int:produto_id>/delete', methods=['POST'])
+@login_required
+@permission_required('produtos.delete')
+def delete_produto(produto_id: int):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM produtos WHERE produto_id = :pid"), {'pid': produto_id})
+        db.commit()
+        flash('Produto excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_produto: {e}")
+        flash('Erro ao excluir produto', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_produtos'))        
+
 # -------------------------------------------------------------------
 # DESTINATÁRIOS
 # -------------------------------------------------------------------
 
-@admin_bp.route('/destinatarios')
+@admin_bp.route('/destinatarios/<int:cliente_id>')
 @login_required
 @permission_required('destinatarios_nfe.view')
-def list_destinatarios():
+def list_destinatarios(cliente_id: int):
     db = _get_db()
     try:
         rows = db.execute(text("""
             SELECT *
             FROM destinatarios_nfe
-            WHERE tipo = 'DEST' OR tipo IS NULL
-            ORDER BY razao_social
-        """)).fetchall()
+            WHERE cliente_id = :cid
+            ORDER BY nome_razao_social
+        """), {'cid': cliente_id}).fetchall()
         destinatarios = [_safe_row_to_dict(r, [
             'cliente_id','nome_razao_social','cpf_cnpj','uf','nome_municipio'
         ]) for r in rows]
-        return render_template('admin/destinatarios/list.html', destinatarios=destinatarios)
+        return render_template('admin/destinatarios/list.html', destinatarios=destinatarios, cliente_id=cliente_id)
     except Exception as e:
         print(f"❌ Erro list_destinatarios: {e}")
         flash('Erro ao carregar destinatários', 'error')
-        return render_template('admin/destinatarios/list.html', destinatarios=[])
+        return render_template('admin/destinatarios/list.html', destinatarios=[], cliente_id=cliente_id)
     finally:
         db.close()
 
@@ -1135,7 +1572,7 @@ def salvar_destinatario():
         print(f"❌ Erro salvar_destinatario: {e}")
         flash('Erro ao salvar destinatário', 'error')
         cliente_id = request.form.get('cliente_id')
-        return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
+        return redirect(url_for('admin.list_destinatarios'))
     finally:
         db.close()
 
@@ -1181,12 +1618,12 @@ def list_certificados():
     db = _get_db()
     try:
         rows = db.execute(text("""
-            SELECT certificado_id, apelido, tipo, valido_ate, ativo, created_at
-            FROM certificados
-            ORDER BY certificado_id DESC
+            SELECT certificado_digital_id, fingerprint, conteudo_certificado, validade_fim, ativo
+            FROM certificados_digitais
+            ORDER BY certicertificado_digital_idficado_id DESC
         """)).fetchall()
         certificados = [_safe_row_to_dict(r, [
-            'certificado_id','apelido','tipo','valido_ate','ativo','created_at'
+            'certificado_digital_id','fingerprint','conteudo_certificado','validade_fim','ativo'
         ]) for r in rows]
         return render_template('admin/certificados/list.html', certificados=certificados)
     except Exception as e:
@@ -1208,15 +1645,15 @@ def novo_certificado():
 def salvar_certificado():
     db = _get_db()
     try:
-        apelido = request.form.get('apelido')
-        tipo = request.form.get('tipo','A1')
-        valido_ate = request.form.get('valido_ate')
+        
+        valido_ate = request.form.get('validade_fim')
         db.execute(text("""
-            INSERT INTO certificados (apelido, tipo, valido_ate, ativo, created_at)
-            VALUES (:apelido, :tipo, :valido_ate, TRUE, NOW())
+            INSERT INTO certificados_digitais (cliente_id, fingerprint, conteudo_certificado, senha_ceritificado,
+                        validade_inicio, validade_fim, ativo, data_upload, nome_arquivo_original, created_by_user_id)
+            VALUES (:cliente_id, :fingerprint, :conteudo_certificado,:senha_ceritificado,:validade_inicio
+                        :validade_fim, TRUE, NOW(),:nome_arquivo_original,current_user.id)
         """), {
-            'apelido': apelido,
-            'tipo': tipo,
+            
             'valido_ate': valido_ate
         })
         db.commit()
@@ -1265,14 +1702,13 @@ def list_regras_tributacao():
     try:
         rows = db.execute(text("""
             SELECT regra_tributacao_id, produto_id, cliente_id, cfop, origem, cst_icms,
-                   aliquota_icms, created_at
+                   aliquota_icms
             FROM regras_tributacao
-            ORDER BY regra_tributacao_id DESC
-            LIMIT 100
+            ORDER BY regra_tributacao_id DESC            
         """)).fetchall()
         regras = [_safe_row_to_dict(r, [
             'regra_tributacao_id','produto_id','cliente_id','cfop','origem',
-            'cst_icms','aliquota_icms','created_at'
+            'cst_icms','aliquota_icms'
         ]) for r in rows]
         return render_template('admin/regras_tributacao/list.html', regras=regras)
     except Exception as e:
@@ -1303,8 +1739,8 @@ def salvar_regra_tributacao():
             'aliquota_icms': request.form.get('aliquota_icms') or 0
         }
         db.execute(text("""
-            INSERT INTO regras_tributacao (produto_id, cliente_id, cfop, origem, cst_icms, aliquota_icms, created_at)
-            VALUES (:produto_id, :cliente_id, :cfop, :origem, :cst_icms, :aliquota_icms, NOW())
+            INSERT INTO regras_tributacao (produto_id, cliente_id, cfop, origem, cst_icms, aliquota_icmst)
+            VALUES (:produto_id, :cliente_id, :cfop, :origem, :cst_icms, :aliquota_icms)
         """), data)
         db.commit()
         flash('Regra salva', 'success')
