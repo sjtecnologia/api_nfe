@@ -530,15 +530,216 @@ def delete_cfop(cfop_id):
 
 @admin_bp.route('/usuarios')
 @login_required
-def list_users():
-    flash('Gestão de usuários (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+@permission_required('usuarios.view')
+def list_usuarios():
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        rows = db.execute(text("""
+            SELECT id, username, email, _is_active, created_at
+            FROM users
+            WHERE username ILIKE :q OR email ILIKE :q
+            ORDER BY username
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT id, username, email, _is_active, created_at
+            FROM users
+            ORDER BY username
+        """)).fetchall()
+    usuarios = [dict(row._mapping) for row in rows]
+    return render_template('admin/usuarios/list.html', usuarios=usuarios)
 
-@admin_bp.route('/clientes/<int:cliente_id>')
+from werkzeug.security import generate_password_hash
+
+@admin_bp.route('/usuarios/novo', methods=['GET', 'POST'])
 @login_required
-def view_cliente(cliente_id: int):
-    flash(f'Visualização do cliente {cliente_id} (stub).', 'info')
-    return redirect(url_for('admin.list_clientes'))
+@permission_required('usuarios.create')
+def create_usuario():
+    db = _get_db()
+    roles = db.execute(text("SELECT id, name FROM roles ORDER BY name")).fetchall()
+    clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password_hash')
+        is_active = request.form.get('is_active') == 'on'
+        selected_roles = request.form.getlist('roles')
+        selected_clientes = request.form.getlist('clientes')
+        try:
+            password_hash = generate_password_hash(password) if password else None
+            result = db.execute(text("""
+                INSERT INTO users (username, email, password_hash, _is_active)
+                VALUES (:username, :email, :password_hash, :is_active)
+                RETURNING id
+            """), {
+                'username': username,
+                'email': email,
+                'password_hash': password_hash,
+                'is_active': is_active
+            })
+            user_id = result.scalar()
+            for role_id in selected_roles:
+                db.execute(text("""
+                    INSERT INTO user_roles (user_id, role_id) VALUES (:user_id, :role_id)
+                """), {'user_id': user_id, 'role_id': role_id})
+            for cliente_id in selected_clientes:
+                db.execute(text("""
+                    INSERT INTO user_clients (user_id, client_id) VALUES (:user_id, :cliente_id)
+                """), {'user_id': user_id, 'cliente_id': cliente_id})
+            db.commit()
+            flash('Usuário cadastrado com sucesso!', 'success')
+            return redirect(url_for('admin.list_usuarios'))
+        except Exception as e:
+            db.rollback()
+            if 'duplicate key value violates unique constraint' in str(e):
+                flash('Já existe um usuário com esse nome ou email.', 'warning')
+            else:
+                flash('Erro ao cadastrar usuário.', 'danger')
+    return render_template('admin/usuarios/form.html', usuario=None, roles=roles, clientes=clientes)
+
+@admin_bp.route('/usuarios/editar/<int:usuario_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('usuarios.edit')
+def edit_usuario(usuario_id):
+    db = _get_db()
+    roles = db.execute(text("SELECT id, name FROM roles ORDER BY name")).fetchall()
+    clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password_hash')
+        is_active = request.form.get('is_active') == 'on'
+        selected_roles = request.form.getlist('roles')
+        selected_clientes = request.form.getlist('clientes')
+        try:
+            if password:
+                password_hash = generate_password_hash(password)
+                db.execute(text("""
+                    UPDATE users SET
+                        username = :username,
+                        email = :email,
+                        password_hash = :password_hash,
+                        _is_active = :is_active
+                    WHERE id = :usuario_id
+                """), {
+                    'username': username,
+                    'email': email,
+                    'password_hash': password_hash,
+                    'is_active': is_active,
+                    'usuario_id': usuario_id
+                })
+            else:
+                db.execute(text("""
+                    UPDATE users SET
+                        username = :username,
+                        email = :email,
+                        _is_active = :is_active
+                    WHERE id = :usuario_id
+                """), {
+                    'username': username,
+                    'email': email,
+                    'is_active': is_active,
+                    'usuario_id': usuario_id
+                })
+            db.execute(text("DELETE FROM user_roles WHERE user_id = :user_id"), {'user_id': usuario_id})
+            for role_id in selected_roles:
+                db.execute(text("""
+                    INSERT INTO user_roles (user_id, role_id) VALUES (:user_id, :role_id)
+                """), {'user_id': usuario_id, 'role_id': role_id})
+            db.execute(text("DELETE FROM user_clients WHERE user_id = :user_id"), {'user_id': usuario_id})
+            for cliente_id in selected_clientes:
+                db.execute(text("""
+                    INSERT INTO user_clients (user_id, client_id) VALUES (:user_id, :cliente_id)
+                """), {'user_id': usuario_id, 'cliente_id': cliente_id})
+            db.commit()
+            flash('Usuário atualizado com sucesso!', 'success')
+            return redirect(url_for('admin.list_usuarios'))
+        except Exception as e:
+            db.rollback()
+            if 'duplicate key value violates unique constraint' in str(e):
+                flash('Já existe um usuário com esse nome ou email.', 'warning')
+            else:
+                flash('Erro ao atualizar usuário.', 'danger')
+    row = db.execute(text("SELECT id, username, email, password_hash, _is_active FROM users WHERE id = :id"), {'id': usuario_id}).fetchone()
+    usuario = dict(row._mapping) if row else {}
+    usuario_roles = [r[0] for r in db.execute(text("SELECT role_id FROM user_roles WHERE user_id = :id"), {'id': usuario_id}).fetchall()]
+    usuario_clientes = [c[0] for c in db.execute(text("SELECT client_id FROM user_clients WHERE user_id = :id"), {'id': usuario_id}).fetchall()]
+    usuario['roles'] = usuario_roles
+    usuario['clientes'] = usuario_clientes
+    return render_template('admin/usuarios/form.html', usuario=usuario, roles=roles, clientes=clientes)
+
+@admin_bp.route('/usuarios/excluir/<int:usuario_id>', methods=['POST'])
+@login_required
+@permission_required('usuarios.delete')
+def delete_usuario(usuario_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM users WHERE id = :id"), {'id': usuario_id})
+        db.commit()
+        flash('Usuário excluído com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_usuario: {e}")
+        flash('Erro ao excluir usuário', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_usuarios'))
+
+@admin_bp.route('/clientes/<int:cliente_id>/visualizar')
+@login_required
+@permission_required('clientes.view')
+def visualizar_cliente(cliente_id: int):
+    db = _get_db()
+    try:
+        row = db.execute(text("""
+            SELECT cliente_id, razao_social, nome_fantasia, cnpj, inscricao_estadual, inscricao_municipal,
+                   regime_tributario_id, cnae, cep, logradouro, numero, complemento, bairro,
+                   nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, ativo, data_cadastro
+            FROM clientes
+            WHERE cliente_id = :cid
+        """), {'cid': cliente_id}).fetchone()
+        cliente = dict(row._mapping) if row else None
+
+        # Busca regime tributário
+        regime = None
+        if cliente and cliente.get('regime_tributario_id'):
+            regime_row = db.execute(text("""
+                SELECT nome FROM regimes_tributarios WHERE regime_tributario_id = :rid
+            """), {'rid': cliente['regime_tributario_id']}).fetchone()
+            regime = regime_row[0] if regime_row else None
+
+        # Busca produtos do cliente
+        produtos = db.execute(text("""
+            SELECT produto_id, descricao, codigo_interno, ativo
+            FROM produtos
+            WHERE cliente_id = :cid
+            ORDER BY descricao
+        """), {'cid': cliente_id}).fetchall()
+        produtos = [dict(p._mapping) for p in produtos]
+
+        # Busca destinatários do cliente
+        destinatarios = db.execute(text("""
+            SELECT destinatario_id, nome_razao_social, cpf_cnpj, email
+            FROM destinatarios_nfe
+            WHERE cliente_id = :cid
+            ORDER BY nome_razao_social
+        """), {'cid': cliente_id}).fetchall()
+        destinatarios = [dict(d._mapping) for d in destinatarios]
+
+        return render_template(
+            'admin/clientes/detalhes.html',
+            cliente=cliente,
+            regime=regime,
+            produtos=produtos,
+            destinatarios=destinatarios
+        )
+    except Exception as e:
+        print(f"❌ Erro visualizar_cliente: {e}")
+        flash('Erro ao carregar detalhes do cliente', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    finally:
+        db.close()
 
 @admin_bp.route('/csosn')
 @login_required
@@ -710,23 +911,182 @@ def delete_regime_tributario(regime_tributario_id: int):
 
 @admin_bp.route('/roles')
 @login_required
+@permission_required('roles.view')
 def list_roles():
-    """
-    Stub para evitar BuildError de url_for('admin.list_roles') usado em base.html.
-    Gestão de roles/papéis de usuários no sistema.
-    """
-    flash('Lista de Roles (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        rows = db.execute(text("""
+            SELECT id, name, description
+            FROM roles
+            WHERE name ILIKE :q OR description ILIKE :q
+            ORDER BY name
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT id, name, description
+            FROM roles
+            ORDER BY name
+        """)).fetchall()
+    roles = [dict(row._mapping) for row in rows]
+    return render_template('admin/roles/list.html', roles=roles)
+
+@admin_bp.route('/roles/novo', methods=['GET', 'POST'])
+@login_required
+@permission_required('roles.create')
+def create_role():
+    db = _get_db()
+    permissions = db.execute(text("SELECT id, name, description FROM permissions ORDER BY name")).fetchall()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        selected_permissions = request.form.getlist('permissions')
+        try:
+            result = db.execute(text("""
+                INSERT INTO roles (name, description)
+                VALUES (:name, :description)
+                RETURNING id
+            """), {'name': name, 'description': description})
+            role_id = result.scalar()
+            for perm_id in selected_permissions:
+                db.execute(text("""
+                    INSERT INTO role_permissions (role_id, permission_id)
+                    VALUES (:role_id, :perm_id)
+                """), {'role_id': role_id, 'perm_id': perm_id})
+            db.commit()
+            flash('Role cadastrada com sucesso!', 'success')
+            return redirect(url_for('admin.list_roles'))
+        except Exception as e:
+            db.rollback()
+            flash('Erro ao cadastrar role', 'danger')
+    return render_template('admin/roles/form.html', role=None, permissions=permissions)
+
+@admin_bp.route('/roles/editar/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('roles.edit')
+def edit_role(role_id):
+    db = _get_db()
+    permissions = db.execute(text("SELECT id, name, description FROM permissions ORDER BY name")).fetchall()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        selected_permissions = request.form.getlist('permissions')
+        try:
+            db.execute(text("""
+                UPDATE roles SET
+                    name = :name,
+                    description = :description
+                WHERE id = :role_id
+            """), {'name': name, 'description': description, 'role_id': role_id})
+            db.execute(text("DELETE FROM role_permissions WHERE role_id = :role_id"), {'role_id': role_id})
+            for perm_id in selected_permissions:
+                db.execute(text("""
+                    INSERT INTO role_permissions (role_id, permission_id)
+                    VALUES (:role_id, :perm_id)
+                """), {'role_id': role_id, 'perm_id': perm_id})
+            db.commit()
+            flash('Role atualizada com sucesso!', 'success')
+            return redirect(url_for('admin.list_roles'))
+        except Exception as e:
+            db.rollback()
+            flash('Erro ao atualizar role', 'danger')
+    row = db.execute(text("SELECT id, name, description FROM roles WHERE id = :id"), {'id': role_id}).fetchone()
+    role = dict(row._mapping) if row else {}
+    role_permissions = [p[0] for p in db.execute(text("SELECT permission_id FROM role_permissions WHERE role_id = :id"), {'id': role_id}).fetchall()]
+    role['permissions'] = role_permissions
+    return render_template('admin/roles/form.html', role=role, permissions=permissions)
+
+@admin_bp.route('/roles/excluir/<int:role_id>', methods=['POST'])
+@login_required
+@permission_required('roles.delete')
+def delete_role(role_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM role_permissions WHERE role_id = :id"), {'id': role_id})
+        db.execute(text("DELETE FROM roles WHERE id = :id"), {'id': role_id})
+        db.commit()
+        flash('Role excluída com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_role: {e}")
+        flash('Erro ao excluir role', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_roles'))
 
 @admin_bp.route('/permissions')
 @login_required
+@permission_required('permissions.view')
 def list_permissions():
-    """
-    Stub para evitar BuildError de url_for('admin.list_permissions') usado em base.html.
-    Gestão de permissões do sistema.
-    """
-    flash('Lista de Permissões (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        rows = db.execute(text("""
+            SELECT id, name, description
+            FROM permissions
+            WHERE name ILIKE :q OR description ILIKE :q
+            ORDER BY name
+        """), {'q': f'%{q}%'}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT id, name, description
+            FROM permissions
+            ORDER BY name
+        """)).fetchall()
+    permissions = [dict(row._mapping) for row in rows]
+    return render_template('admin/permissions/list.html', permissions=permissions)
+
+@admin_bp.route('/permissions/novo')
+@login_required
+@permission_required('permissions.create')
+def create_permission():
+    return render_template('admin/permissions/form.html', permission=None)
+
+@admin_bp.route('/permissions/editar/<int:permission_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('permissions.edit')
+def edit_permission(permission_id):
+    db = _get_db()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        description = request.form.get('description')
+        try:
+            db.execute(text("""
+                UPDATE permissions SET
+                    name = :name,
+                    description = :description
+                WHERE id = :permission_id
+            """), {
+                'name': name,
+                'description': description,
+                'permission_id': permission_id
+            })
+            db.commit()
+            flash('Permissão atualizada com sucesso!', 'success')
+            return redirect(url_for('admin.list_permissions'))
+        except Exception as e:
+            db.rollback()
+            flash('Erro ao atualizar permissão', 'danger')
+    row = db.execute(text("SELECT id, name, description FROM permissions WHERE id = :id"), {'id': permission_id}).fetchone()
+    permission = dict(row._mapping) if row else None
+    return render_template('admin/permissions/form.html', permission=permission)
+
+@admin_bp.route('/permissions/excluir/<int:permission_id>', methods=['POST'])
+@login_required
+@permission_required('permissions.delete')
+def delete_permission(permission_id):
+    db = _get_db()
+    try:
+        db.execute(text("DELETE FROM permissions WHERE id = :id"), {'id': permission_id})
+        db.commit()
+        flash('Permissão excluída com sucesso', 'success')
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro delete_permission: {e}")
+        flash('Erro ao excluir permissão', 'error')
+    finally:
+        db.close()
+    return redirect(url_for('admin.list_permissions'))
 
 @admin_bp.route('/user-permissions')
 @login_required
@@ -1769,6 +2129,51 @@ def excluir_regra_tributacao(regra_id: int):
         print(f"❌ Erro excluir_regra_tributacao: {e}")
         flash('Erro ao excluir regra', 'error')
         return redirect(url_for('admin.list_regras_tributacao'))
+    finally:
+        db.close()
+
+
+@admin_bp.route('/perfil')
+@login_required
+def perfil():
+    db = _get_db()
+    try:
+        # Busca dados do usuário logado
+        row = db.execute(text("""
+            SELECT id, username, email, _is_active, created_at
+            FROM users
+            WHERE id = :id
+        """), {'id': current_user.id}).fetchone()
+        usuario = dict(row._mapping) if row else None
+
+        # Busca roles do usuário
+        roles = db.execute(text("""
+            SELECT r.name
+            FROM roles r
+            JOIN user_roles ur ON ur.role_id = r.id
+            WHERE ur.user_id = :id
+        """), {'id': current_user.id}).fetchall()
+        usuario_roles = [r[0] for r in roles]
+
+        # Busca clientes do usuário
+        clientes = db.execute(text("""
+            SELECT c.cliente_id, c.razao_social
+            FROM clientes c
+            JOIN user_clients uc ON uc.client_id = c.cliente_id
+            WHERE uc.user_id = :id
+        """), {'id': current_user.id}).fetchall()
+        usuario_clientes = [dict(row._mapping) for row in clientes]
+
+        return render_template(
+            'admin/perfil.html',
+            usuario=usuario,
+            usuario_roles=usuario_roles,
+            usuario_clientes=usuario_clientes
+        )
+    except Exception as e:
+        print(f"❌ Erro perfil: {e}")
+        flash('Erro ao carregar perfil', 'error')
+        return render_template('admin/perfil.html', usuario=None, usuario_roles=[], usuario_clientes=[])
     finally:
         db.close()
 

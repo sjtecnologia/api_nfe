@@ -829,7 +829,7 @@
                                 </a>
                                 <div class="dropdown-menu">
                                     {% if has_permission('users.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_users') }}">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_usuarios') }}">
                                         <i class="fas fa-user"></i> Usuários
                                     </a>
                                     {% endif %}
@@ -881,11 +881,21 @@
                                 </a>
                                 <div class="dropdown-divider"></div>
                                 {% endif %}
-                                
-                                <a class="dropdown-item" href="{{ url_for('home.home') }}">
-                                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                                <a class="dropdown-item"
+                                    href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
+                                            {{ url_for('admin.admin_home') }}
+                                        {% elif current_user.is_authenticated and session.current_client_id %}
+                                            {{ url_for('cliente.dashboard', cliente_id=session.current_client_id) }}
+                                        {% else %}
+                                            {{ url_for('home.home') }}
+                                        {% endif %}">
+                                    
+                                   <i class="fas fa-tachometer-alt"></i> Dashboard                          
                                 </a>
-                                <a class="dropdown-item" href="#" onclick="alert('Perfil não implementado ainda')">
+                                <!-- <a class="dropdown-item" href="{{ url_for('home.home') }}">
+                                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                                </a> -->
+                                <a class="dropdown-item" href="{{ url_for('admin.perfil') }}">
                                     <i class="fas fa-user-edit"></i> Meu Perfil
                                 </a>
                                 <div class="dropdown-divider"></div>

@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Meu Perfil{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="h3 mb-4">Meu Perfil</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% if usuario %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Login:</dt>
+                <dd class="col-sm-9">{{ usuario.username }}</dd>
+                <dt class="col-sm-3">Email:</dt>
+                <dd class="col-sm-9">{{ usuario.email }}</dd>
+                <dt class="col-sm-3">Ativo:</dt>
+                <dd class="col-sm-9">
+                    {% if usuario._is_active %}
+                        <span class="badge bg-success">Sim</span>
+                    {% else %}
+                        <span class="badge bg-danger">Não</span>
+                    {% endif %}
+                </dd>
+                <dt class="col-sm-3">Criado em:</dt>
+                <dd class="col-sm-9">
+                    {% if usuario.created_at %}
+                        {{ usuario.created_at.strftime('%d/%m/%Y %H:%M') }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </dd>
+                <dt class="col-sm-3">Roles:</dt>
+                <dd class="col-sm-9">
+                    {% if usuario_roles %}
+                        {% for r in usuario_roles %}
+                            <span class="badge bg-primary">{{ r }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-muted">Nenhuma</span>
+                    {% endif %}
+                </dd>
+                <dt class="col-sm-3">Clientes com acesso:</dt>
+                <dd class="col-sm-9">
+                    {% if usuario_clientes %}
+                        <ul class="mb-0">
+                        {% for c in usuario_clientes %}
+                            <li>{{ c.razao_social }}</li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        <span class="text-muted">Nenhum</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+    </div>
+    {% else %}
+        <div class="alert alert-warning">Usuário não encontrado.</div>
+    {% endif %}
+</div>
+{% endblock %}
