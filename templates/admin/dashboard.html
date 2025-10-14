@@ -162,7 +162,7 @@
                                     <td>{{ cliente.cnpj }}</td>
                                     <td>{{ cliente.data_cadastro.strftime('%d/%m/%Y') if cliente.data_cadastro else '-' }}</td>
                                     <td>
-                                        <a href="{{ url_for('admin.view_cliente', cliente_id=cliente.cliente_id) }}" 
+                                        <a href="{{ url_for('admin.visualizar_cliente', cliente_id=cliente.cliente_id) }}" 
                                            class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-eye"></i> Ver
                                         </a>

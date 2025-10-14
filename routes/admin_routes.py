@@ -240,9 +240,47 @@ def admin_home():
 
 @admin_bp.route('/nfes')
 @login_required
+@permission_required('nfes.view')
 def list_nfes():
-    flash('Lista de NFes (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    db = _get_db()
+    q = request.args.get('q', '').strip()
+    filtro = ""
+    params = {}
+    if q:
+        filtro = """
+            WHERE n.chave_acesso ILIKE :q
+               OR n.destinatario_razao_social ILIKE :q
+               OR n.destinatario_cnpj_cpf ILIKE :q
+               OR c.razao_social ILIKE :q
+               OR c.cnpj ILIKE :q
+        """
+        params['q'] = f'%{q}%'
+    rows = db.execute(text(f"""
+        SELECT n.nfe_emitida_id, n.cliente_id, n.chave_acesso, n.data_criacao, n.status,
+               n.destinatario_razao_social, n.destinatario_cnpj_cpf,
+               n.tipo_nfe, n.finalidade_emissao,
+               c.razao_social, c.cnpj
+        FROM nfe_emitidas n
+        JOIN clientes c ON c.cliente_id = n.cliente_id
+        {filtro}
+        ORDER BY n.data_criacao DESC
+        LIMIT 100
+    """), params).fetchall()
+    nfes = [dict(row._mapping) for row in rows]
+
+    # Monta o cliente_map para o filtro e exibição
+    clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
+    cliente_map = {row.cliente_id: row.razao_social for row in clientes}
+
+    cliente_id = request.args.get('cliente_id')
+
+    return render_template(
+        'admin/nfes/list.html',
+        nfes=nfes,
+        q=q,
+        cliente_map=cliente_map,
+        cliente_id=cliente_id
+    )
 
 @admin_bp.route('/ncms')
 @login_required
