@@ -184,9 +184,31 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
             
             # ✅ EXTRAIR INFORMAÇÕES DO CERTIFICADO
             print(f"📋 process_certificate_upload: Extraindo informações do certificado...")
-            fingerprint = cert_x509_obj.fingerprint(hashes.SHA256()).hex()
-            validade_inicio_final = cert_x509_obj.not_valid_before_utc.replace(tzinfo=None)
-            validade_fim_final = cert_x509_obj.not_valid_after_utc.replace(tzinfo=None)
+            # pkcs12.load_key_and_certificates may return None for the main certificate;
+            # try to use an additional certificate as fallback
+            cert_obj = cert_x509_obj
+            if cert_obj is None and additional_certificates:
+                cert_obj = additional_certificates[0]
+                print("⚠️ process_certificate_upload: Certificado principal era None, usando certificado adicional como fallback")
+            if cert_obj is None:
+                raise Exception("Certificado X.509 não encontrado dentro do PKCS#12")
+            
+            # fingerprint
+            fingerprint = cert_obj.fingerprint(hashes.SHA256()).hex()
+            
+            # compatibilidade: alguns objetos x509 usam not_valid_before/_after e outros not_valid_before_utc/_after_utc
+            try:
+                validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
+                validade_fim = getattr(cert_obj, "not_valid_after_utc", None)
+                if validade_inicio is None or validade_fim is None:
+                    validade_inicio = getattr(cert_obj, "not_valid_before", None)
+                    validade_fim = getattr(cert_obj, "not_valid_after", None)
+                validade_inicio_final = validade_inicio.replace(tzinfo=None) if validade_inicio else None
+                validade_fim_final = validade_fim.replace(tzinfo=None) if validade_fim else None
+            except Exception as date_err:
+                print(f"❌ process_certificate_upload: Erro ao obter datas de validade: {date_err}")
+                validade_inicio_final = None
+                validade_fim_final = None
             
             print(f"📋 process_certificate_upload: Fingerprint: {fingerprint}")
             print(f"📋 process_certificate_upload: Válido de {validade_inicio_final} até {validade_fim_final}")

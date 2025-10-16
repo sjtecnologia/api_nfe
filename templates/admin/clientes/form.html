@@ -1,9 +1,5 @@
 {% extends "base.html" %}
 
-<!-- {% block title %}
-    {% if cliente.cliente_id %}Editar Cliente1: {{ cliente.razao_social }}{% else %}Novo Cliente{% endif %}
-{% endblock %} -->
-
 {% block content %}
     <h1 class="mb-4">
         {% if cliente.cliente_id %}Editar Cliente: {{ cliente.razao_social }}{% else %}Novo Cliente{% endif %}
@@ -15,7 +11,7 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="cliente-tab" data-bs-toggle="tab" data-bs-target="#cliente-pane" type="button" role="tab" aria-controls="cliente-pane" aria-selected="true">Dados do Cliente</button>
                 </li>
-                {% if cliente.cliente_id %} {# Apenas mostra as abas de associação se for edição de cliente existente #}
+                {% if cliente.cliente_id %}
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos-pane" type="button" role="tab" aria-controls="produtos-pane" aria-selected="false">Produtos</button>
                 </li>
@@ -36,7 +32,6 @@
                 <!-- Aba: Dados do Cliente -->
                 <div class="tab-pane fade show active" id="cliente-pane" role="tabpanel" aria-labelledby="cliente-tab" tabindex="0">
                     <form action="{{ url_for('admin.edit_cliente', cliente_id=cliente.cliente_id) if cliente.cliente_id else url_for('admin.create_cliente') }}" method="post" enctype="multipart/form-data">
-                        {# Campos do Cliente #}
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="razao_social" class="form-label">Razão Social</label>
@@ -63,7 +58,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="regime_tributario_id" class="form-label">Regime Tributário</label>
-                            <select class="form-select select2-searchable" id="regime_tributario_id" name="regime_tributario_id" required> {# Adicionado select2-searchable #}
+                            <select class="form-select select2-searchable" id="regime_tributario_id" name="regime_tributario_id" required>
                                 <option value="">Selecione um Regime Tributário...</option>
                                 {% for regime in regimes_tributarios %}
                                     <option value="{{ regime.regime_tributario_id }}" {% if form_data.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}>
@@ -140,8 +135,6 @@
                             </label>
                         </div>
                         
-                        {# Campos para upload de certificado no CADASTRO de Cliente, para o PRIMEIRO certificado #}
-                        {# No EDITAR, o upload de novo certificado será na aba de certificados #}
                         {% if not cliente.cliente_id %}
                         <fieldset class="mb-3">
                             <legend>Certificado Digital (Opcional - Primeiro Certificado)</legend>
@@ -160,7 +153,6 @@
                                 </label>
                             </div>
                             <input type="hidden" name="cert_nome_arquivo_original" value="Upload Inicial">
-                            {# Validade será extraída do arquivo #}
                         </fieldset>
                         {% endif %}
 
@@ -169,7 +161,6 @@
                     </form>
                 </div>
 
-                <!-- Aba: Produtos -->
                 {% if cliente.cliente_id %}
                 <div class="tab-pane fade" id="produtos-pane" role="tabpanel" aria-labelledby="produtos-tab" tabindex="0">
                     <h5 class="mt-3">Produtos Associados</h5>
@@ -177,43 +168,31 @@
                     <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
                         Adicionar Novo Produto
                     </button>
-                    
                     {% include 'admin/produtos/list_partial.html' %}
                 </div>
 
-                <!-- Aba: Certificados -->
                 <div class="tab-pane fade" id="certificados-pane" role="tabpanel" aria-labelledby="certificados-tab" tabindex="0">
                     <h5 class="mt-3">Certificados Associados</h5>
                     <p>Gerencie os certificados digitais deste cliente.</p>
                     <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
                         Adicionar Novo Certificado
                     </button>
-                    
-                    {# Formulário de Upload Rápido de Certificado - Pode ser feito no próprio modal #}
-                    {# Para simplificar, vou remover o "Upload Rápido" duplicado aqui, pois o modal já faz isso #}
-                    {# Se precisar, pode ser re-adicionado com AJAX POST direto para admin_clientes_edit #}
-
                     {% include 'admin/certificados/list_partial.html' %}
                 </div>
 
-                <!-- Aba: Regras Tributárias -->
                 <div class="tab-pane fade" id="regras-pane" role="tabpanel" aria-labelledby="regras-tab" tabindex="0">
                     <h5 class="mt-3">Regras Tributárias Associadas</h5>
                     <p>Configure as regras tributárias específicas para este cliente.</p>
                     <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Nova Regra Tributária" data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
                         Adicionar Nova Regra
                     </button>
-                    
                     {% include 'admin/regras_tributacao/list_partial.html' %}
                 </div>
 
-                <!-- Aba: Destinatários NF-e -->
                 <div class="tab-pane fade" id="destinatarios-pane" role="tabpanel" aria-labelledby="destinatarios-tab" tabindex="0">
                     <h5 class="mt-3">Destinatários NF-e Associados</h5>
                     <p>Gerencie os destinatários de NF-e para este cliente.</p>
-                    {# Por enquanto, manter o link para o formulário de destinatário, mas pode ser convertido para modal também #}
                     <a href="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary btn-sm mb-3">Adicionar Novo Destinatário</a>
-                    
                     {% include 'admin/destinatarios/list.html' %}
                 </div>
                 {% endif %}
@@ -221,13 +200,11 @@
         </div>
     </div>
 
-    <!-- {# Overlay de carregamento para a busca de CEP #}
-    <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner"></div>
         <p class="mt-3">Buscando CEP...</p>
-    </div> -->
+    </div>
 
-    {# MODAL GENÉRICO PARA ADIÇÃO DE PRODUTOS/CERTIFICADOS/REGRAS #}
     <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -240,7 +217,6 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                    <!-- O botão de submit será parte do formulário carregado dinamicamente -->
                 </div>
             </div>
         </div>
@@ -249,161 +225,158 @@
 
 {% block scripts %}
 <script>
-    // Ativa a aba correta se houver um fragmento de URL (ancora)
-    document.addEventListener('DOMContentLoaded', function() {
-        const hash = window.location.hash;
-        if (hash) {
-            let tabId = hash.substring(1); // Remove o '#'
-            // Mapeia fragmentos para IDs de abas/botões de abas (com o "-pane" adicionado)
-            if (tabId === 'produtos') tabId = 'produtos-tab';
-            else if (tabId === 'certificados') tabId = 'certificados-tab';
-            else if (tabId === 'regras') tabId = 'regras-tab';
-            else if (tabId === 'destinatarios') tabId = 'destinatarios-tab';
-            else return; // Não faz nada se o fragmento não for reconhecido
+document.addEventListener('DOMContentLoaded', function() {
+    // Máscara CNPJ
+    var cnpjInput = document.getElementById('cnpj');
+    if (cnpjInput && window.IMask) {
+        IMask(cnpjInput, { mask: '00.000.000/0000-00' });
+    }
+    // Máscara CEP
+    var cepInput = document.getElementById('cep');
+    if (cepInput && window.IMask) {
+        IMask(cepInput, { mask: '00000-000' });
+    }
+    // Máscara Telefone
+    var telInput = document.getElementById('telefone_contato');
+    if (telInput && window.IMask) {
+        IMask(telInput, { mask: '(00) 0000-0000' });
+    }
 
-            const tabButton = document.getElementById(tabId);
-            if (tabButton) {
-                const tab = new bootstrap.Tab(tabButton);
-                tab.show();
+    // Busca CEP
+    var btnBuscarCep = document.getElementById('btn-buscar-cep');
+    if (btnBuscarCep && cepInput) {
+        btnBuscarCep.addEventListener('click', function() {
+            var cep = cepInput.value.replace(/\D/g, '');
+            var loadingOverlay = document.getElementById('loadingOverlay');
+            if (cep.length !== 8) {
+                alert('Por favor, digite um CEP válido com 8 dígitos.');
+                return;
             }
+            if (loadingOverlay) loadingOverlay.classList.add('active');
+            fetch('https://viacep.com.br/ws/' + cep + '/json/')
+                .then(response => response.json())
+                .then(data => {
+                    if (loadingOverlay) loadingOverlay.classList.remove('active');
+                    if (data.erro) {
+                        alert('CEP não encontrado.');
+                    } else {
+                        document.getElementById('logradouro').value = data.logradouro || '';
+                        document.getElementById('complemento').value = data.complemento || '';
+                        document.getElementById('bairro').value = data.bairro || '';
+                        document.getElementById('nome_municipio').value = data.localidade || '';
+                        document.getElementById('codigo_municipio').value = data.ibge || '';
+                        document.getElementById('uf').value = data.uf || '';
+                        document.getElementById('numero').focus();
+                    }
+                })
+                .catch(function() {
+                    if (loadingOverlay) loadingOverlay.classList.remove('active');
+                    alert('Ocorreu um erro ao buscar o CEP. Tente novamente mais tarde.');
+                });
+        });
+    }
+    // Tabs via hash
+    const hash = window.location.hash;
+    if (hash) {
+        let tabId = hash.substring(1);
+        if (tabId === 'produtos') tabId = 'produtos-tab';
+        else if (tabId === 'certificados') tabId = 'certificados-tab';
+        else if (tabId === 'regras') tabId = 'regras-tab';
+        else if (tabId === 'destinatarios') tabId = 'destinatarios-tab';
+        else return;
+        const tabButton = document.getElementById(tabId);
+        if (tabButton) {
+            const tab = new bootstrap.Tab(tabButton);
+            tab.show();
         }
-    });
+    }
 
-    // jQuery Mask
-    $(document).ready(function(){
-        $('#cnpj').mask('00.000.000/0000-00');
-        $('#cep').mask('00000-000');
-        $('#telefone_contato').mask('(00) 0000-0000'); // Adapte para 9 dígitos se necessário '(00) 00000-0000'
-    });
+    // Modal AJAX
+    const addModal = document.getElementById('addModal');
+    if (addModal) {
+        const modalBody = addModal.querySelector('.modal-body');
+        const modalTitle = addModal.querySelector('.modal-title');
+        let currentModalForm = null;
 
-    // Função de buscar CEP
-    document.getElementById('btn-buscar-cep').addEventListener('click', function() {
-        const cepInput = document.getElementById('cep');
-        const cep = cepInput.value.replace(/\D/g, ''); // Remove caracteres não numéricos
-        const loadingOverlay = document.getElementById('loadingOverlay');
+        addModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const url = button.getAttribute('data-modal-url');
+            const title = button.getAttribute('data-modal-title');
 
-        if (cep.length !== 8) {
-            alert('Por favor, digite um CEP válido com 8 dígitos.');
-            return;
-        }
+            modalTitle.textContent = title;
+            modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Carregando formulário...</p></div>';
 
-        loadingOverlay.classList.remove('hidden');
-
-        fetch(`https://viacep.com.br/ws/${cep}/json/`)
-            .then(response => response.json())
-            .then(data => {
-                loadingOverlay.classList.add('hidden');
-                if (data.erro) {
-                    alert('CEP não encontrado.');
-                } else {
-                    document.getElementById('logradouro').value = data.logradouro;
-                    document.getElementById('complemento').value = data.complemento;
-                    document.getElementById('bairro').value = data.bairro;
-                    document.getElementById('nome_municipio').value = data.localidade;
-                    document.getElementById('codigo_municipio').value = data.ibge;
-                    document.getElementById('uf').value = data.uf;
-                    document.getElementById('numero').focus(); // Foca no campo número
+            fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             })
-            .catch(error => {
-                loadingOverlay.classList.add('hidden');
-                console.error('Erro ao buscar CEP:', error);
-                alert('Ocorreu um erro ao buscar o CEP. Tente novamente mais tarde.');
-            });
-    });
+            .then(response => response.text())
+            .then(html => {
+                modalBody.innerHTML = html;
+                currentModalForm = modalBody.querySelector('form');
 
-    // Lógica para carregar formulários via AJAX em um Modal
-    const addModal = document.getElementById('addModal');
-    const modalBody = addModal.querySelector('.modal-body');
-    const modalTitle = addModal.querySelector('.modal-title');
-    let currentModalForm = null; // Armazena a referência ao formulário atual no modal
-
-    addModal.addEventListener('show.bs.modal', function (event) {
-        // Botão que disparou o modal
-        const button = event.relatedTarget;
-        // Pega as informações dos atributos data-*
-        const url = button.getAttribute('data-modal-url');
-        const title = button.getAttribute('data-modal-title');
-
-        modalTitle.textContent = title;
-        modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Carregando formulário...</p></div>';
-
-        // Carrega o conteúdo do formulário via AJAX
-        fetch(url, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest' // Indica que é uma requisição AJAX
-            }
-        })
-        .then(response => response.text())
-        .then(html => {
-            modalBody.innerHTML = html;
-            currentModalForm = modalBody.querySelector('form'); // Pega o formulário recém-carregado
-
-            if (currentModalForm) {
-                // Adiciona um listener para a submissão do formulário dentro do modal
-                currentModalForm.addEventListener('submit', function(e) {
-                    e.preventDefault(); // Impede a submissão padrão do formulário
-
-                    const form = this;
-                    const formData = new FormData(form);
-                    const formAction = form.action;
-
-                    // Desabilita o botão de submit e mostra um spinner (opcional)
-                    const submitButton = form.querySelector('button[type="submit"]');
-                    if(submitButton) {
-                        submitButton.disabled = true;
-                        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
-                    }
-
-                    fetch(formAction, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest' // Indica que é uma submissão AJAX
+                if (currentModalForm) {
+                    currentModalForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const form = this;
+                        const formData = new FormData(form);
+                        const formAction = form.action;
+                        const submitButton = form.querySelector('button[type="submit"]');
+                        if(submitButton) {
+                            submitButton.disabled = true;
+                            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
                         }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert(data.message);
-                            bootstrap.Modal.getInstance(addModal).hide(); // Esconde o modal
-                            // Recarrega a página do cliente para atualizar as listas
-                            window.location.href = data.redirect_url || window.location.href; // Redireciona se houver URL no retorno
-                        } else {
-                            alert('Erro: ' + data.message);
+                        fetch(formAction, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert(data.message);
+                                bootstrap.Modal.getInstance(addModal).hide();
+                                window.location.href = data.redirect_url || window.location.href;
+                            } else {
+                                alert('Erro: ' + data.message);
+                                if(submitButton) {
+                                    submitButton.disabled = false;
+                                    submitButton.innerHTML = 'Salvar';
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Erro na submissão AJAX:', error);
+                            alert('Ocorreu um erro ao salvar. Verifique o console para mais detalhes.');
                             if(submitButton) {
                                 submitButton.disabled = false;
                                 submitButton.innerHTML = 'Salvar';
                             }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Erro na submissão AJAX:', error);
-                        alert('Ocorreu um erro ao salvar. Verifique o console para mais detalhes.');
-                        if(submitButton) {
-                            submitButton.disabled = false;
-                            submitButton.innerHTML = 'Salvar';
-                        }
+                        });
                     });
-                });
-            }
-            // Re-aplicar máscaras se o formulário carregado tiver campos mascarados
-            $('#cnpj_modal').mask('00.000.000/0000-00'); // Exemplo: se houver um CNPJ no modal
-            $('#cep_modal').mask('00000-000');
-            $('#telefone_modal').mask('(00) 0000-0000');
-            // ... adicione outras máscaras conforme necessário
-        })
-        .catch(error => {
-            modalBody.innerHTML = '<p class="text-danger">Erro ao carregar o formulário: ' + error + '</p>';
-            console.error('Erro ao carregar formulário no modal:', error);
+                }
+                // Máscaras nos campos do modal
+                var cnpjModal = document.getElementById('cnpj_modal');
+                if (cnpjModal) IMask(cnpjModal, { mask: '00.000.000/0000-00' });
+                var cepModal = document.getElementById('cep_modal');
+                if (cepModal) IMask(cepModal, { mask: '00000-000' });
+                var telModal = document.getElementById('telefone_modal');
+                if (telModal) IMask(telModal, { mask: '(00) 0000-0000' });
+            })
+            .catch(error => {
+                modalBody.innerHTML = '<p class="text-danger">Erro ao carregar o formulário: ' + error + '</p>';
+                console.error('Erro ao carregar formulário no modal:', error);
+            });
         });
-    });
 
-    // Limpa o conteúdo do modal ao escondê-lo para evitar formulários duplicados
-    addModal.addEventListener('hidden.bs.modal', function () {
-        modalBody.innerHTML = '';
-        currentModalForm = null;
-    });
-
+        addModal.addEventListener('hidden.bs.modal', function () {
+            modalBody.innerHTML = '';
+            currentModalForm = null;
+        });
+    }
+});
 </script>
 {% endblock %}

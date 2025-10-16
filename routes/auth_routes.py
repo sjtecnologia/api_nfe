@@ -27,6 +27,7 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
+        db = None
         try:
             db = next(get_db())
             
@@ -59,9 +60,10 @@ def login():
                 else:
                     # Para usuários cliente, buscar cliente associado
                     cliente_result = db.execute(text("""
-                        SELECT cliente_id FROM clientes 
-                        WHERE created_by_user_id = :user_id AND ativo = true
-                        
+                        SELECT c.cliente_id 
+                        FROM user_clients uc
+                        JOIN clientes c ON c.cliente_id = uc.client_id
+                        WHERE uc.user_id = :user_id AND c.ativo = true
                     """), {"user_id": user_data.id})  # ✅ USAR user_data.id
                     
                     cliente_data = cliente_result.first()
@@ -100,7 +102,7 @@ def login():
             traceback.print_exc()
             flash('Erro interno do servidor.', 'danger')
         finally:
-            if 'db' in locals():
+            if db is not None:
                 db.close()
     
     return render_template('login.html')

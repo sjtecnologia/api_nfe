@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <script src="https://unpkg.com/imask"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SJ Tecnologia - Sistema NFe{% endblock %}</title>
@@ -652,9 +653,36 @@
                 font-size: 1rem !important;
             }
         }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.7);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .loading-overlay.active {
+            display: flex !important;
+        }
+        .spinner {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #3498db;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg);}
+            100% { transform: rotate(360deg);}
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
+{% block scripts %}{% endblock %}
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
@@ -895,6 +923,11 @@
                                 <!-- <a class="dropdown-item" href="{{ url_for('home.home') }}">
                                     <i class="fas fa-tachometer-alt"></i> Dashboard
                                 </a> -->
+                                
+                                <a class="dropdown-item" href="{{ url_for('cliente.selecionar_cliente') }}">
+                                    <i class="fas fa-exchange-alt"></i> Trocar Cliente
+                                </a>
+
                                 <a class="dropdown-item" href="{{ url_for('admin.perfil') }}">
                                     <i class="fas fa-user-edit"></i> Meu Perfil
                                 </a>

@@ -1376,14 +1376,143 @@ def list_clientes():
         db.close()
 
 
-
-@admin_bp.route('/clientes/novo')
+from services.certificate_service import  _encrypt_password
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.hazmat.primitives import hashes
+import base64
+@admin_bp.route('/clientes/novo', methods=['GET', 'POST'])
 @login_required
 @permission_required('clientes.create')
 def create_cliente():
     db = _get_db()
     try:
-        # Monta form_data vazio
+        # Carrega regimes tributários para o select
+        regimes_rows = db.execute(text("SELECT regime_tributario_id, nome FROM regimes_tributarios")).fetchall()
+        regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
+
+        if request.method == 'POST':
+            # Dados do cliente
+            data = {
+                'razao_social': request.form.get('razao_social'),
+                'nome_fantasia': request.form.get('nome_fantasia'),
+                'cnpj': request.form.get('cnpj'),
+                'inscricao_estadual': request.form.get('inscricao_estadual'),
+                'inscricao_municipal': request.form.get('inscricao_municipal'),
+                'regime_tributario_id': request.form.get('regime_tributario_id'),
+                'cnae': request.form.get('cnae'),
+                'cep': request.form.get('cep'),
+                'logradouro': request.form.get('logradouro'),
+                'numero': request.form.get('numero'),
+                'complemento': request.form.get('complemento'),
+                'bairro': request.form.get('bairro'),
+                'nome_municipio': request.form.get('nome_municipio'),
+                'codigo_municipio': request.form.get('codigo_municipio'),
+                'uf': request.form.get('uf'),
+                'email_contato': request.form.get('email_contato'),
+                'telefone_contato': request.form.get('telefone_contato'),
+                'ativo': request.form.get('ativo') == 'on',
+                'data_cadastro': datetime.now(),
+                'created_by_user_id': current_user.id
+            }
+            try:
+                # Salva cliente e recupera o cliente_id
+                result = db.execute(text("""
+                    INSERT INTO clientes (
+                        razao_social, nome_fantasia, cnpj, inscricao_estadual, inscricao_municipal,
+                        regime_tributario_id, cnae, cep, logradouro, numero, complemento, bairro,
+                        nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, ativo, data_cadastro, created_by_user_id
+                    ) VALUES (
+                        :razao_social, :nome_fantasia, :cnpj, :inscricao_estadual, :inscricao_municipal,
+                        :regime_tributario_id, :cnae, :cep, :logradouro, :numero, :complemento, :bairro,
+                        :nome_municipio, :codigo_municipio, :uf, :email_contato, :telefone_contato, :ativo, :data_cadastro, :created_by_user_id
+                    ) RETURNING cliente_id
+                """), data)
+                row = result.fetchone()
+                if row:
+                    cliente_id = row[0]
+                else:
+                    # Nenhum id retornado: desfaz e retorna o formulário com erro
+                    db.rollback()
+                    flash('Erro ao inserir cliente: nenhum id retornado pelo banco.', 'danger')
+                    return render_template(
+                        'admin/clientes/form.html',
+                        cliente=None,
+                        form_data=data,
+                        regimes_tributarios=regimes_tributarios
+                    )
+
+                # Salva certificado digital se foi enviado
+                cert_file = request.files.get('conteudo_certificado_file')
+                cert_senha = request.form.get('cert_senha_certificado')
+                cert_ativo = request.form.get('cert_ativo') == 'on'
+                cert_nome_arquivo = request.form.get('cert_nome_arquivo_original', 'Upload Inicial')
+
+                if cert_file and cert_file.filename:
+                    conteudo_certificado = cert_file.read()
+                    senha_criptografada = _encrypt_password(cert_senha) if cert_senha else None
+                    nome_arquivo_original = cert_file.filename
+
+                    # Extrair fingerprint, validade_inicio e validade_fim
+                    try:
+                        # Carregar PKCS#12
+                        password_bytes = cert_senha.encode('utf-8') if cert_senha is not None else None
+                        private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
+                            conteudo_certificado,
+                            password_bytes
+                        )
+                        cert_obj = cert_x509_obj
+                        if cert_obj is None and additional_certificates:
+                            cert_obj = additional_certificates[0]
+                        if cert_obj is None:
+                            raise Exception("Certificado X.509 não encontrado dentro do PKCS#12")
+                        fingerprint = cert_obj.fingerprint(hashes.SHA256()).hex()
+                        validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
+                        validade_fim = getattr(cert_obj, "not_valid_before_utc", None)
+                    except Exception as e:
+                        print(f"❌ Erro ao extrair dados do certificado: {e}")
+                        fingerprint = None
+                        validade_inicio = None
+                        validade_fim = None
+
+                    # Se quiser salvar o conteúdo em base64 (compatível com seu service)
+                    conteudo_certificado_b64 = base64.b64encode(conteudo_certificado).decode('utf-8')
+
+                    db.execute(text("""
+                        INSERT INTO certificados_digitais (
+                            cliente_id, conteudo_certificado, senha_certificado, ativo, data_upload,
+                            nome_arquivo_original, created_by_user_id, fingerprint, validade_inicio, validade_fim
+                        ) VALUES (
+                            :cliente_id, :conteudo_certificado, :senha_certificado, :ativo, NOW(),
+                            :nome_arquivo_original, :created_by_user_id, :fingerprint, :validade_inicio, :validade_fim
+                        )
+                    """), {
+                        'cliente_id': cliente_id,
+                        'conteudo_certificado': conteudo_certificado_b64,
+                        'senha_certificado': senha_criptografada,
+                        'ativo': cert_ativo,
+                        'nome_arquivo_original': nome_arquivo_original,
+                        'created_by_user_id': current_user.id,
+                        'fingerprint': fingerprint,
+                        'validade_inicio': validade_inicio,
+                        'validade_fim': validade_fim
+                    })
+
+                db.commit()
+                flash('Cliente cadastrado com sucesso!', 'success')
+                return redirect(url_for('admin.list_clientes'))
+            except Exception as e:
+                db.rollback()
+                print(f"❌ Erro ao salvar cliente/certificado: {e}")
+                flash('Erro ao salvar cliente ou certificado', 'danger')
+                form_data = data
+                return render_template(
+                    'admin/clientes/form.html',
+                    cliente=None,
+                    form_data=form_data,
+                    regimes_tributarios=regimes_tributarios
+                )
+
+        # GET: exibe formulário vazio
         form_data = {
             'razao_social': '',
             'nome_fantasia': '',
@@ -1404,10 +1533,6 @@ def create_cliente():
             'telefone_contato': '',
             'ativo': True,
         }
-        # Carrega regimes tributários para o select
-        regimes_rows = db.execute(text("SELECT regime_tributario_id, nome FROM regimes_tributarios")).fetchall()
-        regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
-        
         return render_template(
             'admin/clientes/form.html',
             cliente=None,
@@ -1420,7 +1545,6 @@ def create_cliente():
         return redirect(url_for('admin.list_clientes'))
     finally:
         db.close()
-
 
 
 def _cliente_to_form_data(cliente_row):
@@ -1453,10 +1577,11 @@ def edit_cliente(cliente_id: int):
     db = _get_db()
     try:
         row = db.execute(text("SELECT * FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
-        if row:
-            cliente = dict(row._mapping)
-        else:
-            cliente = None
+        
+        if not row:
+            flash('Cliente não encontrado', 'warning')
+            return redirect(url_for('admin.list_clientes'))
+        cliente = dict(row._mapping)
 
         if not cliente:
             flash('Cliente não encontrado', 'warning')
@@ -1467,6 +1592,7 @@ def edit_cliente(cliente_id: int):
             SELECT * FROM certificados_digitais WHERE cliente_id = :cid
         """), {'cid': cliente_id}).fetchall()
         
+        
         # Consultar produtos cadastrados para o cliente
         prod_rows = db.execute(text("""
             SELECT *
@@ -1474,22 +1600,34 @@ def edit_cliente(cliente_id: int):
             WHERE cliente_id = :cid
             ORDER BY descricao
         """), {'cid': cliente_id}).fetchall()
-        produtos_existentes = [dict(row._mapping) for row in prod_rows]
+        produtos_existentes = []
+        if prod_rows:
+            produtos_existentes = [dict(row._mapping) for row in prod_rows]
+         
+            
         
         # Consultar regras tributárias para o cliente
         regras_rows = db.execute(text("""
             SELECT * FROM regras_tributacao WHERE cliente_id = :cid
         """), {'cid': cliente_id}).fetchall()
-        regras_existentes = [dict(row._mapping) for row in regras_rows]
-
+        regras_existentes = []
+        if regras_rows:
+            regras_existentes = [dict(row._mapping) for row in regras_rows]
+            
         # Consultar destinatários para o cliente
         destinatarios_rows = db.execute(text("""
             SELECT * FROM destinatarios_nfe WHERE cliente_id = :cid
         """), {'cid': cliente_id}).fetchall()
-        destinatarios = [dict(row._mapping) for row in destinatarios_rows]
-
+        destinatarios = []
+        if destinatarios_rows:
+            destinatarios = [dict(row._mapping) for row in destinatarios_rows]
+            
         regimes_rows = db.execute(text("SELECT regime_tributario_id, nome FROM regimes_tributarios")).fetchall()
-        regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
+        regimes_tributarios = []
+        if regimes_rows :
+            regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
+
+
         certificados_existentes = [dict(row._mapping) for row in certificados_existentes]
        
         return render_template(
@@ -2018,7 +2156,7 @@ def list_certificados():
         rows = db.execute(text("""
             SELECT certificado_digital_id, fingerprint, conteudo_certificado, validade_fim, ativo
             FROM certificados_digitais
-            ORDER BY certicertificado_digital_idficado_id DESC
+            ORDER BY certificado_digital_id DESC
         """)).fetchall()
         certificados = [_safe_row_to_dict(r, [
             'certificado_digital_id','fingerprint','conteudo_certificado','validade_fim','ativo'
@@ -2043,16 +2181,31 @@ def novo_certificado():
 def salvar_certificado():
     db = _get_db()
     try:
-        
-        valido_ate = request.form.get('validade_fim')
+        cliente_id = request.form.get('cliente_id')
+        fingerprint = request.form.get('fingerprint')
+        conteudo_certificado = request.form.get('conteudo_certificado')
+        senha_certificado = request.form.get('senha_certificado')
+        validade_inicio = request.form.get('validade_inicio')
+        validade_fim = request.form.get('validade_fim')
+        nome_arquivo_original = request.form.get('nome_arquivo_original')
+
         db.execute(text("""
-            INSERT INTO certificados_digitais (cliente_id, fingerprint, conteudo_certificado, senha_ceritificado,
-                        validade_inicio, validade_fim, ativo, data_upload, nome_arquivo_original, created_by_user_id)
-            VALUES (:cliente_id, :fingerprint, :conteudo_certificado,:senha_ceritificado,:validade_inicio
-                        :validade_fim, TRUE, NOW(),:nome_arquivo_original,current_user.id)
+            INSERT INTO certificados_digitais (
+                cliente_id, fingerprint, conteudo_certificado, senha_certificado,
+                validade_inicio, validade_fim, ativo, data_upload, nome_arquivo_original, created_by_user_id
+            ) VALUES (
+                :cliente_id, :fingerprint, :conteudo_certificado, :senha_certificado,
+                :validade_inicio, :validade_fim, TRUE, NOW(), :nome_arquivo_original, :created_by_user_id
+            )
         """), {
-            
-            'valido_ate': valido_ate
+            'cliente_id': cliente_id,
+            'fingerprint': fingerprint,
+            'conteudo_certificado': conteudo_certificado,
+            'senha_certificado': senha_certificado,
+            'validade_inicio': validade_inicio,
+            'validade_fim': validade_fim,
+            'nome_arquivo_original': nome_arquivo_original,
+            'created_by_user_id': current_user.id
         })
         db.commit()
         flash('Certificado salvo', 'success')

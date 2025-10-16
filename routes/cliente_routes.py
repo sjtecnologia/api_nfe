@@ -234,6 +234,22 @@ def resumo(cliente_id):
     finally:
         db.close()
 
+@cliente_bp.route('/selecionar-cliente')
+@login_required
+def selecionar_cliente():
+    db = next(get_db())
+    try:
+        clientes_result = db.execute(text("""
+            SELECT c.cliente_id, c.razao_social
+            FROM user_clients uc
+            JOIN clientes c ON c.cliente_id = uc.client_id
+            WHERE uc.user_id = :user_id AND c.ativo = true
+        """), {"user_id": current_user.id})
+        clientes_do_usuario = [dict(row._mapping) for row in clientes_result]
+        return render_template('cliente/selecionar_cliente.html', clientes_do_usuario=clientes_do_usuario)
+    finally:
+        db.close()
+
 @cliente_bp.route('/api/estatisticas/<int:cliente_id>')
 @login_required
 @client_access_required()
