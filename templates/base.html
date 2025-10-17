@@ -9,10 +9,13 @@
     <!-- ✅ FAVICON DA SJ TECNOLOGIA -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
     <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
-    
-    <!-- ✅ USAR APENAS BOOTSTRAP 4.6 (compatível com Select2) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     
     <!-- ✅ TEMA PERSONALIZADO SJ TECNOLOGIA -->
     <style>
@@ -266,27 +269,20 @@
         }
         
         .alert-success {
-            background-color: rgba(76, 175, 80, 0.1);
-            border-left-color: var(--sj-success);
-            color: #2E7D32;
+            background-color: #28a745 !important; /* verde Bootstrap mais forte */
+            color: #fff;
         }
-        
-        .alert-info {
-            background-color: rgba(2, 136, 209, 0.1);
-            border-left-color: var(--sj-secondary);
-            color: #1565C0;
-        }
-        
-        .alert-warning {
-            background-color: rgba(255, 152, 0, 0.1);
-            border-left-color: var(--sj-warning);
-            color: #E65100;
-        }
-        
         .alert-danger {
-            background-color: rgba(244, 67, 54, 0.1);
-            border-left-color: var(--sj-danger);
-            color: #C62828;
+            background-color: #dc3545 !important;
+            color: #fff;
+        }
+        .alert-warning {
+            background-color: #ffc107 !important;
+            color: #212529;
+        }
+        .alert-info {
+            background-color: #17a2b8 !important;
+            color: #fff;
         }
         
         /* ===== FORMULÁRIOS PERSONALIZADOS ===== */
@@ -702,7 +698,7 @@
                 <small style="font-size: 0.75rem; opacity: 0.8; margin-left: 8px;">v2.0</small>
             </a>
             
-            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
@@ -887,9 +883,9 @@
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                 <i class="fas fa-user-circle"></i> {{ current_user.username }}
                                 {% if not current_user.is_super_admin() and session.current_client_id %}
-                                    <small class="badge badge-primary ml-1">Cliente</small>
+                                    <small class="badge bg-primary ms-1">Cliente</small>
                                 {% elif current_user.is_super_admin() %}
-                                    <small class="badge badge-danger ml-1">Admin</small>
+                                    <small class="badge bg-danger ms-1">Admin</small>
                                 {% endif %}
                             </a>
                             <div class="dropdown-menu dropdown-menu-right">
@@ -969,7 +965,6 @@
     {% endif %} -->
 
     <main class="container-fluid mt-3">
-        <!-- Área para mostrar mensagens flash -->
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="alerts-global-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 450px;">
@@ -977,10 +972,8 @@
                     <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-lg auto-close-alert global-alert" 
                          role="alert" 
                          style="border-radius: 12px; border: none; border-left: 5px solid; margin-bottom: 12px; animation: slideInRight 0.6s ease-out; backdrop-filter: blur(15px);">
-                        
-                        <!-- ✅ ÍCONE BASEADO NO TIPO -->
                         <div class="d-flex align-items-start">
-                            <div class="alert-icon mr-3" style="font-size: 1.2rem; margin-top: 2px;">
+                            <div class="alert-icon me-3" style="font-size: 1.2rem; margin-top: 2px;">
                                 {% if category == 'error' or category == 'danger' %}
                                     <i class="fas fa-exclamation-triangle"></i>
                                 {% elif category == 'success' %}
@@ -993,29 +986,21 @@
                                     <i class="fas fa-bell"></i>
                                 {% endif %}
                             </div>
-                            
                             <div class="alert-content flex-grow-1">
                                 <div class="alert-message" style="font-weight: 500; line-height: 1.4;">
                                     {{ message }}
                                 </div>
-                                
-                                <!-- ✅ BARRA DE PROGRESSO PARA AUTO-CLOSE -->
                                 <div class="auto-close-progress" style="height: 3px; background: rgba(255,255,255,0.3); border-radius: 3px; margin-top: 8px; overflow: hidden;">
                                     <div class="progress-bar" style="height: 100%; background: rgba(255,255,255,0.7); width: 100%; animation: progressCountdown 6s linear forwards;"></div>
                                 </div>
                             </div>
-                            
-                            <!-- ✅ BOTÃO FECHAR -->
-                            <button type="button" class="close ml-2" data-dismiss="alert" aria-label="Close" style="font-size: 1.5rem; opacity: 0.8;">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
+                            <button type="button" class="btn-close ms-2" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% endif %}
         {% endwith %}
-
         {% block content %}{% endblock %}
     </main>
 
@@ -1027,9 +1012,9 @@
                 {% if current_user.is_authenticated %}
                     | Usuário: <strong>{{ current_user.username }}</strong>
                     {% if current_user.is_super_admin() %}
-                        <span class="badge badge-danger ml-1">Administrador</span>
+                        <span class="badge bg-danger ms-1">Administrador</span>
                     {% elif session.current_client_id %}
-                        <span class="badge badge-primary ml-1">{{ session.current_client_name or 'Cliente' }}</span>
+                        <span class="badge bg-primary ms-1">{{ session.current_client_name or 'Cliente' }}</span>
                     {% endif %}
                 {% endif %}
                 | © 2025
@@ -1037,136 +1022,90 @@
         </div>
     </footer>
 
-    <!-- ✅ ORDEM CORRETA: jQuery PRIMEIRO, depois Bootstrap -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+ 
 
-    <!-- ✅ JAVASCRIPT DE AUTO-CLOSE APÓS JQUERY -->
+ 
+    <!-- ✅ JAVASCRIPT DE AUTO-CLOSE EM JS PURO -->
     <script>
-    $(document).ready(function() {
-        
-        console.log('🔧 Inicializando sistema de auto-close alerts...');
-        
-        // ✅ FUNÇÃO CORRIGIDA DE AUTO-CLOSE
+    document.addEventListener('DOMContentLoaded', function () {
         function initAutoCloseAlerts() {
-            $('.auto-close-alert:not(.initialized)').each(function() {
-                const $alert = $(this);
-                const closeTime = 6000; // 6 segundos
+            document.querySelectorAll('.auto-close-alert:not(.initialized)').forEach(function(alert) {
+                alert.classList.add('initialized', 'showing');
+                let closeTime = 6000;
                 let timeoutId;
                 let isPaused = false;
-                
-                console.log('📋 Inicializando alert:', $alert.find('.alert-message').text().substring(0, 30) + '...');
-                
-                // Marcar como inicializado
-                $alert.addClass('initialized showing');
-                
-                // Função para fechar o alert
+                const progressBar = alert.querySelector('.progress-bar');
+
                 function closeAlert() {
-                    console.log('🚫 Fechando alert automaticamente');
-                    
-                    // Adicionar classe de fechamento
-                    $alert.addClass('closing');
-                    
-                    // Aguardar animação CSS e remover elemento
+                    alert.classList.add('closing');
                     setTimeout(function() {
-                        $alert.fadeOut(300, function() {
-                            $alert.remove();
-                            console.log('✅ Alert removido do DOM');
-                        });
-                    }, 500); // Aguarda a animação slideOutRight (0.5s)
+                        alert.classList.remove('show', 'showing', 'closing');
+                        alert.style.display = 'none';
+                    }, 500);
                 }
-                
-                // Timer principal
+
                 function startTimer() {
                     if (!isPaused) {
-                        console.log('⏰ Iniciando timer de 6 segundos');
                         timeoutId = setTimeout(closeAlert, closeTime);
                     }
                 }
-                
-                // Eventos de hover
-                $alert.hover(
-                    function() {
-                        // Mouse enter - pausar
-                        console.log('⏸️  Pausando timer (hover)');
-                        isPaused = true;
-                        if (timeoutId) {
-                            clearTimeout(timeoutId);
-                        }
-                        $(this).find('.progress-bar').css('animation-play-state', 'paused');
-                    },
-                    function() {
-                        // Mouse leave - retomar
-                        console.log('▶️  Retomando timer (leave)');
-                        isPaused = false;
-                        $(this).find('.progress-bar').css('animation-play-state', 'running');
-                        
-                        // Tempo reduzido ao retomar (2 segundos)
-                        timeoutId = setTimeout(closeAlert, 2000);
-                    }
-                );
-                
-                // Botão de fechar manual
-                $alert.find('.close').off('click.autoclose').on('click.autoclose', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('❌ Fechamento manual do alert');
-                    
-                    if (timeoutId) {
-                        clearTimeout(timeoutId);
-                    }
-                    closeAlert();
+
+                alert.addEventListener('mouseenter', function() {
+                    isPaused = true;
+                    if (timeoutId) clearTimeout(timeoutId);
+                    if (progressBar) progressBar.style.animationPlayState = 'paused';
                 });
-                
-                // Iniciar o timer
+
+                alert.addEventListener('mouseleave', function() {
+                    isPaused = false;
+                    if (progressBar) progressBar.style.animationPlayState = 'running';
+                    timeoutId = setTimeout(closeAlert, 2000);
+                });
+
+                // Botão de fechar manual
+                const btnClose = alert.querySelector('.btn-close');
+                if (btnClose) {
+                    btnClose.addEventListener('click', function(e) {
+                        if (timeoutId) clearTimeout(timeoutId);
+                        closeAlert();
+                    });
+                }
+
                 startTimer();
             });
         }
-        
-        // ✅ INICIALIZAR IMEDIATAMENTE
+
+        // Inicializar imediatamente
         initAutoCloseAlerts();
-        
-        // ✅ OBSERVER PARA ALERTS DINÂMICOS (AJAX)
+
+        // Observer para alerts dinâmicos
         const alertObserver = new MutationObserver(function(mutations) {
             let hasNewAlerts = false;
-            
             mutations.forEach(function(mutation) {
                 mutation.addedNodes.forEach(function(node) {
-                    if (node.nodeType === 1) {
-                        if ($(node).hasClass('auto-close-alert') || $(node).find('.auto-close-alert').length > 0) {
-                            hasNewAlerts = true;
-                        }
+                    if (node.nodeType === 1 && (node.classList.contains('auto-close-alert') || node.querySelector('.auto-close-alert'))) {
+                        hasNewAlerts = true;
                     }
                 });
             });
-            
-            if (hasNewAlerts) {
-                console.log('🔍 Novos alerts detectados via AJAX/DOM');
-                setTimeout(initAutoCloseAlerts, 100); // Pequeno delay para garantir renderização
-            }
+            if (hasNewAlerts) setTimeout(initAutoCloseAlerts, 100);
         });
-        
-        // Observar mudanças no DOM
-        alertObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        
-        // ✅ FALLBACK: Verificar periodicamente por novos alerts
+
+        alertObserver.observe(document.body, { childList: true, subtree: true });
+
+        // Fallback: verificar periodicamente por novos alerts
         setInterval(function() {
-            const newAlerts = $('.auto-close-alert:not(.initialized)').length;
-            if (newAlerts > 0) {
-                console.log(`🔄 Encontrados ${newAlerts} alerts não inicializados`);
+            if (document.querySelectorAll('.auto-close-alert:not(.initialized)').length > 0) {
                 initAutoCloseAlerts();
             }
         }, 1000);
-        
-        console.log('✅ Sistema de auto-close alerts carregado com sucesso');
     });
     </script>
-    
-    <!-- Scripts personalizados das páginas -->
+    <!-- jQuery (necessário para Select2) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     {% block extra_js %}{% endblock %}
-
+    
 </body>
 </html>

@@ -153,7 +153,26 @@
                 </div>
             </div>
         </div>
-
+        <div class="form-section">
+            <h5><i class="fas fa-user"></i> Destinatário</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="destinatario_razao_social">Razão Social *</label>
+                        <input type="text" class="form-control" id="destinatario_razao_social" name="destinatario_razao_social"
+                            value="{{ nfe.destinatario_razao_social or '' }}" required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="destinatario_cnpj_cpf">CNPJ/CPF *</label>
+                        <input type="text" class="form-control" id="destinatario_cnpj_cpf" name="destinatario_cnpj_cpf"
+                            value="{{ nfe.destinatario_cnpj_cpf or '' }}" maxlength="18" required>
+                    </div>
+                </div>
+                <!-- Adicione outros campos do destinatário conforme necessário -->
+            </div>
+        </div>
         <!-- Seção: Itens -->
         <div class="form-section">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -195,17 +214,42 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label>NCM *</label>
-                                        <input type="text" class="form-control" name="ncm_{{ loop.index0 }}" 
-                                               value="{{ item.ncm }}" maxlength="8" required>
+                                        <select class="form-control js-select2-ncm" name="ncm_{{ loop.index0 }}" required>
+                                            <option value="">Selecione o NCM...</option>
+                                            {% for ncm in ncms %}
+                                            <option value="{{ ncm.codigo }}" {% if item.ncm|replace('.', '') == ncm.codigo|replace('.', '') %}selected{% endif %}>
+                                                {{ ncm.codigo }} - {{ ncm.descricao }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label>CFOP *</label>
-                                        <input type="text" class="form-control" name="cfop_{{ loop.index0 }}" 
-                                               value="{{ item.cfop }}" maxlength="4" required>
+                                        <select class="form-control js-select2-cfop" name="cfpo_{{ loop.index0 }}" required>
+                                            <option value="">Selecione o CFOP...</option>
+                                            {% for cfop in cfops %}
+                                            <option value="{{ cfop.cfop }}" {% if item.cfop|replace('.', '') == cfop.cfop|replace('.', '') %}selected{% endif %}>
+                                                {{ cfop.cfop }} - {{ cfop.descricao }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
                                     </div>
                                 </div>
+                                <!-- <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>CFOP *</label>
+                                        <select class="form-control select2" name="cfop_{{ loop.index0 }}" required>
+                                            <option value="">Selecione...</option>
+                                            {% for cfop in cfops %}
+                                            <option value="{{ cfop.codigo }}" {% if item.cfop == cfop.codigo %}selected{% endif %}>
+                                                {{ cfop.codigo }} - {{ cfop.descricao }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div> -->
                                 <div class="col-md-2">
                                     <div class="form-group">
                                         <label>Quantidade *</label>
@@ -239,11 +283,17 @@
                                         </select>
                                     </div>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-3">
                                     <div class="form-group">
-                                        <label>CST ICMS</label>
-                                        <input type="text" class="form-control" name="cst_icms_{{ loop.index0 }}" 
-                                               value="{{ item.cst_icms }}" maxlength="3">
+                                        <label>CST ICMS *</label>
+                                        <select class="form-control js-select2-cst" name="cst_{{ loop.index0 }}" required>
+                                            <option value="">Selecione o CST ICMS...</option>
+                                            {% for cst in csts %}
+                                            <option value="{{ cst.codigo }}" {% if item.cst_icms == cst.codigo %}selected{% endif %}>
+                                                {{ cst.codigo }} - {{ cst.descricao }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
                                     </div>
                                 </div>
                                 <div class="col-md-2">
@@ -446,6 +496,43 @@ function addItem() {
     itemIndex++;
     updateItemNumbers();
 }
+
+$(document).ready(function() {
+    $('.js-select2-ncm').select2({
+        width: '100%',
+        allowClear: true,
+        placeholder: 'Digite para buscar NCM...',
+        language: {
+            noResults: () => "Nenhum NCM encontrado",
+            searching: () => "Pesquisando..."
+        }
+    });
+    // Repita para .js-select2-cfop e .js-select2-cst se necessário
+});
+$(document).ready(function() {
+    $('.js-select2-cfop').select2({
+        width: '100%',
+        allowClear: true,
+        placeholder: 'Digite para buscar CFOP...',
+        language: {
+            noResults: () => "Nenhum CFOP encontrado",
+            searching: () => "Pesquisando..."
+        }
+    });
+    // Repita para .js-select2-cfop e .js-select2-cst se necessário
+});
+$(document).ready(function() {
+    $('.js-select2-cst').select2({
+        width: '100%',
+        allowClear: true,
+        placeholder: 'Digite para buscar CST ICMS...',
+        language: {
+            noResults: () => "Nenhum CST ICMS encontrado",
+            searching: () => "Pesquisando..."
+        }
+    });
+    // Repita para .js-select2-cfop e .js-select2-cst se necessário
+});
 
 function removeItem(button) {
     if (document.querySelectorAll('.item-card').length <= 1) {

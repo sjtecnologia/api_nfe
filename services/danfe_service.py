@@ -394,6 +394,7 @@ def generate_danfe_reportlab_enhanced(xml_content: Union[str, bytes], output_pdf
                                 'codigo': extract_prod_text('./ns:cProd/text()'),
                                 'descricao': extract_prod_text('./ns:xProd/text()'),
                                 'ncm': extract_prod_text('./ns:NCM/text()'),
+                                'cfop': extract_prod_text('./ns:CFOP/text()'),
                                 'quantidade': extract_prod_text('./ns:qCom/text()'),
                                 'unidade': extract_prod_text('./ns:uCom/text()'),
                                 'valor_unitario': extract_prod_text('./ns:vUnCom/text()'),

@@ -28,10 +28,7 @@
     margin: 0;
 }
 
-.form-group label {
-    font-weight: 600;
-    color: #333;
-}
+
 
 .btn {
     margin: 0 5px;
@@ -350,7 +347,7 @@ input[readonly] {
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">🔍 Buscar NCM</h5>
-                <button type="button" class="close" data-dismiss="modal">
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     <span>&times;</span>
                 </button>
             </div>
@@ -586,16 +583,12 @@ function adicionarItem() {
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>NCM *</label>
-                        <div class="input-group">
-                            <input type="text" name="ncm_${itemCounter}" class="form-control" 
-                                   placeholder="00000000" maxlength="8" pattern="[0-9]{8}" required readonly>
-                            <div class="input-group-append">
-                                <button type="button" class="btn btn-outline-secondary" onclick="abrirBuscaNCM(${itemCounter})">
-                                    <i class="fas fa-search"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <small class="form-text text-muted">Clique na lupa para buscar NCM</small>
+                        <select name="ncm_${itemCounter}" class="form-control js-select2-ncm" required>
+                            <option value="">Selecione o NCM...</option>
+                            {% for ncm in all_ncms %}
+                            <option value="{{ ncm.codigo }}">{{ ncm.codigo }} - {{ ncm.descricao }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -711,7 +704,16 @@ function initSelect2ForItem(itemId) {
                 searching: () => "Pesquisando..."
             }
         });
-        
+        // NCM
+        $(`select[name="ncm_${itemId}"]`).select2({
+            width: '100%',
+            allowClear: true,
+            placeholder: 'Digite para buscar NCM...',
+            language: {
+                noResults: () => "Nenhum NCM encontrado",
+                searching: () => "Pesquisando..."
+            }
+        });
         console.log(`✅ Select2 inicializado para item ${itemId}`);
     }
 }
@@ -827,7 +829,7 @@ function atualizarItemJSON(itemId) {
         quantidade: document.querySelector(`input[name="quantidade_${itemId}"]`).value,
         valor_unitario: document.querySelector(`input[name="valor_unitario_${itemId}"]`).value,
         valor_total: document.querySelector(`input[name="valor_total_${itemId}"]`).value,
-        ncm: document.querySelector(`input[name="ncm_${itemId}"]`).value,
+        ncm: document.querySelector(`select[name="ncm_${itemId}"]`).value,
         cfop: document.querySelector(`select[name="cfop_${itemId}"]`).value,
         origem: document.querySelector(`select[name="origem_${itemId}"]`).value,
         cst_icms: document.querySelector(`select[name="cst_icms_${itemId}"]`).value,

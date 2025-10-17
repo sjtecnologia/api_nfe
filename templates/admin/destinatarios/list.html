@@ -49,9 +49,9 @@
                                         </td>
                                         <td>
                                             {% if destinatario.tipo_pessoa == 'F' %}
-                                                <span class="badge badge-info">Pessoa Física</span>
+                                                <span class="badge bg-info">Pessoa Física</span>
                                             {% elif destinatario.tipo_pessoa == 'J' %}
-                                                <span class="badge badge-primary">Pessoa Jurídica</span>
+                                                <span class="badge bg-primary">Pessoa Jurídica</span>
                                             {% else %}
                                                 <span class="badge badge-secondary">{{ destinatario.tipo_pessoa or 'N/A' }}</span>
                                             {% endif %}

@@ -64,7 +64,7 @@
         margin-bottom: 0.5rem;
         color: #343a40;
     }
-    .form-group label,
+  
     .form-check-label,
     .modal-body label {
         font-weight: 600;
@@ -159,17 +159,17 @@
             <div class="card border-left-{{ 'success' if nfe.status|upper == 'AUTORIZADA' else 'danger' if nfe.status|upper == 'REJEITADA' else 'warning' if nfe.status|upper == 'PROCESSANDO' else 'secondary' }} shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
-                        <div class="col-auto mr-3">
+                        <div class="col-auto me-3">
                             <i class="fas fa-{{ 'check-circle' if nfe.status|upper == 'AUTORIZADA' else 'times-circle' if nfe.status|upper == 'REJEITADA' else 'clock' if nfe.status|upper == 'PROCESSANDO' else 'file' }} fa-2x text-{{ 'success' if nfe.status|upper == 'AUTORIZADA' else 'danger' if nfe.status|upper == 'REJEITADA' else 'warning' if nfe.status|upper == 'PROCESSANDO' else 'secondary' }}"></i>
                         </div>
-                        <div class="col mr-2">
+                        <div class="col me-2">
                             <div class="text-xs font-weight-bold text-{{ 'success' if nfe.status|upper == 'AUTORIZADA' else 'danger' if nfe.status|upper == 'REJEITADA' else 'warning' if nfe.status|upper == 'PROCESSANDO' else 'secondary' }} text-uppercase mb-1">
                                 Status da NF-e
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">
                                 {{ nfe.status|upper }}
                                 {% if nfe.protocolo_sefaz %}
-                                <span class="badge badge-{{ 'success' if nfe.status|upper == 'AUTORIZADA' else 'danger' if nfe.status|upper == 'REJEITADA' else 'warning' if nfe.status|upper == 'PROCESSANDO' else 'secondary' }} badge-large ml-2">
+                                <span class="badge badge-{{ 'success' if nfe.status|upper == 'AUTORIZADA' else 'danger' if nfe.status|upper == 'REJEITADA' else 'warning' if nfe.status|upper == 'PROCESSANDO' else 'secondary' }} badge-large ms-2">
                                     Protocolo: {{ nfe.protocolo_sefaz }}
                                 </span>
                                 {% endif %}
@@ -225,8 +225,8 @@
                         {% endif %}
                         
                         <!-- Botão para compartilhar -->
-                        <button type="button" id="btn-share" class="btn btn-outline-secondary">
-                            <i class="fas fa-share-alt"></i> Compartilhar
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#shareModal">
+                           <i class="fas fa-share-alt"></i> Compartilhar NFe
                         </button>
                         
                         <!-- Botão para voltar -->
@@ -347,7 +347,7 @@
                         <dt>Chave de Acesso</dt>
                         <dd>
                             <code>{{ nfe.chave_acesso }}</code>
-                            <button type="button" class="btn btn-sm btn-outline-secondary ml-1" onclick="copyToClipboard('{{ nfe.chave_acesso }}')">
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="copyToClipboard('{{ nfe.chave_acesso }}')">
                                 <i class="fas fa-copy"></i>
                             </button>
                         </dd>
@@ -363,23 +363,23 @@
         <div class="card-header card-tabs">
             <ul class="nav nav-tabs" id="nfeTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active text-gray-800" id="itens-tab" data-toggle="tab" data-target="#itens" type="button" role="tab" aria-controls="itens" aria-selected="true">
+                    <button class="nav-link active text-gray-800" id="itens-tab" data-bs-toggle="tab" data-bs-target="#itens" type="button" role="tab" aria-controls="itens" aria-selected="true">
                         <i class="fas fa-list text-gray-800"></i> Itens da NF-e
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link text-gray-800" id="info-tab" data-toggle="tab" data-target="#info" type="button" role="tab" aria-controls="info" aria-selected="false">
+                    <button class="nav-link text-gray-800" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button" role="tab" aria-controls="info" aria-selected="false">
                         <i class="fas fa-info-circle text-gray-800"></i> Informações Adicionais
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link text-gray-800" id="xml-tab" data-toggle="tab" data-target="#xml" type="button" role="tab" aria-controls="xml" aria-selected="false">
+                    <button class="nav-link text-gray-800" id="xml-tab" data-bs-toggle="tab" data-bs-target="#xml" type="button" role="tab" aria-controls="xml" aria-selected="false">
                         <i class="fas fa-code text-gray-800"></i> XML
                     </button>
                 </li>
                 {% if nfe.status|upper == 'AUTORIZADA' %}
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link text-gray-800" id="danfe-tab" data-toggle="tab" data-target="#danfe" type="button" role="tab" aria-controls="danfe" aria-selected="false">
+                    <button class="nav-link text-gray-800" id="danfe-tab" data-bs-toggle="tab" data-bs-target="#danfe" type="button" role="tab" aria-controls="danfe" aria-selected="false">
                         <i class="fas fa-file-pdf text-gray-800"></i> DANFE
                     </button>
                 </li>
@@ -491,8 +491,11 @@
                             </button>
                         </div>
                         <div id="danfe-tab-status"></div>
-                        <div class="embed-responsive embed-responsive-1by1" style="min-height: 800px;">
-                            <iframe id="danfe-preview-iframe" class="embed-responsive-item" src="about:blank" allowfullscreen></iframe>
+                        <div style="width: 100%; min-height: 1000px; display: flex; justify-content: center; align-items: flex-start;">
+                            <iframe id="danfe-preview-iframe"
+                                    src="about:blank"
+                                    style="width: 90vw; height: 1000px; border: 1px solid #ccc; background: #fff;"
+                                    allowfullscreen></iframe>
                         </div>
                     </div>
                 </div>
@@ -508,7 +511,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="danfeModalLabel">DANFE - NF-e #{{ nfe.nfe_emitida_id }}</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -519,7 +522,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 <button type="button" class="btn btn-info" onclick="printDanfeFromModal()">
                     <i class="fas fa-print"></i> Imprimir
                 </button>
@@ -540,9 +543,9 @@
                 <h5 class="modal-title" id="shareModalLabel">
                     <i class="fas fa-share-alt"></i> Compartilhar NFe
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <!-- <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
-                </button>
+                </button> -->
             </div>
             <div class="modal-body">
                 <form id="shareForm">
@@ -579,7 +582,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
                 <button type="button" class="btn btn-primary" id="btnSendEmail">
@@ -713,7 +716,7 @@
         
         // Mudança para tab DANFE usando jQuery
         if (typeof $ !== 'undefined') {
-            $('#nfeTabs button[data-target="#danfe"]').on('shown.bs.tab', function(e) {
+            $('#nfeTabs button[data-bs-target="#danfe"]').on('shown.bs.tab', function(e) {
                 var iframe = document.getElementById('danfe-preview-iframe');
                 if (iframe && iframe.src === 'about:blank') {
                     generateDanfeForTab();
@@ -1142,7 +1145,7 @@
         `;
         toast.innerHTML = `
             <div class="d-flex align-items-center">
-                <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : tipo === 'warning' ? 'exclamation-triangle' : 'info-circle'} mr-2"></i>
+                <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : tipo === 'warning' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
                 <span>${mensagem}</span>
                 <button type="button" class="close ml-auto" onclick="this.parentElement.parentElement.remove()" style="font-size: 1.2rem;">
                     <span>&times;</span>

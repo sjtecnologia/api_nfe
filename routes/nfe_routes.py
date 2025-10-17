@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 from datetime import datetime
 from database.connection import get_db
-from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms
+from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm
 from auth.decorators import permission_required, admin_required
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
@@ -294,7 +294,7 @@ def emitir_nfe():
                             finalidade_emissao=int(form_data_initial.get('finNFe', '1')),
                             natureza_operacao=form_data_initial.get('natOp', ''),
                             destinatario_razao_social=destinatario_data['nome_razao_social'],
-                            destinatario_cnpj_cpf=destinatario_data['cpf_cnpj'],
+                            destinatario_cnpj_cpf=destinatario_data['cpf_cnpj'].replace('.','').replace('/','').replace('-',''),
                             json_nfe={
                                 'xml_content': xml_assinado,
                                 'form_data': form_data_initial,
@@ -483,6 +483,16 @@ def emitir_nfe():
                 'descricao': cfop.descricao
             })
         
+        # BUSCAR NCMs
+        all_ncms = db.query(Ncm).all()
+        ncms_data = []
+        for ncm in all_ncms:
+            ncms_data.append({
+                'ncm_id': ncm.ncm_id,
+                'codigo': ncm.codigo,
+                'descricao': ncm.descricao
+            })
+
         # ✅ BUSCAR CSTs E CSOSNs
         try:
             all_csts = db.query(Csticms).all()
@@ -525,6 +535,7 @@ def emitir_nfe():
                              all_cfops=cfops_data,
                              all_csts=csts_data,
                              all_csosns=csosns_data,
+                             all_ncms=ncms_data,
                              initial_nfe_items=[])
         
     except Exception as e:
@@ -680,7 +691,7 @@ def view(nfe_id):
             traceback.print_exc()
             # Fallback simples
             nfe_data = {key: getattr(nfe, key) for key in dir(nfe) if not key.startswith('_') and not callable(getattr(nfe, key))}
-        
+        print(nfe_data)
         return render_template('admin/nfes/xml_preview.html', nfe=nfe_data)
         
     except Exception as e:
@@ -995,7 +1006,7 @@ def edit(nfe_id):
                 
                 # ✅ NCMs
                 try:
-                    ncms_query = text("SELECT codigo, descricao FROM ncms ORDER BY codigo LIMIT 100")
+                    ncms_query = text("SELECT codigo, descricao FROM ncms ORDER BY codigo")
                     ncms_result = db.execute(ncms_query).fetchall()
                     ncms = []
                     for ncm_row in ncms_result:
@@ -1019,6 +1030,33 @@ def edit(nfe_id):
                 except Exception as e:
                     print(f"⚠️ Erro ao buscar NCMs: {e}")
                     ncms = []
+
+                # ✅ CSTs
+                try:
+                    csts_query = text("SELECT codigo, descricao FROM cst_icms ORDER BY codigo ")
+                    csts_result = db.execute(csts_query).fetchall()
+                    csts = []
+                    for cst_row in csts_result:
+                        try:
+                            if hasattr(cst_row, '_asdict'):
+                                csts.append(cst_row._asdict())
+                            elif hasattr(cst_row, '_mapping'):
+                                mapping = cst_row._mapping
+                                if callable(mapping):
+                                    csts.append(dict(mapping()))
+                                else:
+                                    csts.append(dict(mapping))
+                            else:
+                                csts.append({
+                                    'codigo': cst_row[0],
+                                    'descricao': cst_row[1]
+                                })
+                        except Exception as e:
+                            print(f"⚠️ Erro ao processar CST: {e}")
+                            continue
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar CSTs: {e}")
+                    csts = []
                 
                 # ✅ PRODUTOS
                 try:
@@ -1057,6 +1095,7 @@ def edit(nfe_id):
                                      clientes=clientes,
                                      cfops=cfops,
                                      ncms=ncms,
+                                     csts=csts,
                                      produtos=produtos,
                                      from_rejected=request.args.get('from') == 'rejected')
                 
@@ -1181,12 +1220,13 @@ def edit(nfe_id):
                     flash('Esta NF-e não pode ser editada', 'error')
                     return redirect(url_for('nfe.view', nfe_id=nfe_id))
                 
-                # Buscar destinatário
-                destinatario_query = text("SELECT * FROM clientes WHERE cliente_id = :cliente_id")
-                destinatario_result = db.execute(destinatario_query, {'cliente_id': cliente_id}).fetchone()
+                # Buscar destinatário correto
+                # destinatario_cnpj_cpf = request.form.get('destinatario_cnpj_cpf')  # ou o nome do campo correto do formulário
+                destinatario_query = text("SELECT * FROM nfe_emitidas WHERE WHERE nfe_emitida_id = :nfe_id")
+                destinatario_result = db.execute(destinatario_query, {'nfe_id': nfe_id}).fetchone()
                 
                 if not destinatario_result:
-                    flash('Cliente não encontrado', 'error')
+                    flash('Destinatário não encontrado', 'error')
                     return redirect(url_for('nfe.edit', nfe_id=nfe_id))
                 
                 # Preparar dados para salvar
@@ -1247,7 +1287,7 @@ def edit(nfe_id):
                     'finalidade_emissao': int(dados_nfe['finNFe']),
                     'informacoes_adicionais': dados_nfe['infCpl'],
                     'destinatario_razao_social': dest_razao,
-                    'destinatario_cnpj_cpf': dest_cnpj,
+                    'destinatario_cnpj_cpf': dest_cnpj.replace('.','').replace('/','').replace('-',''),
                     'json_nfe': json.dumps(json_nfe),
                     'status': new_status,
                     'mensagem_sefaz': mensagem

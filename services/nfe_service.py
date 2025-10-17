@@ -364,7 +364,7 @@ class NFeService:
                 SELECT razao_social, nome_fantasia, cnpj, inscricao_estadual,
                        logradouro, numero, bairro, cep, nome_municipio, 
                        codigo_municipio, uf
-                FROM empresas 
+                FROM clientes 
                 WHERE ativo = true 
                 LIMIT 1
             """)
@@ -389,14 +389,21 @@ class NFeService:
                 emitente_data = {'razao_social': 'EMPRESA TESTE', 'cnpj': '12345678000100', 'uf': 'SP'}
             
             # Buscar destinatário
-            destinatario_query = text("""
-                SELECT razao_social as nome_razao_social, cnpj_cpf as cpf_cnpj,
-                       logradouro, numero, bairro, cep, nome_municipio,
-                       codigo_municipio, uf
-                FROM clientes 
-                WHERE cliente_id = :cliente_id
-            """)
-            destinatario_result = self.db.execute(destinatario_query, {'cliente_id': cliente_id}).fetchone()
+            destinatario_cnpj_cpf = None
+            # Preferir valor vindo do payload (dados_nfe)
+            if isinstance(dados_nfe, dict):
+                destinatario_cnpj_cpf = dados_nfe.get('destinatario_cnpj_cpf') or (dados_nfe.get('destinatario') and dados_nfe['destinatario'].get('cnpj_cpf'))
+            # Sanitizar CNPJ/CPF
+            if destinatario_cnpj_cpf:
+                try:
+                    destinatario_cnpj_cpf = limpar_cnpj_cpf(destinatario_cnpj_cpf)
+                except Exception:
+                    destinatario_cnpj_cpf = re.sub(r'\D', '', str(destinatario_cnpj_cpf))
+            else:
+                return {'success': False, 'message': 'CNPJ/CPF do destinatário não informado'}
+            
+            destinatario_query = text("SELECT * FROM destinatarios_nfe WHERE cnpj_cpf = :cnpj_cpf")
+            destinatario_result = self.db.execute(destinatario_query, {'cnpj_cpf': destinatario_cnpj_cpf}).fetchone()
             
             if not destinatario_result:
                 return {'success': False, 'message': 'Cliente não encontrado'}
