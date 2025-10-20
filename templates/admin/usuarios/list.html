@@ -44,6 +44,7 @@
                     <th>ID</th>
                     <th>Nome de Usuário</th>
                     <th>Email</th>
+                    <th>Role</th>
                     <th>Ativo</th>
                     <th>Criado em</th>
                     <th class="text-center">Ações</th>
@@ -55,6 +56,15 @@
                     <td>{{ usuario.id | highlight(q) }}</td>
                     <td>{{ usuario.username | highlight(q) }}</td>
                     <td>{{ usuario.email | highlight(q) }}</td>
+                    <td>
+                        {% if usuario.roles and usuario.roles|length > 0 %}
+                            {% for role in usuario.roles %}
+                                <span class="badge bg-info">{{ role.name }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="badge bg-secondary">N/A</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if usuario._is_active %}
                             <span class="badge bg-success">Sim</span>
@@ -85,7 +95,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">Nenhum usuário cadastrado.</td>
+                    <td colspan="7" class="text-center text-muted">Nenhum usuário cadastrado.</td>
                 </tr>
                 {% endfor %}
             </tbody>

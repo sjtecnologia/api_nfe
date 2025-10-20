@@ -42,7 +42,7 @@
                 </div>
                 <div class="mb-3">
                     <label for="roles" class="form-label">Papel (Role):</label>
-                    <select id="roles" name="roles" class="form-select" multiple required>
+                    <select id="roles" name="roles" class="form-select" required>
                         {% for role in roles %}
                             <option value="{{ role.id }}"
                                 {% if usuario and role.id in usuario.roles %}selected{% endif %}>
@@ -50,7 +50,7 @@
                             </option>
                         {% endfor %}
                     </select>
-                    <small class="text-muted">Segure Ctrl (Windows) ou Command (Mac) para selecionar múltiplos.</small>
+                    <small class="text-muted">Selecione apenas um papel para o usuário.</small>
                 </div>
                 <div class="mb-3">
                     <label for="clientes" class="form-label">Clientes com acesso:</label>

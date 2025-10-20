@@ -44,6 +44,11 @@ def select_client(cliente_id):
         user_client_ids = [client['cliente_id'] for client in current_user.clients]
         if cliente_id in user_client_ids:
             session['current_client_id'] = cliente_id
+            # Atualiza o nome do cliente na sessão
+            for client in current_user.clients:
+                if client['cliente_id'] == cliente_id:
+                    session['current_client_name'] = client.get('razao_social') or client.get('nome_fantasia') or ''
+                    break
             return redirect(url_for('cliente.dashboard', cliente_id=cliente_id))
     
     flash('Você não tem acesso a este cliente.', 'error')

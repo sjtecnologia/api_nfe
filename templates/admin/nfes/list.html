@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}NFes - {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}{% endblock %}
+{% block title %}
+    {% if current_user.is_super_admin() %}
+        NFes - {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}
+    {% else %}
+        NFes - {{ cliente_map.get(cliente_id|int, 'Cliente Selecionado') }}
+    {% endif %}
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -10,28 +16,32 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4 class="card-title mb-0">
                         <i class="fas fa-file-invoice"></i>
-                        NFes - {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}
+                        {% if current_user.is_super_admin() %}
+                            NFes - {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}
+                        {% else %}
+                            NFes - {{ cliente_map.get(cliente_id|int, 'Cliente Selecionado') }}
+                        {% endif %}
                     </h4>
                     <div>
-                        {% if cliente_map|length > 1 %}
-                        <div class="dropdown d-inline-block me-2">
-                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-filter"></i>
-                                Filtrar por Cliente
-                            </button>
-                            <div class="dropdown-menu">
-                                <a class="dropdown-item {% if not cliente_id %}active{% endif %}" href="{{ url_for('nfe.list_nfes') }}">
-                                    <i class="fas fa-list"></i> Todos os Clientes
-                                </a>
-                                <div class="dropdown-divider"></div>
-                                {% for cid, cnome in cliente_map.items() %}
-                                <a class="dropdown-item {% if cliente_id and cliente_id|int == cid %}active{% endif %}" 
-                                   href="{{ url_for('nfe.list_nfes', cliente_id=cid) }}">
-                                    <i class="fas fa-building"></i> {{ cnome }}
-                                </a>
-                                {% endfor %}
+                        {% if cliente_map|length > 1 and current_user.is_super_admin() %}
+                            <div class="dropdown d-inline-block me-2">
+                                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-filter"></i>
+                                    Filtrar por Cliente
+                                </button>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item {% if not cliente_id %}active{% endif %}" href="{{ url_for('nfe.list_nfes') }}">
+                                        <i class="fas fa-list"></i> Todos os Clientes
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    {% for cid, cnome in cliente_map.items() %}
+                                    <a class="dropdown-item {% if cliente_id and cliente_id|int == cid %}active{% endif %}" 
+                                       href="{{ url_for('nfe.list_nfes', cliente_id=cid) }}">
+                                        <i class="fas fa-building"></i> {{ cnome }}
+                                    </a>
+                                    {% endfor %}
+                                </div>
                             </div>
-                        </div>
                         {% endif %}
                         <a href="{{ url_for('nfe.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Nova NFe
@@ -172,7 +182,7 @@
                                 <a href="{{ url_for('nfe.create') }}" class="btn btn-primary btn-lg">
                                     <i class="fas fa-plus"></i> Emitir Primeira NFe
                                 </a>
-                                {% if cliente_id %}
+                                {% if cliente_id and current_user.is_super_admin() %}
                                 <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary btn-lg ms-2">
                                     <i class="fas fa-list"></i> Ver Todas as NFes
                                 </a>

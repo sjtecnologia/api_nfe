@@ -58,39 +58,25 @@ def login():
                 if role_name == 'admin':
                     return redirect(url_for('admin.admin_home'))
                 else:
-                    # Para usuários cliente, buscar cliente associado
-                    cliente_result = db.execute(text("""
-                        SELECT c.cliente_id 
+                    # Buscar todos os clientes acessíveis do usuário
+                    clientes_result = db.execute(text("""
+                        SELECT c.cliente_id, c.razao_social
                         FROM user_clients uc
                         JOIN clientes c ON c.cliente_id = uc.client_id
                         WHERE uc.user_id = :user_id AND c.ativo = true
-                    """), {"user_id": user_data.id})  # ✅ USAR user_data.id
-                    
-                    cliente_data = cliente_result.first()
-                    if cliente_data:
-                        print(f"🔄 Redirecionando usuário {username} para cliente {cliente_data.cliente_id}")
-                        return redirect(url_for('cliente.dashboard', cliente_id=cliente_data.cliente_id))
+                        ORDER BY c.razao_social ASC
+                    """), {"user_id": user_data.id})
+                    clientes_acessiveis = [dict(row._mapping) for row in clientes_result]
+                    if clientes_acessiveis:
+                        primeiro_cliente = clientes_acessiveis[0]
+                        session['current_client_id'] = primeiro_cliente['cliente_id']
+                        session['current_client_name'] = primeiro_cliente['razao_social']
+                        print(f"🔄 Cliente padrão atribuído: {primeiro_cliente['razao_social']} (ID: {primeiro_cliente['cliente_id']}) para usuário {username}")
+                        return redirect(url_for('cliente.dashboard', cliente_id=primeiro_cliente['cliente_id']))
                     else:
                         print(f"⚠️  Nenhum cliente encontrado para user_id {user_data.id}")
-                        
-                        # Vamos ver se tem clientes disponíveis
-                        clientes_result = db.execute(text("""
-                            SELECT cliente_id, razao_social FROM clientes 
-                            WHERE ativo = true
-                            
-                        """))
-                        
-                        clientes_disponiveis = [dict(row._mapping) for row in clientes_result]
-                        
-                        if clientes_disponiveis:
-                            print(f"📋 Clientes disponíveis: {len(clientes_disponiveis)}")
-                            # Por enquanto, redirecionar para o primeiro cliente
-                            primeiro_cliente = clientes_disponiveis[0]
-                            print(f"🔄 Redirecionando para primeiro cliente: {primeiro_cliente['razao_social']}")
-                            return redirect(url_for('cliente.dashboard', cliente_id=primeiro_cliente['cliente_id']))
-                        else:
-                            flash('Nenhum cliente encontrado no sistema.', 'warning')
-                            return redirect(url_for('home.home'))
+                        flash('Nenhum cliente encontrado no sistema.', 'warning')
+                        return redirect(url_for('home.home'))
                         
             else:
                 print(f"❌ LOGIN FALHOU: Usuário {username} não encontrado ou senha incorreta")

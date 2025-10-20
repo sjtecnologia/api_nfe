@@ -199,7 +199,7 @@ def admin_home():
             SELECT nfe_emitida_id, status, data_criacao
             FROM nfe_emitidas
             ORDER BY nfe_emitida_id DESC
-            LIMIT 10
+            LIMIT 3
         """)).fetchall()
         for r in rows_nfe:
             ultimas_nfes.append(_safe_row_to_dict(r, [
@@ -244,17 +244,37 @@ def admin_home():
 def list_nfes():
     db = _get_db()
     q = request.args.get('q', '').strip()
-    filtro = ""
+    cliente_id = request.args.get('cliente_id')
+    filtro = []
     params = {}
+    from flask_login import current_user
+    # Se não for super_admin, filtra por cliente_id ou pelos clientes acessíveis
+    if not current_user.is_super_admin():
+        accessible_ids = [c.get('cliente_id') for c in current_user.get_accessible_clients()] if hasattr(current_user, 'get_accessible_clients') else []
+        if cliente_id:
+            filtro.append("n.cliente_id = :cliente_id")
+            params['cliente_id'] = int(cliente_id)
+        elif accessible_ids:
+            filtro.append("n.cliente_id IN :ids")
+            params['ids'] = tuple(accessible_ids)
+        else:
+            filtro.append("1=0")  # Nenhum cliente acessível
+    elif cliente_id:
+        filtro.append("n.cliente_id = :cliente_id")
+        params['cliente_id'] = int(cliente_id)
+    # Filtro de busca
     if q:
-        filtro = """
-            WHERE n.chave_acesso ILIKE :q
-               OR n.destinatario_razao_social ILIKE :q
-               OR n.destinatario_cnpj_cpf ILIKE :q
-               OR c.razao_social ILIKE :q
-               OR c.cnpj ILIKE :q
-        """
+        filtro.append("(" +
+            "n.chave_acesso ILIKE :q OR "
+            "n.destinatario_razao_social ILIKE :q OR "
+            "n.destinatario_cnpj_cpf ILIKE :q OR "
+            "c.razao_social ILIKE :q OR "
+            "c.cnpj ILIKE :q"
+            ")")
         params['q'] = f'%{q}%'
+    where_clause = ""
+    if filtro:
+        where_clause = "WHERE " + " AND ".join(filtro)
     rows = db.execute(text(f"""
         SELECT n.nfe_emitida_id, n.cliente_id, n.chave_acesso, n.data_criacao, n.status,
                n.destinatario_razao_social, n.destinatario_cnpj_cpf,
@@ -262,7 +282,7 @@ def list_nfes():
                c.razao_social, c.cnpj
         FROM nfe_emitidas n
         JOIN clientes c ON c.cliente_id = n.cliente_id
-        {filtro}
+        {where_clause}
         ORDER BY n.data_criacao DESC
         LIMIT 100
     """), params).fetchall()
@@ -271,8 +291,6 @@ def list_nfes():
     # Monta o cliente_map para o filtro e exibição
     clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
     cliente_map = {row.cliente_id: row.razao_social for row in clientes}
-
-    cliente_id = request.args.get('cliente_id')
 
     return render_template(
         'admin/nfes/list.html',
@@ -585,7 +603,15 @@ def list_usuarios():
             FROM users
             ORDER BY username
         """)).fetchall()
-    usuarios = [dict(row._mapping) for row in rows]
+    usuarios = []
+    for row in rows:
+        usuario = dict(row._mapping)
+        # Buscar roles do usuário
+        roles_data = db.execute(text("""
+            SELECT r.name FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = :user_id
+        """), {'user_id': usuario['id']}).fetchall()
+        usuario['roles'] = [{'name': r.name} for r in roles_data]
+        usuarios.append(usuario)
     return render_template('admin/usuarios/list.html', usuarios=usuarios)
 
 from werkzeug.security import generate_password_hash
@@ -1852,17 +1878,23 @@ def delete_destinatario(destinatario_id: int):
 def list_produtos():
     db = _get_db()
     try:
+        from flask import session
+        cliente_id = session.get('current_client_id')
+        if not cliente_id:
+            flash('Nenhum cliente selecionado.', 'error')
+            return render_template('admin/produtos/list.html', produtos=[])
         rows = db.execute(text("""
             SELECT produto_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
                    ncm_id, cfop_id, ativo
             FROM produtos
+            WHERE cliente_id = :cliente_id
             ORDER BY descricao
-        """)).fetchall()
+        """), {'cliente_id': cliente_id}).fetchall()
         produtos = [_safe_row_to_dict(r, [
             'produto_id','codigo_interno','descricao','unidade_comercial',
             'preco_unitario_padrao','ncm_id','cfop_id','ativo'
         ]) for r in rows]
-        return render_template('admin/produtos/list.html', produtos=produtos)
+        return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id)
     except Exception as e:
         print(f"❌ Erro list_produtos: {e}")
         flash('Erro ao carregar produtos', 'error')
@@ -2048,11 +2080,17 @@ def list_destinatarios(cliente_id: int):
         destinatarios = [_safe_row_to_dict(r, [
             'cliente_id','nome_razao_social','cpf_cnpj','uf','nome_municipio'
         ]) for r in rows]
-        return render_template('admin/destinatarios/list.html', destinatarios=destinatarios, cliente_id=cliente_id)
+        # Buscar nome do cliente
+        cliente_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
+        cliente_nome = cliente_row[0] if cliente_row else f"ID {cliente_id}"
+        return render_template('admin/destinatarios/list.html', destinatarios=destinatarios, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
         print(f"❌ Erro list_destinatarios: {e}")
         flash('Erro ao carregar destinatários', 'error')
-        return render_template('admin/destinatarios/list.html', destinatarios=[], cliente_id=cliente_id)
+        # Buscar nome do cliente para erro também
+        cliente_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
+        cliente_nome = cliente_row[0] if cliente_row else f"ID {cliente_id}"
+        return render_template('admin/destinatarios/list.html', destinatarios=[], cliente_id=cliente_id, cliente_nome=cliente_nome)
     finally:
         db.close()
 
@@ -2152,20 +2190,28 @@ def edit_destinatario(destinatario_id: int):
 @permission_required('certificados.view')
 def list_certificados():
     db = _get_db()
+    cliente_id = request.args.get('cliente_id') or session.get('current_client_id') or session.get('active_cliente_id')
+    cliente_nome = None
     try:
+        if not cliente_id:
+            flash('Selecione um cliente para visualizar os certificados.', 'warning')
+            return render_template('admin/certificados/list.html', certificados=[], cliente_id=None, cliente_nome=None)
+        row_cliente = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
+        cliente_nome = row_cliente[0] if row_cliente else 'Cliente'
         rows = db.execute(text("""
-            SELECT certificado_digital_id, fingerprint, conteudo_certificado, validade_fim, ativo
+            SELECT certificado_digital_id, fingerprint, conteudo_certificado, validade_fim, ativo, nome_arquivo_original, data_upload
             FROM certificados_digitais
+            WHERE cliente_id = :cid
             ORDER BY certificado_digital_id DESC
-        """)).fetchall()
+        """), {'cid': cliente_id}).fetchall()
         certificados = [_safe_row_to_dict(r, [
-            'certificado_digital_id','fingerprint','conteudo_certificado','validade_fim','ativo'
+            'certificado_digital_id','fingerprint','conteudo_certificado','validade_fim','ativo','nome_arquivo_original','data_upload'
         ]) for r in rows]
-        return render_template('admin/certificados/list.html', certificados=certificados)
+        return render_template('admin/certificados/list.html', certificados=certificados, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
         print(f"❌ Erro list_certificados: {e}")
         flash('Erro ao carregar certificados', 'error')
-        return render_template('admin/certificados/list.html', certificados=[])
+        return render_template('admin/certificados/list.html', certificados=[], cliente_id=cliente_id, cliente_nome=cliente_nome)
     finally:
         db.close()
 
@@ -2250,18 +2296,21 @@ def toggle_certificado_status(certificado_id: int):
 @permission_required('regras_tributacao.view')
 def list_regras_tributacao():
     db = _get_db()
+    cliente_id = request.args.get('cliente_id') or session.get('current_client_id') or session.get('active_cliente_id')
     try:
+        if not cliente_id:
+            flash('Selecione um cliente para visualizar as regras tributárias.', 'warning')
+            return render_template('admin/regras_tributacao/list.html', regras=[], cliente_id=None)
         rows = db.execute(text("""
-            SELECT regra_tributacao_id, produto_id, cliente_id, cfop, origem, cst_icms,
-                   aliquota_icms
+            SELECT regra_tributacao_id, cliente_id, cfop_id, ncm_id, uf_origem, uf_destino, tipo_item, prioridade, cst_icms, csosn_icms, aliquota_icms, reducao_base_icms, modalidade_bc_icms, motivo_desoneracao_icms, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cst_ipi, aliquota_ipi, descricao_regra, data_criacao, ativo
             FROM regras_tributacao
+            WHERE cliente_id = :cid
             ORDER BY regra_tributacao_id DESC            
-        """)).fetchall()
+        """), {'cid': cliente_id}).fetchall()
         regras = [_safe_row_to_dict(r, [
-            'regra_tributacao_id','produto_id','cliente_id','cfop','origem',
-            'cst_icms','aliquota_icms'
+            'regra_tributacao_id','cliente_id','cfop_id','ncm_id','uf_origem','uf_destino','tipo_item','prioridade','cst_icms','csosn_icms','aliquota_icms','reducao_base_icms','modalidade_bc_icms','motivo_desoneracao_icms','cst_pis','aliquota_pis','cst_cofins','aliquota_cofins','cst_ipi','aliquota_ipi','descricao_regra','data_criacao','ativo'
         ]) for r in rows]
-        return render_template('admin/regras_tributacao/list.html', regras=regras)
+        return render_template('admin/regras_tributacao/list.html', regras=regras, cliente_id=cliente_id)
     except Exception as e:
         print(f"❌ Erro list_regras_tributacao: {e}")
         flash('Erro ao carregar regras', 'error')

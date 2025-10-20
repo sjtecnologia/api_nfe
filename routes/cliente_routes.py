@@ -109,7 +109,7 @@ def dashboard(cliente_id):
             FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
             ORDER BY data_criacao DESC
-            LIMIT 5
+            LIMIT 3
         """)
         
         ultimas_nfes_result = db.execute(query_ultimas_nfes, {"cliente_id": cliente_id})
