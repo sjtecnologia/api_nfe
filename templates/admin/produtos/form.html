@@ -331,24 +331,12 @@
                                         {{ 'Atualizar' if produto else 'Salvar' }} Produto
                                     </button>
                                     
-                                    <a href="{% if voltar_para == 'list_partial' %}
-                                                {{ url_for('admin.list_produtos_partial', cliente_id=cliente_id) }}
-                                            {% else %}
-                                                {{ url_for('admin.list_produtos', cliente_id=cliente_id) }}
-                                            {% endif %}" 
-                                        class="btn btn-secondary btn-lg ms-2">
+
+                                    <button type="button" class="btn btn-secondary btn-lg ms-2" onclick="window.history.back();">
                                         <i class="fas fa-arrow-left"></i>
-                                        Voltar para Lista           
-                                    </a>
+                                        Voltar para Lista
+                                    </button>
                                     
-                                    {% if produto %}
-                                        <button type="button" 
-                                                class="btn btn-outline-info btn-lg ms-2"
-                                                onclick="duplicarProduto()">
-                                            <i class="fas fa-copy"></i>
-                                            Duplicar Produto
-                                        </button>
-                                    {% endif %}
                                 </div>
                             </div>
                         </div>

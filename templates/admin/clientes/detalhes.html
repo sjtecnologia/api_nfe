@@ -86,8 +86,8 @@
     {% else %}
         <div class="alert alert-warning">Cliente não encontrado.</div>
     {% endif %}
-    <a href="{{ url_for('admin.list_clientes') }}" class="btn btn-secondary">
-        <i class="fas fa-arrow-left"></i> Voltar para lista
-    </a>
+    <button type="button" class="btn btn-secondary" onclick="window.history.back();">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </button>
 </div>
 {% endblock %}

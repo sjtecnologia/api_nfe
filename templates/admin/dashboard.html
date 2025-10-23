@@ -3,20 +3,8 @@
 {% block title %}Dashboard Administrativo{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header Admin -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card bg-danger text-white">
-                <div class="card-body">
-                    <h2><i class="fas fa-tools"></i> Dashboard Administrativo</h2>
-                    <p class="mb-0">Visão geral da plataforma NFe</p>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Estatísticas Gerais -->
+    <!-- Cards de estatísticas originais -->
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
@@ -60,12 +48,12 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col me-2">
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                NFes este Ano
+                                NFes no Ano
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.nfes_ano }}</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                            <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
@@ -78,18 +66,43 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col me-2">
                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                NFes este Mês
+                                NFes no Mês
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.nfes_mes }}</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-calendar-day fa-2x text-gray-300"></i>
+                            <i class="fas fa-calendar-week fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+<div class="container-fluid">
+    <!-- Filtros de Relatório -->
+    <form method="get" class="row g-3 align-items-end mb-4" id="filtro-relatorio-form">
+        <div class="col-md-4">
+            <label for="cliente_id" class="form-label">Cliente</label>
+            <select class="form-select" id="cliente_id" name="cliente_id">
+                <option value="">Todos os clientes</option>
+
+                {% for cliente in clientes_filtro %}
+                    <option value="{{ cliente.cliente_id }}" {% if cliente.cliente_id|string == request.args.get('cliente_id', '') %}selected{% endif %}>{{ cliente.razao_social }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="periodo_inicio" class="form-label">Período Inicial</label>
+            <input type="date" class="form-control" id="periodo_inicio" name="periodo_inicio" value="{{ request.args.get('periodo_inicio', data_primeiro_dia_mes) }}">
+        </div>
+        <div class="col-md-3">
+            <label for="periodo_fim" class="form-label">Período Final</label>
+            <input type="date" class="form-control" id="periodo_fim" name="periodo_fim" value="{{ request.args.get('periodo_fim', data_hoje) }}">
+        </div>
+        <div class="col-md-2 d-grid">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Filtrar</button>
+        </div>
+    </form>
 
     <!-- Ações Administrativas -->
     <!-- <div class="row mb-4">
@@ -111,28 +124,64 @@
                             <a href="{{ url_for('admin.list_usuarios') }}" 
                                class="btn btn-success btn-lg btn-block">
                                 <i class="fas fa-user"></i><br>
-                                Usuários
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('admin.list_nfes') }}" 
-                               class="btn btn-info btn-lg btn-block">
-                                <i class="fas fa-file-invoice"></i><br>
-                                Todas as NFes
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('admin.list_cfops') }}" 
-                               class="btn btn-warning btn-lg btn-block">
-                                <i class="fas fa-cogs"></i><br>
-                                Cadastros Fiscais
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div> -->
+
+                                </div>
+                            </div>
+
+
+
+                            <!-- Extrato detalhado de NFEs emitidas -->
+                            {% if extrato_nfes and extrato_nfes|length > 0 %}
+                            <div class="card mb-4">
+                                <div class="card-header bg-secondary text-white">
+                                    <i class="bi bi-list-ul me-2"></i>Extrato detalhado de NFEs emitidas
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-hover mb-0 align-middle">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Data</th>
+                                                    <th>Status</th>
+                                                    <th>Cliente</th>
+                                                    <th>Destinatário</th>
+                                                    <th>CNPJ/CPF</th>
+                                                    <th class="text-end">Valor Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for nfe in extrato_nfes %}
+                                                <tr>
+                                                    <td>{{ nfe.nfe_emitida_id }}</td>
+                                                    <td>{{ nfe.data_criacao.strftime('%d/%m/%Y %H:%M') if nfe.data_criacao else '' }}</td>
+                                                    <td>
+                                                        <span class="badge bg-{{ 'success' if nfe.status == 'aprovada' else 'secondary' }}">{{ nfe.status|capitalize }}</span>
+                                                    </td>
+                                                    <td>
+                                                        {% set cliente = clientes_filtro|selectattr('cliente_id', 'equalto', nfe.cliente_id)|first %}
+                                                        {{ cliente.razao_social if cliente else nfe.cliente_id }}
+                                                    </td>
+                                                    <td>{{ nfe.destinatario_razao_social }}</td>
+                                                    <td>{{ nfe.destinatario_cnpj_cpf }}</td>
+                                                    <td class="text-end">R$ {{ '{:,.2f}'.format(nfe.valor_total|float).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                            {% if extrato_nfes|length > 0 %}
+                                            <tfoot>
+                                                <tr>
+                                                    <th colspan="6" class="text-end">Somatório</th>
+                                                    <th class="text-end">R$ {{ '{:,.2f}'.format(extrato_nfes|map(attribute='valor_total')|sum|float).replace(',', 'X').replace('.', ',').replace('X', '.') }}</th>
+                                                </tr>
+                                            </tfoot>
+                                            {% endif %}
+                                        </table>
+                                    </div>
+                                    <div class="p-2 small text-muted">Exibindo até 100 últimas NFEs emitidas conforme filtro.</div>
+                                </div>
+                            </div>
+    {% endif %}
 
     <!-- Últimos Clientes Cadastrados -->
     {% if ultimos_clientes %}

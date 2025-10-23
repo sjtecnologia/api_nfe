@@ -961,11 +961,7 @@
                 <i class="fas fa-code"></i> NfeSjtec - Sistema de Nota Fiscal Eletrônica
                 {% if current_user.is_authenticated %}
                     | Usuário: <strong>{{ current_user.username }}</strong>
-                    {% if current_user.is_super_admin() %}
-                        <span class="badge bg-danger ms-1">Administrador</span>
-                    {% elif session.current_client_id %}
-                        <span class="badge bg-primary ms-1">{{ session.current_client_name or 'Cliente' }}</span>
-                    {% endif %}
+                    <span class="badge bg-primary ms-1">{{ current_user.roles[0].name }}</span>                    
                 {% endif %}
                 | © 2025
             </small>

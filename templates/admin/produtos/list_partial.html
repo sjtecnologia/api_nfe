@@ -37,6 +37,12 @@
                                    title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </a>
+                                <!-- Duplicar -->
+                                <form method="post" action="{{ url_for('admin.duplicar_produto', produto_id=produto.produto_id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-info" title="Duplicar Produto" onclick="return confirm('Deseja duplicar este produto?');">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </form>
                                 <!-- Alterar Status -->
                                 <button type="button" 
                                         class="btn btn-sm btn-outline-{{ 'danger' if produto.ativo else 'success' }} btn-toggle-status"

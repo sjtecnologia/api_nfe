@@ -1,15 +1,79 @@
+
+# coding: utf-8
 from __future__ import annotations
 from typing import Optional, Dict, Any, List, Generator
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, jsonify, session, current_app
 )
+
+# Definição do Blueprint admin_bp
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 from flask_login import login_required, current_user
 from sqlalchemy import text
 from datetime import datetime
 import sys
 from pathlib import Path
 import importlib
+
+
+
+
+# Defina o decorator permission_required (stub ou real)
+try:
+    # Tente importar o real
+    from ..core.permissions import permission_required  # type: ignore
+except Exception:
+    def permission_required(permission):
+        def decorator(f):
+            return f
+        return decorator
+
+# Duplicar produto
+@admin_bp.route('/produtos/<int:produto_id>/duplicar', methods=['POST'])
+@login_required
+@permission_required('produtos.create')
+def duplicar_produto(produto_id: int):
+    db = _get_db()
+    try:
+        # Buscar produto original
+        row = db.execute(text("""
+            SELECT cliente_id, codigo_interno, descricao, unidade_comercial, tipo_item, preco_unitario_padrao,
+                   ncm_id, cfop_id, origem_mercadoria, cest, cst_id, csosn_id, ativo
+            FROM produtos WHERE produto_id = :pid
+        """), {'pid': produto_id}).fetchone()
+        if not row:
+            flash('Produto original não encontrado para duplicação.', 'error')
+            return redirect(request.referrer or url_for('admin.list_produtos'))
+        prod = dict(row._mapping)
+        # Ajustar campos para novo produto
+        prod['codigo_interno'] = (prod['codigo_interno'] or '') + '_COPIA'
+        prod['descricao'] = (prod['descricao'] or '') + ' (Cópia)'
+        prod['created_by_user_id'] = current_user.id
+        # Insert novo produto
+        result = db.execute(text("""
+            INSERT INTO produtos (cliente_id, codigo_interno, descricao, unidade_comercial, tipo_item, preco_unitario_padrao,
+                      ncm_id, cfop_id, origem_mercadoria, cest, cst_id, csosn_id, created_by_user_id, ativo)
+            VALUES (:cliente_id, :codigo_interno, :descricao, :unidade_comercial, :tipo_item, :preco_unitario_padrao,
+                :ncm_id, :cfop_id, :origem_mercadoria, :cest, :cst_id, :csosn_id, :created_by_user_id, :ativo)
+            RETURNING produto_id
+        """), prod)
+        db.commit()
+        row_result = result.fetchone()
+        new_id = row_result[0] if row_result else None
+        if new_id:
+            flash('Produto duplicado com sucesso! Faça os ajustes necessários.', 'success')
+            return redirect(url_for('admin.edit_produto', produto_id=new_id, origem='duplicado'))
+        else:
+            flash('Erro ao duplicar produto: ID não retornado.', 'error')
+            return redirect(request.referrer or url_for('admin.list_produtos'))
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro ao duplicar produto: {e}")
+        flash('Erro ao duplicar produto', 'error')
+        return redirect(request.referrer or url_for('admin.list_produtos'))
+    finally:
+        db.close()
 
 # Importe o decorator permission_required
 try:
@@ -115,7 +179,6 @@ def _locate_get_db():
             conn.close()
     return _fallback
 
-admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 # -------------------------------------------------------------------
 # HELPERS
@@ -161,52 +224,113 @@ def _get_db():
 @login_required
 def admin_home():
     db = None
+    db = None
     stats = {
         'total_clientes': 0,
         'total_nfes': 0,
         'nfes_ano': 0,
         'nfes_mes': 0
     }
-    ultimas_nfes: List[Dict[str, Any]] = []
-    ultimos_clientes: List[Dict[str, Any]] = []
+    ultimas_nfes = []
+    ultimos_clientes = []
+    clientes_filtro = []
+
     try:
         db = _get_db()
 
+        # Filtros recebidos via GET
+        cliente_id = request.args.get('cliente_id', type=int)
+        periodo_inicio = request.args.get('periodo_inicio')
+        periodo_fim = request.args.get('periodo_fim')
+
+        # Lista de clientes para o filtro
+        clientes_rows = db.execute(text("SELECT cliente_id, razao_social FROM clientes WHERE ativo = TRUE ORDER BY razao_social")).fetchall()
+        clientes_filtro = [dict(row._mapping) for row in clientes_rows]
+
+        # Monta filtro SQL para NFes
+        filtro_nfe = []
+        params_nfe = {}
+        if cliente_id:
+            filtro_nfe.append("cliente_id = :cliente_id")
+            params_nfe['cliente_id'] = cliente_id
+        if periodo_inicio:
+            filtro_nfe.append("data_criacao >= :periodo_inicio")
+            params_nfe['periodo_inicio'] = periodo_inicio
+        if periodo_fim:
+            filtro_nfe.append("data_criacao <= :periodo_fim")
+            params_nfe['periodo_fim'] = periodo_fim
+        where_nfe = ("WHERE " + " AND ".join(filtro_nfe)) if filtro_nfe else ""
+
         # Total clientes (excluindo destinatários, ajuste se necessário)
-        stats['total_clientes'] = db.execute(text("""
-            SELECT COUNT(*) FROM clientes WHERE ativo = TRUE
-        """)).scalar() or 0
+        stats['total_clientes'] = db.execute(text("SELECT COUNT(*) FROM clientes WHERE ativo = TRUE")).scalar() or 0
 
-        # Total NFes
-        stats['total_nfes'] = db.execute(text("SELECT COUNT(*) FROM nfe_emitidas")).scalar() or 0
+        # Total NFes conforme filtro
+        total_nfes_result = db.execute(text(f"SELECT COUNT(*) FROM nfe_emitidas {where_nfe}"), params_nfe).scalar()
+        stats['total_nfes'] = int(total_nfes_result) if total_nfes_result is not None else 0
 
+        # Ano e mês para os cards
         ano_atual = datetime.now().year
         mes_atual = datetime.now().month
 
-        stats['nfes_ano'] = db.execute(text("""
-            SELECT COUNT(*) FROM nfe_emitidas
-            WHERE EXTRACT(YEAR FROM data_criacao) = :ano
-        """), {'ano': ano_atual}).scalar() or 0
+        # NFes do ano conforme filtro
+        filtro_ano = list(filtro_nfe)
+        params_ano = dict(params_nfe)
+        filtro_ano.append("EXTRACT(YEAR FROM data_criacao) = :ano")
+        params_ano['ano'] = ano_atual
+        where_ano = ("WHERE " + " AND ".join(filtro_ano)) if filtro_ano else ""
+        nfes_ano_result = db.execute(text(f"SELECT COUNT(*) FROM nfe_emitidas {where_ano}"), params_ano).scalar()
+        stats['nfes_ano'] = int(nfes_ano_result) if nfes_ano_result is not None else 0
 
-        stats['nfes_mes'] = db.execute(text("""
-            SELECT COUNT(*) FROM nfe_emitidas
-            WHERE EXTRACT(YEAR FROM data_criacao) = :ano
-              AND EXTRACT(MONTH FROM data_criacao) = :mes
-        """), {'ano': ano_atual, 'mes': mes_atual}).scalar() or 0
+        # NFes do mês conforme filtro
+        filtro_mes = list(filtro_nfe)
+        params_mes = dict(params_nfe)
+        filtro_mes.append("EXTRACT(YEAR FROM data_criacao) = :ano")
+        filtro_mes.append("EXTRACT(MONTH FROM data_criacao) = :mes")
+        params_mes['ano'] = ano_atual
+        params_mes['mes'] = mes_atual
+        where_mes = ("WHERE " + " AND ".join(filtro_mes)) if filtro_mes else ""
+        nfes_mes_result = db.execute(text(f"SELECT COUNT(*) FROM nfe_emitidas {where_mes}"), params_mes).scalar()
+        stats['nfes_mes'] = int(nfes_mes_result) if nfes_mes_result is not None else 0
 
-        # Últimas NFes
-        rows_nfe = db.execute(text("""
-            SELECT nfe_emitida_id, status, data_criacao
-            FROM nfe_emitidas
-            ORDER BY nfe_emitida_id DESC
-            LIMIT 3
-        """)).fetchall()
+        # Últimas NFes (apenas do filtro, se houver)
+        rows_nfe = db.execute(text(f"SELECT nfe_emitida_id, status, data_criacao FROM nfe_emitidas {where_nfe} ORDER BY nfe_emitida_id DESC LIMIT 3"), params_nfe).fetchall()
         for r in rows_nfe:
             ultimas_nfes.append(_safe_row_to_dict(r, [
                 'nfe_emitida_id','status','data_criacao'
             ]))
 
-        # Últimos clientes
+        # Extrato detalhado de NFEs emitidas por cliente/período
+        extrato_nfes = []
+        extrato_rows = db.execute(text(f"""
+            SELECT nfe_emitida_id, cliente_id, data_criacao, status, destinatario_razao_social, destinatario_cnpj_cpf, json_nfe
+            FROM nfe_emitidas
+            {where_nfe}
+            ORDER BY data_criacao DESC
+            LIMIT 100
+        """), params_nfe).fetchall()
+        for r in extrato_rows:
+            row_dict = _safe_row_to_dict(r, [
+                'nfe_emitida_id','cliente_id','data_criacao','status','destinatario_razao_social','destinatario_cnpj_cpf','json_nfe'
+            ])
+            valor_total = 0.0
+            json_nfe = row_dict.get('json_nfe')
+            if json_nfe:
+                import json
+                try:
+                    if isinstance(json_nfe, str):
+                        json_data = json.loads(json_nfe)
+                    else:
+                        json_data = json_nfe
+                    # Novo cálculo: soma dos valor_total dos itens
+                    items = json_data.get('items', [])
+                    valor_total = sum(float(item.get('valor_total', 0.0)) for item in items if isinstance(item, dict))
+                except Exception as e:
+                    print(f"Erro ao extrair valor_total do json_nfe: {e}")
+                    valor_total = 0.0
+            row_dict['valor_total'] = valor_total
+            extrato_nfes.append(row_dict)
+
+        # Últimos clientes (mantém todos)
         rows_cli = db.execute(text("""
             SELECT cliente_id,
                    razao_social,
@@ -223,17 +347,26 @@ def admin_home():
                 'cliente_id','razao_social','nome_fantasia','cnpj','data_cadastro'
             ]))
 
+        # Datas padrão para o filtro (primeiro dia do mês e hoje)
+        from datetime import date
+        hoje = date.today()
+        primeiro_dia_mes = hoje.replace(day=1)
         return render_template('admin/dashboard.html',
-                               stats=stats,
-                               ultimas_nfes=ultimas_nfes,
-                               ultimos_clientes=ultimos_clientes)
+               stats=stats,
+               ultimas_nfes=ultimas_nfes,
+               ultimos_clientes=ultimos_clientes,
+               clientes_filtro=clientes_filtro,
+               extrato_nfes=extrato_nfes,
+               data_hoje=hoje.strftime('%Y-%m-%d'),
+               data_primeiro_dia_mes=primeiro_dia_mes.strftime('%Y-%m-%d'))
     except Exception as e:
         print(f"❌ Erro dashboard admin: {e}")
         flash('Erro ao carregar dashboard', 'error')
         return render_template('admin/dashboard.html',
                                stats=stats,
                                ultimas_nfes=ultimas_nfes,
-                               ultimos_clientes=ultimos_clientes)
+                               ultimos_clientes=ultimos_clientes,
+                               clientes_filtro=[])
     finally:
         if db:
             db.close()
@@ -324,57 +457,6 @@ def list_ncms():
         """)).fetchall()
     ncms = [dict(row._mapping) for row in rows]
     return render_template('admin/ncms/list.html', ncms=ncms)
-
-@admin_bp.route('/ncms/novo')
-@login_required
-@permission_required('ncms.create')
-def create_ncm():
-    return render_template('admin/ncms/form.html', ncm=None)
-
-@admin_bp.route('/ncms/editar/<int:ncm_id>', methods=['GET', 'POST'])
-@login_required
-@permission_required('ncms.edit')
-def edit_ncm(ncm_id):
-    db = _get_db()
-    if request.method == 'POST':
-        # Recebe dados do formulário
-        codigo = request.form.get('codigo')
-        descricao = request.form.get('descricao')
-        data_inicio = request.form.get('data_inicio') or None
-        data_fim = request.form.get('data_fim') or None
-        tipo_ato = request.form.get('tipo_ato')
-        numero_ato = request.form.get('numero_ato')
-        ano_ato = request.form.get('ano_ato')
-        try:
-            db.execute(text("""
-                UPDATE ncms SET
-                    codigo = :codigo,
-                    descricao = :descricao,
-                    data_inicio = :data_inicio,
-                    data_fim = :data_fim,
-                    tipo_ato = :tipo_ato,
-                    numero_ato = :numero_ato,
-                    ano_ato = :ano_ato
-                WHERE ncm_id = :ncm_id
-            """), {
-                'codigo': codigo,
-                'descricao': descricao,
-                'data_inicio': data_inicio,
-                'data_fim': data_fim,
-                'tipo_ato': tipo_ato,
-                'numero_ato': numero_ato,
-                'ano_ato': ano_ato,
-                'ncm_id': ncm_id
-            })
-            db.commit()
-            flash('NCM atualizado com sucesso!', 'success')
-            return redirect(url_for('admin.list_ncms'))
-        except Exception as e:
-            db.rollback()
-            flash('Erro ao atualizar NCM', 'danger')
-    row = db.execute(text("SELECT ncm_id, codigo, descricao, data_inicio, data_fim, tipo_ato, numero_ato, ano_ato FROM ncms WHERE ncm_id = :id"), {'id': ncm_id}).fetchone()
-    ncm = dict(row._mapping) if row else None
-    return render_template('admin/ncms/form.html', ncm=ncm)
 
 @admin_bp.route('/ncms/excluir/<int:ncm_id>', methods=['POST'])
 @login_required
@@ -1659,6 +1741,7 @@ def edit_cliente(cliente_id: int):
         return render_template(
             'admin/clientes/form.html',
             cliente=cliente,
+            cliente_id=cliente.get('cliente_id'),
             form_data=form_data,
             regimes_tributarios=regimes_tributarios,
             certificados_existentes=certificados_existentes,
@@ -1750,12 +1833,32 @@ def delete_certificado(certificado_digital_id: int):
 @permission_required('regras_tributacao.create')
 def create_regra_tributacao(cliente_id: int):
     modal = request.args.get('modal', False)
-    return render_template(
-        'admin/regras_tributacao/form.html',
-        regra=None,
-        cliente_id=cliente_id,
-        modal=modal
-    )
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or modal
+    template = 'admin/regras_tributacao/form.html'
+    db = _get_db()
+    try:
+        # Buscar todos os CFOPs
+        cfop_rows = db.execute(text("""
+            SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
+        """)).fetchall()
+        cfops = [dict(row._mapping) for row in cfop_rows]
+        # Buscar todos os NCMs
+        ncm_rows = db.execute(text("""
+            SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo
+        """)).fetchall()
+        ncms = [dict(row._mapping) for row in ncm_rows]
+        if is_ajax:
+            template = 'admin/regras_tributacao/form_partial.html'
+        return render_template(
+            template,
+            regra=None,
+            cliente_id=cliente_id,
+            modal=modal,
+            cfops=cfops,
+            ncms=ncms
+        )
+    finally:
+        db.close()
 
 @admin_bp.route('/regras-tributacao/<int:regra_tributacao_id>/edit', methods=['GET'])
 @login_required
@@ -1902,11 +2005,42 @@ def list_produtos():
     finally:
         db.close()
 
+
 @admin_bp.route('/produtos/add', methods=['GET'])
 @login_required
 @permission_required('produtos.create')
 def create_produto():
-    return render_template('admin/produtos/form.html', produto=None)
+    from flask import session, request
+    # Permite cliente_id via query string (prioridade)
+    cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
+    if not cliente_id or cliente_id == 'None':
+        flash('Selecione um cliente antes de cadastrar produtos.', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    db = _get_db()
+    try:
+        # Busca listas para selects (NCM, CFOP, etc)
+        ncm_lista = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms")).fetchall()
+        cfop_lista = db.execute(text("SELECT cfop_id, cfop ,descricao FROM cfops")).fetchall()
+        origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria")).fetchall()
+        csts_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms")).fetchall()
+        csosns_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms")).fetchall()
+
+        return render_template(
+            'admin/produtos/form.html',
+            produto=None,
+            ncms=[dict(ncm._mapping) for ncm in ncm_lista],
+            cfops=[dict(cfop._mapping) for cfop in cfop_lista],
+            origens_mercadoria = [dict(origens._mapping) for origens in origens_list],
+            csts = [dict(csts._mapping) for csts in csts_list],
+            csosns = [dict(csosns._mapping) for csosns in csosns_list],
+            cliente_id=cliente_id
+        )
+    except Exception as e:
+        print(f"❌ Erro create_produto: {e}")
+        flash('Erro ao carregar formulário de produto', 'error')
+        return redirect(url_for('admin.list_produtos'))
+    finally:
+        db.close()
 
 @admin_bp.route('/produtos/add', methods=['POST'])
 @login_required
@@ -1914,24 +2048,40 @@ def create_produto():
 def store_produto():
     db = _get_db()
     try:
+        # Busca o cliente_id do form ou da sessão
+        cliente_id = request.form.get('cliente_id') or session.get('current_client_id')
+        # Corrige caso venha string 'None' ou valor vazio
+        if not cliente_id or cliente_id == 'None':
+            flash('Cliente não selecionado.', 'error')
+            return redirect(url_for('admin.list_produtos'))
+        cst_id = request.form.get('cst_id')
+        csosn_id = request.form.get('csosn_id')
         data = {
+            'cliente_id': int(cliente_id),
             'codigo_interno': request.form.get('codigo_interno'),
             'descricao': request.form.get('descricao'),
             'unidade_comercial': request.form.get('unidade_comercial','UN'),
+            'tipo_item': request.form.get('tipo_item'),
             'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
             'ncm_id': request.form.get('ncm_id'),
             'cfop_id': request.form.get('cfop_id'),
+            'origem_mercadoria': request.form.get('origem_mercadoria'),
+            'cest': request.form.get('cest'),
+            'cst_id': int(cst_id) if cst_id else None,
+            'csosn_id': int(csosn_id) if csosn_id else None,
+            'created_by_user_id': current_user.id,
             'ativo': True
         }
         db.execute(text("""
-            INSERT INTO produtos (codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
-                                  ncm_id, cfop_id, ativo)
-            VALUES (:codigo_interno, :descricao, :unidade_comercial, :preco_unitario_padrao,
-                    :ncm_id, :cfop_id, :ativo)
+            INSERT INTO produtos (cliente_id, codigo_interno, descricao, unidade_comercial, tipo_item, preco_unitario_padrao,
+                      ncm_id, cfop_id, origem_mercadoria, cest, cst_id, csosn_id, created_by_user_id, ativo)
+            VALUES (:cliente_id, :codigo_interno, :descricao, :unidade_comercial, :tipo_item, :preco_unitario_padrao,
+                :ncm_id, :cfop_id, :origem_mercadoria, :cest, :cst_id, :csosn_id, :created_by_user_id, :ativo)
         """), data)
         db.commit()
         flash('Produto criado', 'success')
-        return redirect(url_for('admin.list_produtos'))
+        # Redireciona para edição do cliente, aba produtos
+        return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
     except Exception as e:
         db.rollback()
         print(f"❌ Erro store_produto: {e}")
@@ -2001,7 +2151,9 @@ def update_produto(produto_id: int):
             'unidade_comercial': request.form.get('unidade_comercial','UN'),
             'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
             'ncm_id': request.form.get('ncm_id'),
-            'cfop_id': request.form.get('cfcfop_idop_padrao'),
+            'cfop_id': request.form.get('cfop_id'),
+            'cest': request.form.get('cest'),
+            'csosn_id': request.form.get('csosn_id'),
         }
         db.execute(text("""
             UPDATE produtos
@@ -2010,11 +2162,18 @@ def update_produto(produto_id: int):
                 unidade_comercial=:unidade_comercial,
                 preco_unitario_padrao=:preco_unitario_padrao,
                 ncm_id=:ncm_id,
-                cfop_id=:cfop_id
+                cfop_id=:cfop_id,
+                cest=:cest,
+                csosn_id=:csosn_id
             WHERE produto_id=:produto_id
         """), data)
         db.commit()
         flash('Produto atualizado', 'success')
+        # Buscar cliente_id do produto atualizado
+        row = db.execute(text("SELECT cliente_id FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
+        cliente_id = row[0] if row else None
+        if cliente_id:
+            return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
         return redirect(url_for('admin.list_produtos'))
     except Exception as e:
         db.rollback()

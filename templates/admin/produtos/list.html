@@ -63,14 +63,19 @@
                                             </td>
                                             <td>
                                                 <div class="btn-group" role="group">
-                                                    <!-- ✅ LINK CORRETO PARA EDITAR -->
+                                                    <!-- Editar -->
                                                     <a href="{{ url_for('admin.edit_produto', produto_id=produto.produto_id, origem='list') }}"
                                                        class="btn btn-sm btn-outline-primary" 
                                                        title="Editar">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
-                                                    
-                                                    <!-- ✅ TOGGLE STATUS USANDO DATA-ATTRIBUTES -->
+                                                    <!-- Duplicar -->
+                                                    <form method="post" action="{{ url_for('admin.duplicar_produto', produto_id=produto.produto_id) }}" style="display:inline;">
+                                                        <button type="submit" class="btn btn-sm btn-outline-info" title="Duplicar Produto" onclick="return confirm('Deseja duplicar este produto?');">
+                                                            <i class="fas fa-copy"></i>
+                                                        </button>
+                                                    </form>
+                                                    <!-- Toggle Status -->
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-{{ 'danger' if produto.ativo else 'success' }} btn-toggle-status"
                                                             data-produto-id="{{ produto.produto_id }}"

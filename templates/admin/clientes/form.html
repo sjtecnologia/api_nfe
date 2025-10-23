@@ -163,37 +163,59 @@
 
                 {% if cliente.cliente_id %}
                 <div class="tab-pane fade" id="produtos-pane" role="tabpanel" aria-labelledby="produtos-tab" tabindex="0">
-                    <h5 class="mt-3">Produtos Associados</h5>
-                    <p>Gerencie os produtos específicos deste cliente.</p>
-                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
-                        Adicionar Novo Produto
-                    </button>
-                    {% include 'admin/produtos/list_partial.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-box me-2"></i>Produtos Associados</span>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Produto
+                            </button>
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/produtos/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tab-pane fade" id="certificados-pane" role="tabpanel" aria-labelledby="certificados-tab" tabindex="0">
-                    <h5 class="mt-3">Certificados Associados</h5>
-                    <p>Gerencie os certificados digitais deste cliente.</p>
-                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
-                        Adicionar Novo Certificado
-                    </button>
-                    {% include 'admin/certificados/list_partial.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-certificate me-2"></i>Certificados Associados</span>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Certificado
+                            </button>
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/certificados/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tab-pane fade" id="regras-pane" role="tabpanel" aria-labelledby="regras-tab" tabindex="0">
-                    <h5 class="mt-3">Regras Tributárias Associadas</h5>
-                    <p>Configure as regras tributárias específicas para este cliente.</p>
-                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Nova Regra Tributária" data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
-                        Adicionar Nova Regra
-                    </button>
-                    {% include 'admin/regras_tributacao/list_partial.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-balance-scale me-2"></i>Regras Tributárias Associadas</span>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Nova Regra Tributária" data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Nova Regra
+                            </button>
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/regras_tributacao/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
 
                 <div class="tab-pane fade" id="destinatarios-pane" role="tabpanel" aria-labelledby="destinatarios-tab" tabindex="0">
-                    <h5 class="mt-3">Destinatários NF-e Associados</h5>
-                    <p>Gerencie os destinatários de NF-e para este cliente.</p>
-                    <a href="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary btn-sm mb-3">Adicionar Novo Destinatário</a>
-                    {% include 'admin/destinatarios/list.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-users me-2"></i>Destinatários NF-e Associados</span>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Destinatário" data-modal-url="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Destinatário
+                            </button>
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/destinatarios/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -206,7 +228,7 @@
     </div>
 
     <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xxl" style="max-width: 98vw; margin: 0 auto;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="addModalLabel"></h5>
