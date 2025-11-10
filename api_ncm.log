@@ -1,0 +1,93 @@
+🤖 API NCM para LLM - Versão Independente
+==================================================
+📥 Carregando ncms_training_data.json...
+✅ Carregados 13217 NCMs processados
+✅ API pronta para usar!
+📊 Total de NCMs: 13217
+   • Analíticos: 10507
+   • Sintéticos: 2710
+
+🌐 Servidor será executado em:
+   http://0.0.0.0:8081
+   http://192.168.0.52:8081
+
+📋 Endpoints disponíveis:
+   • GET /api/llm/ncms/stats
+   • GET /api/llm/ncms/search?q={termo}
+   • GET /api/llm/ncms/hierarquia/{codigo}
+   • GET /api/llm/ncms/export
+   • GET /health
+
+🧪 Teste rápido:
+   curl http://192.168.0.52:8081/health
+
+💡 IMPORTANTE: Sua LLM está em http://192.168.0.52:1234
+💡 Esta API NCM está em http://192.168.0.52:8081
+
+🚀 Iniciando servidor...
+ * Serving Flask app 'api_ncm_standalone'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8081
+ * Running on http://192.168.0.97:8081
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [30/Oct/2025 14:59:02] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 14:59:33] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 14:59:33] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 14:59:43] "GET /api/llm/ncms/search?q=smartphone&limit=2 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:00:03] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:12:34] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:12:48] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:12:49] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:16:00] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:16:01] "GET /api/llm/ncms/search?q=smartphone+Samsung+Galaxy&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:16:48] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:20:07] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:20:07] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:20:58] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:22:36] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:22:36] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:23:44] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:23:44] "GET /api/llm/ncms/search?q=smartphone+Samsung&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:20] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:20] "GET /api/llm/ncms/search?q=smartphone+Samsung+Galaxy&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:20] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:35] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:35] "GET /api/llm/ncms/search?q=notebook+gamer+Dell&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:35] "GET /api/llm/ncms/search?q=notebook&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:35] "GET /api/llm/ncms/search?q=computador&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:50] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:50] "GET /api/llm/ncms/search?q=mouse+wireless+Logitech&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:25:50] "GET /api/llm/ncms/search?q=mouse&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:26:05] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:26:05] "GET /api/llm/ncms/search?q=café+torrado&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:26:05] "GET /api/llm/ncms/search?q=café&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:27:20] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:27:20] "GET /api/llm/ncms/search?q=Monitor+de+computador&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:27:20] "GET /api/llm/ncms/search?q=notebook&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:27:21] "GET /api/llm/ncms/search?q=computador&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:11] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:11] "GET /api/llm/ncms/search?q=smartphone+iPhone+15&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:11] "GET /api/llm/ncms/search?q=smartphone&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:16] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:16] "GET /api/llm/ncms/search?q=notebook+Dell+inspiron&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:16] "GET /api/llm/ncms/search?q=notebook&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:16] "GET /api/llm/ncms/search?q=computador&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:21] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:21] "GET /api/llm/ncms/search?q=impressora+HP+LaserJet&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:21] "GET /api/llm/ncms/search?q=impressora&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:26] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:26] "GET /api/llm/ncms/search?q=café+premium+torrado&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:26] "GET /api/llm/ncms/search?q=café&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:31] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:31] "GET /api/llm/ncms/search?q=pneu+aro+16+Michelin&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:28:31] "GET /api/llm/ncms/search?q=pneu&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:29:55] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:29:55] "GET /api/llm/ncms/search?q=Monitor+de+computador&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:29:55] "GET /api/llm/ncms/search?q=notebook&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:29:56] "GET /api/llm/ncms/search?q=computador&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:41:56] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:41:57] "GET /api/llm/ncms/search?q=Monitor+de+computador&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:41:57] "GET /api/llm/ncms/search?q=notebook&tipo=analitico&limit=3 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Oct/2025 15:41:57] "GET /api/llm/ncms/search?q=computador&tipo=analitico&limit=3 HTTP/1.1" 200 -

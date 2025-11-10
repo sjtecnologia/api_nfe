@@ -1,0 +1,461 @@
+# 🎯 PROMPTS ESPECÍFICOS PARA PRODUTOS COMUNS
+
+## 📋 INSTRUÇÕES DE USO:
+1. Abra seu LM Studio
+2. Configure o System Prompt (veja no arquivo `exemplos_prompts_llama.txt`)
+3. Copie qualquer prompt abaixo
+4. Cole no chat da Llama-3.1-8B
+5. Pressione Enter e veja a classificação!
+
+---
+
+## 🖱️ MOUSE GAMER
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "mouse gamer":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 84.71.60.52**
+   Descrição: Mouses (ratos)
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 84.71.60.90**
+   Descrição: Outras unidades de entrada ou de saída
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "mouse gamer" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🎧 FONE BLUETOOTH
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "fone bluetooth":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 85.18.30.00**
+   Descrição: Fones de ouvido e auriculares, mesmo combinados com microfone, e conjuntos ou sortidos constituídos por microfone e um ou mais alto-falantes
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 85.17.62.40**
+   Descrição: Aparelhos para recepção, conversão e transmissão ou regeneração de voz, imagem ou outros dados, incluindo aparelhos de comutação e roteamento
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "fone bluetooth" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## ⌨️ TECLADO MECÂNICO
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "teclado mecânico":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 84.71.60.51**
+   Descrição: Teclados
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 84.71.60.90**
+   Descrição: Outras unidades de entrada ou de saída
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "teclado mecânico" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🖥️ MONITOR 4K
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "monitor 4k":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 85.28.72.10**
+   Descrição: Monitores dos tipos utilizados exclusiva ou principalmente com máquinas automáticas para processamento de dados da posição 84.71
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 85.28.72.91**
+   Descrição: Outros monitores a cores, com tubo de raios catódicos
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "monitor 4k" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🖨️ IMPRESSORA LASER
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "impressora laser":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 84.43.32.10**
+   Descrição: Impressoras a laser
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 84.43.32.90**
+   Descrição: Outras impressoras, máquinas copiadoras e telecopiadores (fax)
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "impressora laser" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## ☕ CAFÉ TORRADO
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "café torrado":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 09.01.21.00**
+   Descrição: Café torrado, não descafeinado
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 09.01.22.00**
+   Descrição: Café torrado, descafeinado
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+3. **NCM 21.01.11.10**
+   Descrição: Café solúvel, mesmo descafeinado
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "café torrado" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🍔 HAMBÚRGUER CONGELADO
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "hambúrguer congelado":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 16.02.20.00**
+   Descrição: Preparações alimentícias e conservas de fígado
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 16.02.31.00**
+   Descrição: De peru
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+3. **NCM 16.02.32.10**
+   Descrição: Hambúrgueres
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "hambúrguer congelado" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🧴 SHAMPOO
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "shampoo":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 33.05.10.00**
+   Descrição: Xampus
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 33.05.20.00**
+   Descrição: Preparações para ondulação ou alisamento, permanentes, dos cabelos
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "shampoo" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 👕 CAMISETA ALGODÃO
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "camiseta algodão":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 61.09.10.00**
+   Descrição: T-shirts e camisetas interiores, de malha
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 61.05.10.00**
+   Descrição: Camisas de homem ou menino
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "camiseta algodão" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🚗 PNEU AUTOMOTIVO
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "pneu automotivo":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 40.11.10.00**
+   Descrição: Dos tipos utilizados em automóveis de passageiros (incluindo os veículos de uso misto e os automóveis de corrida)
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 40.11.20.00**
+   Descrição: Dos tipos utilizados em ônibus ou caminhões
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "pneu automotivo" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🎮 CONSOLE VIDEOGAME
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "console videogame":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 95.04.50.00**
+   Descrição: Consoles e máquinas de jogos de vídeo, exceto os da subposição 9504.30
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 95.04.90.10**
+   Descrição: Cartas de jogar
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "console videogame" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🔋 BATERIA CELULAR
+
+**Copie este prompt:**
+```
+Você é especialista em NCM brasileiro. Baseado nos dados OFICIAIS abaixo, classifique "bateria celular":
+
+**DADOS NCM OFICIAIS ENCONTRADOS:**
+
+1. **NCM 85.07.60.00**
+   Descrição: Acumuladores de íons de lítio
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+2. **NCM 85.07.90.00**
+   Descrição: Outros acumuladores
+   Tipo: Analítico
+   Status NFe: ✅ Pode usar
+
+**PERGUNTA:** Qual o melhor NCM para classificar "bateria celular" em uma Nota Fiscal Eletrônica?
+
+**INSTRUÇÕES:**
+- Use APENAS os NCMs listados acima
+- Escolha o mais específico e adequado
+- Formate a resposta assim:
+
+🎯 **NCM:** [código do NCM escolhido]
+📝 **Descrição:** [descrição oficial exata]
+📊 **Tipo:** Analítico
+✅ **NFe:** Sim
+💡 **Observações:** [por que este NCM é o mais adequado]
+
+**SUA RESPOSTA:**
+```
+
+---
+
+## 🎉 COMO USAR:
+1. **Copie** qualquer prompt acima
+2. **Abra** o LM Studio
+3. **Cole** no chat da Llama-3.1-8B
+4. **Pressione** Enter
+5. **Receba** a classificação oficial!
+
+**🦙 Sua IA agora é uma especialista NCM brasileira!**

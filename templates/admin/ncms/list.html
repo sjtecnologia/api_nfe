@@ -2,13 +2,92 @@
 
 {% block title %}NCMs - Admin{% endblock %}
 
+{% block head %}
+<style>
+    /* stylelint-disable */
+    /* Estilos para hierarquia de NCMs */
+    .ncm-hierarchy-level-0 {
+        background-color: #f8f9fa;
+        border-left: 4px solid #007bff;
+    }
+    
+    .ncm-hierarchy-level-1 {
+        background-color: #fefefe;
+        border-left: 4px solid #17a2b8;
+    }
+    
+    .ncm-hierarchy-level-2 {
+        background-color: #fffef8;
+        border-left: 4px solid #ffc107;
+    }
+    
+    .ncm-hierarchy-level-3 {
+        background-color: #f8fff8;
+        border-left: 4px solid #28a745;
+    }
+    
+    .ncm-hierarchy-level-0:hover,
+    .ncm-hierarchy-level-1:hover,
+    .ncm-hierarchy-level-2:hover,
+    .ncm-hierarchy-level-3:hover {
+        background-color: #e3f2fd;
+    }
+    
+    .table-hierarchy {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    
+    .table-hierarchy td {
+        border-top: 1px solid #dee2e6;
+        vertical-align: middle;
+    }
+    
+    .ncm-code-formatted {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+    }
+    
+    .hierarchy-icon {
+        width: 16px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h3 mb-0">Administração de NCMs</h1>
-        <a href="{{ url_for('admin.create_ncm') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Adicionar Novo NCM
-        </a>
+        <div class="btn-group">
+            <a href="{{ url_for('admin.create_ncm') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Adicionar Novo NCM
+            </a>
+            <a href="{{ url_for('admin.upload_siscomex_json') }}" class="btn btn-info">
+                <i class="fas fa-upload"></i> Importar JSON Siscomex
+            </a>
+        </div>
+    </div>
+
+    <!-- Painel de Informações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-info-circle"></i> Informações NCM
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="mb-0">
+                                <i class="fas fa-database text-primary"></i>
+                                <strong>Total de NCMs cadastrados:</strong> {{ ncms|length }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Campo de consulta -->
@@ -39,78 +118,104 @@
     {% endwith %} -->
 
     <div class="table-responsive">
-        <table class="table table-bordered table-hover align-middle">
+        <table class="table table-bordered table-hover align-middle table-hierarchy">
             <thead class="table-light">
                 <tr>
                     <th>ID</th>
                     <th>Código</th>
                     <th>Descrição</th>
-                    <th>Data Início</th>
-                    <th>Data Fim</th>
-                    <th>Tipo Ato</th>
-                    <th>Nº Ato</th>
-                    <th>Ano Ato</th>
+                    <th>Tipo</th>
+                    <th>Última Atualização</th>
+                    <th>Fonte</th>
                     <th class="text-center">Ações</th>
                 </tr>
             </thead>
             <tbody>
                 {% for ncm in ncms %}
-                <tr>
+                <tr class="ncm-hierarchy-level-{{ ncm.hierarchy_level or 0 }}">
                     <td>{{ ncm.ncm_id | highlight(q) }}</td>
-                    <td>{{ ncm.codigo | highlight(q) }}</td>
-                    <td>{{ ncm.descricao | highlight(q) }}</td>
+                    <td class="text-nowrap">
+                        <div class="d-flex align-items-center indentable" data-indent="{{ ncm.indent_px|default(0, true) }}">
+                            {% if ncm.hierarchy_level == 0 %}
+                                <i class="fas fa-folder text-primary me-2"></i>
+                            {% elif ncm.hierarchy_level == 1 %}
+                                <i class="fas fa-folder-open text-info me-2"></i>
+                            {% elif ncm.hierarchy_level == 2 %}
+                                <i class="fas fa-file-alt text-warning me-2"></i>
+                            {% else %}
+                                <i class="fas fa-tag text-success me-2"></i>
+                            {% endif %}
+                            <span class="fw-bold">{{ ncm.codigo_formatado or ncm.codigo | highlight(q) }}</span>
+                            {% if ncm.hierarchy_type %}
+                                <small class="text-muted ms-2">({{ ncm.hierarchy_type }})</small>
+                            {% endif %}
+                        </div>
+                    </td>
                     <td>
-                        {% if ncm.data_inicio %}
-                            {{ ncm.data_inicio.strftime('%d/%m/%Y') | highlight(q) }}
+                        <div class="indentable" data-indent="{{ ncm.indent_px or 0 }}">
+                            <span class="{% if ncm.hierarchy_level == 0 %}fw-bold text-primary{% elif ncm.hierarchy_level == 1 %}fw-semibold text-info{% endif %}">
+                                {{ ncm.descricao | highlight(q) }}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        {% if ncm.tipo == 'sintetico' %}
+                            <span class="badge bg-secondary" title="NCM sintético - apenas para classificação">
+                                <i class="fas fa-sitemap"></i> Sintético
+                            </span>
+                        {% else %}
+                            <span class="badge bg-success" title="NCM analítico - recebe lançamentos">
+                                <i class="fas fa-calculator"></i> Analítico
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">
+                        {% if ncm.data_atualizacao %}
+                            {{ ncm.data_atualizacao.strftime('%d/%m/%Y %H:%M') }}
                         {% else %}
                             N/A
                         {% endif %}
                     </td>
                     <td>
-                        {% if ncm.data_fim %}
-                            {{ ncm.data_fim.strftime('%d/%m/%Y') | highlight(q) }}
+                        {% if ncm.fonte_atualizacao %}
+                            <span class="badge bg-{{ 'success' if ncm.fonte_atualizacao == 'receita_federal' else 'info' if ncm.fonte_atualizacao == 'dados_iniciais' else 'secondary' }}">
+                                {{ ncm.fonte_atualizacao.replace('_', ' ').title() }}
+                            </span>
                         {% else %}
-                           
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if ncm.tipo_ato %}
-                            {{ ncm.tipo_ato | highlight(q) }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if ncm.numero_ato %}
-                            {{ ncm.numero_ato | highlight(q) }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if ncm.ano_ato %}
-                            {{ ncm.ano_ato | highlight(q) }}
-                        {% else %}
-                            N/A
+                            <span class="badge bg-secondary">Manual</span>
                         {% endif %}
                     </td>
                     <td class="text-center">
-                        <div class="d-flex justify-content-center gap-2">
-                            <a href="{{ url_for('admin.edit_ncm', ncm_id=ncm.ncm_id) }}" class="btn btn-sm btn-warning">
-                                <i class="fas fa-edit"></i> Editar
-                            </a>
-                            <form action="{{ url_for('admin.delete_ncm', ncm_id=ncm.ncm_id) }}" method="post" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                    onclick="return confirm('Tem certeza que deseja excluir o NCM {{ ncm.codigo }}?');">
-                                    <i class="fas fa-trash"></i> Excluir
-                                </button>
-                            </form>
-                        </div>
+                        {% if ncm.tipo == 'analitico' %}
+                            <div class="d-flex justify-content-center gap-1">
+                                <a href="{{ url_for('admin.edit_ncm', ncm_id=ncm.ncm_id) }}" 
+                                   class="btn btn-sm btn-outline-warning" 
+                                   title="Editar NCM">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <form action="{{ url_for('admin.delete_ncm', ncm_id=ncm.ncm_id) }}" method="post" style="display:inline;">
+                                    <button type="submit" 
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="Excluir NCM"
+                                            onclick="return confirm('Tem certeza que deseja excluir o NCM {{ ncm.codigo_formatado or ncm.codigo }}?');">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        {% else %}
+                            <small class="text-muted">
+                                <i class="fas fa-lock" title="NCMs sintéticos não podem ser editados"></i>
+                                Sistema
+                            </small>
+                        {% endif %}
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9" class="text-center text-muted">Nenhum NCM cadastrado.</td>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="fas fa-search fa-2x mb-2 d-block"></i>
+                        Nenhum NCM cadastrado.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -125,4 +230,16 @@
         title="Voltar ao topo">
     <i class="fas fa-arrow-up"></i>
 </button>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.indentable[data-indent]').forEach(function(el) {
+        var v = parseInt(el.getAttribute('data-indent'), 10);
+        if (isNaN(v)) v = 0;
+        el.style.marginLeft = v + 'px';
+    });
+});
+</script>
+
 {% endblock %}
+

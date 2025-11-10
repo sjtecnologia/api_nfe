@@ -42,3 +42,10 @@ reportlab>=3.6.9
 
 # PyNFe para geração de DANFE
 pynfe>=0.4.1
+
+# Importação em lote de produtos (Fase 3)
+pandas>=2.2.0
+openpyxl>=3.1.2
+
+# Busca de CEP via API
+requests>=2.31.0

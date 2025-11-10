@@ -1,0 +1,14 @@
+# Configuração do Cron para sincronização automática de NCMs
+# Execute: crontab -e e adicione esta linha para sincronizar todo domingo às 02:00
+
+# Sincronizar NCMs todo domingo às 02:00
+0 2 * * 0 cd /Users/renato/Documents/Developement/api_nfe && /usr/bin/python3 sync_ncm.py >> /var/log/ncm_sync.log 2>&1
+
+# Alternativa: Sincronização mensal (primeiro dia do mês às 03:00)
+# 0 3 1 * * cd /Users/renato/Documents/Developement/api_nfe && /usr/bin/python3 sync_ncm.py >> /var/log/ncm_sync.log 2>&1
+
+# Para instalar:
+# 1. Execute: crontab -e
+# 2. Adicione uma das linhas acima
+# 3. Salve e saia do editor
+# 4. Verifique com: crontab -l

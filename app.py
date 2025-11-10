@@ -14,6 +14,7 @@ from routes.nfe_routes import nfe_bp
 from routes.admin_routes import admin_bp
 from routes.home_routes import home_bp
 from routes.cliente_routes import cliente_bp
+from routes.llm_api_routes import llm_api_bp
 
 # Configurar Flask-Login
 from auth.login_manager import init_login_manager
@@ -34,6 +35,7 @@ app.register_blueprint(nfe_bp, url_prefix='/admin/nfe')
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(cliente_bp, url_prefix='/cliente')
 app.register_blueprint(home_bp)
+app.register_blueprint(llm_api_bp)  # API específica para LLM
 
 import re
 from markupsafe import Markup, escape

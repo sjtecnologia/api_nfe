@@ -1,0 +1,37 @@
+🤖 API NCM para LLM - Versão Independente
+==================================================
+📥 Carregando ncms_training_data.json...
+✅ Carregados 13217 NCMs processados
+✅ API pronta para usar!
+📊 Total de NCMs: 13217
+   • Analíticos: 10507
+   • Sintéticos: 2710
+
+🌐 Servidor será executado em:
+   http://0.0.0.0:8081
+   http://192.168.0.52:8081
+
+📋 Endpoints disponíveis:
+   • GET /api/llm/ncms/stats
+   • GET /api/llm/ncms/search?q={termo}
+   • GET /api/llm/ncms/hierarquia/{codigo}
+   • GET /api/llm/ncms/export
+   • GET /health
+
+🧪 Teste rápido:
+   curl http://192.168.0.52:8081/health
+
+💡 IMPORTANTE: Sua LLM está em http://192.168.0.52:1234
+💡 Esta API NCM está em http://192.168.0.52:8081
+
+🚀 Iniciando servidor...
+ * Serving Flask app 'api_ncm_standalone'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8081
+ * Running on http://192.168.0.97:8081
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [10/Nov/2025 09:27:21] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2025 09:27:21] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2025 09:27:26] "GET /health HTTP/1.1" 200 -

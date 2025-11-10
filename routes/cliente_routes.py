@@ -288,3 +288,94 @@ def api_estatisticas(cliente_id):
                 locals()['db'].close()
         except Exception:
             pass
+
+@cliente_bp.route('/api/nfes_por_mes/<int:cliente_id>')
+@login_required
+@client_access_required()
+def api_nfes_por_mes(cliente_id):
+    """API para dados do gráfico de NFes por mês"""
+    try:
+        db = next(get_db())
+        
+        # Pegar período do query string (padrão: 6 meses)
+        periodo = request.args.get('periodo', '6')
+        
+        # Calcular data de início baseado no período
+        hoje = datetime.now()
+        
+        if periodo == 'ano_atual':
+            data_inicio = datetime(hoje.year, 1, 1)
+        elif periodo == 'ano_anterior':
+            data_inicio = datetime(hoje.year - 1, 1, 1)
+            hoje = datetime(hoje.year - 1, 12, 31)
+        elif periodo == '24':
+            data_inicio = hoje - timedelta(days=730)
+        elif periodo == '12':
+            data_inicio = hoje - timedelta(days=365)
+        else:  # padrão 6 meses
+            data_inicio = hoje - timedelta(days=180)
+        
+        # Buscar dados agrupados por mês
+        query_nfes_por_mes = text("""
+            SELECT 
+                EXTRACT(MONTH FROM data_criacao)::INTEGER as mes,
+                EXTRACT(YEAR FROM data_criacao)::INTEGER as ano,
+                COUNT(*)::INTEGER as quantidade
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+            AND data_criacao >= :data_inicio
+            AND data_criacao <= :data_fim
+            GROUP BY EXTRACT(YEAR FROM data_criacao), EXTRACT(MONTH FROM data_criacao)
+            ORDER BY ano, mes
+        """)
+        
+        result = db.execute(query_nfes_por_mes, {
+            "cliente_id": cliente_id,
+            "data_inicio": data_inicio,
+            "data_fim": hoje
+        })
+        
+        nfes_por_mes = []
+        for row in result:
+            nfes_por_mes.append({
+                'mes': row[0],
+                'ano': row[1],
+                'quantidade': row[2]
+            })
+        
+        # Se não houver dados, retornar array vazio
+        if not nfes_por_mes:
+            # Criar meses vazios para o período
+            meses_periodo = []
+            meses = int(periodo) if periodo.isdigit() else 6
+            
+            if periodo == 'ano_atual':
+                for m in range(1, hoje.month + 1):
+                    meses_periodo.append({'mes': m, 'ano': hoje.year, 'quantidade': 0})
+            elif periodo == 'ano_anterior':
+                for m in range(1, 13):
+                    meses_periodo.append({'mes': m, 'ano': hoje.year - 1, 'quantidade': 0})
+            else:
+                for i in range(meses):
+                    mes_atual = hoje - timedelta(days=30 * i)
+                    meses_periodo.insert(0, {
+                        'mes': mes_atual.month,
+                        'ano': mes_atual.year,
+                        'quantidade': 0
+                    })
+            
+            nfes_por_mes = meses_periodo
+        
+        return jsonify(nfes_por_mes)
+        
+    except Exception as e:
+        print(f"❌ Erro api_nfes_por_mes: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        try:
+            if 'db' in locals() and locals()['db'] is not None:
+                locals()['db'].close()
+        except Exception:
+            pass

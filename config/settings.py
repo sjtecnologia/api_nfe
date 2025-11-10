@@ -21,3 +21,15 @@ UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
 
 # Configurações de Log
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+
+# Configurações de Backup
+BACKUP_DIR = os.getenv('BACKUP_DIR', 'backups')
+BACKUP_RETENTION_DAYS = int(os.getenv('BACKUP_RETENTION_DAYS', '30'))
+BACKUP_LOG_DIR = os.getenv('BACKUP_LOG_DIR', 'logs')
+
+# Configurações do Banco de Dados para Backup
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME', 'sjtnfe')
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'Mo2505')

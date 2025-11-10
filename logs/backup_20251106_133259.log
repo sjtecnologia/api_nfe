@@ -1,0 +1,19 @@
+[2025-11-06 13:33:00] ==========================================
+[2025-11-06 13:33:00] Iniciando backup do banco de dados
+[2025-11-06 13:33:00] ==========================================
+[2025-11-06 13:33:00] Database: sjtnfe
+[2025-11-06 13:33:00] Host: localhost:5432
+[2025-11-06 13:33:00] Backup File: ./backups/backup_sjtnfe_20251106_133259.sql.gz
+[2025-11-06 13:33:00] Executando pg_dump...
+[2025-11-06 13:33:00] ✓ Dump do banco criado com sucesso
+[2025-11-06 13:33:00] Comprimindo backup...
+[2025-11-06 13:33:00] ✓ Backup comprimido com sucesso
+[2025-11-06 13:33:00] Tamanho do backup: 280K
+[2025-11-06 13:33:00] ==========================================
+[2025-11-06 13:33:00] Executando rotação de backups...
+[2025-11-06 13:33:00] Mantendo backups dos últimos 30 dias
+[2025-11-06 13:33:00] Nenhum backup antigo para remover
+[2025-11-06 13:33:00] Total de backups disponíveis:        1
+[2025-11-06 13:33:00] ==========================================
+[2025-11-06 13:33:00] ✓ Backup concluído com sucesso!
+[2025-11-06 13:33:00] ==========================================

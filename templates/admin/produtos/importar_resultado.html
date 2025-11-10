@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Resultado da Importação{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-check-circle"></i> Resultado da Importação</h2>
+            <p class="text-muted mb-0">Resumo do processamento em lote</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin.list_produtos') }}" class="btn btn-primary">
+                <i class="fas fa-list"></i> Ver Produtos
+            </a>
+            <a href="{{ url_for('admin.importar_produtos') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-redo"></i> Nova Importação
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            {% if sucessos > 0 %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <h5 class="alert-heading">
+                    <i class="fas fa-check-circle"></i> Importação Concluída com Sucesso!
+                </h5>
+                <hr>
+                <p class="mb-0">
+                    <strong>{{ sucessos }}</strong> produto(s) foi(ram) importado(s) com sucesso.
+                </p>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            {% endif %}
+
+            {% if erros %}
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <h5 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle"></i> Atenção: Alguns Erros Foram Encontrados
+                </h5>
+                <hr>
+                <p class="mb-0">
+                    <strong>{{ erros|length }}</strong> erro(s) ocorreu(ram) durante a importação.
+                </p>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            {% endif %}
+
+            {% if sucessos == 0 and erros %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <h5 class="alert-heading">
+                    <i class="fas fa-times-circle"></i> Nenhum Produto Foi Importado
+                </h5>
+                <hr>
+                <p class="mb-0">
+                    Todos os registros apresentaram erros. Verifique o arquivo e tente novamente.
+                </p>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Produtos Importados
+                            </div>
+                            <div class="h3 mb-0 font-weight-bold text-gray-800">{{ sucessos }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Erros Encontrados
+                            </div>
+                            <div class="h3 mb-0 font-weight-bold text-gray-800">{{ erros|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-circle fa-2x text-danger"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Total de Linhas
+                            </div>
+                            <div class="h3 mb-0 font-weight-bold text-gray-800">{{ total_linhas }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-alt fa-2x text-info"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if erros %}
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Detalhes dos Erros
+                    </h6>
+                    <button class="btn btn-sm btn-outline-danger" onclick="exportarErros()">
+                        <i class="fas fa-download"></i> Exportar Erros
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-bordered table-sm" id="tabelaErros">
+                            <thead class="thead-light sticky-top">
+                                <tr>
+                                    <th width="80">#</th>
+                                    <th>Descrição do Erro</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for erro in erros %}
+                                <tr>
+                                    <td class="text-center">{{ loop.index }}</td>
+                                    <td>{{ erro }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card shadow">
+                <div class="card-header py-3 bg-info text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-info-circle"></i> Próximos Passos
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        {% if sucessos > 0 %}
+                        <li>
+                            <a href="{{ url_for('admin.list_produtos') }}">
+                                Visualize os produtos importados
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if erros %}
+                        <li>Corrija os erros listados acima no arquivo original</li>
+                        <li>Remova as linhas já importadas com sucesso</li>
+                        <li>
+                            <a href="{{ url_for('admin.importar_produtos') }}">
+                                Faça uma nova importação
+                            </a> com as correções
+                        </li>
+                        {% endif %}
+                        {% if sucessos == 0 and not erros %}
+                        <li>Nenhum produto foi processado</li>
+                        <li>Verifique se o arquivo contém dados válidos</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="erros-data">{{ erros | tojson | safe }}</script>
+<script>
+function exportarErros() {
+    // Coletar erros
+    const listaErros = JSON.parse(document.getElementById('erros-data').textContent);
+    
+    // Criar CSV
+    let csv = 'Numero,Erro\n';
+    listaErros.forEach((erro, idx) => {
+        csv += `${idx + 1},"${erro.replace(/"/g, '""')}"\n`;
+    });
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'erros_importacao.csv');
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
+
+<style>
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+</style>
+{% endblock %}

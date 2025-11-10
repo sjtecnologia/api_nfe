@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - Select NCM</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        body { padding: 20px; }
+        .info { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            padding: 15px; 
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        .resultado {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🧪 Teste - Select NCM com Select2</h2>
+        <p class="text-muted">Testando carregamento de NCMs do banco de dados</p>
+        <hr>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="form-group">
+                    <label for="ncm_id">NCM - Nomenclatura Comum do Mercosul</label>
+                    <select class="form-control js-select2-ncm" id="ncm_id" name="ncm_id" style="width: 100%;">
+                        <option value="">Clique aqui ou digite para buscar...</option>
+                    </select>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i> 
+                        Digite pelo menos 2 caracteres para buscar, ou clique para ver os primeiros NCMs
+                    </small>
+                </div>
+                
+                <div class="info">
+                    <h5>📋 Instruções:</h5>
+                    <ol>
+                        <li><strong>Clique</strong> no campo acima (deve abrir lista com NCMs)</li>
+                        <li><strong>Digite</strong> algo como "mouse" ou "notebook"</li>
+                        <li><strong>Selecione</strong> um NCM da lista</li>
+                    </ol>
+                    
+                    <h5 class="mt-3">🔍 O que está sendo testado:</h5>
+                    <ul>
+                        <li>✅ Carregamento inicial de NCMs do banco</li>
+                        <li>✅ Busca por descrição (ex: "mouse")</li>
+                        <li>✅ Busca por código (ex: "84716053")</li>
+                        <li>✅ Select2 funcionando corretamente</li>
+                    </ul>
+                </div>
+                
+                <div class="resultado" id="resultado" style="display: none;">
+                    <h5>✅ NCM Selecionado:</h5>
+                    <p><strong>ID:</strong> <span id="result-id"></span></p>
+                    <p><strong>Código:</strong> <span id="result-codigo"></span></p>
+                    <p><strong>Descrição:</strong> <span id="result-descricao"></span></p>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="alert alert-info">
+                    <h6><strong>Status da API:</strong></h6>
+                    <div id="api-status">⏳ Verificando...</div>
+                </div>
+                
+                <div class="alert alert-secondary">
+                    <h6><strong>Dicas:</strong></h6>
+                    <ul class="mb-0 small">
+                        <li>Use <kbd>↑</kbd> <kbd>↓</kbd> para navegar</li>
+                        <li>Use <kbd>Enter</kbd> para selecionar</li>
+                        <li>Use <kbd>Esc</kbd> para fechar</li>
+                        <li>Use <kbd>Delete</kbd> para limpar</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            console.log('🚀 Inicializando Select2...');
+            
+            // Testa API primeiro
+            $.ajax({
+                url: '/admin/api/ncms/search?q=&limit=5',
+                method: 'GET',
+                success: function(data) {
+                    console.log('✅ API respondeu:', data);
+                    $('#api-status').html('✅ API Funcionando<br><small>' + data.results.length + ' NCMs retornados</small>');
+                },
+                error: function(xhr) {
+                    console.error('❌ Erro na API:', xhr);
+                    $('#api-status').html('❌ API com erro<br><small>' + xhr.status + ' ' + xhr.statusText + '</small>');
+                }
+            });
+            
+            // Inicializa Select2
+            $('.js-select2-ncm').select2({
+                width: '100%',
+                placeholder: 'Digite para buscar NCM...',
+                allowClear: true,
+                minimumInputLength: 0,
+                ajax: {
+                    url: '/admin/api/ncms/search',
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) {
+                        console.log('🔍 Buscando NCMs com termo:', params.term || '(vazio)');
+                        return {
+                            q: params.term || '',
+                            limit: 50
+                        };
+                    },
+                    processResults: function (data) {
+                        console.log('📦 Recebidos', data.results.length, 'NCMs');
+                        return {
+                            results: data.results.map(function(item) {
+                                return {
+                                    id: item.id,
+                                    text: item.text,
+                                    codigo: item.codigo,
+                                    descricao: item.descricao
+                                };
+                            })
+                        };
+                    },
+                    cache: true
+                },
+                templateResult: function(ncm) {
+                    if (ncm.loading) {
+                        return $('<span><i class="fas fa-spinner fa-spin"></i> Carregando...</span>');
+                    }
+                    
+                    if (!ncm.id) {
+                        return ncm.text;
+                    }
+                    
+                    return $(`
+                        <div style="padding: 5px;">
+                            <strong style="color: #007bff;">${ncm.codigo || ncm.text.split(' - ')[0]}</strong>
+                            <br>
+                            <small style="color: #666;">${ncm.descricao || ncm.text.split(' - ')[1] || ''}</small>
+                        </div>
+                    `);
+                },
+                templateSelection: function(ncm) {
+                    return ncm.text || ncm.codigo + ' - ' + ncm.descricao;
+                },
+                language: {
+                    noResults: function() {
+                        return 'Nenhum NCM encontrado';
+                    },
+                    searching: function() {
+                        return 'Buscando...';
+                    },
+                    inputTooShort: function() {
+                        return 'Digite pelo menos 2 caracteres';
+                    }
+                }
+            });
+            
+            // Listener para quando selecionar um NCM
+            $('#ncm_id').on('select2:select', function (e) {
+                var data = e.params.data;
+                console.log('✅ NCM selecionado:', data);
+                
+                $('#result-id').text(data.id);
+                $('#result-codigo').text(data.codigo || data.text.split(' - ')[0]);
+                $('#result-descricao').text(data.descricao || data.text.split(' - ')[1] || '');
+                $('#resultado').slideDown();
+            });
+            
+            // Listener para quando limpar
+            $('#ncm_id').on('select2:clear', function (e) {
+                console.log('🗑️ NCM limpo');
+                $('#resultado').slideUp();
+            });
+            
+            console.log('✅ Select2 inicializado!');
+        });
+    </script>
+</body>
+</html>

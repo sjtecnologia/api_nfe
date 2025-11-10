@@ -171,6 +171,7 @@
                             </button>
                         </div>
                         <div class="card-body pt-3">
+                            {% set cliente_id = cliente.cliente_id %}
                             {% include 'admin/produtos/list_partial.html' %}
                         </div>
                     </div>

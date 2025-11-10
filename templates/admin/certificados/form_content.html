@@ -1,44 +1,50 @@
 {# Este template contém apenas o formulário para ser incluído em um modal ou outra parte da página #}
-<form id="certificadoModalForm" action="{{ url_for('admin.create_certificado', modal=true) }}" method="post" enctype="multipart/form-data">
+<form id="certificadoModalForm" action="{{ url_for('admin.salvar_certificado') }}" method="post" enctype="multipart/form-data">
     {# Input oculto para o cliente_id #}
-    <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
+    <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
 
     <div class="mb-3">
-        <label for="cliente_id_select" class="form-label">Cliente Associado</label>
-        <select class="form-select" id="cliente_id_select" name="cliente_id_display" disabled> 
-            <option value="">Selecione um cliente...</option>
-            {% for cliente_item in clientes %}
-                <option value="{{ cliente_item.cliente_id }}" {% if (form_data.cliente_id | default(return_client_id)) == cliente_item.cliente_id %}selected{% endif %}>
-                    {{ cliente_item.razao_social }}
-                </option>
-            {% endfor %}
-        </select>
+        <label for="conteudo_certificado_file" class="form-label">
+            <i class="fas fa-file-upload"></i> Arquivo do Certificado *
+        </label>
+        <input class="form-control" type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" accept=".pfx,.p12" required>
+        <small class="form-text text-muted">Selecione um arquivo .pfx ou .p12</small>
     </div>
 
     <div class="mb-3">
-        <label for="nome_arquivo_original" class="form-label">Nome do Arquivo (ou Descrição)</label>
-        <input type="text" class="form-control" id="nome_arquivo_original" name="cert_nome_arquivo_original" value="{{ form_data.nome_arquivo_original | default('') }}" required>
+        <label for="cert_senha_certificado" class="form-label">
+            <i class="fas fa-key"></i> Senha do Certificado *
+        </label>
+        <input type="password" class="form-control" id="cert_senha_certificado" name="cert_senha_certificado" placeholder="Digite a senha do certificado" required>
+        <small class="form-text text-muted">Senha utilizada para proteger o certificado digital</small>
     </div>
     
     <div class="mb-3">
-        <label for="conteudo_certificado_file" class="form-label">Arquivo do Certificado (.pfx)</label>
-        <input class="form-control" type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" accept=".pfx" required>
-    </div>
-
-    <div class="mb-3">
-        <label for="cert_senha_certificado" class="form-label">Senha do Certificado</label>
-        <input type="password" class="form-control" id="cert_senha_certificado" name="cert_senha_certificado" required>
+        <label for="nome_arquivo_original" class="form-label">Descrição (Opcional)</label>
+        <input type="text" class="form-control" id="nome_arquivo_original" name="cert_nome_arquivo_original" placeholder="Ex: Certificado A1 2024" value="{{ form_data.nome_arquivo_original | default('') }}">
+        <small class="form-text text-muted">Deixe em branco para usar o nome do arquivo</small>
     </div>
     
     {# Validade será extraída do arquivo no backend, não preenchida aqui #}
     {# Campos de validade só são relevantes para edição de certificado existente #}
 
     <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" id="ativo" name="cert_ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
-        <label class="form-check-label" for="ativo">
-            Certificado Ativo
+        <input class="form-check-input" type="checkbox" id="cert_ativo" name="cert_ativo" checked>
+        <label class="form-check-label" for="cert_ativo">
+            <i class="fas fa-check-circle"></i> Certificado Ativo
         </label>
     </div>
+    
+    <div class="alert alert-info mt-3">
+        <i class="fas fa-info-circle"></i> <strong>Importante:</strong>
+        <ul class="mb-0 mt-2">
+            <li>O certificado deve estar válido</li>
+            <li>A senha deve estar correta</li>
+            <li>Será utilizado para assinatura das NF-e</li>
+        </ul>
+    </div>
 
-    <button type="submit" class="btn btn-success">Salvar Certificado</button>
+    <button type="submit" class="btn btn-success">
+        <i class="fas fa-save"></i> Salvar Certificado
+    </button>
 </form>

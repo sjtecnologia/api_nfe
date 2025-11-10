@@ -16,10 +16,10 @@
                 {% for certificado in certificados_existentes %}
                 <tr>
                     <td>{{ certificado.certificado_digital_id }}</td>
-                    <td>{{ certificado.nome_arquivo_original | truncate(30, True, '...') }}</td>
-                    <td>{{ certificado.fingerprint[:10] }}...</td>
-                    <td>{{ certificado.validade_inicio.strftime('%d/%m/%Y') }}</td>
-                    <td>{{ certificado.validade_fim.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ (certificado.nome_arquivo_original or 'Sem nome') | truncate(30, True, '...') }}</td>
+                    <td>{{ (certificado.fingerprint[:10] if certificado.fingerprint else 'N/A') }}{{ '...' if certificado.fingerprint else '' }}</td>
+                    <td>{{ certificado.validade_inicio.strftime('%d/%m/%Y') if certificado.validade_inicio else 'N/A' }}</td>
+                    <td>{{ certificado.validade_fim.strftime('%d/%m/%Y') if certificado.validade_fim else 'N/A' }}</td>
                     <td>
                         {% if certificado.ativo %}
                             <span class="badge bg-success">Sim</span>

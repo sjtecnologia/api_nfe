@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste - Preenchimento Automático IA</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        body { padding: 20px; }
+        .log { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            padding: 10px; 
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-success { color: #28a745; }
+        .log-error { color: #dc3545; }
+        .log-info { color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🧪 Teste - Preenchimento Automático IA</h2>
+        <hr>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label>Descrição do Produto</label>
+                    <input type="text" class="form-control" id="descricao" value="Mouse wireless sem fio">
+                </div>
+                
+                <button class="btn btn-primary" id="btnTestar">
+                    🤖 Buscar Sugestão IA
+                </button>
+            </div>
+        </div>
+        
+        <hr>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label>NCM</label>
+                    <select class="form-control select2" id="ncm_id" name="ncm_id">
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>CFOP</label>
+                    <select class="form-control select2" id="cfop_id" name="cfop_id">
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>CST</label>
+                    <select class="form-control select2" id="cst_id" name="cst_id">
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>CSOSN</label>
+                    <select class="form-control select2" id="csosn_id" name="csosn_id">
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>CEST</label>
+                    <input type="text" class="form-control" id="cest" name="cest">
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <h5>📋 Log de Eventos:</h5>
+                <div class="log" id="log"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        // Inicializa Select2
+        $('.select2').select2({
+            width: '100%',
+            placeholder: 'Selecione...',
+            allowClear: true
+        });
+        
+        // Função de log
+        function log(message, type = 'info') {
+            var color = type === 'success' ? 'log-success' : 
+                       type === 'error' ? 'log-error' : 'log-info';
+            $('#log').append('<div class="' + color + '">' + message + '</div>');
+            $('#log').scrollTop($('#log')[0].scrollHeight);
+        }
+        
+        // Evento do botão
+        $('#btnTestar').click(function() {
+            var descricao = $('#descricao').val();
+            
+            if (!descricao) {
+                alert('Digite uma descrição!');
+                return;
+            }
+            
+            $('#log').html('');
+            log('🚀 Iniciando busca...', 'info');
+            log('📝 Produto: ' + descricao, 'info');
+            
+            $(this).prop('disabled', true).html('⏳ Buscando...');
+            
+            $.ajax({
+                url: '/admin/api/sugestao-tributaria',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    descricao: descricao
+                }),
+                success: function(resp) {
+                    log('✅ Resposta recebida!', 'success');
+                    log('📊 IDs: ' + JSON.stringify(resp.ids), 'info');
+                    log('📋 Classificação: ' + JSON.stringify(resp.classificacao), 'info');
+                    
+                    var ids = resp.ids || {};
+                    var classificacao = resp.classificacao || {};
+                    
+                    // Preenche NCM
+                    if (ids.ncm_id) {
+                        log('🔧 Preenchendo NCM ID: ' + ids.ncm_id, 'success');
+                        var ncmText = classificacao.ncm + ' - ' + (resp.ncm_descricao || 'NCM');
+                        
+                        var $ncmSelect = $('#ncm_id');
+                        if ($ncmSelect.find("option[value='" + ids.ncm_id + "']").length === 0) {
+                            var newOption = new Option(ncmText, ids.ncm_id, true, true);
+                            $ncmSelect.append(newOption);
+                        } else {
+                            $ncmSelect.val(ids.ncm_id);
+                        }
+                        $ncmSelect.trigger('change');
+                        log('✅ NCM preenchido: ' + ncmText, 'success');
+                    }
+                    
+                    // Preenche CFOP
+                    if (ids.cfop_id) {
+                        log('🔧 Preenchendo CFOP ID: ' + ids.cfop_id, 'success');
+                        var cfopText = classificacao.cfop + ' - ' + (resp.cfop_descricao || 'CFOP');
+                        
+                        var $cfopSelect = $('#cfop_id');
+                        if ($cfopSelect.find("option[value='" + ids.cfop_id + "']").length === 0) {
+                            var newOption = new Option(cfopText, ids.cfop_id, true, true);
+                            $cfopSelect.append(newOption);
+                        } else {
+                            $cfopSelect.val(ids.cfop_id);
+                        }
+                        $cfopSelect.trigger('change');
+                        log('✅ CFOP preenchido: ' + cfopText, 'success');
+                    }
+                    
+                    // Preenche CST
+                    if (ids.cst_id) {
+                        log('🔧 Preenchendo CST ID: ' + ids.cst_id, 'success');
+                        var cstText = classificacao.cst + ' - ' + (resp.cst_descricao || 'CST');
+                        
+                        var $cstSelect = $('#cst_id');
+                        if ($cstSelect.find("option[value='" + ids.cst_id + "']").length === 0) {
+                            var newOption = new Option(cstText, ids.cst_id, true, true);
+                            $cstSelect.append(newOption);
+                        } else {
+                            $cstSelect.val(ids.cst_id);
+                        }
+                        $cstSelect.trigger('change');
+                        log('✅ CST preenchido: ' + cstText, 'success');
+                    }
+                    
+                    // Preenche CSOSN
+                    if (ids.csosn_id) {
+                        log('🔧 Preenchendo CSOSN ID: ' + ids.csosn_id, 'success');
+                        var csosnText = classificacao.csosn + ' - ' + (resp.csosn_descricao || 'CSOSN');
+                        
+                        var $csosnSelect = $('#csosn_id');
+                        if ($csosnSelect.find("option[value='" + ids.csosn_id + "']").length === 0) {
+                            var newOption = new Option(csosnText, ids.csosn_id, true, true);
+                            $csosnSelect.append(newOption);
+                        } else {
+                            $csosnSelect.val(ids.csosn_id);
+                        }
+                        $csosnSelect.trigger('change');
+                        log('✅ CSOSN preenchido: ' + csosnText, 'success');
+                    }
+                    
+                    // Preenche CEST
+                    if (ids.cest || classificacao.cest) {
+                        var cestValue = ids.cest || classificacao.cest;
+                        if (cestValue && cestValue !== 'null' && cestValue !== 'None') {
+                            log('🔧 Preenchendo CEST: ' + cestValue, 'success');
+                            $('#cest').val(cestValue);
+                            log('✅ CEST preenchido: ' + cestValue, 'success');
+                        } else {
+                            log('ℹ️ CEST não informado (opcional)', 'info');
+                        }
+                    }
+                    
+                    log('🎉 Preenchimento concluído!', 'success');
+                },
+                error: function(xhr) {
+                    log('❌ Erro: ' + xhr.status, 'error');
+                    log('📄 Resposta: ' + xhr.responseText, 'error');
+                },
+                complete: function() {
+                    $('#btnTestar').prop('disabled', false).html('🤖 Buscar Sugestão IA');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

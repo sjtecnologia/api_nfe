@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}Estatísticas de Auditoria{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-chart-bar"></i> Estatísticas de Auditoria
+        </h1>
+        <a href="{{ url_for('admin.list_auditoria') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Filtro de Período -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" action="{{ url_for('admin.estatisticas_auditoria') }}" class="row">
+                <div class="col-md-4">
+                    <label for="dias" class="form-label">Período de Análise:</label>
+                    <select name="dias" id="dias" class="form-select" onchange="this.form.submit()">
+                        <option value="7" {% if dias == 7 %}selected{% endif %}>Últimos 7 dias</option>
+                        <option value="15" {% if dias == 15 %}selected{% endif %}>Últimos 15 dias</option>
+                        <option value="30" {% if dias == 30 %}selected{% endif %}>Últimos 30 dias</option>
+                        <option value="60" {% if dias == 60 %}selected{% endif %}>Últimos 60 dias</option>
+                        <option value="90" {% if dias == 90 %}selected{% endif %}>Últimos 90 dias</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Total de Ações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-left-primary shadow">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Ações (últimos {{ dias }} dias)
+                            </div>
+                            <div class="h2 mb-0 font-weight-bold text-gray-800">
+                                {{ "{:,}".format(stats.total_acoes).replace(',', '.') }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-list fa-3x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Ações por Tipo -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-chart-pie"></i> Ações por Tipo
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if stats.acoes_por_tipo %}
+                    <canvas id="acoesPorTipoChart" width="400" height="300"></canvas>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Ação</th>
+                                    <th class="text-end">Quantidade</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for acao in stats.acoes_por_tipo %}
+                                <tr>
+                                    <td><strong>{{ acao.acao }}</strong></td>
+                                    <td class="text-end">{{ acao.quantidade }}</td>
+                                    <td class="text-end">
+                                        {{ "%.1f"|format((acao.quantidade / stats.total_acoes * 100)) }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                        <p>Nenhuma ação registrada no período</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Usuários Mais Ativos -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-users"></i> Top 10 Usuários Mais Ativos
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if stats.usuarios_ativos %}
+                    <canvas id="usuariosAtivosChart" width="400" height="300"></canvas>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Usuário</th>
+                                    <th class="text-end">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for usuario in stats.usuarios_ativos %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>
+                                        <i class="fas fa-user text-primary"></i> {{ usuario.username }}
+                                    </td>
+                                    <td class="text-end">
+                                        <strong>{{ usuario.quantidade }}</strong>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                        <p>Nenhum usuário ativo no período</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabelas Mais Alteradas -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-database"></i> Top 10 Tabelas Mais Alteradas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if stats.tabelas_alteradas %}
+                    <canvas id="tabelasAlteradasChart" width="400" height="200"></canvas>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Tabela</th>
+                                    <th class="text-end">Alterações</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tabela in stats.tabelas_alteradas %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td><code>{{ tabela.tabela }}</code></td>
+                                    <td class="text-end"><strong>{{ tabela.quantidade }}</strong></td>
+                                    <td class="text-end">
+                                        {{ "%.1f"|format((tabela.quantidade / stats.total_acoes * 100)) }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                        <p>Nenhuma alteração em tabelas no período</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+// @ts-nocheck - Este arquivo mistura Jinja2 templates com JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    // Cores para os gráficos
+    const colors = [
+        'rgba(78, 115, 223, 0.8)',
+        'rgba(28, 200, 138, 0.8)',
+        'rgba(54, 185, 204, 0.8)',
+        'rgba(246, 194, 62, 0.8)',
+        'rgba(231, 74, 59, 0.8)',
+        'rgba(133, 135, 150, 0.8)',
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(255, 159, 64, 0.8)',
+        'rgba(255, 205, 86, 0.8)',
+        'rgba(75, 192, 192, 0.8)'
+    ];
+
+    {% if stats.acoes_por_tipo %}
+    // Gráfico de Ações por Tipo
+    const acoesPorTipoCtx = document.getElementById('acoesPorTipoChart');
+    if (acoesPorTipoCtx) {
+        new Chart(acoesPorTipoCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ stats.acoes_por_tipo | map(attribute='acao') | list | tojson }},
+                datasets: [{
+                    data: {{ stats.acoes_por_tipo | map(attribute='quantidade') | list | tojson }},
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+    {% endif %}
+
+    {% if stats.usuarios_ativos %}
+    // Gráfico de Usuários Ativos
+    const usuariosAtivosCtx = document.getElementById('usuariosAtivosChart');
+    if (usuariosAtivosCtx) {
+        new Chart(usuariosAtivosCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ stats.usuarios_ativos | map(attribute='username') | list | tojson }},
+                datasets: [{
+                    label: 'Ações',
+                    data: {{ stats.usuarios_ativos | map(attribute='quantidade') | list | tojson }},
+                    backgroundColor: 'rgba(28, 200, 138, 0.8)',
+                    borderColor: 'rgba(28, 200, 138, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+    {% endif %}
+
+    {% if stats.tabelas_alteradas %}
+    // Gráfico de Tabelas Alteradas
+    const tabelasAlteradasCtx = document.getElementById('tabelasAlteradasChart');
+    if (tabelasAlteradasCtx) {
+        new Chart(tabelasAlteradasCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ stats.tabelas_alteradas | map(attribute='tabela') | list | tojson }},
+                datasets: [{
+                    label: 'Alterações',
+                    data: {{ stats.tabelas_alteradas | map(attribute='quantidade') | list | tojson }},
+                    backgroundColor: 'rgba(54, 185, 204, 0.8)',
+                    borderColor: 'rgba(54, 185, 204, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

@@ -1,20 +1,222 @@
-
-# coding: utf-8
-from __future__ import annotations
 from typing import Optional, Dict, Any, List, Generator
-from flask import (
-    Blueprint, render_template, request, redirect, url_for,
-    flash, jsonify, session, current_app
-)
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, current_app
 
 # Definição do Blueprint admin_bp
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+import os
+import sys
+import importlib
+import json
+from werkzeug.utils import secure_filename
+import requests
 from flask_login import login_required, current_user
 from sqlalchemy import text
+from sqlalchemy.engine import Result
 from datetime import datetime
-import sys
 from pathlib import Path
-import importlib
+import asyncio
+from auth.decorators import admin_required  # Importar decorator de admin
+
+# Definição do Blueprint admin_bp
+
+# Defina o decorator permission_required (stub ou real)
+try:
+    from ..core.permissions import permission_required  # type: ignore
+except Exception:
+    def permission_required(permission):
+        def decorator(f):
+            return f
+        return decorator
+
+# Inicializa get_db na primeira chamada
+from database.connection import get_db
+
+# -------------------------------------------------------------------
+# PRODUTOS (CADASTRO, EDIÇÃO, LISTAGEM)
+# -------------------------------------------------------------------
+
+@admin_bp.route('/produtos/<int:produto_id>/editar', methods=['GET', 'POST'])
+@login_required
+@permission_required('produtos.edit')
+def editar_produto(produto_id):
+    db = _get_db()
+    try:
+        # Initialize cliente_id at the beginning
+        cliente_id = None
+        
+        if request.method == 'POST':
+            # Atualiza produto
+            data = {
+                'produto_id': produto_id,
+                'codigo_interno': request.form.get('codigo_interno'),
+                'descricao': request.form.get('descricao'),
+                'unidade_comercial': request.form.get('unidade_comercial','UN'),
+                'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
+                'ncm_id': request.form.get('ncm_id'),
+                'cfop_id': request.form.get('cfop_id'),
+                'cest': request.form.get('cest'),
+                'csosn_id': request.form.get('csosn_id'),
+            }
+            db.execute(text("""
+                UPDATE produtos
+                SET codigo_interno=:codigo_interno,
+                    descricao=:descricao,
+                    unidade_comercial=:unidade_comercial,
+                    preco_unitario_padrao=:preco_unitario_padrao,
+                    ncm_id=:ncm_id,
+                    cfop_id=:cfop_id,
+                    cest=:cest,
+                    csosn_id=:csosn_id
+                WHERE produto_id=:produto_id
+            """), data)
+            db.commit()
+            flash('Produto atualizado', 'success')
+            # Buscar cliente_id do produto atualizado
+            row = db.execute(text("SELECT cliente_id FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
+            cliente_id = row[0] if row else None
+            if cliente_id:
+                return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
+            return redirect(url_for('admin.list_produtos'))
+        else:
+            # Exibe form de edição
+            row = db.execute(text("SELECT * FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
+            produto = dict(row._mapping) if row else None
+            print(f"🔍 Produto encontrado: {produto is not None}")
+            if produto:
+                print(f"🔍 Produto ID: {produto.get('produto_id')}, Descrição: {produto.get('descricao')}")
+                for key, value in produto.items():
+                    print(f"🔍 {key}: {value}")
+            if produto and 'cliente_id' in produto and produto['cliente_id']:
+                cliente_id = produto['cliente_id']
+            else:
+                cliente_id = request.args.get('cliente_id') or session.get('active_cliente_id')
+            try:
+                cliente_id = int(cliente_id) if cliente_id is not None else None
+            except (TypeError, ValueError):
+                cliente_id = None
+            print("🔍 Buscando NCMs...")
+            ncm_list = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo")).fetchall()
+            print(f"🔍 NCMs encontrados: {len(ncm_list)}")
+            
+            print("🔍 Buscando CFOPs...")
+            cfop_list = db.execute(text("SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop")).fetchall()
+            print(f"🔍 CFOPs encontrados: {len(cfop_list)}")
+            
+            print("🔍 Buscando CSTs...")
+            cst_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms ORDER BY codigo")).fetchall()
+            print(f"🔍 CSTs encontrados: {len(cst_list)}")
+            
+            print("🔍 Buscando CSOSNs...")
+            csosn_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms ORDER BY codigo")).fetchall()
+            print(f"🔍 CSOSNs encontrados: {len(csosn_list)}")
+            
+            print("🔍 Buscando Origens de Mercadoria...")
+            origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria ORDER BY codigo")).fetchall()
+            print(f"🔍 Origens encontradas: {len(origens_list)}")
+            
+            print("🔍 Tentando renderizar template...")
+            try:
+                return render_template(
+                    'admin/produtos/form.html',
+                    produto=produto,
+                    cliente_id=cliente_id,
+                    ncms=[dict(n._mapping) for n in ncm_list],
+                    cfops=[dict(c._mapping) for c in cfop_list],
+                    csts=[dict(c._mapping) for c in cst_list],
+                    csosns=[dict(c._mapping) for c in csosn_list],
+                    origens_mercadoria=[dict(o._mapping) for o in origens_list]
+                )
+            except Exception as template_error:
+                print(f"❌ Erro ao renderizar template: {template_error}")
+                raise template_error
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro na função editar_produto: {e}")
+        print(f"❌ Tipo do erro: {type(e)}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Erro ao editar produto: {e}', 'danger')
+        return redirect(url_for('admin.list_produtos'))
+    finally:
+        db.close()
+
+def _get_db():
+    return next(get_db())
+
+# Rota para upload de NCM CSV e envio para IA
+@admin_bp.route('/ncms/upload-csv', methods=['GET', 'POST'])
+@login_required
+def upload_ncm_csv():
+    if request.method == 'POST':
+        file = request.files.get('file')
+        filename = file.filename if file and hasattr(file, 'filename') else None
+        if not file or not filename or not isinstance(filename, str) or not filename.lower().endswith('.csv'):
+            flash('Selecione um arquivo CSV válido.', 'danger')
+            return redirect(request.url)
+        safe_filename = secure_filename(filename)
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', '/tmp')
+        os.makedirs(upload_folder, exist_ok=True)
+        upload_path = os.path.join(upload_folder, safe_filename)
+        file.save(upload_path)
+        # Enviar para microserviço IA (ajuste a URL conforme necessário)
+        ia_url = current_app.config.get('IA_NCM_UPLOAD_URL', 'http://localhost:8000/ncm/dados')
+        try:
+            with open(upload_path, 'rb') as f:
+                response = requests.post(ia_url, files={'file': f}, timeout=60)
+            if response.status_code == 200:
+                flash('Arquivo enviado para IA com sucesso!', 'success')
+            else:
+                flash(f'Falha ao enviar para IA: {response.text}', 'danger')
+        except Exception as e:
+            flash(f'Erro ao enviar para IA: {e}', 'danger')
+        return redirect(url_for('admin.list_ncms'))
+    return render_template('admin/ncms/upload_csv.html')
+
+# Defina o decorator permission_required (stub ou real)
+try:
+    from ..core.permissions import permission_required  # type: ignore
+except Exception:
+    def permission_required(permission):
+        def decorator(f):
+            return f
+        return decorator
+
+# Inicializa get_db na primeira chamada
+from database.connection import get_db
+
+
+
+## A duplicata da função edit_produto foi removida. Mantenha apenas uma definição correta no arquivo.
+
+
+## As funções create_produto e edit_produto duplicadas foram removidas. Mantenha apenas uma definição de cada no arquivo, preferencialmente a versão mais recente e correta (com passagem de cliente_id para o template).
+
+# Rota para editar NCM
+@admin_bp.route('/ncms/editar/<int:ncm_id>', methods=['GET', 'POST'])
+@login_required
+# @permission_required('ncms.edit')  # Descomente se desejar controle de permissão
+def edit_ncm(ncm_id):
+    db = _get_db()
+    try:
+        if request.method == 'POST':
+            codigo = request.form.get('codigo')
+            descricao = request.form.get('descricao')
+            # Adicione outros campos conforme necessário
+            db.execute(text("""
+                UPDATE ncms SET codigo = :codigo, descricao = :descricao WHERE ncm_id = :ncm_id
+            """), {'codigo': codigo, 'descricao': descricao, 'ncm_id': ncm_id})
+            db.commit()
+            flash('NCM atualizado com sucesso!', 'success')
+            return redirect(url_for('admin.list_ncms'))
+        row = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms WHERE ncm_id = :id"), {'id': ncm_id}).fetchone()
+        ncm = dict(row._mapping) if row else None
+        return render_template('admin/ncms/form.html', ncm=ncm)
+    except Exception as e:
+        db.rollback()
+        flash(f'Erro ao editar NCM: {e}', 'danger')
+        return redirect(url_for('admin.list_ncms'))
+    finally:
+        db.close()
 
 
 
@@ -29,7 +231,7 @@ except Exception:
             return f
         return decorator
 
-# Duplicar produto
+# ...existing code...
 @admin_bp.route('/produtos/<int:produto_id>/duplicar', methods=['POST'])
 @login_required
 @permission_required('produtos.create')
@@ -63,7 +265,7 @@ def duplicar_produto(produto_id: int):
         new_id = row_result[0] if row_result else None
         if new_id:
             flash('Produto duplicado com sucesso! Faça os ajustes necessários.', 'success')
-            return redirect(url_for('admin.edit_produto', produto_id=new_id, origem='duplicado'))
+            return redirect(url_for('admin.editar_produto', produto_id=new_id))
         else:
             flash('Erro ao duplicar produto: ID não retornado.', 'error')
             return redirect(request.referrer or url_for('admin.list_produtos'))
@@ -213,8 +415,7 @@ def resolve_cliente_id(param_name: str = 'cliente_id', required: bool = False) -
 from database.connection import get_db
 # get_db = _locate_get_db()
 
-def _get_db():
-    return next(get_db())
+
 
 # -------------------------------------------------------------------
 # DASHBOARD ADMIN
@@ -223,153 +424,8 @@ def _get_db():
 @admin_bp.route('/')
 @login_required
 def admin_home():
-    db = None
-    db = None
-    stats = {
-        'total_clientes': 0,
-        'total_nfes': 0,
-        'nfes_ano': 0,
-        'nfes_mes': 0
-    }
-    ultimas_nfes = []
-    ultimos_clientes = []
-    clientes_filtro = []
-
-    try:
-        db = _get_db()
-
-        # Filtros recebidos via GET
-        cliente_id = request.args.get('cliente_id', type=int)
-        periodo_inicio = request.args.get('periodo_inicio')
-        periodo_fim = request.args.get('periodo_fim')
-
-        # Lista de clientes para o filtro
-        clientes_rows = db.execute(text("SELECT cliente_id, razao_social FROM clientes WHERE ativo = TRUE ORDER BY razao_social")).fetchall()
-        clientes_filtro = [dict(row._mapping) for row in clientes_rows]
-
-        # Monta filtro SQL para NFes
-        filtro_nfe = []
-        params_nfe = {}
-        if cliente_id:
-            filtro_nfe.append("cliente_id = :cliente_id")
-            params_nfe['cliente_id'] = cliente_id
-        if periodo_inicio:
-            filtro_nfe.append("data_criacao >= :periodo_inicio")
-            params_nfe['periodo_inicio'] = periodo_inicio
-        if periodo_fim:
-            filtro_nfe.append("data_criacao <= :periodo_fim")
-            params_nfe['periodo_fim'] = periodo_fim
-        where_nfe = ("WHERE " + " AND ".join(filtro_nfe)) if filtro_nfe else ""
-
-        # Total clientes (excluindo destinatários, ajuste se necessário)
-        stats['total_clientes'] = db.execute(text("SELECT COUNT(*) FROM clientes WHERE ativo = TRUE")).scalar() or 0
-
-        # Total NFes conforme filtro
-        total_nfes_result = db.execute(text(f"SELECT COUNT(*) FROM nfe_emitidas {where_nfe}"), params_nfe).scalar()
-        stats['total_nfes'] = int(total_nfes_result) if total_nfes_result is not None else 0
-
-        # Ano e mês para os cards
-        ano_atual = datetime.now().year
-        mes_atual = datetime.now().month
-
-        # NFes do ano conforme filtro
-        filtro_ano = list(filtro_nfe)
-        params_ano = dict(params_nfe)
-        filtro_ano.append("EXTRACT(YEAR FROM data_criacao) = :ano")
-        params_ano['ano'] = ano_atual
-        where_ano = ("WHERE " + " AND ".join(filtro_ano)) if filtro_ano else ""
-        nfes_ano_result = db.execute(text(f"SELECT COUNT(*) FROM nfe_emitidas {where_ano}"), params_ano).scalar()
-        stats['nfes_ano'] = int(nfes_ano_result) if nfes_ano_result is not None else 0
-
-        # NFes do mês conforme filtro
-        filtro_mes = list(filtro_nfe)
-        params_mes = dict(params_nfe)
-        filtro_mes.append("EXTRACT(YEAR FROM data_criacao) = :ano")
-        filtro_mes.append("EXTRACT(MONTH FROM data_criacao) = :mes")
-        params_mes['ano'] = ano_atual
-        params_mes['mes'] = mes_atual
-        where_mes = ("WHERE " + " AND ".join(filtro_mes)) if filtro_mes else ""
-        nfes_mes_result = db.execute(text(f"SELECT COUNT(*) FROM nfe_emitidas {where_mes}"), params_mes).scalar()
-        stats['nfes_mes'] = int(nfes_mes_result) if nfes_mes_result is not None else 0
-
-        # Últimas NFes (apenas do filtro, se houver)
-        rows_nfe = db.execute(text(f"SELECT nfe_emitida_id, status, data_criacao FROM nfe_emitidas {where_nfe} ORDER BY nfe_emitida_id DESC LIMIT 3"), params_nfe).fetchall()
-        for r in rows_nfe:
-            ultimas_nfes.append(_safe_row_to_dict(r, [
-                'nfe_emitida_id','status','data_criacao'
-            ]))
-
-        # Extrato detalhado de NFEs emitidas por cliente/período
-        extrato_nfes = []
-        extrato_rows = db.execute(text(f"""
-            SELECT nfe_emitida_id, cliente_id, data_criacao, status, destinatario_razao_social, destinatario_cnpj_cpf, json_nfe
-            FROM nfe_emitidas
-            {where_nfe}
-            ORDER BY data_criacao DESC
-            LIMIT 100
-        """), params_nfe).fetchall()
-        for r in extrato_rows:
-            row_dict = _safe_row_to_dict(r, [
-                'nfe_emitida_id','cliente_id','data_criacao','status','destinatario_razao_social','destinatario_cnpj_cpf','json_nfe'
-            ])
-            valor_total = 0.0
-            json_nfe = row_dict.get('json_nfe')
-            if json_nfe:
-                import json
-                try:
-                    if isinstance(json_nfe, str):
-                        json_data = json.loads(json_nfe)
-                    else:
-                        json_data = json_nfe
-                    # Novo cálculo: soma dos valor_total dos itens
-                    items = json_data.get('items', [])
-                    valor_total = sum(float(item.get('valor_total', 0.0)) for item in items if isinstance(item, dict))
-                except Exception as e:
-                    print(f"Erro ao extrair valor_total do json_nfe: {e}")
-                    valor_total = 0.0
-            row_dict['valor_total'] = valor_total
-            extrato_nfes.append(row_dict)
-
-        # Últimos clientes (mantém todos)
-        rows_cli = db.execute(text("""
-            SELECT cliente_id,
-                   razao_social,
-                   nome_fantasia,
-                   cnpj AS cnpj,
-                   data_cadastro AS data_cadastro
-            FROM clientes
-            WHERE ativo = TRUE
-            ORDER BY cliente_id DESC
-            LIMIT 8
-        """)).fetchall()
-        for r in rows_cli:
-            ultimos_clientes.append(_safe_row_to_dict(r, [
-                'cliente_id','razao_social','nome_fantasia','cnpj','data_cadastro'
-            ]))
-
-        # Datas padrão para o filtro (primeiro dia do mês e hoje)
-        from datetime import date
-        hoje = date.today()
-        primeiro_dia_mes = hoje.replace(day=1)
-        return render_template('admin/dashboard.html',
-               stats=stats,
-               ultimas_nfes=ultimas_nfes,
-               ultimos_clientes=ultimos_clientes,
-               clientes_filtro=clientes_filtro,
-               extrato_nfes=extrato_nfes,
-               data_hoje=hoje.strftime('%Y-%m-%d'),
-               data_primeiro_dia_mes=primeiro_dia_mes.strftime('%Y-%m-%d'))
-    except Exception as e:
-        print(f"❌ Erro dashboard admin: {e}")
-        flash('Erro ao carregar dashboard', 'error')
-        return render_template('admin/dashboard.html',
-                               stats=stats,
-                               ultimas_nfes=ultimas_nfes,
-                               ultimos_clientes=ultimos_clientes,
-                               clientes_filtro=[])
-    finally:
-        if db:
-            db.close()
+    """Redireciona para o novo dashboard analytics"""
+    return redirect(url_for('admin.dashboard'))
 
 @admin_bp.route('/nfes')
 @login_required
@@ -398,7 +454,6 @@ def list_nfes():
     # Filtro de busca
     if q:
         filtro.append("(" +
-            "n.chave_acesso ILIKE :q OR "
             "n.destinatario_razao_social ILIKE :q OR "
             "n.destinatario_cnpj_cpf ILIKE :q OR "
             "c.razao_social ILIKE :q OR "
@@ -433,70 +488,293 @@ def list_nfes():
         cliente_id=cliente_id
     )
 
+def _calculate_ncm_hierarchy_level(codigo):
+    """
+    Calcula o nível hierárquico de um código NCM baseado na estrutura:
+    - Capítulo (2 dígitos): 01, 02, etc. - Nível 0
+    - Posição (4 dígitos): 0101, 0102, etc. - Nível 1  
+    - Subposição (6 dígitos): 010101, 010102, etc. - Nível 2
+    - Item (8 dígitos): 01010101, 01010102, etc. - Nível 3
+    """
+    if not codigo or not codigo.isdigit():
+        return 0
+    
+    codigo_len = len(codigo)
+    if codigo_len <= 2:
+        return 0  # Capítulo
+    elif codigo_len <= 4:
+        return 1  # Posição
+    elif codigo_len <= 6:
+        return 2  # Subposição
+    else:
+        return 3  # Item (8 dígitos)
+
+def _add_ncm_hierarchy_data(ncms):
+    """
+    Adiciona dados de hierarquia aos NCMs para exibição indentada
+    """
+    for ncm in ncms:
+        codigo = ncm.get('codigo', '')
+        ncm['hierarchy_level'] = _calculate_ncm_hierarchy_level(codigo)
+        
+        # Define tipo de elemento baseado no nível
+        level_names = ['Capítulo', 'Posição', 'Subposição', 'Item']
+        ncm['hierarchy_type'] = level_names[min(ncm['hierarchy_level'], 3)]
+        
+        # Calcula indentação (20px por nível)
+        ncm['indent_px'] = ncm['hierarchy_level'] * 20
+        
+        # Formata código com pontos para melhor visualização
+        if len(codigo) >= 8:
+            ncm['codigo_formatado'] = f"{codigo[:2]}.{codigo[2:4]}.{codigo[4:6]}.{codigo[6:8]}"
+        elif len(codigo) >= 6:
+            ncm['codigo_formatado'] = f"{codigo[:2]}.{codigo[2:4]}.{codigo[4:6]}"
+        elif len(codigo) >= 4:
+            ncm['codigo_formatado'] = f"{codigo[:2]}.{codigo[2:4]}"
+        else:
+            ncm['codigo_formatado'] = codigo
+    
+    return ncms
+
 @admin_bp.route('/ncms')
 @login_required
 def list_ncms():
+    from services.ncm_service import ncm_service
+    
     db = _get_db()
     q = request.args.get('q', '').strip()
+    
+    # Usa o serviço híbrido para busca
     if q:
-        rows = db.execute(text("""
-            SELECT ncm_id, codigo, descricao, data_inicio, data_fim, tipo_ato, numero_ato, ano_ato
-            FROM ncms
-            WHERE codigo ILIKE :q
-               OR descricao ILIKE :q
-               OR tipo_ato ILIKE :q
-               OR numero_ato::text ILIKE :q
-               OR ano_ato::text ILIKE :q
-            ORDER BY codigo
-        """), {'q': f'%{q}%'}).fetchall()
+        ncms = ncm_service.search_ncm_hybrid(q, limit=100)
+        # Converte para formato esperado pelo template se necessário
+        if ncms and not isinstance(ncms[0].get('ncm_id'), (int, type(None))):
+            # Se vem da busca online, cria formato compatível
+            ncms = [{'ncm_id': i+1, 'codigo': ncm.get('codigo', ''), 'descricao': ncm.get('descricao', ''), 
+                    'data_atualizacao': ncm.get('data_atualizacao'), 'fonte_atualizacao': 'online'} 
+                   for i, ncm in enumerate(ncms)]
     else:
+        # Lista padrão do banco local com ordenação hierárquica
         rows = db.execute(text("""
-            SELECT ncm_id, codigo, descricao, data_inicio, data_fim, tipo_ato, numero_ato, ano_ato
+            SELECT ncm_id, codigo, descricao, tipo, data_inicio, data_fim, tipo_ato, numero_ato, ano_ato,
+                   data_atualizacao, fonte_atualizacao
             FROM ncms
-            ORDER BY codigo
+            ORDER BY 
+                SUBSTRING(codigo, 1, 2),  -- Capítulo
+                SUBSTRING(codigo, 3, 2),  -- Posição  
+                SUBSTRING(codigo, 5, 2),  -- Subposição
+                SUBSTRING(codigo, 7, 2)   -- Item
         """)).fetchall()
-    ncms = [dict(row._mapping) for row in rows]
+        ncms = [dict(row._mapping) for row in rows]
+    
+    # Adiciona dados de hierarquia para exibição indentada
+    ncms = _add_ncm_hierarchy_data(ncms)
+    
+    db.close()
+    
     return render_template('admin/ncms/list.html', ncms=ncms)
 
+
+
+@admin_bp.route('/ncms/upload-siscomex', methods=['GET', 'POST'])
+@login_required
+@permission_required('ncms.sync')
+def upload_siscomex_json():
+    """
+    Upload manual de arquivo JSON baixado do Siscomex após resolver captcha
+    """
+    if request.method == 'POST':
+        file = request.files.get('siscomex_file')
+        
+        if not file or not file.filename:
+            flash('Por favor, selecione um arquivo JSON do Siscomex.', 'warning')
+            return redirect(request.url)
+        
+        if not file.filename.lower().endswith(('.json', '.txt')):
+            flash('Arquivo deve ser JSON baixado do Siscomex (.json ou .txt).', 'warning')
+            return redirect(request.url)
+        
+        try:
+            # Lê o conteúdo do arquivo
+            content = file.read().decode('utf-8').strip()
+            
+            if not content:
+                flash('Arquivo parece estar vazio.', 'warning')
+                return redirect(request.url)
+            
+            # Verifica se é JSON válido básico
+            if not (content.startswith('{') or content.startswith('[')):
+                flash('Arquivo não parece ser um JSON válido. Deve começar com { ou [', 'warning')
+                return redirect(request.url)
+            
+            # Processa o JSON do Siscomex
+            from services.ncm_service import ncm_service
+            result = ncm_service.process_siscomex_json(content)
+            
+            if result['success']:
+                flash(f"✅ {result['message']}", 'success')
+            else:
+                flash(f"⚠️ {result['message']}", 'warning')
+                
+        except UnicodeDecodeError:
+            flash('Erro de codificação do arquivo. Certifique-se que está em UTF-8.', 'error')
+        except Exception as e:
+            flash(f'Erro ao processar arquivo: {str(e)}', 'error')
+        
+        return redirect(url_for('admin.list_ncms'))
+    
+    # GET - Mostra formulário de upload
+    return render_template('admin/ncms/upload_siscomex.html')
+
+
+
+
+
+# API para busca de NCM híbrida (para Select2)
+@admin_bp.route('/api/ncms/search', methods=['GET'])
+@login_required
+def api_search_ncms():
+    from services.ncm_service import ncm_service
+    
+    q = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 50)), 100)
+    
+    # Se não houver busca, retorna NCMs mais comuns
+    if len(q) < 2:
+        db = _get_db()
+        try:
+            # Retorna os 50 primeiros NCMs ordenados por código
+            result = db.execute(text("""
+                SELECT ncm_id, codigo, descricao 
+                FROM ncms 
+                WHERE tipo = 'analitico'
+                ORDER BY codigo 
+                LIMIT :limit
+            """), {'limit': limit})
+            
+            results = []
+            for row in result:
+                results.append({
+                    'id': row.ncm_id,
+                    'text': f"{row.codigo} - {row.descricao}",
+                    'codigo': row.codigo,
+                    'descricao': row.descricao
+                })
+            
+            return jsonify({'results': results})
+        finally:
+            db.close()
+    
+    try:
+        ncms = ncm_service.search_ncm_hybrid(q, limit)
+        
+        # Formato para Select2
+        results = []
+        for ncm in ncms:
+            results.append({
+                'id': ncm.get('ncm_id', ''),
+                'text': f"{ncm.get('codigo', '')} - {ncm.get('descricao', '')}",
+                'codigo': ncm.get('codigo', ''),
+                'descricao': ncm.get('descricao', '')
+            })
+        
+        return jsonify({'results': results})
+        
+    except Exception as e:
+        return jsonify({'results': [], 'error': str(e)})
+
+# Rota para cadastro de novo NCM
+@admin_bp.route('/ncms/novo', methods=['GET', 'POST'])
+@login_required
+# @permission_required('ncms.create')  # Descomente se desejar controle de permissão
+def create_ncm():
+    db = _get_db()
+    try:
+        if request.method == 'POST':
+            codigo = request.form.get('codigo')
+            descricao = request.form.get('descricao')
+            # Adicione outros campos conforme necessário
+            db.execute(text("""
+                INSERT INTO ncms (codigo, descricao) VALUES (:codigo, :descricao)
+            """), {'codigo': codigo, 'descricao': descricao})
+            db.commit()
+            flash('NCM cadastrado com sucesso!', 'success')
+            return redirect(url_for('admin.list_ncms'))
+        return render_template('admin/ncms/form.html', ncm=None)
+    except Exception as e:
+        db.rollback()
+        flash(f'Erro ao cadastrar NCM: {e}', 'danger')
+        return redirect(url_for('admin.list_ncms'))
+    finally:
+        db.close()
+
+# Rota para excluir NCM
 @admin_bp.route('/ncms/excluir/<int:ncm_id>', methods=['POST'])
 @login_required
 @permission_required('ncms.delete')
 def delete_ncm(ncm_id):
     db = _get_db()
     try:
-        db.execute(text("DELETE FROM ncms WHERE ncm_id = :id"), {'id': ncm_id})
-        db.commit()
-        flash('NCM excluído com sucesso', 'success')
+        # Verifica se o NCM está sendo usado por algum produto
+        produtos_usando = db.execute(text("""
+            SELECT COUNT(*) as total FROM produtos WHERE ncm_id = :ncm_id
+        """), {'ncm_id': ncm_id}).fetchone()
+        
+        if produtos_usando and produtos_usando.total > 0:
+            flash(f'Não é possível excluir este NCM pois está sendo usado por {produtos_usando.total} produto(s).', 'warning')
+            return redirect(url_for('admin.list_ncms'))
+        
+        # Se não está sendo usado, pode excluir
+        result: Result[Any] = db.execute(text("DELETE FROM ncms WHERE ncm_id = :ncm_id"), {'ncm_id': ncm_id})
+        
+        # Para SQLAlchemy, usamos result.rowcount para verificar quantas linhas foram afetadas
+        rows_affected = getattr(result, 'rowcount', 0)
+        
+        if rows_affected > 0:
+            db.commit()
+            flash('NCM excluído com sucesso!', 'success')
+        else:
+            flash('NCM não encontrado.', 'warning')
+            
     except Exception as e:
         db.rollback()
         print(f"❌ Erro delete_ncm: {e}")
-        flash('Erro ao excluir NCM', 'error')
+        flash(f'Erro ao excluir NCM: {str(e)}', 'error')
     finally:
         db.close()
-    return redirect(url_for('admin.list_ncms'))        
+    
+    return redirect(url_for('admin.list_ncms'))
+
+## Rotas de roles e permissions incompletas removidas para evitar erro de sintaxe.
 
 @admin_bp.route('/cst')
 @login_required
 @permission_required('cst.view')
 def list_cst():
     db = _get_db()
-    q = request.args.get('q', '').strip()
-    if q:
-        rows = db.execute(text("""
-            SELECT cst_id, codigo, descricao
-            FROM cst_icms
-            WHERE codigo ILIKE :q
-               OR descricao ILIKE :q
-            ORDER BY codigo
-        """), {'q': f'%{q}%'}).fetchall()
-    else:
-        rows = db.execute(text("""
-            SELECT cst_id, codigo, descricao
-            FROM cst_icms
-            ORDER BY codigo
-        """)).fetchall()
-    csts = [dict(row._mapping) for row in rows]
-    return render_template('admin/cst/list.html', csts=csts)
+    try:
+        q = request.args.get('q', '').strip()
+        if q:
+            rows = db.execute(text("""
+                SELECT cst_id, codigo, descricao
+                FROM cst_icms
+                WHERE codigo ILIKE :q OR descricao ILIKE :q
+                ORDER BY codigo
+            """), {'q': f'%{q}%'}).fetchall()
+        else:
+            rows = db.execute(text("""
+                SELECT cst_id, codigo, descricao
+                FROM cst_icms
+                ORDER BY codigo
+            """)).fetchall()
+        csts = [dict(row._mapping) for row in rows]
+        return render_template('admin/cst/list.html', csts=csts)
+    except Exception as e:
+        print(f"❌ Erro list_cst: {e}")
+        flash('Erro ao carregar CSTs', 'error')
+        return render_template('admin/cst/list.html', csts=[])
+    finally:
+        db.close()
 
 @admin_bp.route('/cst/novo')
 @login_required
@@ -1264,25 +1542,330 @@ def configuracoes():
     flash('Configurações do Sistema (stub).', 'info')
     return redirect(url_for('admin.admin_home'))
 
-@admin_bp.route('/auditoria')
+# REMOVIDO: Stub antigo da rota /auditoria (implementação completa está na linha ~3719)
+# A função list_auditoria() substitui este stub
+
+@admin_bp.route('/backups')
 @login_required
-def auditoria():
+@permission_required('backups.view')
+def list_backups():
     """
-    Stub para evitar BuildError de url_for('admin.auditoria') usado em base.html.
-    Auditoria do sistema.
+    Lista todos os backups disponíveis com informações detalhadas.
     """
-    flash('Auditoria (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    from config.settings import BACKUP_DIR, BACKUP_LOG_DIR
+    import glob
+    
+    try:
+        # Criar diretório de backups se não existir
+        backup_path = Path(BACKUP_DIR)
+        backup_path.mkdir(exist_ok=True)
+        
+        # Buscar todos os arquivos de backup
+        backup_files = glob.glob(os.path.join(BACKUP_DIR, 'backup_*.sql.gz'))
+        
+        backups = []
+        for filepath in backup_files:
+            stat = os.stat(filepath)
+            backups.append({
+                'filename': os.path.basename(filepath),
+                'filepath': filepath,
+                'size': stat.st_size,
+                'size_mb': round(stat.st_size / (1024 * 1024), 2),
+                'created_at': datetime.fromtimestamp(stat.st_mtime),
+                'age_days': (datetime.now() - datetime.fromtimestamp(stat.st_mtime)).days
+            })
+        
+        # Ordenar por data de criação (mais recente primeiro)
+        backups.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        # Buscar logs de backup
+        log_files = glob.glob(os.path.join(BACKUP_LOG_DIR, 'backup_*.log'))
+        last_backup_log = None
+        if log_files:
+            log_files.sort(key=os.path.getmtime, reverse=True)
+            log_path = log_files[0]
+            with open(log_path, 'r') as f:
+                last_backup_log = f.read()
+        
+        return render_template('admin/backups.html', 
+                             backups=backups,
+                             backup_dir=BACKUP_DIR,
+                             last_log=last_backup_log)
+    except Exception as e:
+        flash(f'Erro ao listar backups: {str(e)}', 'danger')
+        return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/backups/executar', methods=['POST'])
+@login_required
+@permission_required('backups.create')
+def executar_backup_manual():
+    """
+    Executa backup manual do banco de dados.
+    """
+    from config.settings import BACKUP_DIR, BACKUP_RETENTION_DAYS
+    import subprocess
+    
+    try:
+        # Construir comando de backup
+        script_path = os.path.join(os.getcwd(), 'backup_database.sh')
+        
+        if not os.path.exists(script_path):
+            flash('Script de backup não encontrado!', 'danger')
+            return redirect(url_for('admin.list_backups'))
+        
+        # Executar script de backup
+        result = subprocess.run(
+            [script_path],
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minutos timeout
+        )
+        
+        if result.returncode == 0:
+            flash('Backup executado com sucesso!', 'success')
+        else:
+            flash(f'Erro ao executar backup: {result.stderr}', 'danger')
+            
+    except subprocess.TimeoutExpired:
+        flash('Timeout ao executar backup (> 5 minutos)', 'danger')
+    except Exception as e:
+        flash(f'Erro ao executar backup: {str(e)}', 'danger')
+    
+    return redirect(url_for('admin.list_backups'))
+
+@admin_bp.route('/backups/download/<filename>')
+@login_required
+@permission_required('backups.download')
+def download_backup(filename):
+    """
+    Faz download de um arquivo de backup específico.
+    """
+    from config.settings import BACKUP_DIR
+    from flask import send_file
+    
+    try:
+        # Validar filename para prevenir directory traversal
+        secure_name = secure_filename(filename)
+        if not secure_name.startswith('backup_') or not secure_name.endswith('.sql.gz'):
+            flash('Nome de arquivo inválido!', 'danger')
+            return redirect(url_for('admin.list_backups'))
+        
+        filepath = os.path.join(BACKUP_DIR, secure_name)
+        
+        if not os.path.exists(filepath):
+            flash('Arquivo de backup não encontrado!', 'danger')
+            return redirect(url_for('admin.list_backups'))
+        
+        return send_file(filepath, as_attachment=True)
+        
+    except Exception as e:
+        flash(f'Erro ao baixar backup: {str(e)}', 'danger')
+        return redirect(url_for('admin.list_backups'))
+
+@admin_bp.route('/backups/delete/<filename>', methods=['POST'])
+@login_required
+@permission_required('backups.delete')
+def delete_backup(filename):
+    """
+    Remove um arquivo de backup específico.
+    """
+    from config.settings import BACKUP_DIR
+    
+    try:
+        # Validar filename
+        secure_name = secure_filename(filename)
+        if not secure_name.startswith('backup_') or not secure_name.endswith('.sql.gz'):
+            flash('Nome de arquivo inválido!', 'danger')
+            return redirect(url_for('admin.list_backups'))
+        
+        filepath = os.path.join(BACKUP_DIR, secure_name)
+        
+        if not os.path.exists(filepath):
+            flash('Arquivo de backup não encontrado!', 'danger')
+            return redirect(url_for('admin.list_backups'))
+        
+        os.remove(filepath)
+        flash(f'Backup {secure_name} removido com sucesso!', 'success')
+        
+    except Exception as e:
+        flash(f'Erro ao remover backup: {str(e)}', 'danger')
+    
+    return redirect(url_for('admin.list_backups'))
 
 @admin_bp.route('/backup')
 @login_required
 def backup():
     """
-    Stub para evitar BuildError de url_for('admin.backup') usado em base.html.
-    Sistema de backup.
+    Redireciona para a lista de backups (mantém compatibilidade).
     """
-    flash('Sistema de Backup (stub).', 'info')
-    return redirect(url_for('admin.admin_home'))
+    return redirect(url_for('admin.list_backups'))
+
+# -------------------------------------------------------------------
+# DASHBOARD ANALYTICS
+# -------------------------------------------------------------------
+
+@admin_bp.route('/dashboard')
+@login_required
+def dashboard():
+    """
+    Dashboard principal com analytics, gráficos e KPIs do sistema.
+    """
+    db = _get_db()
+    try:
+        from datetime import datetime, timedelta
+        
+        # KPIs principais
+        kpis = {}
+        
+        # 1. Total de NFes emitidas
+        kpis['total_nfes'] = db.execute(text("""
+            SELECT COUNT(*) FROM nfe_emitidas
+        """)).scalar() or 0
+        
+        # 2. Valor total de NFes (extraindo do JSON)
+        kpis['valor_total'] = db.execute(text("""
+            SELECT COALESCE(SUM(
+                (json_nfe->>'valor_total')::numeric
+            ), 0) FROM nfe_emitidas
+            WHERE json_nfe IS NOT NULL AND json_nfe->>'valor_total' IS NOT NULL
+        """)).scalar() or 0
+        
+        # 3. Taxa de sucesso (autorizadas vs total)
+        total = kpis['total_nfes']
+        autorizadas = db.execute(text("""
+            SELECT COUNT(*) FROM nfe_emitidas WHERE status = 'Autorizada'
+        """)).scalar() or 0
+        kpis['taxa_sucesso'] = round((autorizadas / total * 100) if total > 0 else 0, 1)
+        
+        # 4. Dias até vencimento do certificado mais próximo
+        kpis['dias_certificado'] = db.execute(text("""
+            SELECT MIN(EXTRACT(DAY FROM (validade_fim - CURRENT_DATE)))
+            FROM certificados_digitais
+            WHERE ativo = TRUE AND validade_fim > CURRENT_DATE
+        """)).scalar()
+        if kpis['dias_certificado'] is None:
+            kpis['dias_certificado'] = 0
+        else:
+            kpis['dias_certificado'] = int(kpis['dias_certificado'])
+        
+        # 5. Total de clientes ativos
+        kpis['total_clientes'] = db.execute(text("""
+            SELECT COUNT(*) FROM clientes WHERE ativo = TRUE
+        """)).scalar() or 0
+        
+        # 6. Total de produtos cadastrados
+        kpis['total_produtos'] = db.execute(text("""
+            SELECT COUNT(*) FROM produtos WHERE ativo = TRUE
+        """)).scalar() or 0
+        
+        # 7. Sugestões IA aceitas (se houver dados)
+        kpis['sugestoes_ia_aceitas'] = db.execute(text("""
+            SELECT COUNT(*) FROM sugestoes_ia WHERE sugestao_aceita = TRUE
+        """)).scalar() or 0
+        
+        # 8. NFes do mês atual
+        kpis['nfes_mes'] = db.execute(text("""
+            SELECT COUNT(*) 
+            FROM nfe_emitidas 
+            WHERE EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
+            AND EXTRACT(MONTH FROM data_criacao) = EXTRACT(MONTH FROM CURRENT_DATE)
+        """)).scalar() or 0
+        
+        return render_template('admin/dashboard.html', kpis=kpis)
+        
+    except Exception as e:
+        print(f"❌ Erro dashboard: {e}")
+        flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
+        return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/dashboard/api/data')
+@login_required
+def dashboard_api_data():
+    """
+    API JSON para dados do dashboard (gráficos e métricas).
+    """
+    db = _get_db()
+    try:
+        from datetime import datetime, timedelta
+        from calendar import month_name
+        
+        data = {}
+        
+        # Gráfico 1: NFes por mês (últimos 12 meses)
+        nfes_por_mes = db.execute(text("""
+            SELECT 
+                TO_CHAR(data_criacao, 'YYYY-MM') as mes,
+                COUNT(*) as total,
+                COALESCE(SUM(
+                    (json_nfe->>'valor_total')::numeric
+                ), 0) as valor
+            FROM nfe_emitidas
+            WHERE data_criacao >= CURRENT_DATE - INTERVAL '12 months'
+            GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
+            ORDER BY mes
+        """)).fetchall()
+        
+        data['nfes_por_mes'] = {
+            'labels': [row[0] for row in nfes_por_mes],
+            'totais': [int(row[1]) for row in nfes_por_mes],
+            'valores': [float(row[2]) for row in nfes_por_mes]
+        }
+        
+        # Gráfico 2: Top 5 produtos cadastrados
+        top_produtos = db.execute(text("""
+            SELECT 
+                descricao,
+                produto_id
+            FROM produtos
+            WHERE ativo = TRUE AND descricao IS NOT NULL
+            ORDER BY produto_id DESC
+            LIMIT 5
+        """)).fetchall()
+        
+        data['top_produtos'] = {
+            'labels': [row[0][:30] if row[0] else 'Sem descrição' for row in top_produtos],
+            'valores': [idx + 1 for idx in range(len(top_produtos))]  # Sequencial para demonstração
+        }
+        
+        # Gráfico 3: Status das NFes (pizza)
+        status_nfes = db.execute(text("""
+            SELECT 
+                COALESCE(status, 'Sem Status') as status,
+                COUNT(*) as total
+            FROM nfe_emitidas
+            GROUP BY status
+            ORDER BY total DESC
+        """)).fetchall()
+        
+        data['status_nfes'] = {
+            'labels': [row[0] for row in status_nfes],
+            'valores': [int(row[1]) for row in status_nfes]
+        }
+        
+        # Gráfico 4: Clientes mais ativos (top 5)
+        top_clientes = db.execute(text("""
+            SELECT 
+                c.razao_social,
+                COUNT(n.nfe_emitida_id) as total_nfes
+            FROM clientes c
+            LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
+            WHERE c.ativo = TRUE
+            GROUP BY c.razao_social
+            HAVING COUNT(n.nfe_emitida_id) > 0
+            ORDER BY total_nfes DESC
+            LIMIT 5
+        """)).fetchall()
+        
+        data['top_clientes'] = {
+            'labels': [row[0][:30] for row in top_clientes],
+            'valores': [int(row[1]) for row in top_clientes]
+        }
+        
+        return jsonify(data)
+        
+    except Exception as e:
+        print(f"❌ Erro dashboard API: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/motivos-desoneracao')
 @login_required
@@ -1378,28 +1961,40 @@ def delete_motivo_desoneracao(motivo_id: int):
 @permission_required('origens_mercadoria.view')
 def list_origens_mercadoria():
     db = _get_db()
-    q = request.args.get('q', '').strip()
-    if q:
-        rows = db.execute(text("""
-            SELECT origem_id, codigo, descricao
-            FROM origens_mercadoria
-            WHERE codigo ILIKE :q
-               OR descricao ILIKE :q
-            ORDER BY codigo
-        """), {'q': f'%{q}%'}).fetchall()
-    else:
+    try:
         rows = db.execute(text("""
             SELECT origem_id, codigo, descricao
             FROM origens_mercadoria
             ORDER BY codigo
         """)).fetchall()
-    origens = [dict(row._mapping) for row in rows]
-    return render_template('admin/origens_mercadoria/list.html', origens=origens)
+        origens = [dict(row._mapping) for row in rows]
+        return render_template('admin/origens_mercadoria/list.html', origens=origens)
+    except Exception as e:
+        flash(f'Erro ao listar origens de mercadoria: {str(e)}', 'danger')
+        return redirect(url_for('admin.admin_home'))
 
-@admin_bp.route('/origens-mercadoria/novo')
+@admin_bp.route('/origens-mercadoria/novo', methods=['GET', 'POST'])
 @login_required
 @permission_required('origens_mercadoria.create')
 def create_origem_mercadoria():
+    db = _get_db()
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        descricao = request.form.get('descricao')
+        try:
+            db.execute(text("""
+                INSERT INTO origens_mercadoria (codigo, descricao)
+                VALUES (:codigo, :descricao)
+            """), {
+                'codigo': codigo,
+                'descricao': descricao
+            })
+            db.commit()
+            flash('Origem de Mercadoria criada com sucesso!', 'success')
+            return redirect(url_for('admin.list_origens_mercadoria'))
+        except Exception as e:
+            db.rollback()
+            flash(f'Erro ao criar Origem de Mercadoria: {str(e)}', 'danger')
     return render_template('admin/origens_mercadoria/form.html', origem=None)
 
 @admin_bp.route('/origens-mercadoria/editar/<int:origem_id>', methods=['GET', 'POST'])
@@ -1499,16 +2094,24 @@ def create_cliente():
         regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
 
         if request.method == 'POST':
+            # Limpar CEP (remover formatação)
+            cep_raw = request.form.get('cep', '')
+            cep_limpo = ''.join(filter(str.isdigit, cep_raw))
+            
+            # Limpar CNPJ (remover formatação)
+            cnpj_raw = request.form.get('cnpj', '')
+            cnpj_limpo = ''.join(filter(str.isdigit, cnpj_raw))
+            
             # Dados do cliente
             data = {
                 'razao_social': request.form.get('razao_social'),
                 'nome_fantasia': request.form.get('nome_fantasia'),
-                'cnpj': request.form.get('cnpj'),
+                'cnpj': cnpj_limpo,  # Limpo
                 'inscricao_estadual': request.form.get('inscricao_estadual'),
                 'inscricao_municipal': request.form.get('inscricao_municipal'),
                 'regime_tributario_id': request.form.get('regime_tributario_id'),
                 'cnae': request.form.get('cnae'),
-                'cep': request.form.get('cep'),
+                'cep': cep_limpo,  # Limpo
                 'logradouro': request.form.get('logradouro'),
                 'numero': request.form.get('numero'),
                 'complemento': request.form.get('complemento'),
@@ -1695,10 +2298,76 @@ def edit_cliente(cliente_id: int):
             flash('Cliente não encontrado', 'warning')
             return redirect(url_for('admin.list_clientes'))
 
+        # Processar POST - atualização dos dados do cliente
+        if request.method == 'POST':
+            try:
+                # Limpar CEP (remover formatação)
+                cep_raw = request.form.get('cep', '')
+                cep_limpo = ''.join(filter(str.isdigit, cep_raw))
+                
+                # Limpar CNPJ (remover formatação)
+                cnpj_raw = request.form.get('cnpj', '')
+                cnpj_limpo = ''.join(filter(str.isdigit, cnpj_raw))
+                
+                data = {
+                    'razao_social': request.form.get('razao_social'),
+                    'nome_fantasia': request.form.get('nome_fantasia'),
+                    'cnpj': cnpj_limpo,  # Limpo
+                    'inscricao_estadual': request.form.get('inscricao_estadual'),
+                    'inscricao_municipal': request.form.get('inscricao_municipal'),
+                    'regime_tributario_id': request.form.get('regime_tributario_id'),
+                    'cnae': request.form.get('cnae'),
+                    'cep': cep_limpo,  # Limpo
+                    'logradouro': request.form.get('logradouro'),
+                    'numero': request.form.get('numero'),
+                    'complemento': request.form.get('complemento'),
+                    'bairro': request.form.get('bairro'),
+                    'nome_municipio': request.form.get('nome_municipio'),
+                    'codigo_municipio': request.form.get('codigo_municipio'),
+                    'uf': request.form.get('uf'),
+                    'email_contato': request.form.get('email_contato'),
+                    'telefone_contato': request.form.get('telefone_contato'),
+                    'ativo': request.form.get('ativo') == 'on',
+                    'cliente_id': cliente_id
+                }
+
+                db.execute(text("""
+                    UPDATE clientes SET
+                        razao_social = :razao_social,
+                        nome_fantasia = :nome_fantasia,
+                        cnpj = :cnpj,
+                        inscricao_estadual = :inscricao_estadual,
+                        inscricao_municipal = :inscricao_municipal,
+                        regime_tributario_id = :regime_tributario_id,
+                        cnae = :cnae,
+                        cep = :cep,
+                        logradouro = :logradouro,
+                        numero = :numero,
+                        complemento = :complemento,
+                        bairro = :bairro,
+                        nome_municipio = :nome_municipio,
+                        codigo_municipio = :codigo_municipio,
+                        uf = :uf,
+                        email_contato = :email_contato,
+                        telefone_contato = :telefone_contato,
+                        ativo = :ativo
+                    WHERE cliente_id = :cliente_id
+                """), data)
+                
+                db.commit()
+                flash('Cliente atualizado com sucesso!', 'success')
+                return redirect(url_for('admin.list_clientes'))
+            except Exception as e:
+                db.rollback()
+                print(f"❌ Erro ao atualizar cliente: {e}")
+                flash('Erro ao atualizar cliente', 'danger')
+                # Continua para renderizar o formulário com os dados atuais
+
         form_data = _cliente_to_form_data(cliente)
-        certificados_existentes = db.execute(text("""
+        certificados_result = db.execute(text("""
             SELECT * FROM certificados_digitais WHERE cliente_id = :cid
         """), {'cid': cliente_id}).fetchall()
+        certificados_existentes = certificados_result if certificados_result else []
         
         
         # Consultar produtos cadastrados para o cliente
@@ -1732,11 +2401,11 @@ def edit_cliente(cliente_id: int):
             
         regimes_rows = db.execute(text("SELECT regime_tributario_id, nome FROM regimes_tributarios")).fetchall()
         regimes_tributarios = []
-        if regimes_rows :
-            regimes_tributarios = [_safe_row_to_dict(r, ['regime_tributario_id', 'nome']) for r in regimes_rows]
+        if regimes_rows:
+            regimes_tributarios = [dict(r._mapping) for r in regimes_rows if r]
 
 
-        certificados_existentes = [dict(row._mapping) for row in certificados_existentes]
+        certificados_existentes = [dict(row._mapping) for row in certificados_existentes if row]
        
         return render_template(
             'admin/clientes/form.html',
@@ -1750,7 +2419,9 @@ def edit_cliente(cliente_id: int):
             destinatarios=destinatarios
         )
     except Exception as e:
+        import traceback
         print(f"❌ Erro edit_cliente: {e}")
+        traceback.print_exc()
         flash('Erro ao carregar cliente', 'error')
         return redirect(url_for('admin.list_clientes'))
     finally:
@@ -1778,11 +2449,23 @@ def delete_cliente(cliente_id: int):
 @permission_required('certificados.create')
 def create_certificado(cliente_id: int):
     modal = request.args.get('modal', False)
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
+    # Se for modal/AJAX, retorna apenas o conteúdo do formulário
+    if modal or is_ajax:
+        return render_template(
+            'admin/certificados/form_content.html',
+            certificado=None,
+            cliente_id=cliente_id,
+            modal=True
+        )
+    
+    # Senão, retorna página completa
     return render_template(
         'admin/certificados/form.html',
         certificado=None,
         cliente_id=cliente_id,
-        modal=modal
+        modal=False
     )
 
 @admin_bp.route('/certificados/<int:certificado_digital_id>/edit/<int:cliente_id>', methods=['GET'])
@@ -1873,7 +2556,23 @@ def edit_regra_tributacao(regra_tributacao_id: int):
         if not regra:
             flash('Regra de tributação não encontrada', 'warning')
             return redirect(url_for('admin.list_regras_tributacao'))
-        return render_template('admin/regras_tributacao/form.html', regra=regra)
+        
+        # Buscar todos os CFOPs
+        cfop_rows = db.execute(text("""
+            SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
+        """)).fetchall()
+        cfops = [dict(row._mapping) for row in cfop_rows]
+        
+        # Buscar todos os NCMs
+        ncm_rows = db.execute(text("""
+            SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo
+        """)).fetchall()
+        ncms = [dict(row._mapping) for row in ncm_rows]
+        
+        return render_template('admin/regras_tributacao/form.html', 
+                             regra=regra, 
+                             cfops=cfops, 
+                             ncms=ncms)
     except Exception as e:
         print(f"❌ Erro edit_regra_tributacao: {e}")
         flash('Erro ao carregar regra', 'error')
@@ -1906,11 +2605,35 @@ def admin_destinatarios_nfe_add(cliente_id: int):
     if request.method == 'POST':
         db = _get_db()
         try:
+            # Limpar CEP (remover formatação)
+            cep_raw = request.form.get('cep', '')
+            cep_limpo = ''.join(filter(str.isdigit, cep_raw))
+            
+            # Limpar CPF/CNPJ (remover formatação)
+            cpf_cnpj_raw = request.form.get('cpf_cnpj', '')
+            cpf_cnpj_limpo = ''.join(filter(str.isdigit, cpf_cnpj_raw))
+            
+            # Garantir codigo_uf (campo obrigatório)
+            codigo_uf = request.form.get('codigo_uf')
+            if not codigo_uf or codigo_uf == 'None':
+                # Mapeamento de fallback UF -> Código IBGE
+                uf = request.form.get('uf', '')
+                uf_map = {
+                    'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29',
+                    'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52', 'MA': '21',
+                    'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25',
+                    'PR': '41', 'PE': '26', 'PI': '22', 'RJ': '33', 'RN': '24',
+                    'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35',
+                    'SE': '28', 'TO': '17'
+                }
+                codigo_uf = uf_map.get(uf, '99')
+                print(f"⚠️ codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
+            
             data = {
                 'cliente_id': cliente_id,
                 'tipo_pessoa': request.form.get('tipo_pessoa'),  # Adicionado
                 'nome_razao_social': request.form.get('nome_razao_social'),  # Adicionado
-                'cpf_cnpj': request.form.get('cpf_cnpj'),
+                'cpf_cnpj': cpf_cnpj_limpo,  # Limpo
                 'ie': request.form.get('ie'),  # Adicionado
                 'ie_indicador_nfe': request.form.get('ie_indicador_nfe', 'C'),  # Adicionado
                 'email': request.form.get('email'),  # Adicionado
@@ -1919,11 +2642,11 @@ def admin_destinatarios_nfe_add(cliente_id: int):
                 'numero': request.form.get('numero'),
                 'complemento': request.form.get('complemento'),  # Adicionado
                 'bairro': request.form.get('bairro'),
-                'cep': request.form.get('cep'),
+                'cep': cep_limpo,  # Limpo
                 'codigo_municipio': request.form.get('codigo_municipio'),
                 'nome_municipio': request.form.get('nome_municipio'),
                 'uf': request.form.get('uf'),
-                'codigo_uf': request.form.get('codigo_uf'),  # Adicionado
+                'codigo_uf': codigo_uf,  # Garantido
                 'codigo_pais': request.form.get('codigo_pais', '1058'),  # Adicionado
                 'nome_pais': request.form.get('nome_pais', 'Brasil'),  # Adicionado
                 'data_cadastro': datetime.now(),  # Adicionado
@@ -1941,12 +2664,12 @@ def admin_destinatarios_nfe_add(cliente_id: int):
             """), data)
             db.commit()
             flash('Destinatário adicionado com sucesso', 'success')
-            return redirect(url_for('admin.list_destinatarios'))
+            return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         except Exception as e:
             db.rollback()
             print(f"❌ Erro admin_destinatarios_nfe_add: {e}")
             flash('Erro ao adicionar destinatário', 'error')
-            return redirect(url_for('admin.list_destinatarios'))
+            return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         finally:
             db.close()
     else:
@@ -2006,6 +2729,220 @@ def list_produtos():
         db.close()
 
 
+@admin_bp.route('/produtos/importar', methods=['GET', 'POST'])
+@login_required
+@permission_required('produtos.create')
+def importar_produtos():
+    """
+    GET: Exibe formulário de importação em lote
+    POST: Processa arquivo CSV/XLSX e importa produtos
+    """
+    from flask import session, request
+    from werkzeug.utils import secure_filename
+    import os
+    import pandas as pd
+    from datetime import datetime
+    
+    cliente_id = session.get('current_client_id')
+    if not cliente_id:
+        flash('Selecione um cliente antes de importar produtos.', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    
+    if request.method == 'GET':
+        return render_template('admin/produtos/importar.html', cliente_id=cliente_id)
+    
+    # POST: Processar upload
+    db = _get_db()
+    try:
+        if 'arquivo' not in request.files:
+            flash('Nenhum arquivo selecionado', 'error')
+            return redirect(url_for('admin.importar_produtos'))
+        
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            flash('Nenhum arquivo selecionado', 'error')
+            return redirect(url_for('admin.importar_produtos'))
+        
+        # Validar extensão
+        if not arquivo.filename:
+            flash('Nome do arquivo inválido', 'error')
+            return redirect(url_for('admin.importar_produtos'))
+        
+        filename = secure_filename(arquivo.filename)
+        extensao = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+        
+        if extensao not in ['csv', 'xlsx', 'xls']:
+            flash('Formato inválido. Use CSV ou XLSX', 'error')
+            return redirect(url_for('admin.importar_produtos'))
+        
+        # Ler arquivo com pandas
+        try:
+            if extensao == 'csv':
+                df = pd.read_csv(arquivo.stream, encoding='utf-8')
+            else:
+                df = pd.read_excel(arquivo.stream, engine='openpyxl')
+        except Exception as e:
+            flash(f'Erro ao ler arquivo: {str(e)}', 'error')
+            return redirect(url_for('admin.importar_produtos'))
+        
+        # Validar colunas obrigatórias
+        colunas_obrigatorias = ['codigo', 'descricao', 'unidade', 'valor']
+        colunas_faltando = [c for c in colunas_obrigatorias if c not in df.columns]
+        
+        if colunas_faltando:
+            flash(f'Colunas obrigatórias faltando: {", ".join(colunas_faltando)}', 'error')
+            return redirect(url_for('admin.importar_produtos'))
+        
+        # Processar importação
+        sucessos = 0
+        erros = []
+        
+        for idx, row in df.iterrows():
+            # Ensure idx is converted to int properly - pandas index can be various types
+            linha = int(str(idx)) + 2 if idx is not None else 2  # +2 porque pandas começa em 0 e tem header
+            
+            try:
+                # Validações básicas
+                if pd.isna(row['descricao']) or str(row['descricao']).strip() == '':
+                    erros.append(f"Linha {linha}: Descrição obrigatória")
+                    continue
+                
+                if pd.isna(row['valor']) or float(row['valor']) <= 0:
+                    erros.append(f"Linha {linha}: Valor deve ser maior que zero")
+                    continue
+                
+                # Buscar NCM se fornecido
+                ncm_id = None
+                if 'ncm_codigo' in row and not pd.isna(row['ncm_codigo']):
+                    ncm_codigo = str(row['ncm_codigo']).strip()
+                    ncm_row = db.execute(text("""
+                        SELECT ncm_id FROM ncms WHERE codigo = :codigo LIMIT 1
+                    """), {'codigo': ncm_codigo}).fetchone()
+                    if ncm_row:
+                        ncm_id = ncm_row[0]
+                
+                # Buscar CFOP se fornecido
+                cfop_id = None
+                if 'cfop_codigo' in row and not pd.isna(row['cfop_codigo']):
+                    cfop_codigo = str(row['cfop_codigo']).strip()
+                    cfop_row = db.execute(text("""
+                        SELECT cfop_id FROM cfops WHERE cfop = :cfop LIMIT 1
+                    """), {'cfop': cfop_codigo}).fetchone()
+                    if cfop_row:
+                        cfop_id = cfop_row[0]
+                
+                # Inserir produto
+                db.execute(text("""
+                    INSERT INTO produtos (
+                        cliente_id, codigo_interno, descricao, unidade_comercial,
+                        preco_unitario_padrao, ncm_id, cfop_id, ativo,
+                        created_by_user_id, data_cadastro
+                    ) VALUES (
+                        :cliente_id, :codigo, :descricao, :unidade,
+                        :valor, :ncm_id, :cfop_id, :ativo,
+                        :user_id, :data
+                    )
+                """), {
+                    'cliente_id': cliente_id,
+                    'codigo': str(row['codigo']).strip() if not pd.isna(row['codigo']) else None,
+                    'descricao': str(row['descricao']).strip(),
+                    'unidade': str(row['unidade']).strip() if not pd.isna(row['unidade']) else 'UN',
+                    'valor': float(row['valor']),
+                    'ncm_id': ncm_id,
+                    'cfop_id': cfop_id,
+                    'ativo': bool(row.get('ativo', True)) if 'ativo' in row else True,
+                    'user_id': current_user.id,
+                    'data': datetime.now()
+                })
+                
+                sucessos += 1
+                
+            except Exception as e:
+                erros.append(f"Linha {linha}: {str(e)}")
+                continue
+        
+        # Commit se houver sucessos
+        if sucessos > 0:
+            db.commit()
+            flash(f'✅ Importação concluída: {sucessos} produto(s) importado(s)', 'success')
+        
+        if erros:
+            flash(f'⚠️ {len(erros)} erro(s) encontrado(s)', 'warning')
+        
+        return render_template('admin/produtos/importar_resultado.html',
+                             sucessos=sucessos,
+                             erros=erros,
+                             total_linhas=len(df),
+                             cliente_id=cliente_id)
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro importar_produtos: {e}")
+        flash(f'Erro ao importar produtos: {str(e)}', 'error')
+        return redirect(url_for('admin.importar_produtos'))
+    finally:
+        db.close()
+
+
+@admin_bp.route('/produtos/template-csv')
+@login_required
+@permission_required('produtos.view')
+def download_template_csv():
+    """Download de template CSV para importação de produtos"""
+    from flask import make_response
+    import io
+    
+    # CSV com headers e exemplo
+    csv_content = """codigo,descricao,unidade,valor,ncm_codigo,cfop_codigo,ativo
+PROD001,Produto Exemplo 1,UN,10.50,84719000,5102,true
+PROD002,Produto Exemplo 2,PC,25.00,85171290,5405,true
+PROD003,Produto Exemplo 3,KG,5.75,39269090,5102,true"""
+    
+    output = io.StringIO()
+    output.write(csv_content)
+    output.seek(0)
+    
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    response.headers['Content-Disposition'] = 'attachment; filename=template_produtos.csv'
+    
+    return response
+
+
+@admin_bp.route('/produtos/template-xlsx')
+@login_required
+@permission_required('produtos.view')
+def download_template_xlsx():
+    """Download de template XLSX para importação de produtos"""
+    from flask import send_file
+    import pandas as pd
+    import io
+    
+    # Criar DataFrame com exemplo
+    df = pd.DataFrame({
+        'codigo': ['PROD001', 'PROD002', 'PROD003'],
+        'descricao': ['Produto Exemplo 1', 'Produto Exemplo 2', 'Produto Exemplo 3'],
+        'unidade': ['UN', 'PC', 'KG'],
+        'valor': [10.50, 25.00, 5.75],
+        'ncm_codigo': ['84719000', '85171290', '39269090'],
+        'cfop_codigo': ['5102', '5405', '5102'],
+        'ativo': [True, True, True]
+    })
+    
+    # Criar arquivo Excel em memória
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Produtos', index=False)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='template_produtos.xlsx'
+    )
+
+
 @admin_bp.route('/produtos/add', methods=['GET'])
 @login_required
 @permission_required('produtos.create')
@@ -2013,9 +2950,11 @@ def create_produto():
     from flask import session, request
     # Permite cliente_id via query string (prioridade)
     cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
-    if not cliente_id or cliente_id == 'None':
+    # Sanitiza para garantir que não seja string 'None' ou vazio
+    if not cliente_id or str(cliente_id).lower() == 'none':
         flash('Selecione um cliente antes de cadastrar produtos.', 'error')
         return redirect(url_for('admin.list_clientes'))
+    cliente_id = str(cliente_id)
     db = _get_db()
     try:
         # Busca listas para selects (NCM, CFOP, etc)
@@ -2090,98 +3029,6 @@ def store_produto():
     finally:
         db.close()
 
-@admin_bp.route('/produtos/<int:produto_id>/edit', methods=['GET'])
-@login_required
-@permission_required('produtos.edit')
-def edit_produto(produto_id: int):
-    origem = request.args.get('origem', 'list')
-    db = _get_db()
-    try:
-        row = db.execute(text("""
-            SELECT produto_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
-                   tipo_item, ncm_id, cest, cfop_id, origem_mercadoria,
-                   cst_id, csosn_id, ativo
-            FROM produtos
-            WHERE produto_id = :pid
-        """), {'pid': produto_id}).fetchone()
-        produto = dict(row._mapping) if row else None
-
-        if not produto:
-            flash('Produto não encontrado', 'warning')
-            return redirect(url_for('admin.list_produtos'))
-
-        # Se precisar de listas para selects (NCM, CFOP, etc), busque aqui:
-        ncm_lista = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms")).fetchall()
-        cfop_lista = db.execute(text("SELECT cfop_id, cfop ,descricao FROM cfops")).fetchall()
-        origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria")).fetchall()
-        csts_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms")).fetchall()
-        csosns_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms")).fetchall()
-
-        # ... outros selects ...
-
-        return render_template(
-            'admin/produtos/form.html',
-            produto=produto,
-            ncms=[dict(ncm._mapping) for ncm in ncm_lista],
-            cfops=[dict(cfop._mapping) for cfop in cfop_lista],
-            origens_mercadoria = [dict(origens._mapping) for origens in origens_list],
-            csts = [dict(csts._mapping) for csts in csts_list],
-            csosns = [dict(csosns._mapping) for csosns in csosns_list],
-            voltar_para=origem
-
-            # ... outros contextos ...
-        )
-    except Exception as e:
-        print(f"❌ Erro edit_produto: {e}")
-        flash('Erro ao carregar produto', 'error')
-        return redirect(url_for('admin.list_produtos'))
-    finally:
-        db.close()
-
-@admin_bp.route('/produtos/<int:produto_id>/edit', methods=['POST'])
-@login_required
-@permission_required('produtos.edit')
-def update_produto(produto_id: int):
-    db = _get_db()
-    try:
-        data = {
-            'produto_id': produto_id,
-            'codigo_interno': request.form.get('codigo_interno'),
-            'descricao': request.form.get('descricao'),
-            'unidade_comercial': request.form.get('unidade_comercial','UN'),
-            'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
-            'ncm_id': request.form.get('ncm_id'),
-            'cfop_id': request.form.get('cfop_id'),
-            'cest': request.form.get('cest'),
-            'csosn_id': request.form.get('csosn_id'),
-        }
-        db.execute(text("""
-            UPDATE produtos
-            SET codigo_interno=:codigo_interno,
-                descricao=:descricao,
-                unidade_comercial=:unidade_comercial,
-                preco_unitario_padrao=:preco_unitario_padrao,
-                ncm_id=:ncm_id,
-                cfop_id=:cfop_id,
-                cest=:cest,
-                csosn_id=:csosn_id
-            WHERE produto_id=:produto_id
-        """), data)
-        db.commit()
-        flash('Produto atualizado', 'success')
-        # Buscar cliente_id do produto atualizado
-        row = db.execute(text("SELECT cliente_id FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
-        cliente_id = row[0] if row else None
-        if cliente_id:
-            return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
-        return redirect(url_for('admin.list_produtos'))
-    except Exception as e:
-        db.rollback()
-        print(f"❌ Erro update_produto: {e}")
-        flash('Erro ao atualizar produto', 'error')
-        return redirect(url_for('admin.edit_produto', produto_id=produto_id))
-    finally:
-        db.close()
 
 @admin_bp.route('/produtos/alterar-status', methods=['POST'])
 @login_required
@@ -2261,11 +3108,35 @@ def list_destinatarios(cliente_id: int):
 def salvar_destinatario():
     db = _get_db()
     try:
+        # Limpar CEP (remover formatação)
+        cep_raw = request.form.get('cep', '')
+        cep_limpo = ''.join(filter(str.isdigit, cep_raw))
+        
+        # Limpar CPF/CNPJ (remover formatação)
+        cpf_cnpj_raw = request.form.get('cpf_cnpj', '')
+        cpf_cnpj_limpo = ''.join(filter(str.isdigit, cpf_cnpj_raw))
+        
+        # Garantir codigo_uf (campo obrigatório)
+        codigo_uf = request.form.get('codigo_uf')
+        if not codigo_uf or codigo_uf == 'None':
+            # Mapeamento de fallback UF -> Código IBGE
+            uf = request.form.get('uf', '')
+            uf_map = {
+                'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29',
+                'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52', 'MA': '21',
+                'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25',
+                'PR': '41', 'PE': '26', 'PI': '22', 'RJ': '33', 'RN': '24',
+                'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35',
+                'SE': '28', 'TO': '17'
+            }
+            codigo_uf = uf_map.get(uf, '99')
+            print(f"⚠️ codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
+        
         data = {
             'cliente_id': request.form.get('cliente_id'),
             'tipo_pessoa': request.form.get('tipo_pessoa'),
             'nome_razao_social': request.form.get('nome_razao_social'),
-            'cpf_cnpj': request.form.get('cpf_cnpj'),
+            'cpf_cnpj': cpf_cnpj_limpo,  # Limpo
             'ie': request.form.get('ie'),
             'ie_indicador_nfe': request.form.get('ie_indicador_nfe'),
             'email': request.form.get('email'),
@@ -2274,11 +3145,11 @@ def salvar_destinatario():
             'numero': request.form.get('numero'),
             'complemento': request.form.get('complemento'),
             'bairro': request.form.get('bairro'),
-            'cep': request.form.get('cep'),
+            'cep': cep_limpo,  # Limpo
             'nome_municipio': request.form.get('nome_municipio'),
             'codigo_municipio': request.form.get('codigo_municipio'),
             'uf': request.form.get('uf'),
-            'codigo_uf': request.form.get('codigo_uf'),
+            'codigo_uf': codigo_uf,  # Garantido
             'codigo_pais': request.form.get('codigo_pais'),
             'nome_pais': request.form.get('nome_pais'),
             'data_cadastro': datetime.now(),
@@ -2299,13 +3170,14 @@ def salvar_destinatario():
         """), data)
         db.commit()
         flash('Destinatário salvo', 'success')
-        return redirect(url_for('admin.list_destinatarios'))
+        cliente_id = request.form.get('cliente_id')
+        return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
         print(f"❌ Erro salvar_destinatario: {e}")
         flash('Erro ao salvar destinatário', 'error')
         cliente_id = request.form.get('cliente_id')
-        return redirect(url_for('admin.list_destinatarios'))
+        return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
     finally:
         db.close()
 
@@ -2374,52 +3246,143 @@ def list_certificados():
     finally:
         db.close()
 
-@admin_bp.route('/certificados/novo')
-@login_required
-@permission_required('certificados.create')
-def novo_certificado():
-    return render_template('admin/certificados/form.html', certificado=None)
-
 @admin_bp.route('/certificados/salvar', methods=['POST'])
 @login_required
 @permission_required('certificados.create')
 def salvar_certificado():
     db = _get_db()
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    cliente_id = None  # Initialize to avoid "possibly unbound" error
+    
     try:
+        # Debug: imprimir todos os dados recebidos
+        print(f"[DEBUG] Form data: {dict(request.form)}")
+        print(f"[DEBUG] Files: {dict(request.files)}")
+        print(f"[DEBUG] Referrer: {request.referrer}")
+        
+        # Obter cliente_id do form, args ou referrer
         cliente_id = request.form.get('cliente_id')
-        fingerprint = request.form.get('fingerprint')
-        conteudo_certificado = request.form.get('conteudo_certificado')
-        senha_certificado = request.form.get('senha_certificado')
-        validade_inicio = request.form.get('validade_inicio')
-        validade_fim = request.form.get('validade_fim')
-        nome_arquivo_original = request.form.get('nome_arquivo_original')
-
+        if not cliente_id or cliente_id == '':
+            # Tentar pegar do referrer URL (ex: /admin/clientes/11/edit)
+            if request.referrer:
+                import re
+                match = re.search(r'/clientes/(\d+)/', request.referrer)
+                if match:
+                    cliente_id = match.group(1)
+                    print(f"[DEBUG] Cliente ID extraído do referrer: {cliente_id}")
+        
+        if not cliente_id or cliente_id == '':
+            raise Exception(f"Cliente ID não fornecido. Form keys: {list(request.form.keys())}, Referrer: {request.referrer}")
+        
+        # Convert to int to validate
+        try:
+            cliente_id = int(cliente_id)
+        except (ValueError, TypeError):
+            raise Exception(f"Cliente ID inválido: '{cliente_id}'")
+            
+        # Suporta ambos os formatos de formulário (antigo e novo)
+        cert_file = request.files.get('conteudo_certificado_file') or request.files.get('arquivo_certificado')
+        cert_senha = request.form.get('cert_senha_certificado') or request.form.get('senha_certificado')
+        cert_ativo = request.form.get('cert_ativo') == 'on'
+        cert_nome_arquivo = request.form.get('cert_nome_arquivo_original', 'Upload via Modal')
+        
+        if not cert_file or not cert_file.filename:
+            raise Exception("Arquivo de certificado não fornecido")
+        
+        # Ler conteúdo do arquivo
+        conteudo_certificado = cert_file.read()
+        senha_criptografada = _encrypt_password(cert_senha) if cert_senha else None
+        nome_arquivo_original = cert_file.filename
+        
+        # Extrair fingerprint e validades do certificado
+        fingerprint = None
+        validade_inicio = None
+        validade_fim = None
+        
+        try:
+            from cryptography.hazmat.primitives.serialization import pkcs12
+            from cryptography.hazmat.primitives import hashes
+            
+            # Carregar PKCS#12
+            password_bytes = cert_senha.encode('utf-8') if cert_senha else None
+            private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
+                conteudo_certificado,
+                password_bytes
+            )
+            
+            cert_obj = cert_x509_obj
+            if cert_obj is None and additional_certificates:
+                cert_obj = additional_certificates[0]
+            if cert_obj is None:
+                raise Exception("Certificado X.509 não encontrado dentro do PKCS#12")
+                
+            fingerprint = cert_obj.fingerprint(hashes.SHA256()).hex()
+            validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
+            validade_fim = getattr(cert_obj, "not_valid_after_utc", None)
+            
+        except Exception as e:
+            print(f"⚠️ Aviso ao extrair dados do certificado: {e}")
+            # Continua mesmo sem extrair os dados (melhor do que falhar)
+        
+        # Converter conteúdo para base64
+        import base64
+        conteudo_certificado_b64 = base64.b64encode(conteudo_certificado).decode('utf-8')
+        
+        # Inserir no banco
         db.execute(text("""
             INSERT INTO certificados_digitais (
-                cliente_id, fingerprint, conteudo_certificado, senha_certificado,
-                validade_inicio, validade_fim, ativo, data_upload, nome_arquivo_original, created_by_user_id
+                cliente_id, conteudo_certificado, senha_certificado, ativo, data_upload,
+                nome_arquivo_original, created_by_user_id, fingerprint, validade_inicio, validade_fim
             ) VALUES (
-                :cliente_id, :fingerprint, :conteudo_certificado, :senha_certificado,
-                :validade_inicio, :validade_fim, TRUE, NOW(), :nome_arquivo_original, :created_by_user_id
+                :cliente_id, :conteudo_certificado, :senha_certificado, :ativo, NOW(),
+                :nome_arquivo_original, :created_by_user_id, :fingerprint, :validade_inicio, :validade_fim
             )
         """), {
             'cliente_id': cliente_id,
-            'fingerprint': fingerprint,
-            'conteudo_certificado': conteudo_certificado,
-            'senha_certificado': senha_certificado,
-            'validade_inicio': validade_inicio,
-            'validade_fim': validade_fim,
+            'conteudo_certificado': conteudo_certificado_b64,
+            'senha_certificado': senha_criptografada,
+            'ativo': cert_ativo,
             'nome_arquivo_original': nome_arquivo_original,
-            'created_by_user_id': current_user.id
+            'created_by_user_id': current_user.id,
+            'fingerprint': fingerprint,
+            'validade_inicio': validade_inicio,
+            'validade_fim': validade_fim
         })
         db.commit()
-        flash('Certificado salvo', 'success')
-        return redirect(url_for('admin.list_certificados'))
+        
+        # Se for requisição AJAX, retorna JSON
+        if is_ajax:
+            return jsonify({
+                'success': True,
+                'message': 'Certificado salvo com sucesso!',
+                'redirect_url': url_for('admin.edit_cliente', cliente_id=cliente_id) + '#certificados'
+            })
+        
+        # Senão, redirect tradicional
+        flash('Certificado salvo com sucesso!', 'success')
+        return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id))
+        
     except Exception as e:
         db.rollback()
         print(f"❌ Erro salvar_certificado: {e}")
-        flash('Erro ao salvar certificado', 'error')
-        return redirect(url_for('admin.novo_certificado'))
+        import traceback
+        traceback.print_exc()
+        
+        # Se for requisição AJAX, retorna JSON com erro
+        if is_ajax:
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao salvar certificado: {str(e)}'
+            }), 500
+        
+        # Senão, redirect com flash
+        flash(f'Erro ao salvar certificado: {str(e)}', 'error')
+        # Se cliente_id foi obtido, redireciona para o cliente, senão para lista
+        if cliente_id:
+            return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id))
+        else:
+            return redirect(url_for('admin.list_clientes'))
+        
     finally:
         db.close()
 
@@ -2460,15 +3423,26 @@ def list_regras_tributacao():
         if not cliente_id:
             flash('Selecione um cliente para visualizar as regras tributárias.', 'warning')
             return render_template('admin/regras_tributacao/list.html', regras=[], cliente_id=None)
+        
+        # Query com JOIN para trazer dados completos de CFOP e NCM
         rows = db.execute(text("""
-            SELECT regra_tributacao_id, cliente_id, cfop_id, ncm_id, uf_origem, uf_destino, tipo_item, prioridade, cst_icms, csosn_icms, aliquota_icms, reducao_base_icms, modalidade_bc_icms, motivo_desoneracao_icms, cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, cst_ipi, aliquota_ipi, descricao_regra, data_criacao, ativo
-            FROM regras_tributacao
-            WHERE cliente_id = :cid
-            ORDER BY regra_tributacao_id DESC            
+            SELECT 
+                rt.regra_tributacao_id, rt.cliente_id, rt.cfop_id, rt.ncm_id, 
+                rt.uf_origem, rt.uf_destino, rt.tipo_item, rt.prioridade, 
+                rt.cst_icms, rt.csosn_icms, rt.aliquota_icms, rt.reducao_base_icms, 
+                rt.modalidade_bc_icms, rt.motivo_desoneracao_icms, 
+                rt.cst_pis, rt.aliquota_pis, rt.cst_cofins, rt.aliquota_cofins, 
+                rt.cst_ipi, rt.aliquota_ipi, rt.descricao_regra, rt.data_criacao, rt.ativo,
+                cf.cfop as cfop_codigo, cf.descricao as cfop_descricao,
+                nc.codigo as ncm_codigo, nc.descricao as ncm_descricao
+            FROM regras_tributacao rt
+            LEFT JOIN cfops cf ON rt.cfop_id = cf.cfop_id
+            LEFT JOIN ncms nc ON rt.ncm_id = nc.ncm_id
+            WHERE rt.cliente_id = :cid
+            ORDER BY rt.regra_tributacao_id DESC            
         """), {'cid': cliente_id}).fetchall()
-        regras = [_safe_row_to_dict(r, [
-            'regra_tributacao_id','cliente_id','cfop_id','ncm_id','uf_origem','uf_destino','tipo_item','prioridade','cst_icms','csosn_icms','aliquota_icms','reducao_base_icms','modalidade_bc_icms','motivo_desoneracao_icms','cst_pis','aliquota_pis','cst_cofins','aliquota_cofins','cst_ipi','aliquota_ipi','descricao_regra','data_criacao','ativo'
-        ]) for r in rows]
+        
+        regras = [dict(r._mapping) for r in rows]
         return render_template('admin/regras_tributacao/list.html', regras=regras, cliente_id=cliente_id)
     except Exception as e:
         print(f"❌ Erro list_regras_tributacao: {e}")
@@ -2481,7 +3455,29 @@ def list_regras_tributacao():
 @login_required
 @permission_required('regras_tributacao.create')
 def nova_regra_tributacao():
-    return render_template('admin/regras_tributacao/form.html', regra=None)
+    db = _get_db()
+    try:
+        # Buscar todos os CFOPs
+        cfop_rows = db.execute(text("""
+            SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
+        """)).fetchall()
+        cfops = [dict(row._mapping) for row in cfop_rows]
+        
+        # Buscar todos os NCMs
+        ncm_rows = db.execute(text("""
+            SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo
+        """)).fetchall()
+        ncms = [dict(row._mapping) for row in ncm_rows]
+        
+        cliente_id = request.args.get('cliente_id') or session.get('current_client_id') or session.get('active_cliente_id')
+        
+        return render_template('admin/regras_tributacao/form.html', 
+                             regra=None, 
+                             cfops=cfops, 
+                             ncms=ncms,
+                             cliente_id=cliente_id)
+    finally:
+        db.close()
 
 @admin_bp.route('/regras-tributacao/salvar', methods=['POST'])
 @login_required
@@ -2489,25 +3485,105 @@ def nova_regra_tributacao():
 def salvar_regra_tributacao():
     db = _get_db()
     try:
+        regra_id = request.form.get('regra_tributacao_id')
+        cliente_id = request.form.get('cliente_id')
+        
+        # Função auxiliar para converter valores vazios em None
+        def get_or_none(field, convert_to=None):
+            val = request.form.get(field)
+            if val is None or val == '':
+                return None
+            try:
+                if convert_to == int:
+                    return int(val)
+                elif convert_to == float:
+                    return float(val)
+                elif convert_to == str:
+                    return str(val)
+                return str(val)
+            except:
+                return None
+        
+        # Montar dados
         data = {
-            'produto_id': request.form.get('produto_id'),
-            'cliente_id': request.form.get('cliente_id'),
-            'cfop': request.form.get('cfop'),
-            'origem': request.form.get('origem','0'),
-            'cst_icms': request.form.get('cst_icms','00'),
-            'aliquota_icms': request.form.get('aliquota_icms') or 0
+            'cliente_id': cliente_id,
+            'regime_tributario_id': get_or_none('regime_tributario_id', int) or 1,  # Default: Simples Nacional
+            'cfop_id': get_or_none('cfop_id', int),
+            'ncm_id': get_or_none('ncm_id', int),
+            'uf_origem': get_or_none('uf_origem', str),
+            'uf_destino': get_or_none('uf_destino', str),
+            'tipo_item': get_or_none('tipo_item', str),
+            'prioridade': get_or_none('prioridade', int) or 100,
+            'cst_icms': get_or_none('cst_icms', str),
+            'csosn_icms': get_or_none('csosn_icms', str),
+            'aliquota_icms': get_or_none('aliquota_icms', float),
+            'reducao_base_icms': get_or_none('reducao_base_icms', float),
+            'modalidade_bc_icms': get_or_none('modalidade_bc_icms', int),
+            'motivo_desoneracao_icms': get_or_none('motivo_desoneracao_icms', int),
+            'cst_pis': get_or_none('cst_pis', str),
+            'aliquota_pis': get_or_none('aliquota_pis', float),
+            'cst_cofins': get_or_none('cst_cofins', str),
+            'aliquota_cofins': get_or_none('aliquota_cofins', float),
+            'cst_ipi': get_or_none('cst_ipi', str),
+            'aliquota_ipi': get_or_none('aliquota_ipi', float),
+            'descricao_regra': get_or_none('descricao_regra', str),
+            'ativo': True
         }
-        db.execute(text("""
-            INSERT INTO regras_tributacao (produto_id, cliente_id, cfop, origem, cst_icms, aliquota_icmst)
-            VALUES (:produto_id, :cliente_id, :cfop, :origem, :cst_icms, :aliquota_icms)
-        """), data)
+        
+        if regra_id:
+            # Atualização
+            data['regra_id'] = int(regra_id)
+            db.execute(text("""
+                UPDATE regras_tributacao SET
+                    regime_tributario_id = :regime_tributario_id,
+                    cfop_id = :cfop_id,
+                    ncm_id = :ncm_id,
+                    uf_origem = :uf_origem,
+                    uf_destino = :uf_destino,
+                    tipo_item = :tipo_item,
+                    prioridade = :prioridade,
+                    cst_icms = :cst_icms,
+                    csosn_icms = :csosn_icms,
+                    aliquota_icms = :aliquota_icms,
+                    reducao_base_icms = :reducao_base_icms,
+                    modalidade_bc_icms = :modalidade_bc_icms,
+                    motivo_desoneracao_icms = :motivo_desoneracao_icms,
+                    cst_pis = :cst_pis,
+                    aliquota_pis = :aliquota_pis,
+                    cst_cofins = :cst_cofins,
+                    aliquota_cofins = :aliquota_cofins,
+                    cst_ipi = :cst_ipi,
+                    aliquota_ipi = :aliquota_ipi,
+                    descricao_regra = :descricao_regra,
+                    ativo = :ativo
+                WHERE regra_tributacao_id = :regra_id
+            """), data)
+            flash('Regra atualizada com sucesso!', 'success')
+        else:
+            # Inserção
+            db.execute(text("""
+                INSERT INTO regras_tributacao (
+                    cliente_id, regime_tributario_id, cfop_id, ncm_id, uf_origem, uf_destino, 
+                    tipo_item, prioridade, cst_icms, csosn_icms, aliquota_icms, 
+                    reducao_base_icms, modalidade_bc_icms, motivo_desoneracao_icms,
+                    cst_pis, aliquota_pis, cst_cofins, aliquota_cofins, 
+                    cst_ipi, aliquota_ipi, descricao_regra, ativo
+                ) VALUES (
+                    :cliente_id, :regime_tributario_id, :cfop_id, :ncm_id, :uf_origem, :uf_destino,
+                    :tipo_item, :prioridade, :cst_icms, :csosn_icms, :aliquota_icms,
+                    :reducao_base_icms, :modalidade_bc_icms, :motivo_desoneracao_icms,
+                    :cst_pis, :aliquota_pis, :cst_cofins, :aliquota_cofins,
+                    :cst_ipi, :aliquota_ipi, :descricao_regra, :ativo
+                )
+            """), data)
+            flash('Regra criada com sucesso!', 'success')
+        
         db.commit()
-        flash('Regra salva', 'success')
-        return redirect(url_for('admin.list_regras_tributacao'))
+        return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
         print(f"❌ Erro salvar_regra_tributacao: {e}")
-        flash('Erro ao salvar regra', 'error')
+        flash('Erro ao salvar regra de tributação', 'error')
         return redirect(url_for('admin.nova_regra_tributacao'))
     finally:
         db.close()
@@ -2522,15 +3598,13 @@ def excluir_regra_tributacao(regra_id: int):
                    {'rid': regra_id})
         db.commit()
         flash('Regra excluída', 'success')
-        return redirect(url_for('admin.list_regras_tributacao'))
     except Exception as e:
         db.rollback()
         print(f"❌ Erro excluir_regra_tributacao: {e}")
         flash('Erro ao excluir regra', 'error')
-        return redirect(url_for('admin.list_regras_tributacao'))
     finally:
         db.close()
-
+    return redirect(url_for('admin.list_regras_tributacao'))
 
 @admin_bp.route('/perfil')
 @login_required
@@ -2577,20 +3651,221 @@ def perfil():
         db.close()
 
 # -------------------------------------------------------------------
-# BUSCAR CEP (mock)
+# BUSCAR CEP
 # -------------------------------------------------------------------
 
 @admin_bp.route('/api/buscar-cep/<cep>')
 @login_required
 def buscar_cep(cep: str):
-    return jsonify({
-        'cep': cep,
-        'logradouro': 'Rua Exemplo',
-        'bairro': 'Centro',
-        'uf': 'SP',
-        'nome_municipio': 'São Paulo',
-        'codigo_municipio': '3550308'
-    })
+    """Busca informações de endereço via API ViaCEP"""
+    import requests
+    from os import environ
+    
+    try:
+        # Remove caracteres não numéricos
+        cep_limpo = ''.join(filter(str.isdigit, cep))
+        
+        if len(cep_limpo) != 8:
+            return jsonify({
+                'success': False,
+                'error': 'CEP inválido. Deve conter 8 dígitos.'
+            }), 400
+        
+        # Consulta API ViaCEP
+        print(f"🔍 Buscando CEP: {cep_limpo}")
+        print(f"🌐 Tentando conectar em: https://viacep.com.br/ws/{cep_limpo}/json/")
+        
+        try:
+            response = requests.get(
+                f'https://viacep.com.br/ws/{cep_limpo}/json/', 
+                timeout=10,  # Aumentado para 10 segundos
+                headers={'User-Agent': 'Mozilla/5.0'}  # Alguns servidores exigem User-Agent
+            )
+        except requests.exceptions.ConnectionError as e:
+            print(f"❌ Erro de conexão específico: {e}")
+            
+            # Modo fallback: tentar usar CEPs de teste
+            try:
+                from config.cep_config import get_cep_teste
+                dados_teste = get_cep_teste(cep_limpo)
+                
+                if dados_teste:
+                    print(f"⚠️ MODO OFFLINE: Usando CEP de teste para {cep_limpo}")
+                    # Continua o fluxo normal com dados de teste
+                    dados = dados_teste
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Sem conexão com internet e CEP não está nos dados de teste.',
+                        'details': f'CEPs de teste disponíveis: 01310-100, 20040-020, 30130-100, 40020-000, 80010-000'
+                    }), 503
+            except ImportError:
+                return jsonify({
+                    'success': False,
+                    'error': 'Não foi possível conectar ao serviço ViaCEP. Verifique sua conexão com a internet.',
+                    'details': 'ConnectionError - Verifique se você está conectado à internet e se não há firewall bloqueando.'
+                }), 503
+        else:
+            # Conexão bem-sucedida com ViaCEP
+            if response.status_code != 200:
+                print(f"⚠️ Status HTTP: {response.status_code}")
+                return jsonify({
+                    'success': False,
+                    'error': f'Erro ao consultar CEP (HTTP {response.status_code}). Tente novamente.'
+                }), 500
+            
+            dados = response.json()
+            
+            # ViaCEP retorna {"erro": true} quando CEP não existe
+            if dados.get('erro'):
+                return jsonify({
+                    'success': False,
+                    'error': 'CEP não encontrado.'
+                }), 404
+        
+        # Buscar código IBGE do município no banco de dados
+        db = _get_db()
+        try:
+            municipio_query = text("""
+                SELECT codigo_municipio, nome_municipio, uf
+                FROM municipios
+                WHERE UPPER(nome_municipio) = UPPER(:nome)
+                AND uf = :uf
+                LIMIT 1
+            """)
+            
+            municipio_row = db.execute(municipio_query, {
+                'nome': dados.get('localidade', ''),
+                'uf': dados.get('uf', '')
+            }).fetchone()
+            
+            if municipio_row:
+                codigo_municipio = municipio_row[0]
+                nome_municipio = municipio_row[1]
+            else:
+                # Fallback: tentar buscar apenas por nome
+                municipio_query_fallback = text("""
+                    SELECT codigo_municipio, nome_municipio, uf
+                    FROM municipios
+                    WHERE UPPER(nome_municipio) LIKE UPPER(:nome)
+                    AND uf = :uf
+                    LIMIT 1
+                """)
+                
+                municipio_row = db.execute(municipio_query_fallback, {
+                    'nome': f"%{dados.get('localidade', '')}%",
+                    'uf': dados.get('uf', '')
+                }).fetchone()
+                
+                if municipio_row:
+                    codigo_municipio = municipio_row[0]
+                    nome_municipio = municipio_row[1]
+                else:
+                    # Se não encontrar, usar dados do ViaCEP mesmo
+                    codigo_municipio = dados.get('ibge', '')
+                    nome_municipio = dados.get('localidade', '')
+                    print(f"⚠️ Município não encontrado no BD: {nome_municipio}/{dados.get('uf')}")
+            
+            # Buscar código UF
+            codigo_uf = None
+            try:
+                uf_query = text("SELECT codigo_uf FROM estados WHERE uf = :uf LIMIT 1")
+                uf_row = db.execute(uf_query, {'uf': dados.get('uf', '')}).fetchone()
+                if uf_row:
+                    codigo_uf = uf_row[0]
+            except Exception as e_uf:
+                print(f"⚠️ Erro ao buscar código UF no BD: {e_uf}")
+            
+            # Fallback: Mapeamento manual de UF para código IBGE
+            if not codigo_uf:
+                uf_map = {
+                    'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29',
+                    'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52', 'MA': '21',
+                    'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25',
+                    'PR': '41', 'PE': '26', 'PI': '22', 'RJ': '33', 'RN': '24',
+                    'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35',
+                    'SE': '28', 'TO': '17'
+                }
+                codigo_uf = uf_map.get(dados.get('uf', ''))
+                if codigo_uf:
+                    print(f"ℹ️ Usando código UF do mapeamento: {dados.get('uf')} = {codigo_uf}")
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar município no BD: {e}")
+            codigo_municipio = dados.get('ibge', '')
+            nome_municipio = dados.get('localidade', '')
+            # Fallback final para código UF
+            uf_map = {
+                'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29',
+                'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52', 'MA': '21',
+                'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25',
+                'PR': '41', 'PE': '26', 'PI': '22', 'RJ': '33', 'RN': '24',
+                'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35',
+                'SE': '28', 'TO': '17'
+            }
+            codigo_uf = uf_map.get(dados.get('uf', ''))
+        finally:
+            db.close()
+        
+        print(f"✅ CEP encontrado: {dados.get('logradouro')}, {nome_municipio}/{dados.get('uf')}")
+        
+        # Garantir que codigo_uf não seja None (campo obrigatório no banco)
+        if not codigo_uf:
+            print(f"⚠️ AVISO: codigo_uf não encontrado para UF={dados.get('uf')}. Usando código padrão '99'")
+            codigo_uf = '99'  # Código genérico de fallback
+        
+        # Retornar dados formatados
+        return jsonify({
+            'success': True,
+            'cep': cep_limpo,
+            'logradouro': dados.get('logradouro', ''),
+            'complemento': dados.get('complemento', ''),
+            'bairro': dados.get('bairro', ''),
+            'nome_municipio': nome_municipio,
+            'codigo_municipio': codigo_municipio,
+            'uf': dados.get('uf', ''),
+            'codigo_uf': codigo_uf,
+            'ddd': dados.get('ddd', '')
+        }), 200
+        
+    except requests.Timeout:
+        print(f"⏱️ Timeout ao buscar CEP: {cep}")
+        return jsonify({
+            'success': False,
+            'error': 'Tempo esgotado ao consultar CEP (10 segundos). O serviço pode estar lento.',
+            'details': 'Timeout - Tente novamente em alguns instantes.'
+        }), 504
+        
+    except requests.RequestException as e:
+        print(f"❌ Erro de conexão ao buscar CEP: {e}")
+        print(f"❌ Tipo de erro: {type(e).__name__}")
+        
+        # Mensagem detalhada baseada no tipo de erro
+        error_msg = 'Erro de conexão com o serviço de CEP.'
+        details = str(e)
+        
+        if 'ConnectionError' in str(type(e).__name__):
+            error_msg = 'Sem conexão com a internet ou serviço ViaCEP indisponível.'
+            details = 'Verifique: 1) Conexão Wi-Fi/Ethernet, 2) Firewall, 3) Status do ViaCEP'
+        elif 'SSLError' in str(type(e).__name__):
+            error_msg = 'Erro de certificado SSL ao conectar com ViaCEP.'
+            details = 'Problema de segurança na conexão. Verifique certificados do sistema.'
+        
+        return jsonify({
+            'success': False,
+            'error': error_msg,
+            'details': details
+        }), 503
+        
+    except Exception as e:
+        print(f"❌ Erro inesperado ao buscar CEP: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao buscar CEP: {str(e)}',
+            'details': 'Erro interno do servidor. Verifique os logs.'
+        }), 500
 
 # -------------------------------------------------------------------
 # HEALTH
@@ -2599,3 +3874,589 @@ def buscar_cep(cep: str):
 @admin_bp.route('/health')
 def admin_health():
     return jsonify({'status': 'ok', 'role': getattr(current_user, 'role', None)})
+
+# Endpoint para sugestão IA integrada (NCM + LLM) - USA API UNIFICADA
+@admin_bp.route('/api/sugestao_tributaria', methods=['POST'])
+@login_required
+def api_sugestao_tributaria():
+    """
+    Endpoint que chama a API IA Unificada (porta 9000) e converte
+    códigos para IDs do banco de dados para preenchimento automático
+    """
+    import requests as req_lib
+    
+    # Recebe dados do formulário via JSON
+    dados = request.get_json()
+    print(f"[IA] 🎯 Nova solicitação de sugestão: {dados.get('descricao', 'N/A')}")
+    
+    # Validação básica
+    if not dados.get('descricao'):
+        return jsonify({'erro': 'Descrição do produto é obrigatória'}), 400
+    
+    db = _get_db()
+    
+    try:
+        # Enriquece dados com informações do cliente se disponível
+        cliente_id = dados.get('cliente_id')
+        if cliente_id:
+            # Busca informações do cliente
+            cliente_row = db.execute(text("""
+                SELECT c.uf, c.regime_tributario_id, rt.nome as regime_nome
+                FROM clientes c
+                LEFT JOIN regimes_tributarios rt ON c.regime_tributario_id = rt.regime_tributario_id
+                WHERE c.cliente_id = :cliente_id
+            """), {'cliente_id': cliente_id}).fetchone()
+            
+            if cliente_row:
+                cliente = dict(cliente_row._mapping)
+                dados['uf_origem'] = cliente.get('uf')
+                dados['regime_tributario'] = cliente.get('regime_nome')
+                print(f"[IA] 📍 Contexto cliente: UF={cliente.get('uf')}, Regime={cliente.get('regime_nome')}")
+        
+        # Chama API IA Unificada (porta 9000)
+        print(f"[IA] 🤖 Chamando API IA Unificada...")
+        api_response = req_lib.post(
+            'http://localhost:9000/api/sugestao',
+            json={
+                'descricao': dados.get('descricao'),
+                'tipo_item': dados.get('tipo_item', 'Produto'),
+                'uf_origem': dados.get('uf_origem'),
+                'regime_tributario': dados.get('regime_tributario'),
+                'unidade_comercial': dados.get('unidade_comercial', 'UN'),
+                'codigo_interno': dados.get('codigo_interno'),
+                'cliente_id': cliente_id
+            },
+            timeout=30
+        )
+        
+        if api_response.status_code != 200:
+            print(f"[IA] ❌ Erro na API: {api_response.status_code}")
+            return jsonify({'erro': 'Erro ao consultar API de IA'}), 500
+        
+        resultado_api = api_response.json()
+        
+        if not resultado_api.get('success'):
+            print(f"[IA] ❌ API retornou erro: {resultado_api.get('erro')}")
+            return jsonify(resultado_api), 500
+        
+        classificacao = resultado_api.get('classificacao', {})
+        print(f"[IA] ✅ Classificação recebida: NCM={classificacao.get('ncm')}")
+        
+        # Converte códigos para IDs do banco de dados
+        resultado_final = {
+            'sucesso': True,
+            'classificacao': classificacao,
+            'ids': {}  # IDs para preencher os selects
+        }
+        
+        # Busca NCM_ID pelo código
+        if classificacao.get('ncm'):
+            ncm_codigo = classificacao['ncm'].replace('.', '')  # Remove pontos
+            ncm_row = db.execute(text("""
+                SELECT ncm_id, codigo, descricao 
+                FROM ncms 
+                WHERE REPLACE(codigo, '.', '') = :codigo
+                LIMIT 1
+            """), {'codigo': ncm_codigo}).fetchone()
+            
+            if ncm_row:
+                ncm = dict(ncm_row._mapping)
+                resultado_final['ids']['ncm_id'] = ncm['ncm_id']
+                resultado_final['ncm_descricao'] = ncm['descricao']
+                print(f"[IA] ✅ NCM encontrado: {ncm['codigo']} (ID: {ncm['ncm_id']})")
+            else:
+                print(f"[IA] ⚠️ NCM {ncm_codigo} não encontrado no banco")
+        
+        # Busca CFOP_ID pelo código
+        if classificacao.get('cfop'):
+            cfop_codigo = classificacao['cfop']
+            # Tenta com e sem pontos (ex: "5101" ou "5.101")
+            cfop_row = db.execute(text("""
+                SELECT cfop_id, cfop, descricao 
+                FROM cfops 
+                WHERE REPLACE(cfop, '.', '') = :cfop OR cfop = :cfop
+                LIMIT 1
+            """), {'cfop': cfop_codigo}).fetchone()
+            
+            if cfop_row:
+                cfop = dict(cfop_row._mapping)
+                resultado_final['ids']['cfop_id'] = cfop['cfop_id']
+                resultado_final['cfop_descricao'] = cfop['descricao']
+                print(f"[IA] ✅ CFOP encontrado: {cfop['cfop']} (ID: {cfop['cfop_id']})")
+            else:
+                print(f"[IA] ⚠️ CFOP {cfop_codigo} não encontrado no banco")
+        
+        # Busca CST_ID pelo código (se aplicável)
+        if classificacao.get('cst'):
+            cst_codigo = classificacao['cst']
+            cst_row = db.execute(text("""
+                SELECT cst_id, codigo, descricao 
+                FROM cst_icms 
+                WHERE codigo = :cst
+                LIMIT 1
+            """), {'cst': cst_codigo}).fetchone()
+            
+            if cst_row:
+                cst = dict(cst_row._mapping)
+                resultado_final['ids']['cst_id'] = cst['cst_id']
+                resultado_final['cst_descricao'] = cst['descricao']
+                print(f"[IA] ✅ CST encontrado: {cst['codigo']} (ID: {cst['cst_id']})")
+        
+        # Busca CSOSN_ID pelo código (se aplicável)
+        if classificacao.get('csosn'):
+            csosn_codigo = classificacao['csosn']
+            csosn_row = db.execute(text("""
+                SELECT csosn_id, codigo, descricao 
+                FROM csosn_icms 
+                WHERE codigo = :csosn
+                LIMIT 1
+            """), {'csosn': csosn_codigo}).fetchone()
+            
+            if csosn_row:
+                csosn = dict(csosn_row._mapping)
+                resultado_final['ids']['csosn_id'] = csosn['csosn_id']
+                resultado_final['csosn_descricao'] = csosn['descricao']
+                print(f"[IA] ✅ CSOSN encontrado: {csosn['codigo']} (ID: {csosn['csosn_id']})")
+        
+        # CEST é campo texto livre (não tem tabela de IDs)
+        if classificacao.get('cest'):
+            resultado_final['ids']['cest'] = classificacao['cest']
+            print(f"[IA] ✅ CEST recebido: {classificacao['cest']}")
+        else:
+            print(f"[IA] ℹ️  CEST não informado (opcional)")
+        
+        print(f"[IA] 🎉 Resultado final preparado com IDs do banco")
+        return jsonify(resultado_final)
+        
+    except req_lib.exceptions.RequestException as e:
+        print(f"[IA] ❌ Erro ao conectar com API IA: {e}")
+        return jsonify({
+            'erro': 'API de IA não está disponível. Certifique-se de que está rodando na porta 9000.',
+            'detalhes': str(e)
+        }), 503
+        
+    except Exception as e:
+        print(f"[IA] ❌ Erro inesperado: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'erro': f'Erro no processamento: {str(e)}'}), 500
+        
+    finally:
+        db.close()
+
+# Endpoint para obter informações do cliente (regime tributário, etc.)
+@admin_bp.route('/api/cliente/<int:cliente_id>/info', methods=['GET'])
+@login_required
+def api_cliente_info(cliente_id):
+    """Retorna informações do cliente para ajustar interface dinamicamente"""
+    db = _get_db()
+    try:
+        # Busca informações do cliente
+        cliente_row = db.execute(text("""
+            SELECT c.cliente_id, c.razao_social, c.uf, c.regime_tributario_id, 
+                   rt.nome as regime_nome
+            FROM clientes c
+            LEFT JOIN regimes_tributarios rt ON c.regime_tributario_id = rt.regime_tributario_id
+            WHERE c.cliente_id = :cliente_id
+        """), {'cliente_id': cliente_id}).fetchone()
+        
+        if not cliente_row:
+            return jsonify({'erro': 'Cliente não encontrado'}), 404
+            
+        cliente = dict(cliente_row._mapping)
+        
+        # Determina se é Simples Nacional
+        regime_nome = cliente.get('regime_nome', '').lower()
+        is_simples_nacional = 'simples' in regime_nome
+        
+        return jsonify({
+            'cliente_id': cliente['cliente_id'],
+            'razao_social': cliente['razao_social'],
+            'uf': cliente['uf'],
+            'regime_tributario_id': cliente['regime_tributario_id'],
+            'regime_nome': cliente['regime_nome'],
+            'is_simples_nacional': is_simples_nacional,
+            'mostrar_cst': not is_simples_nacional,
+            'mostrar_csosn': is_simples_nacional
+        })
+        
+    except Exception as e:
+        print(f"❌ Erro ao buscar dados do cliente: {e}")
+        return jsonify({'erro': 'Erro interno do servidor'}), 500
+    finally:
+        db.close()
+
+# Rota de teste para preenchimento automático
+@admin_bp.route('/teste-preenchimento-ia')
+@login_required
+def teste_preenchimento_ia():
+    """Página de teste para verificar preenchimento automático dos campos"""
+    return render_template('teste_preenchimento_ia.html')
+
+# Rota de teste para Select NCM
+@admin_bp.route('/teste-select-ncm')
+@login_required
+def teste_select_ncm():
+    """Página de teste para verificar funcionamento do Select2 de NCMs"""
+    return render_template('teste_select_ncm.html')
+
+
+# -------------------------------------------------------------------
+# AUDITORIA E LOGS (FASE 4)
+# -------------------------------------------------------------------
+
+@admin_bp.route('/auditoria')
+@login_required
+@permission_required('admin.view')
+def list_auditoria():
+    """Lista logs de auditoria com filtros"""
+    from services.auditoria_service import AuditoriaService
+    
+    try:
+        # Parâmetros de filtro
+        user_id = request.args.get('user_id', type=int)
+        acao = request.args.get('acao', type=str)
+        tabela_afetada = request.args.get('tabela', type=str)
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        
+        # Converte datas
+        data_inicio = None
+        data_fim = None
+        if data_inicio_str:
+            try:
+                data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+            except ValueError:
+                flash('Data inicial inválida', 'warning')
+        
+        if data_fim_str:
+            try:
+                data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+                # Adiciona 23:59:59 para incluir todo o dia
+                from datetime import timedelta
+                data_fim = data_fim + timedelta(hours=23, minutes=59, seconds=59)
+            except ValueError:
+                flash('Data final inválida', 'warning')
+        
+        # Busca logs
+        offset = (page - 1) * per_page
+        logs, total = AuditoriaService.obter_logs(
+            user_id=user_id,
+            acao=acao,
+            tabela_afetada=tabela_afetada,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            limit=per_page,
+            offset=offset
+        )
+        
+        # Calcula paginação
+        total_pages = (total + per_page - 1) // per_page
+        
+        # Busca lista de usuários para o filtro
+        db = _get_db()
+        try:
+            query_users = text("""
+                SELECT id, username
+                FROM users
+                ORDER BY username
+            """)
+            usuarios = [{'id': row[0], 'username': row[1]} for row in db.execute(query_users)]
+        finally:
+            db.close()
+        
+        # Lista de ações disponíveis
+        acoes_disponiveis = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'ACCESS']
+        
+        # Lista de tabelas disponíveis
+        tabelas_disponiveis = ['produtos', 'nfe_emitidas', 'clientes', 'users', 'certificados', 'destinatarios', 'regras_tributacao']
+        
+        return render_template('admin/auditoria/list.html',
+                             logs=logs,
+                             total=total,
+                             page=page,
+                             per_page=per_page,
+                             total_pages=total_pages,
+                             usuarios=usuarios,
+                             acoes_disponiveis=acoes_disponiveis,
+                             tabelas_disponiveis=tabelas_disponiveis,
+                             filtros={
+                                 'user_id': user_id,
+                                 'acao': acao,
+                                 'tabela': tabela_afetada,
+                                 'data_inicio': data_inicio_str,
+                                 'data_fim': data_fim_str
+                             })
+    
+    except Exception as e:
+        print(f"❌ Erro ao listar auditoria: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao carregar logs de auditoria', 'danger')
+        return redirect(url_for('admin.dashboard'))
+
+
+@admin_bp.route('/auditoria/estatisticas')
+@login_required
+@permission_required('admin.view')
+def estatisticas_auditoria():
+    """Exibe estatísticas de auditoria"""
+    from services.auditoria_service import AuditoriaService
+    
+    try:
+        dias = request.args.get('dias', 30, type=int)
+        stats = AuditoriaService.obter_estatisticas_auditoria(dias=dias)
+        
+        return render_template('admin/auditoria/estatisticas.html',
+                             stats=stats,
+                             dias=dias)
+    
+    except Exception as e:
+        print(f"❌ Erro ao obter estatísticas: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao carregar estatísticas', 'danger')
+        return redirect(url_for('admin.list_auditoria'))
+
+
+@admin_bp.route('/auditoria/export')
+@login_required
+@permission_required('admin.view')
+def export_auditoria():
+    """Exporta logs de auditoria para CSV ou XLSX"""
+    from services.auditoria_service import AuditoriaService
+    from io import BytesIO, StringIO
+    from flask import make_response, send_file
+    import csv
+    
+    try:
+        # Parâmetros
+        formato = request.args.get('formato', 'csv')  # csv ou xlsx
+        user_id = request.args.get('user_id', type=int)
+        acao = request.args.get('acao', type=str)
+        tabela_afetada = request.args.get('tabela', type=str)
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+        
+        # Converte datas
+        data_inicio = None
+        data_fim = None
+        if data_inicio_str:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+        if data_fim_str:
+            from datetime import timedelta
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+            data_fim = data_fim + timedelta(hours=23, minutes=59, seconds=59)
+        
+        # Busca todos os logs (sem limite)
+        logs, total = AuditoriaService.obter_logs(
+            user_id=user_id,
+            acao=acao,
+            tabela_afetada=tabela_afetada,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            limit=10000,  # Limite máximo
+            offset=0
+        )
+        
+        if formato == 'csv':
+            # Exporta como CSV
+            si = StringIO()
+            writer = csv.writer(si)
+            
+            # Cabeçalhos
+            writer.writerow(['ID', 'Data/Hora', 'Usuário', 'Ação', 'Tabela', 'Registro ID', 'IP', 'Descrição'])
+            
+            # Dados
+            for log in logs:
+                writer.writerow([
+                    log['auditoria_id'],
+                    log['timestamp'].strftime('%d/%m/%Y %H:%M:%S') if log['timestamp'] else '',
+                    log['username'],
+                    log['acao'],
+                    log['tabela_afetada'] or '',
+                    log['registro_id'] or '',
+                    log['ip_address'] or '',
+                    log['descricao'] or ''
+                ])
+            
+            output = make_response(si.getvalue())
+            output.headers["Content-Disposition"] = f"attachment; filename=auditoria_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            output.headers["Content-type"] = "text/csv; charset=utf-8"
+            return output
+        
+        elif formato == 'xlsx':
+            # Exporta como XLSX
+            try:
+                import openpyxl
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill
+            except ImportError:
+                flash('Biblioteca openpyxl não instalada. Use formato CSV.', 'warning')
+                return redirect(url_for('admin.list_auditoria'))
+            
+            wb = Workbook()
+            ws = wb.active
+            
+            # Type guard para worksheet
+            if ws is None:
+                flash('Erro ao criar planilha XLSX.', 'error')
+                return redirect(url_for('admin.list_auditoria'))
+                
+            ws.title = "Auditoria"
+            
+            # Cabeçalhos com estilo
+            headers = ['ID', 'Data/Hora', 'Usuário', 'Ação', 'Tabela', 'Registro ID', 'IP', 'Descrição']
+            ws.append(headers)
+            
+            # Estiliza cabeçalho (verifica se há linhas)
+            try:
+                for cell in ws[1]:
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            except (IndexError, TypeError):
+                pass  # Ignora se não houver linhas
+            
+            # Dados
+            for log in logs:
+                ws.append([
+                    log['auditoria_id'],
+                    log['timestamp'].strftime('%d/%m/%Y %H:%M:%S') if log['timestamp'] else '',
+                    log['username'],
+                    log['acao'],
+                    log['tabela_afetada'] or '',
+                    log['registro_id'] or '',
+                    log['ip_address'] or '',
+                    log['descricao'] or ''
+                ])
+            
+            # Ajusta largura das colunas (type-safe)
+            if hasattr(ws, 'column_dimensions'):
+                ws.column_dimensions['A'].width = 8
+                ws.column_dimensions['B'].width = 20
+                ws.column_dimensions['C'].width = 15
+                ws.column_dimensions['D'].width = 15
+                ws.column_dimensions['E'].width = 20
+                ws.column_dimensions['F'].width = 12
+                ws.column_dimensions['G'].width = 15
+                ws.column_dimensions['H'].width = 50
+            
+            # Salva em BytesIO
+            output = BytesIO()
+            wb.save(output)
+            output.seek(0)
+            
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f'auditoria_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            )
+        
+        else:
+            flash('Formato de exportação inválido', 'danger')
+            return redirect(url_for('admin.list_auditoria'))
+    
+    except Exception as e:
+        print(f"❌ Erro ao exportar auditoria: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao exportar logs', 'danger')
+        return redirect(url_for('admin.list_auditoria'))
+
+
+@admin_bp.route('/auditoria/<int:auditoria_id>')
+@login_required
+@permission_required('admin.view')
+def view_auditoria(auditoria_id):
+    """Visualiza detalhes de um log específico"""
+    db = _get_db()
+    try:
+        query = text("""
+            SELECT 
+                a.auditoria_id,
+                a.user_id,
+                u.username,
+                a.acao,
+                a.tabela_afetada,
+                a.registro_id,
+                a.timestamp,
+                a.dados_antes,
+                a.dados_depois,
+                a.ip_address,
+                a.user_agent,
+                a.descricao
+            FROM auditoria a
+            LEFT JOIN users u ON a.user_id = u.id
+            WHERE a.auditoria_id = :auditoria_id
+        """)
+        
+        result = db.execute(query, {'auditoria_id': auditoria_id}).fetchone()
+        
+        if not result:
+            flash('Log de auditoria não encontrado', 'warning')
+            return redirect(url_for('admin.list_auditoria'))
+        
+        log = {
+            'auditoria_id': result[0],
+            'user_id': result[1],
+            'username': result[2] or 'Sistema',
+            'acao': result[3],
+            'tabela_afetada': result[4],
+            'registro_id': result[5],
+            'timestamp': result[6],
+            'dados_antes': result[7],
+            'dados_depois': result[8],
+            'ip_address': result[9],
+            'user_agent': result[10],
+            'descricao': result[11]
+        }
+        
+        return render_template('admin/auditoria/view.html', log=log)
+    
+    except Exception as e:
+        print(f"❌ Erro ao visualizar auditoria: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao carregar detalhes do log', 'danger')
+        return redirect(url_for('admin.list_auditoria'))
+    finally:
+        db.close()
+
+
+@admin_bp.route('/auditoria/limpar', methods=['POST'])
+@login_required
+@permission_required('admin.manage')
+def limpar_auditoria():
+    """Limpa logs antigos de auditoria"""
+    from services.auditoria_service import AuditoriaService
+    
+    try:
+        dias = request.form.get('dias', 365, type=int)
+        
+        if dias < 90:
+            flash('Não é permitido limpar logs com menos de 90 dias', 'warning')
+            return redirect(url_for('admin.list_auditoria'))
+        
+        deletados = AuditoriaService.limpar_logs_antigos(dias=dias)
+        
+        flash(f'✅ {deletados} registros de auditoria removidos (mais de {dias} dias)', 'success')
+        
+        # Registra a ação de limpeza
+        AuditoriaService.registrar_acao(
+            user_id=current_user.id,
+            acao='CLEANUP',
+            tabela_afetada='auditoria',
+            descricao=f'Limpeza de logs com mais de {dias} dias - {deletados} registros removidos'
+        )
+        
+        return redirect(url_for('admin.list_auditoria'))
+    
+    except Exception as e:
+        print(f"❌ Erro ao limpar auditoria: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao limpar logs antigos', 'danger')
+        return redirect(url_for('admin.list_auditoria'))
