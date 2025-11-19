@@ -44,10 +44,12 @@
                     <label for="roles" class="form-label">Papel (Role):</label>
                     <select id="roles" name="roles" class="form-select" required>
                         {% for role in roles %}
+                            {% if current_user.is_super_admin() or role.name|lower != 'super_admin' %}
                             <option value="{{ role.id }}"
                                 {% if usuario and role.id in usuario.roles %}selected{% endif %}>
                                 {{ role.name }}
                             </option>
+                            {% endif %}
                         {% endfor %}
                     </select>
                     <small class="text-muted">Selecione apenas um papel para o usuário.</small>

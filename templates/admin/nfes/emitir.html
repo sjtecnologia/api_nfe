@@ -522,7 +522,12 @@ function adicionarItem() {
                                     data-codigo="{{ prod.codigo_interno }}"
                                     data-descricao="{{ prod.descricao }}"
                                     data-preco="{{ prod.preco_unitario_padrao }}"
-                                    data-unidade="{{ prod.unidade_comercial }}">
+                                    data-unidade="{{ prod.unidade_comercial }}"
+                                    data-ncm="{{ prod.ncm_codigo }}"
+                                    data-cfop="{{ prod.cfop_codigo }}"
+                                    data-cst="{{ prod.cst_codigo }}"
+                                    data-csosn="{{ prod.csosn_codigo }}"
+                                    data-origem="{{ prod.origem_mercadoria_id }}">
                                 {{ prod.codigo_interno }} - {{ prod.descricao }}
                             </option>
                             {% endfor %}
@@ -619,17 +624,31 @@ function adicionarItem() {
                         </select>
                     </div>
                 </div>
+                {% if regime_tributario == 'Simples Nacional' %}
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>CSOSN *</label>
+                        <select name="csosn_${itemCounter}" class="form-control js-select2-csosn" required>
+                            <option value="">Selecione o CSOSN...</option>
+                            {% for csosn in all_csosns %}
+                            <option value="{{ csosn.codigo }}">{{ csosn.codigo }} - {{ csosn.descricao }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% else %}
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>CST ICMS *</label>
                         <select name="cst_icms_${itemCounter}" class="form-control js-select2-cst" required>
                             <option value="">Selecione o CST...</option>
                             {% for cst in all_csts %}
-                            <option value="{{ cst.cst }}">{{ cst.cst }} - {{ cst.descricao }}</option>
+                            <option value="{{ cst.codigo }}">{{ cst.codigo }} - {{ cst.descricao }}</option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
+                {% endif %}
             </div>
             
             <!-- Impostos ICMS -->
@@ -751,6 +770,17 @@ function initSelect2ForItem(itemId) {
                 searching: () => "Pesquisando..."
             }
         });
+        
+        // CSOSN
+        $(`select[name="csosn_${itemId}"]`).select2({
+            width: '100%',
+            allowClear: true,
+            placeholder: 'Digite para buscar CSOSN...',
+            language: {
+                noResults: () => "Nenhum CSOSN encontrado",
+                searching: () => "Pesquisando..."
+            }
+        });
         // NCM
         $(`select[name="ncm_${itemId}"]`).select2({
             width: '100%',
@@ -837,10 +867,40 @@ function carregarProduto(itemId) {
     const option = select.options[select.selectedIndex];
     
     if (option.value) {
-        document.querySelector(`input[name="codigo_produto_${itemId}"]`).value = option.dataset.codigo;
-        document.querySelector(`input[name="descricao_${itemId}"]`).value = option.dataset.descricao;
-        document.querySelector(`input[name="valor_unitario_${itemId}"]`).value = option.dataset.preco;
-        document.querySelector(`input[name="unidade_${itemId}"]`).value = option.dataset.unidade;
+        // Dados básicos do produto
+        document.querySelector(`input[name="codigo_produto_${itemId}"]`).value = option.dataset.codigo || '';
+        document.querySelector(`input[name="descricao_${itemId}"]`).value = option.dataset.descricao || '';
+        document.querySelector(`input[name="valor_unitario_${itemId}"]`).value = option.dataset.preco || '0.00';
+        document.querySelector(`input[name="unidade_${itemId}"]`).value = option.dataset.unidade || 'UN';
+        
+        // Dados tributários - usar Select2 .val() para atualizar
+        if (option.dataset.ncm) {
+            $(`select[name="ncm_${itemId}"]`).val(option.dataset.ncm).trigger('change');
+        }
+        
+        if (option.dataset.cfop) {
+            $(`select[name="cfop_${itemId}"]`).val(option.dataset.cfop).trigger('change');
+        }
+        
+        if (option.dataset.origem !== undefined) {
+            const origemSelect = document.querySelector(`select[name="origem_${itemId}"]`);
+            if (origemSelect) {
+                origemSelect.value = option.dataset.origem;
+            }
+        }
+        
+        // CST ou CSOSN dependendo do regime tributário - usar Select2
+        const csosnSelect = $(`select[name="csosn_${itemId}"]`);
+        const cstSelect = $(`select[name="cst_icms_${itemId}"]`);
+        
+        if (csosnSelect.length && option.dataset.csosn) {
+            csosnSelect.val(option.dataset.csosn).trigger('change');
+        } else if (cstSelect.length && option.dataset.cst) {
+            cstSelect.val(option.dataset.cst).trigger('change');
+        }
+        
+        // Atualizar JSON do item
+        atualizarItemJSON(itemId);
     }
 }
 
@@ -879,11 +939,20 @@ function atualizarItemJSON(itemId) {
         ncm: document.querySelector(`select[name="ncm_${itemId}"]`).value,
         cfop: document.querySelector(`select[name="cfop_${itemId}"]`).value,
         origem: document.querySelector(`select[name="origem_${itemId}"]`).value,
-        cst_icms: document.querySelector(`select[name="cst_icms_${itemId}"]`).value,
         aliquota_icms: document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value,
         bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`).value,
         valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`).value
     };
+    
+    // CST ou CSOSN dependendo do regime
+    const csosnSelect = document.querySelector(`select[name="csosn_${itemId}"]`);
+    const cstSelect = document.querySelector(`select[name="cst_icms_${itemId}"]`);
+    
+    if (csosnSelect) {
+        itemData.csosn = csosnSelect.value;
+    } else if (cstSelect) {
+        itemData.cst_icms = cstSelect.value;
+    }
     
     document.getElementById(`item_json_${itemId}`).value = JSON.stringify(itemData);
 }

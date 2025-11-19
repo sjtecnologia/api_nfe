@@ -950,19 +950,58 @@ def delete_cfop(cfop_id):
 def list_usuarios():
     db = _get_db()
     q = request.args.get('q', '').strip()
-    if q:
-        rows = db.execute(text("""
-            SELECT id, username, email, _is_active, created_at
-            FROM users
-            WHERE username ILIKE :q OR email ILIKE :q
-            ORDER BY username
-        """), {'q': f'%{q}%'}).fetchall()
+    
+    # Super Admin vê todos os usuários, Admin Comum vê apenas usuários de seus clientes
+    if current_user.is_super_admin():
+        if q:
+            rows = db.execute(text("""
+                SELECT id, username, email, _is_active, created_at
+                FROM users
+                WHERE username ILIKE :q OR email ILIKE :q
+                ORDER BY username
+            """), {'q': f'%{q}%'}).fetchall()
+        else:
+            rows = db.execute(text("""
+                SELECT id, username, email, _is_active, created_at
+                FROM users
+                ORDER BY username
+            """)).fetchall()
     else:
-        rows = db.execute(text("""
-            SELECT id, username, email, _is_active, created_at
-            FROM users
-            ORDER BY username
-        """)).fetchall()
+        # Admin Comum: busca usuários vinculados aos mesmos clientes (excluindo Super Admins)
+        if q:
+            rows = db.execute(text("""
+                SELECT DISTINCT u.id, u.username, u.email, u._is_active, u.created_at
+                FROM users u
+                INNER JOIN user_clients uc ON u.id = uc.user_id
+                WHERE uc.client_id IN (
+                    SELECT client_id FROM user_clients WHERE user_id = :current_user_id
+                )
+                AND (u.username ILIKE :q OR u.email ILIKE :q)
+                AND u.id NOT IN (
+                    SELECT ur.user_id 
+                    FROM user_roles ur
+                    INNER JOIN roles r ON ur.role_id = r.id
+                    WHERE LOWER(r.name) = 'super_admin'
+                )
+                ORDER BY u.username
+            """), {'current_user_id': current_user.id, 'q': f'%{q}%'}).fetchall()
+        else:
+            rows = db.execute(text("""
+                SELECT DISTINCT u.id, u.username, u.email, u._is_active, u.created_at
+                FROM users u
+                INNER JOIN user_clients uc ON u.id = uc.user_id
+                WHERE uc.client_id IN (
+                    SELECT client_id FROM user_clients WHERE user_id = :current_user_id
+                )
+                AND u.id NOT IN (
+                    SELECT ur.user_id 
+                    FROM user_roles ur
+                    INNER JOIN roles r ON ur.role_id = r.id
+                    WHERE LOWER(r.name) = 'super_admin'
+                )
+                ORDER BY u.username
+            """), {'current_user_id': current_user.id}).fetchall()
+    
     usuarios = []
     for row in rows:
         usuario = dict(row._mapping)
@@ -982,7 +1021,18 @@ from werkzeug.security import generate_password_hash
 def create_usuario():
     db = _get_db()
     roles = db.execute(text("SELECT id, name FROM roles ORDER BY name")).fetchall()
-    clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
+    
+    # Super Admin vê todos os clientes, Admin Comum vê apenas seus clientes
+    if current_user.is_super_admin():
+        clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
+    else:
+        clientes = db.execute(text("""
+            SELECT c.cliente_id, c.razao_social
+            FROM clientes c
+            INNER JOIN user_clients uc ON c.cliente_id = uc.client_id
+            WHERE uc.user_id = :user_id
+            ORDER BY c.razao_social
+        """), {'user_id': current_user.id}).fetchall()
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
@@ -1007,6 +1057,17 @@ def create_usuario():
                 db.execute(text("""
                     INSERT INTO user_roles (user_id, role_id) VALUES (:user_id, :role_id)
                 """), {'user_id': user_id, 'role_id': role_id})
+            # Validar se admin comum está tentando vincular a clientes que não gerencia
+            if not current_user.is_super_admin():
+                admin_clientes = [c[0] for c in db.execute(text("""
+                    SELECT client_id FROM user_clients WHERE user_id = :user_id
+                """), {'user_id': current_user.id}).fetchall()]
+                for cliente_id in selected_clientes:
+                    if int(cliente_id) not in admin_clientes:
+                        db.rollback()
+                        flash('Você não tem permissão para vincular usuários a este cliente.', 'danger')
+                        return render_template('admin/usuarios/form.html', usuario=None, roles=roles, clientes=clientes)
+            
             for cliente_id in selected_clientes:
                 db.execute(text("""
                     INSERT INTO user_clients (user_id, client_id) VALUES (:user_id, :cliente_id)
@@ -1028,7 +1089,18 @@ def create_usuario():
 def edit_usuario(usuario_id):
     db = _get_db()
     roles = db.execute(text("SELECT id, name FROM roles ORDER BY name")).fetchall()
-    clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
+    
+    # Super Admin vê todos os clientes, Admin Comum vê apenas seus clientes
+    if current_user.is_super_admin():
+        clientes = db.execute(text("SELECT cliente_id, razao_social FROM clientes ORDER BY razao_social")).fetchall()
+    else:
+        clientes = db.execute(text("""
+            SELECT c.cliente_id, c.razao_social
+            FROM clientes c
+            INNER JOIN user_clients uc ON c.cliente_id = uc.client_id
+            WHERE uc.user_id = :user_id
+            ORDER BY c.razao_social
+        """), {'user_id': current_user.id}).fetchall()
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
@@ -1071,6 +1143,20 @@ def edit_usuario(usuario_id):
                 db.execute(text("""
                     INSERT INTO user_roles (user_id, role_id) VALUES (:user_id, :role_id)
                 """), {'user_id': usuario_id, 'role_id': role_id})
+            # Validar se admin comum está tentando vincular a clientes que não gerencia
+            if not current_user.is_super_admin():
+                admin_clientes = [c[0] for c in db.execute(text("""
+                    SELECT client_id FROM user_clients WHERE user_id = :user_id
+                """), {'user_id': current_user.id}).fetchall()]
+                for cliente_id in selected_clientes:
+                    if int(cliente_id) not in admin_clientes:
+                        db.rollback()
+                        flash('Você não tem permissão para vincular usuários a este cliente.', 'danger')
+                        # Buscar dados do usuário para o formulário
+                        row = db.execute(text("SELECT id, username, email, password_hash, _is_active FROM users WHERE id = :id"), {'id': usuario_id}).fetchone()
+                        usuario = dict(row._mapping) if row else None
+                        return render_template('admin/usuarios/form.html', usuario=usuario, roles=roles, clientes=clientes)
+            
             db.execute(text("DELETE FROM user_clients WHERE user_id = :user_id"), {'user_id': usuario_id})
             for cliente_id in selected_clientes:
                 db.execute(text("""
@@ -1714,30 +1800,75 @@ def dashboard():
     try:
         from datetime import datetime, timedelta
         
+        # Processar filtros de período
+        periodo = request.args.get('periodo', 'tudo')
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+        
+        # Calcular datas de filtro
+        hoje = datetime.now()
+        data_inicio = None
+        data_fim = None
+        
+        if data_inicio_str and data_fim_str:
+            # Período customizado
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+        elif periodo == 'hoje':
+            data_inicio = hoje.replace(hour=0, minute=0, second=0, microsecond=0)
+            data_fim = hoje.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif periodo == 'semana':
+            data_inicio = hoje - timedelta(days=hoje.weekday())
+            data_fim = hoje
+        elif periodo == 'mes':
+            data_inicio = hoje.replace(day=1)
+            data_fim = hoje
+        elif periodo == 'trimestre':
+            data_inicio = hoje - timedelta(days=90)
+            data_fim = hoje
+        elif periodo == 'ano':
+            data_inicio = hoje.replace(month=1, day=1)
+            data_fim = hoje
+        # periodo == 'tudo' não define filtros
+        
         # KPIs principais
         kpis = {}
         
+        # Criar cláusula WHERE baseada no período
+        where_clause = ""
+        where_and = ""
+        params = {}
+        if data_inicio and data_fim:
+            where_clause = "WHERE data_criacao BETWEEN :data_inicio AND :data_fim"
+            where_and = "AND data_criacao BETWEEN :data_inicio AND :data_fim"
+            params = {'data_inicio': data_inicio, 'data_fim': data_fim}
+        
         # 1. Total de NFes emitidas
-        kpis['total_nfes'] = db.execute(text("""
-            SELECT COUNT(*) FROM nfe_emitidas
-        """)).scalar() or 0
+        kpis['total_nfes'] = db.execute(text(f"""
+            SELECT COUNT(*) FROM nfe_emitidas {where_clause}
+        """), params).scalar() or 0
         
         # 2. Valor total de NFes (extraindo do JSON)
-        kpis['valor_total'] = db.execute(text("""
+        # O valor total está em form_data->valorPagamento
+        kpis['valor_total'] = db.execute(text(f"""
             SELECT COALESCE(SUM(
-                (json_nfe->>'valor_total')::numeric
+                (json_nfe->'form_data'->>'valorPagamento')::numeric
             ), 0) FROM nfe_emitidas
-            WHERE json_nfe IS NOT NULL AND json_nfe->>'valor_total' IS NOT NULL
-        """)).scalar() or 0
+            WHERE json_nfe IS NOT NULL 
+                AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
+                {where_and}
+        """), params).scalar() or 0
         
         # 3. Taxa de sucesso (autorizadas vs total)
         total = kpis['total_nfes']
-        autorizadas = db.execute(text("""
-            SELECT COUNT(*) FROM nfe_emitidas WHERE status = 'Autorizada'
-        """)).scalar() or 0
+        autorizadas = db.execute(text(f"""
+            SELECT COUNT(*) FROM nfe_emitidas 
+            WHERE (status = 'Autorizada' OR status = 'Autorizado' OR status ILIKE '%autoriza%')
+                {where_and}
+        """), params).scalar() or 0
         kpis['taxa_sucesso'] = round((autorizadas / total * 100) if total > 0 else 0, 1)
         
-        # 4. Dias até vencimento do certificado mais próximo
+        # 4. Dias até vencimento do certificado mais próximo (NÃO FILTRADO - sempre mostra o mais próximo)
         kpis['dias_certificado'] = db.execute(text("""
             SELECT MIN(EXTRACT(DAY FROM (validade_fim - CURRENT_DATE)))
             FROM certificados_digitais
@@ -1748,28 +1879,31 @@ def dashboard():
         else:
             kpis['dias_certificado'] = int(kpis['dias_certificado'])
         
-        # 5. Total de clientes ativos
+        # 5. Total de clientes ativos (NÃO FILTRADO POR DATA)
         kpis['total_clientes'] = db.execute(text("""
             SELECT COUNT(*) FROM clientes WHERE ativo = TRUE
         """)).scalar() or 0
         
-        # 6. Total de produtos cadastrados
+        # 6. Total de produtos cadastrados (NÃO FILTRADO POR DATA)
         kpis['total_produtos'] = db.execute(text("""
             SELECT COUNT(*) FROM produtos WHERE ativo = TRUE
         """)).scalar() or 0
         
-        # 7. Sugestões IA aceitas (se houver dados)
-        kpis['sugestoes_ia_aceitas'] = db.execute(text("""
-            SELECT COUNT(*) FROM sugestoes_ia WHERE sugestao_aceita = TRUE
-        """)).scalar() or 0
+        # 7. Sugestões IA aceitas (FILTRADO SE PERÍODO)
+        if data_inicio and data_fim:
+            kpis['sugestoes_ia_aceitas'] = db.execute(text("""
+                SELECT COUNT(*) FROM sugestoes_ia 
+                WHERE sugestao_aceita = TRUE
+                    AND data_sugestao BETWEEN :data_inicio AND :data_fim
+            """), params).scalar() or 0
+        else:
+            kpis['sugestoes_ia_aceitas'] = db.execute(text("""
+                SELECT COUNT(*) FROM sugestoes_ia 
+                WHERE sugestao_aceita = TRUE
+            """)).scalar() or 0
         
-        # 8. NFes do mês atual
-        kpis['nfes_mes'] = db.execute(text("""
-            SELECT COUNT(*) 
-            FROM nfe_emitidas 
-            WHERE EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
-            AND EXTRACT(MONTH FROM data_criacao) = EXTRACT(MONTH FROM CURRENT_DATE)
-        """)).scalar() or 0
+        # 8. NFes do período filtrado
+        kpis['nfes_mes'] = kpis['total_nfes']  # Já foi calculado com filtro
         
         return render_template('admin/dashboard.html', kpis=kpis)
         
@@ -1777,6 +1911,127 @@ def dashboard():
         print(f"❌ Erro dashboard: {e}")
         flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
         return redirect(url_for('admin.admin_home'))
+
+@admin_bp.route('/certificados/vencimento')
+@login_required
+def relatorio_certificados_vencimento():
+    """
+    Relatório de certificados próximos ao vencimento, agrupados por cliente.
+    Acesso: Super Admin e Admins
+    """
+    db = _get_db()
+    try:
+        from datetime import datetime, timedelta
+        
+        # Parâmetros de filtro
+        dias_alerta = request.args.get('dias_alerta', 60, type=int)  # Padrão: 60 dias
+        mostrar_todos = request.args.get('mostrar_todos', 'false') == 'true'
+        
+        # Query principal: certificados por cliente
+        if mostrar_todos:
+            # Mostrar todos os certificados ativos
+            where_vencimento = "AND cd.ativo = TRUE"
+        else:
+            # Mostrar apenas os próximos ao vencimento
+            where_vencimento = """
+                AND cd.ativo = TRUE 
+                AND cd.validade_fim > CURRENT_DATE
+                AND cd.validade_fim <= CURRENT_DATE + INTERVAL ':dias days'
+            """
+        
+        certificados = db.execute(text(f"""
+            SELECT 
+                c.cliente_id,
+                c.razao_social,
+                c.cnpj,
+                cd.certificado_digital_id,
+                cd.nome_arquivo_original,
+                cd.fingerprint,
+                cd.validade_inicio,
+                cd.validade_fim,
+                cd.ativo,
+                EXTRACT(DAY FROM (cd.validade_fim - CURRENT_DATE)) as dias_restantes,
+                CASE 
+                    WHEN cd.validade_fim < CURRENT_DATE THEN 'VENCIDO'
+                    WHEN cd.validade_fim <= CURRENT_DATE + INTERVAL '15 days' THEN 'CRÍTICO'
+                    WHEN cd.validade_fim <= CURRENT_DATE + INTERVAL '30 days' THEN 'URGENTE'
+                    WHEN cd.validade_fim <= CURRENT_DATE + INTERVAL '60 days' THEN 'ATENÇÃO'
+                    ELSE 'OK'
+                END as status_vencimento,
+                CASE 
+                    WHEN cd.validade_fim < CURRENT_DATE THEN 'danger'
+                    WHEN cd.validade_fim <= CURRENT_DATE + INTERVAL '15 days' THEN 'danger'
+                    WHEN cd.validade_fim <= CURRENT_DATE + INTERVAL '30 days' THEN 'warning'
+                    WHEN cd.validade_fim <= CURRENT_DATE + INTERVAL '60 days' THEN 'info'
+                    ELSE 'success'
+                END as cor_alerta
+            FROM clientes c
+            INNER JOIN certificados_digitais cd ON c.cliente_id = cd.cliente_id
+            WHERE c.ativo = TRUE
+                {where_vencimento.replace(':dias', str(dias_alerta)) if not mostrar_todos else where_vencimento}
+            ORDER BY 
+                dias_restantes ASC NULLS LAST,
+                c.razao_social,
+                cd.validade_fim
+        """)).fetchall()
+        
+        # Agrupar por cliente
+        clientes_dict = {}
+        for row in certificados:
+            cliente_id = row[0]
+            if cliente_id not in clientes_dict:
+                clientes_dict[cliente_id] = {
+                    'cliente_id': row[0],
+                    'razao_social': row[1],
+                    'cnpj': row[2],
+                    'certificados': []
+                }
+            
+            clientes_dict[cliente_id]['certificados'].append({
+                'certificado_id': row[3],
+                'nome_arquivo': row[4],
+                'fingerprint': row[5],
+                'validade_inicio': row[6],
+                'validade_fim': row[7],
+                'ativo': row[8],
+                'dias_restantes': int(row[9]) if row[9] is not None else None,
+                'status_vencimento': row[10],
+                'cor_alerta': row[11]
+            })
+        
+        clientes_com_certificados = list(clientes_dict.values())
+        
+        # Estatísticas gerais
+        total_certificados = len(certificados)
+        certificados_vencidos = sum(1 for row in certificados if row[9] is not None and row[9] < 0)
+        certificados_criticos = sum(1 for row in certificados if row[9] is not None and 0 <= row[9] <= 15)
+        certificados_urgentes = sum(1 for row in certificados if row[9] is not None and 15 < row[9] <= 30)
+        certificados_atencao = sum(1 for row in certificados if row[9] is not None and 30 < row[9] <= 60)
+        certificados_ok = sum(1 for row in certificados if row[9] is not None and row[9] > 60)
+        
+        estatisticas = {
+            'total': total_certificados,
+            'vencidos': certificados_vencidos,
+            'criticos': certificados_criticos,
+            'urgentes': certificados_urgentes,
+            'atencao': certificados_atencao,
+            'ok': certificados_ok,
+            'total_clientes': len(clientes_com_certificados)
+        }
+        
+        return render_template('admin/certificados/relatorio_vencimento.html',
+                             clientes=clientes_com_certificados,
+                             estatisticas=estatisticas,
+                             dias_alerta=dias_alerta,
+                             mostrar_todos=mostrar_todos,
+                             data_relatorio=datetime.now().strftime('%d/%m/%Y %H:%M'))
+        
+    except Exception as e:
+        print(f"❌ Erro relatório certificados: {e}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Erro ao carregar relatório de certificados: {str(e)}', 'danger')
+        return redirect(url_for('admin.dashboard'))
 
 @admin_bp.route('/dashboard/api/data')
 @login_required
@@ -1789,21 +2044,77 @@ def dashboard_api_data():
         from datetime import datetime, timedelta
         from calendar import month_name
         
+        # Processar os mesmos filtros de período
+        periodo = request.args.get('periodo', 'tudo')
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+        
+        # Calcular datas de filtro
+        hoje = datetime.now()
+        data_inicio = None
+        data_fim = None
+        
+        if data_inicio_str and data_fim_str:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+        elif periodo == 'hoje':
+            data_inicio = hoje.replace(hour=0, minute=0, second=0, microsecond=0)
+            data_fim = hoje.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif periodo == 'semana':
+            data_inicio = hoje - timedelta(days=hoje.weekday())
+            data_fim = hoje
+        elif periodo == 'mes':
+            data_inicio = hoje.replace(day=1)
+            data_fim = hoje
+        elif periodo == 'trimestre':
+            data_inicio = hoje - timedelta(days=90)
+            data_fim = hoje
+        elif periodo == 'ano':
+            data_inicio = hoje.replace(month=1, day=1)
+            data_fim = hoje
+        
         data = {}
         
-        # Gráfico 1: NFes por mês (últimos 12 meses)
-        nfes_por_mes = db.execute(text("""
-            SELECT 
-                TO_CHAR(data_criacao, 'YYYY-MM') as mes,
-                COUNT(*) as total,
-                COALESCE(SUM(
-                    (json_nfe->>'valor_total')::numeric
-                ), 0) as valor
-            FROM nfe_emitidas
-            WHERE data_criacao >= CURRENT_DATE - INTERVAL '12 months'
-            GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
-            ORDER BY mes
-        """)).fetchall()
+        # Criar cláusula WHERE baseada no período
+        where_clause = ""
+        where_and = ""
+        params = {}
+        if data_inicio and data_fim:
+            where_clause = "WHERE data_criacao BETWEEN :data_inicio AND :data_fim"
+            where_and = "AND data_criacao BETWEEN :data_inicio AND :data_fim"
+            params = {'data_inicio': data_inicio, 'data_fim': data_fim}
+        
+        # Gráfico 1: NFes por mês (filtrado pelo período)
+        if data_inicio and data_fim:
+            # Se filtrado, usar o intervalo específico
+            nfes_por_mes = db.execute(text("""
+                SELECT 
+                    TO_CHAR(data_criacao, 'YYYY-MM') as mes,
+                    COUNT(*) as total,
+                    COALESCE(SUM(
+                        (json_nfe->'form_data'->>'valorPagamento')::numeric
+                    ), 0) as valor
+                FROM nfe_emitidas
+                WHERE data_criacao BETWEEN :data_inicio AND :data_fim
+                    AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
+                GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
+                ORDER BY mes
+            """), params).fetchall()
+        else:
+            # Sem filtro, mostrar últimos 12 meses
+            nfes_por_mes = db.execute(text("""
+                SELECT 
+                    TO_CHAR(data_criacao, 'YYYY-MM') as mes,
+                    COUNT(*) as total,
+                    COALESCE(SUM(
+                        (json_nfe->'form_data'->>'valorPagamento')::numeric
+                    ), 0) as valor
+                FROM nfe_emitidas
+                WHERE data_criacao >= CURRENT_DATE - INTERVAL '12 months'
+                    AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
+                GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
+                ORDER BY mes
+            """)).fetchall()
         
         data['nfes_por_mes'] = {
             'labels': [row[0] for row in nfes_por_mes],
@@ -1811,50 +2122,96 @@ def dashboard_api_data():
             'valores': [float(row[2]) for row in nfes_por_mes]
         }
         
-        # Gráfico 2: Top 5 produtos cadastrados
-        top_produtos = db.execute(text("""
-            SELECT 
-                descricao,
-                produto_id
-            FROM produtos
-            WHERE ativo = TRUE AND descricao IS NOT NULL
-            ORDER BY produto_id DESC
-            LIMIT 5
-        """)).fetchall()
+        # Gráfico 2: Top 5 produtos mais emitidos em NFes (filtrado pelo período)
+        try:
+            if data_inicio and data_fim:
+                top_produtos = db.execute(text("""
+                    SELECT 
+                        item->>'descricao' as descricao,
+                        COUNT(*) as total_usos
+                    FROM nfe_emitidas n
+                    CROSS JOIN LATERAL jsonb_array_elements(n.json_nfe->'items') AS item
+                    WHERE n.data_criacao BETWEEN :data_inicio AND :data_fim
+                        AND item->>'descricao' IS NOT NULL
+                    GROUP BY item->>'descricao'
+                    ORDER BY total_usos DESC
+                    LIMIT 5
+                """), params).fetchall()
+            else:
+                top_produtos = db.execute(text("""
+                    SELECT 
+                        item->>'descricao' as descricao,
+                        COUNT(*) as total_usos
+                    FROM nfe_emitidas n
+                    CROSS JOIN LATERAL jsonb_array_elements(n.json_nfe->'items') AS item
+                    WHERE n.data_criacao >= CURRENT_DATE - INTERVAL '12 months'
+                        AND item->>'descricao' IS NOT NULL
+                    GROUP BY item->>'descricao'
+                    ORDER BY total_usos DESC
+                    LIMIT 5
+                """)).fetchall()
+        except Exception as e:
+            top_produtos = []
         
         data['top_produtos'] = {
-            'labels': [row[0][:30] if row[0] else 'Sem descrição' for row in top_produtos],
-            'valores': [idx + 1 for idx in range(len(top_produtos))]  # Sequencial para demonstração
+            'labels': [row[0][:30] if row[0] else 'Sem descrição' for row in top_produtos] if top_produtos else [],
+            'valores': [int(row[1]) for row in top_produtos] if top_produtos else []
         }
         
-        # Gráfico 3: Status das NFes (pizza)
-        status_nfes = db.execute(text("""
-            SELECT 
-                COALESCE(status, 'Sem Status') as status,
-                COUNT(*) as total
-            FROM nfe_emitidas
-            GROUP BY status
-            ORDER BY total DESC
-        """)).fetchall()
+        # Gráfico 3: Status das NFes (filtrado pelo período)
+        if data_inicio and data_fim:
+            status_nfes = db.execute(text("""
+                SELECT 
+                    COALESCE(status, 'Sem Status') as status,
+                    COUNT(*) as total
+                FROM nfe_emitidas
+                WHERE data_criacao BETWEEN :data_inicio AND :data_fim
+                GROUP BY status
+                ORDER BY total DESC
+            """), params).fetchall()
+        else:
+            status_nfes = db.execute(text("""
+                SELECT 
+                    COALESCE(status, 'Sem Status') as status,
+                    COUNT(*) as total
+                FROM nfe_emitidas
+                GROUP BY status
+                ORDER BY total DESC
+            """)).fetchall()
         
         data['status_nfes'] = {
             'labels': [row[0] for row in status_nfes],
             'valores': [int(row[1]) for row in status_nfes]
         }
         
-        # Gráfico 4: Clientes mais ativos (top 5)
-        top_clientes = db.execute(text("""
-            SELECT 
-                c.razao_social,
-                COUNT(n.nfe_emitida_id) as total_nfes
-            FROM clientes c
-            LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
-            WHERE c.ativo = TRUE
-            GROUP BY c.razao_social
-            HAVING COUNT(n.nfe_emitida_id) > 0
-            ORDER BY total_nfes DESC
-            LIMIT 5
-        """)).fetchall()
+        # Gráfico 4: Clientes mais ativos (top 5, filtrado pelo período)
+        if data_inicio and data_fim:
+            top_clientes = db.execute(text("""
+                SELECT 
+                    c.razao_social,
+                    COUNT(n.nfe_emitida_id) as total_nfes
+                FROM clientes c
+                LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
+                WHERE c.ativo = TRUE 
+                    AND n.data_criacao BETWEEN :data_inicio AND :data_fim
+                GROUP BY c.razao_social
+                HAVING COUNT(n.nfe_emitida_id) > 0
+                ORDER BY total_nfes DESC
+                LIMIT 5
+            """), params).fetchall()
+        else:
+            top_clientes = db.execute(text("""
+                SELECT 
+                    c.razao_social,
+                    COUNT(n.nfe_emitida_id) as total_nfes
+                FROM clientes c
+                LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
+                WHERE c.ativo = TRUE
+                GROUP BY c.razao_social
+                HAVING COUNT(n.nfe_emitida_id) > 0
+                ORDER BY total_nfes DESC
+                LIMIT 5
+            """)).fetchall()
         
         data['top_clientes'] = {
             'labels': [row[0][:30] for row in top_clientes],
@@ -2062,19 +2419,34 @@ def _register_template_utils(setup_state):
 def list_clientes():
     db = _get_db()
     try:
-        rows = db.execute(text("""
-            SELECT cliente_id, razao_social, cnpj, ativo, data_cadastro, email_contato, telefone_contato
-            FROM clientes
-            ORDER BY razao_social
-        """)).fetchall()
+        # Super Admin vê todos os clientes, Admin Comum vê apenas seus clientes
+        if current_user.is_super_admin():
+            rows = db.execute(text("""
+                SELECT cliente_id, razao_social, cnpj, ativo, data_cadastro, email_contato, telefone_contato
+                FROM clientes
+                ORDER BY razao_social
+            """)).fetchall()
+        else:
+            # Admin Comum: apenas clientes vinculados
+            rows = db.execute(text("""
+                SELECT c.cliente_id, c.razao_social, c.cnpj, c.ativo, c.data_cadastro, c.email_contato, c.telefone_contato
+                FROM clientes c
+                INNER JOIN user_clients uc ON c.cliente_id = uc.client_id
+                WHERE uc.user_id = :user_id
+                ORDER BY c.razao_social
+            """), {'user_id': current_user.id}).fetchall()
+        
         clientes = [_safe_row_to_dict(r, [
             'cliente_id','razao_social','cnpj','ativo','data_cadastro','email_contato','telefone_contato'
         ]) for r in rows]
-        return render_template('admin/clientes/list.html', clientes=clientes)
+        
+        # Passar flag indicando se é super admin
+        is_super_admin = current_user.is_super_admin()
+        return render_template('admin/clientes/list.html', clientes=clientes, is_super_admin=is_super_admin)
     except Exception as e:
         print(f"❌ Erro list_clientes: {e}")
         flash('Erro ao carregar clientes', 'error')
-        return render_template('admin/clientes/list.html', clientes=[])
+        return render_template('admin/clientes/list.html', clientes=[], is_super_admin=False)
     finally:
         db.close()
 
@@ -2087,6 +2459,10 @@ import base64
 @login_required
 @permission_required('clientes.create')
 def create_cliente():
+    # Apenas Super Admin pode criar novos clientes
+    if not current_user.is_super_admin():
+        flash('Acesso negado. Apenas Super Admin pode cadastrar novos clientes.', 'danger')
+        return redirect(url_for('admin.list_clientes'))
     db = _get_db()
     try:
         # Carrega regimes tributários para o select
@@ -4460,3 +4836,416 @@ def limpar_auditoria():
         traceback.print_exc()
         flash('Erro ao limpar logs antigos', 'danger')
         return redirect(url_for('admin.list_auditoria'))
+
+
+# ===================================================================
+# FATURAMENTO E COBRANÇA (SUPER ADMIN ONLY)
+# ===================================================================
+
+def _require_super_admin():
+    """Helper para verificar se usuário é Super Admin"""
+    if not current_user.is_authenticated:
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('auth.login'))
+    if not current_user.is_super_admin():
+        flash('Acesso restrito a Super Administradores', 'danger')
+        return redirect(url_for('home.home'))
+    return None
+
+
+@admin_bp.route('/faturamento')
+@login_required
+def list_faturamento():
+    """Lista configurações de faturamento de todos os clientes"""
+    redirect_response = _require_super_admin()
+    if redirect_response:
+        return redirect_response
+    
+    db = _get_db()
+    try:
+        # Busca configurações de faturamento com dados do cliente
+        rows = db.execute(text("""
+            SELECT 
+                c.cliente_id,
+                c.razao_social,
+                c.cnpj,
+                c.ativo as cliente_ativo,
+                cfg.config_faturamento_id,
+                cfg.valor_por_nfe,
+                cfg.forma_pagamento,
+                cfg.dia_vencimento,
+                cfg.periodicidade,
+                cfg.ativo as config_ativa,
+                cfg.inicio_vigencia,
+                cfg.observacoes,
+                -- Estatísticas do mês atual
+                (SELECT COUNT(*) FROM nfe_emitidas 
+                 WHERE cliente_id = c.cliente_id 
+                 AND EXTRACT(MONTH FROM data_criacao) = EXTRACT(MONTH FROM CURRENT_DATE)
+                 AND EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
+                ) as nfes_mes_atual
+            FROM clientes c
+            LEFT JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            WHERE c.ativo = TRUE
+            ORDER BY c.razao_social
+        """)).fetchall()
+        
+        clientes = []
+        for row in rows:
+            cliente = dict(row._mapping)
+            # Calcular valor estimado do mês
+            if cliente['valor_por_nfe'] and cliente['nfes_mes_atual']:
+                cliente['valor_estimado_mes'] = float(cliente['valor_por_nfe']) * cliente['nfes_mes_atual']
+            else:
+                cliente['valor_estimado_mes'] = 0.0
+            clientes.append(cliente)
+        
+        return render_template('admin/faturamento/list.html', clientes=clientes)
+    
+    except Exception as e:
+        print(f"❌ Erro ao listar faturamento: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao carregar configurações de faturamento', 'danger')
+        return render_template('admin/faturamento/list.html', clientes=[])
+    finally:
+        db.close()
+
+
+@admin_bp.route('/faturamento/cliente/<int:cliente_id>/editar', methods=['GET', 'POST'])
+@login_required
+def edit_faturamento_cliente(cliente_id):
+    """Edita configuração de faturamento de um cliente"""
+    redirect_response = _require_super_admin()
+    if redirect_response:
+        return redirect_response
+    
+    db = _get_db()
+    try:
+        if request.method == 'POST':
+            valor_por_nfe = request.form.get('valor_por_nfe', type=float)
+            forma_pagamento = request.form.get('forma_pagamento')
+            dia_vencimento = request.form.get('dia_vencimento', type=int)
+            periodicidade = request.form.get('periodicidade', 'mensal')
+            ativo = request.form.get('ativo') == 'on'
+            observacoes = request.form.get('observacoes', '').strip()
+            
+            # Verifica se já existe configuração
+            existing = db.execute(text("""
+                SELECT config_faturamento_id FROM cliente_configuracao_faturamento
+                WHERE cliente_id = :cliente_id
+            """), {'cliente_id': cliente_id}).fetchone()
+            
+            if existing:
+                # Atualiza
+                db.execute(text("""
+                    UPDATE cliente_configuracao_faturamento SET
+                        valor_por_nfe = :valor_por_nfe,
+                        forma_pagamento = :forma_pagamento,
+                        dia_vencimento = :dia_vencimento,
+                        periodicidade = :periodicidade,
+                        ativo = :ativo,
+                        observacoes = :observacoes,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE cliente_id = :cliente_id
+                """), {
+                    'cliente_id': cliente_id,
+                    'valor_por_nfe': valor_por_nfe,
+                    'forma_pagamento': forma_pagamento,
+                    'dia_vencimento': dia_vencimento,
+                    'periodicidade': periodicidade,
+                    'ativo': ativo,
+                    'observacoes': observacoes
+                })
+                flash('✅ Configuração de faturamento atualizada!', 'success')
+            else:
+                # Insere
+                db.execute(text("""
+                    INSERT INTO cliente_configuracao_faturamento 
+                    (cliente_id, valor_por_nfe, forma_pagamento, dia_vencimento, 
+                     periodicidade, ativo, observacoes, created_by_user_id)
+                    VALUES (:cliente_id, :valor_por_nfe, :forma_pagamento, :dia_vencimento,
+                            :periodicidade, :ativo, :observacoes, :user_id)
+                """), {
+                    'cliente_id': cliente_id,
+                    'valor_por_nfe': valor_por_nfe,
+                    'forma_pagamento': forma_pagamento,
+                    'dia_vencimento': dia_vencimento,
+                    'periodicidade': periodicidade,
+                    'ativo': ativo,
+                    'observacoes': observacoes,
+                    'user_id': current_user.id
+                })
+                flash('✅ Configuração de faturamento criada!', 'success')
+            
+            db.commit()
+            return redirect(url_for('admin.list_faturamento'))
+        
+        # GET - Busca dados do cliente e configuração
+        cliente_row = db.execute(text("""
+            SELECT c.cliente_id, c.razao_social, c.cnpj, c.nome_fantasia,
+                   cfg.config_faturamento_id, cfg.valor_por_nfe, cfg.forma_pagamento,
+                   cfg.dia_vencimento, cfg.periodicidade, cfg.ativo, cfg.observacoes
+            FROM clientes c
+            LEFT JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            WHERE c.cliente_id = :cliente_id
+        """), {'cliente_id': cliente_id}).fetchone()
+        
+        if not cliente_row:
+            flash('Cliente não encontrado', 'danger')
+            return redirect(url_for('admin.list_faturamento'))
+        
+        cliente = dict(cliente_row._mapping)
+        
+        # Formas de pagamento disponíveis
+        formas_pagamento = [
+            {'value': 'boleto', 'label': 'Boleto Bancário'},
+            {'value': 'pix', 'label': 'PIX'},
+            {'value': 'cartao_credito', 'label': 'Cartão de Crédito'},
+            {'value': 'debito_automatico', 'label': 'Débito Automático'},
+            {'value': 'transferencia', 'label': 'Transferência Bancária'}
+        ]
+        
+        periodicidades = [
+            {'value': 'mensal', 'label': 'Mensal'},
+            {'value': 'quinzenal', 'label': 'Quinzenal'},
+            {'value': 'trimestral', 'label': 'Trimestral'}
+        ]
+        
+        return render_template('admin/faturamento/form.html',
+                             cliente=cliente,
+                             formas_pagamento=formas_pagamento,
+                             periodicidades=periodicidades)
+    
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro ao editar faturamento: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao processar configuração de faturamento', 'danger')
+        return redirect(url_for('admin.list_faturamento'))
+    finally:
+        db.close()
+
+
+@admin_bp.route('/faturamento/relatorio-gerencial')
+@login_required
+def relatorio_gerencial():
+    """Relatório gerencial consolidado de faturamento"""
+    redirect_response = _require_super_admin()
+    if redirect_response:
+        return redirect_response
+    
+    db = _get_db()
+    try:
+        mes_ref = request.args.get('mes', datetime.now().month, type=int)
+        ano_ref = request.args.get('ano', datetime.now().year, type=int)
+        
+        # Resumo geral
+        resumo = db.execute(text("""
+            SELECT 
+                COUNT(DISTINCT c.cliente_id) as total_clientes,
+                COUNT(DISTINCT CASE WHEN cfg.ativo = TRUE THEN c.cliente_id END) as clientes_ativos_faturamento,
+                COALESCE(AVG(cfg.valor_por_nfe), 0) as valor_medio_nfe,
+                COALESCE(SUM(
+                    (SELECT COUNT(*) FROM nfe_emitidas 
+                     WHERE cliente_id = c.cliente_id 
+                     AND EXTRACT(MONTH FROM data_criacao) = :mes
+                     AND EXTRACT(YEAR FROM data_criacao) = :ano)
+                ), 0) as total_nfes_mes
+            FROM clientes c
+            LEFT JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            WHERE c.ativo = TRUE
+        """), {'mes': mes_ref, 'ano': ano_ref}).fetchone()
+        
+        resumo_dict = dict(resumo._mapping) if resumo else {}
+        
+        # Faturamento por cliente no mês
+        faturamento_por_cliente = db.execute(text("""
+            SELECT 
+                c.razao_social,
+                c.cnpj,
+                cfg.valor_por_nfe,
+                cfg.forma_pagamento,
+                COUNT(n.nfe_emitida_id) as quantidade_nfes,
+                (COUNT(n.nfe_emitida_id) * COALESCE(cfg.valor_por_nfe, 0)) as valor_total_mes
+            FROM clientes c
+            LEFT JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
+                AND EXTRACT(MONTH FROM n.data_criacao) = :mes
+                AND EXTRACT(YEAR FROM n.data_criacao) = :ano
+            WHERE c.ativo = TRUE AND cfg.ativo = TRUE
+            GROUP BY c.razao_social, c.cnpj, cfg.valor_por_nfe, cfg.forma_pagamento
+            HAVING COUNT(n.nfe_emitida_id) > 0
+            ORDER BY valor_total_mes DESC
+        """), {'mes': mes_ref, 'ano': ano_ref}).fetchall()
+        
+        clientes_faturamento = [dict(row._mapping) for row in faturamento_por_cliente]
+        
+        # Totalização
+        valor_total_faturamento = sum(c['valor_total_mes'] for c in clientes_faturamento)
+        total_nfes = sum(c['quantidade_nfes'] for c in clientes_faturamento)
+        
+        # Distribuição por forma de pagamento
+        distribuicao_pagamento = db.execute(text("""
+            SELECT 
+                cfg.forma_pagamento,
+                COUNT(DISTINCT c.cliente_id) as quantidade_clientes,
+                SUM(
+                    (SELECT COUNT(*) FROM nfe_emitidas 
+                     WHERE cliente_id = c.cliente_id 
+                     AND EXTRACT(MONTH FROM data_criacao) = :mes
+                     AND EXTRACT(YEAR FROM data_criacao) = :ano) * cfg.valor_por_nfe
+                ) as valor_total
+            FROM clientes c
+            INNER JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            WHERE c.ativo = TRUE AND cfg.ativo = TRUE
+            GROUP BY cfg.forma_pagamento
+            ORDER BY valor_total DESC
+        """), {'mes': mes_ref, 'ano': ano_ref}).fetchall()
+        
+        pagamentos = [dict(row._mapping) for row in distribuicao_pagamento]
+        
+        return render_template('admin/faturamento/relatorio_gerencial.html',
+                             mes_ref=mes_ref,
+                             ano_ref=ano_ref,
+                             resumo=resumo_dict,
+                             clientes_faturamento=clientes_faturamento,
+                             valor_total_faturamento=valor_total_faturamento,
+                             total_nfes=total_nfes,
+                             distribuicao_pagamento=pagamentos)
+    
+    except Exception as e:
+        print(f"❌ Erro no relatório gerencial: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao gerar relatório gerencial', 'danger')
+        return render_template('admin/faturamento/relatorio_gerencial.html',
+                             mes_ref=datetime.now().month,
+                             ano_ref=datetime.now().year,
+                             resumo={},
+                             clientes_faturamento=[],
+                             valor_total_faturamento=0,
+                             total_nfes=0,
+                             distribuicao_pagamento=[])
+    finally:
+        db.close()
+
+
+@admin_bp.route('/faturamento/extrato/<int:cliente_id>', methods=['GET', 'POST'])
+@login_required
+def gerar_extrato_cliente(cliente_id):
+    """Gera extrato detalhado para um cliente"""
+    redirect_response = _require_super_admin()
+    if redirect_response:
+        return redirect_response
+    
+    db = _get_db()
+    try:
+        # Se for GET sem parâmetros, mostra formulário de seleção de período
+        if request.method == 'GET' and not request.args.get('mes'):
+            # Busca dados básicos do cliente
+            cliente_row = db.execute(text("""
+                SELECT cliente_id, razao_social, cnpj
+                FROM clientes
+                WHERE cliente_id = :cliente_id
+            """), {'cliente_id': cliente_id}).fetchone()
+            
+            if not cliente_row:
+                flash('Cliente não encontrado', 'danger')
+                return redirect(url_for('admin.list_faturamento'))
+            
+            cliente = dict(cliente_row._mapping)
+            return render_template('admin/faturamento/selecionar_periodo.html', cliente=cliente)
+        
+        # Obter período (de GET params ou POST form)
+        mes_ref = request.args.get('mes') or request.form.get('mes')
+        ano_ref = request.args.get('ano') or request.form.get('ano')
+        
+        if not mes_ref or not ano_ref:
+            flash('Período não informado', 'warning')
+            return redirect(url_for('admin.gerar_extrato_cliente', cliente_id=cliente_id))
+        
+        mes_ref = int(mes_ref)
+        ano_ref = int(ano_ref)
+        
+        # Dados do cliente e configuração
+        cliente_row = db.execute(text("""
+            SELECT 
+                c.cliente_id, c.razao_social, c.cnpj, c.nome_fantasia,
+                c.logradouro, c.numero, c.complemento, c.bairro,
+                c.nome_municipio, c.uf, c.cep,
+                c.email_contato, c.telefone_contato,
+                cfg.valor_por_nfe, cfg.forma_pagamento, cfg.dia_vencimento,
+                cfg.periodicidade
+            FROM clientes c
+            LEFT JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            WHERE c.cliente_id = :cliente_id
+        """), {'cliente_id': cliente_id}).fetchone()
+        
+        if not cliente_row:
+            flash('Cliente não encontrado', 'danger')
+            return redirect(url_for('admin.list_faturamento'))
+        
+        cliente = dict(cliente_row._mapping)
+        
+        # NFes emitidas no período
+        nfes = db.execute(text("""
+            SELECT 
+                nfe_emitida_id,
+                chave_acesso,
+                data_criacao,
+                destinatario_razao_social,
+                destinatario_cnpj_cpf,
+                status,
+                tipo_nfe
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+              AND EXTRACT(MONTH FROM data_criacao) = :mes
+              AND EXTRACT(YEAR FROM data_criacao) = :ano
+            ORDER BY data_criacao DESC
+        """), {'cliente_id': cliente_id, 'mes': mes_ref, 'ano': ano_ref}).fetchall()
+        
+        nfes_list = [dict(row._mapping) for row in nfes]
+        
+        # Cálculos
+        quantidade_nfes = len(nfes_list)
+        valor_unitario = float(cliente['valor_por_nfe']) if cliente['valor_por_nfe'] else 0.0
+        valor_total = quantidade_nfes * valor_unitario
+        
+        # Data de vencimento
+        from calendar import monthrange
+        ultimo_dia = monthrange(ano_ref, mes_ref)[1]
+        dia_venc = min(cliente['dia_vencimento'] or 10, ultimo_dia)
+        
+        if mes_ref == 12:
+            data_vencimento = f"{ano_ref + 1}-01-{dia_venc:02d}"
+        else:
+            data_vencimento = f"{ano_ref}-{mes_ref + 1:02d}-{dia_venc:02d}"
+        
+        extrato = {
+            'mes_referencia': mes_ref,
+            'ano_referencia': ano_ref,
+            'quantidade_nfes': quantidade_nfes,
+            'valor_unitario': valor_unitario,
+            'valor_total': valor_total,
+            'data_vencimento': data_vencimento,
+            'nfes': nfes_list
+        }
+        
+        # Data de hoje formatada
+        data_hoje = datetime.now().strftime('%d/%m/%Y')
+        
+        return render_template('admin/faturamento/extrato_cliente.html',
+                             cliente=cliente,
+                             extrato=extrato,
+                             data_hoje=data_hoje)
+    
+    except Exception as e:
+        print(f"❌ Erro ao gerar extrato: {e}")
+        import traceback
+        traceback.print_exc()
+        flash('Erro ao gerar extrato do cliente', 'danger')
+        return redirect(url_for('admin.list_faturamento'))
+    finally:
+        db.close()

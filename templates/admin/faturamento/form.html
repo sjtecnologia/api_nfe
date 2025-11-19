@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+
+{% block title %}Configurar Faturamento - {{ cliente.razao_social }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3">
+                    <i class="fas fa-cog"></i> 
+                    Configuração de Faturamento
+                </h1>
+                <a href="{{ url_for('admin.list_faturamento') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Informações do Cliente -->
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-building"></i> Dados do Cliente
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="mb-1">{{ cliente.razao_social }}</h5>
+                            <p class="text-muted mb-0">{{ cliente.nome_fantasia or '-' }}</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <strong>CNPJ:</strong><br>
+                            {{ cliente.cnpj or '-' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulário de Configuração -->
+            <form method="POST" class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-dollar-sign"></i> Configuração de Cobrança
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="valor_por_nfe" class="form-label">
+                                <i class="fas fa-money-bill-wave"></i> Valor por NFe *
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="number" 
+                                       class="form-control" 
+                                       id="valor_por_nfe" 
+                                       name="valor_por_nfe" 
+                                       step="0.01" 
+                                       min="0" 
+                                       value="{{ "%.2f"|format(cliente.valor_por_nfe if cliente.valor_por_nfe is not none else 0.50) }}" 
+                                       required>
+                            </div>
+                            <small class="text-muted">Valor cobrado por cada NFe emitida</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="forma_pagamento" class="form-label">
+                                <i class="fas fa-credit-card"></i> Forma de Pagamento *
+                            </label>
+                            <select class="form-select" id="forma_pagamento" name="forma_pagamento" required>
+                                {% for forma in formas_pagamento %}
+                                <option value="{{ forma.value }}" 
+                                        {% if cliente.forma_pagamento == forma.value %}selected{% endif %}>
+                                    {{ forma.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="dia_vencimento" class="form-label">
+                                <i class="fas fa-calendar-alt"></i> Dia de Vencimento *
+                            </label>
+                            <select class="form-select" id="dia_vencimento" name="dia_vencimento" required>
+                                {% for dia in range(1, 29) %}
+                                <option value="{{ dia }}" {% if cliente.dia_vencimento == dia %}selected{% endif %}>
+                                    Dia {{ dia }} do mês
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Data de vencimento da fatura mensal</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="periodicidade" class="form-label">
+                                <i class="fas fa-sync"></i> Periodicidade
+                            </label>
+                            <select class="form-select" id="periodicidade" name="periodicidade">
+                                {% for periodo in periodicidades %}
+                                <option value="{{ periodo.value }}" 
+                                        {% if cliente.periodicidade == periodo.value %}selected{% endif %}>
+                                    {{ periodo.label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">
+                            <i class="fas fa-sticky-note"></i> Observações
+                        </label>
+                        <textarea class="form-control" 
+                                  id="observacoes" 
+                                  name="observacoes" 
+                                  rows="3" 
+                                  placeholder="Informações adicionais sobre a cobrança...">{{ cliente.observacoes or '' }}</textarea>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               id="ativo" 
+                               name="ativo" 
+                               {% if cliente.config_ativa or not cliente.config_faturamento_id %}checked{% endif %}>
+                        <label class="form-check-label" for="ativo">
+                            <strong>Configuração Ativa</strong>
+                            <br>
+                            <small class="text-muted">Desmarque para pausar a cobrança temporariamente</small>
+                        </label>
+                    </div>
+
+                    <hr>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Informação:</strong> 
+                        As alterações entram em vigor imediatamente. O cálculo da próxima fatura 
+                        utilizará os valores configurados aqui.
+                    </div>
+                </div>
+
+                <div class="card-footer d-flex justify-content-between">
+                    <a href="{{ url_for('admin.list_faturamento') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Configuração
+                    </button>
+                </div>
+            </form>
+
+            <!-- Prévia de Cálculo -->
+            <div class="card mt-4 shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-calculator"></i> Simulação de Faturamento
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <h6 class="text-muted">Se emitir 100 NFes:</h6>
+                            <h3 class="text-success mb-0" id="simulacao_100">R$ 50,00</h3>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <h6 class="text-muted">Se emitir 500 NFes:</h6>
+                            <h3 class="text-success mb-0" id="simulacao_500">R$ 250,00</h3>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <h6 class="text-muted">Se emitir 1000 NFes:</h6>
+                            <h3 class="text-success mb-0" id="simulacao_1000">R$ 500,00</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para atualizar simulação
+function atualizarSimulacao() {
+    const valor = parseFloat(document.getElementById('valor_por_nfe').value) || 0;
+    document.getElementById('simulacao_100').textContent = 'R$ ' + (valor * 100).toFixed(2).replace('.', ',');
+    document.getElementById('simulacao_500').textContent = 'R$ ' + (valor * 500).toFixed(2).replace('.', ',');
+    document.getElementById('simulacao_1000').textContent = 'R$ ' + (valor * 1000).toFixed(2).replace('.', ',');
+}
+
+// Atualiza simulação em tempo real
+document.getElementById('valor_por_nfe').addEventListener('input', atualizarSimulacao);
+
+// Atualiza valores ao carregar a página
+document.addEventListener('DOMContentLoaded', atualizarSimulacao);
+
+// Inicializa simulação
+document.getElementById('valor_por_nfe').dispatchEvent(new Event('input'));
+</script>
+{% endblock %}

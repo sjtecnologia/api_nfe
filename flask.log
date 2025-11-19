@@ -69,7 +69,6 @@ OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin
 GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
 GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
 GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
-GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.auditoria
 GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
 OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
 GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
@@ -99,6 +98,9 @@ OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -
 GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
 OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
 GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
 GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
 OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
 OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
@@ -120,10 +122,16 @@ OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin
 GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
 GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
 GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
 GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
 GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
 GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
 GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
 GET, HEAD, OPTIONS   /                                                  -> home.home
 GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
 GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
@@ -214,7 +222,6 @@ OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin
 GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
 GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
 GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
-GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.auditoria
 GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
 OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
 GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
@@ -231,5 +238,87 @@ GET, HEAD, OPTIONS   /admin/origens-mercadoria                          -> admin
 GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/novo                     -> admin.create_origem_mercadoria
 GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/editar/<int:origem_id>   -> admin.edit_origem_mercadoria
 OPTIONS, POST        /admin/origens-mercadoria/excluir/<int:origem_id>  -> admin.delete_origem_mercadoria
-GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes * Debugger is active!
- * Debugger PIN: 827-659-244
+GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes
+GET, HEAD, OPTIONS, POST /admin/clientes/novo                               -> admin.create_cliente * Debugger is active!
+ * Debugger PIN: 175-327-359
+
+GET, HEAD, OPTIONS, POST /admin/clientes/<int:cliente_id>/edit              -> admin.edit_cliente
+OPTIONS, POST        /admin/clientes/<int:cliente_id>/delete            -> admin.delete_cliente
+GET, HEAD, OPTIONS   /admin/certificados/novo/<int:cliente_id>          -> admin.create_certificado
+GET, HEAD, OPTIONS   /admin/certificados/<int:certificado_digital_id>/edit/<int:cliente_id> -> admin.edit_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_digital_id>/delete -> admin.delete_certificado
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova/<int:cliente_id>     -> admin.create_regra_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/<int:regra_tributacao_id>/edit -> admin.edit_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -> admin.delete_regra_tributacao
+GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
+OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
+GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
+GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
+OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
+OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
+OPTIONS, POST        /admin/produtos/<int:produto_id>/delete            -> admin.delete_produto
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:cliente_id>              -> admin.list_destinatarios
+OPTIONS, POST        /admin/destinatarios/salvar                        -> admin.salvar_destinatario
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:destinatario_id>/edit    -> admin.edit_destinatario
+GET, HEAD, OPTIONS   /admin/certificados                                -> admin.list_certificados
+OPTIONS, POST        /admin/certificados/salvar                         -> admin.salvar_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_id>/toggle-status -> admin.toggle_certificado_status
+GET, HEAD, OPTIONS   /admin/regras-tributacao                           -> admin.list_regras_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova                      -> admin.nova_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/salvar                    -> admin.salvar_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/excluir/<int:regra_id>    -> admin.excluir_regra_tributacao
+GET, HEAD, OPTIONS   /admin/perfil                                      -> admin.perfil
+GET, HEAD, OPTIONS   /admin/api/buscar-cep/<cep>                        -> admin.buscar_cep
+GET, HEAD, OPTIONS   /admin/health                                      -> admin.admin_health
+OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin.api_sugestao_tributaria
+GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
+GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
+GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
+GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
+GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
+GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
+GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /                                                  -> home.home
+GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
+GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
+GET, HEAD, OPTIONS   /api/llm/ncms/export                               -> llm_api.export_ncms_for_training
+GET, HEAD, OPTIONS   /api/llm/ncms/search                               -> llm_api.search_ncms_for_llm
+GET, HEAD, OPTIONS   /api/llm/ncms/hierarquia/<codigo>                  -> llm_api.get_hierarquia_ncm
+GET, HEAD, OPTIONS   /api/llm/ncms/stats                                -> llm_api.get_ncm_statistics
+GET, HEAD, OPTIONS   /                                                  -> home
+GET, HEAD, OPTIONS   /health                                            -> health_check
+=== FIM DAS ROTAS ===
+
+Traceback (most recent call last):
+  File "/Users/renato/Documents/Developement/api_nfe/app.py", line 88, in <module>
+    app.run(debug=DEBUG, host=HOST, port=PORT)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 662, in run
+    run_simple(t.cast(str, host), port, self, **options)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/serving.py", line 1115, in run_simple
+    run_with_reloader(
+    ~~~~~~~~~~~~~~~~~^
+        srv.serve_forever,
+        ^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        reloader_type=reloader_type,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/_reloader.py", line 459, in run_with_reloader
+    ensure_echo_on()
+    ~~~~~~~~~~~~~~^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/_reloader.py", line 439, in ensure_echo_on
+    termios.tcsetattr(sys.stdin, termios.TCSANOW, attributes)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+termios.error: (4, 'Interrupted system call')

@@ -30,10 +30,12 @@
                                     Filtrar por Cliente
                                 </button>
                                 <div class="dropdown-menu">
+                                    {% if current_user.is_super_admin() %}
                                     <a class="dropdown-item {% if not cliente_id %}active{% endif %}" href="{{ url_for('nfe.list_nfes') }}">
                                         <i class="fas fa-list"></i> Todos os Clientes
                                     </a>
                                     <div class="dropdown-divider"></div>
+                                    {% endif %}
                                     {% for cid, cnome in cliente_map.items() %}
                                     <a class="dropdown-item {% if cliente_id and cliente_id|int == cid %}active{% endif %}" 
                                        href="{{ url_for('nfe.list_nfes', cliente_id=cid) }}">

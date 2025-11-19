@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 from datetime import datetime
 from database.connection import get_db
-from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm
+from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
 from auth.decorators import permission_required, admin_required
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
@@ -69,6 +69,15 @@ def emitir_nfe():
             return redirect(url_for('home.home'))
         
         print(f"✅ Emitente encontrado: {emitente_data.razao_social}")
+        
+        # Buscar regime tributário
+        regime_tributario_nome = 'Regime Normal'
+        if emitente_data.regime_tributario_id:
+            regime_trib = db.query(RegimeTributario).filter_by(
+                regime_tributario_id=emitente_data.regime_tributario_id
+            ).first()
+            if regime_trib:
+                regime_tributario_nome = regime_trib.nome
         
         # CONVERTER EMITENTE PARA DICIONÁRIO
         emitente_data_for_template = {
@@ -457,21 +466,56 @@ def emitir_nfe():
                 'uf': dest.uf
             })
         
-        # BUSCAR PRODUTOS
-        produtos = db.query(Produto).filter_by(cliente_id=emitente_cliente_id).all()
+        # BUSCAR PRODUTOS (apenas ativos)
+        produtos = db.query(Produto).filter_by(
+            cliente_id=emitente_cliente_id,
+            ativo=True
+        ).all()
         produtos_data = []
         for prod in produtos:
             # Get the actual value from the Decimal column
             preco_value = getattr(prod, 'preco_unitario_padrao', None)
             preco_float = float(preco_value) if preco_value is not None else 0.0
             
-            produtos_data.append({
+            # Buscar códigos NCM e CFOP (não IDs)
+            ncm_codigo = None
+            if prod.ncm_id:
+                ncm_obj = db.query(Ncm).filter_by(ncm_id=prod.ncm_id).first()
+                if ncm_obj:
+                    ncm_codigo = ncm_obj.codigo
+            
+            cfop_codigo = None
+            if prod.cfop_id:
+                cfop_obj = db.query(Cfop).filter_by(cfop_id=prod.cfop_id).first()
+                if cfop_obj:
+                    cfop_codigo = cfop_obj.cfop
+            
+            cst_codigo = None
+            if prod.cst_id:
+                cst_obj = db.query(Csticms).filter_by(cst_id=prod.cst_id).first()
+                if cst_obj:
+                    cst_codigo = cst_obj.codigo
+            
+            csosn_codigo = None
+            if prod.csosn_id:
+                csosn_obj = db.query(Csosnicms).filter_by(csosn_id=prod.csosn_id).first()
+                if csosn_obj:
+                    csosn_codigo = csosn_obj.codigo
+            
+            produto_dict = {
                 'produto_id': prod.produto_id,
                 'codigo_interno': prod.codigo_interno,
                 'descricao': prod.descricao,
                 'preco_unitario_padrao': preco_float,
-                'unidade_comercial': prod.unidade_comercial
-            })
+                'unidade_comercial': prod.unidade_comercial,
+                'ncm_codigo': ncm_codigo,
+                'cfop_codigo': cfop_codigo,
+                'cst_codigo': cst_codigo,
+                'csosn_codigo': csosn_codigo,
+                'origem_mercadoria_id': prod.origem_mercadoria
+            }
+            
+            produtos_data.append(produto_dict)
         
         # BUSCAR CFOPs
         all_cfops = db.query(Cfop).all()
@@ -500,7 +544,7 @@ def emitir_nfe():
             for cst in all_csts:
                 csts_data.append({
                     'cst_id': cst.cst_id,
-                    'cst': cst.codigo,
+                    'codigo': cst.codigo,
                     'descricao': cst.descricao
                 })
             
@@ -516,7 +560,7 @@ def emitir_nfe():
             for csosn in all_csosns:
                 csosns_data.append({
                     'csosn_id': csosn.csosn_id,
-                    'csosn': csosn.codigo,
+                    'codigo': csosn.codigo,
                     'descricao': csosn.descricao
                 })
             
@@ -536,6 +580,7 @@ def emitir_nfe():
                              all_csts=csts_data,
                              all_csosns=csosns_data,
                              all_ncms=ncms_data,
+                             regime_tributario=regime_tributario_nome,
                              initial_nfe_items=[])
         
     except Exception as e:
@@ -556,6 +601,37 @@ def list_nfes():
     
     try:
         cliente_id = request.args.get('cliente_id')
+        
+        # ✅ AJUSTE: Admin comum só vê NFes do cliente ativo
+        # Super Admin vê todas as NFes quando cliente_id não é fornecido
+        if not cliente_id:
+            # Se não forneceu cliente_id, verificar se é Super Admin
+            if hasattr(current_user, 'is_super_admin') and current_user.is_super_admin():
+                # Super Admin: buscar todos os clientes acessíveis
+                accessible_client_ids = get_accessible_client_ids(db)
+                print(f"🔑 Super Admin - Clientes acessíveis: {accessible_client_ids}")
+            else:
+                # Admin Comum: pegar apenas cliente ativo da sessão
+                # ✅ CORREÇÃO: usar 'current_client_id' que é a chave correta na sessão
+                cliente_ativo_id = session.get('current_client_id')
+                print(f"🔍 Admin Comum - Cliente ativo na sessão: {cliente_ativo_id}")
+                print(f"🔍 Sessão completa: {dict(session)}")
+                
+                if not cliente_ativo_id:
+                    flash('Selecione um cliente para visualizar as NFes.', 'warning')
+                    return redirect(url_for('home.home'))
+                accessible_client_ids = [cliente_ativo_id]
+                print(f"✅ Admin Comum - Filtrando NFes do cliente: {cliente_ativo_id}")
+        else:
+            # Se forneceu cliente_id específico, usar ele
+            accessible_client_ids = [int(cliente_id)]
+            cliente_id = int(cliente_id)  # Garantir que é int
+            print(f"🎯 Cliente específico fornecido: {cliente_id}")
+        
+        # Verificar se tem acesso aos clientes
+        if not accessible_client_ids:
+            flash('Você não tem acesso a nenhum cliente.', 'warning')
+            return redirect(url_for('home.home'))
         
         # BUSCAR NFEs COM SQL RAW para evitar problemas de ORM
         if cliente_id:
@@ -582,12 +658,7 @@ def list_nfes():
             """)
             result = db.execute(query, {'cliente_id': cliente_id})
         else:
-            # Buscar todas as NFEs acessíveis ao usuário
-            accessible_client_ids = get_accessible_client_ids(db)
-            if not accessible_client_ids:
-                flash('Você não tem acesso a nenhum cliente.', 'warning')
-                return redirect(url_for('home.home'))
-            
+            # Buscar NFEs dos clientes acessíveis (Super Admin = todos, Admin Comum = apenas ativo)
             # Usar placeholders seguros para evitar SQL injection
             placeholders = ','.join([f':id_{i}' for i in range(len(accessible_client_ids))])
             params = {f'id_{i}': client_id for i, client_id in enumerate(accessible_client_ids)}

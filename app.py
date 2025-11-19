@@ -55,14 +55,20 @@ app.jinja_env.filters['highlight'] = highlight
 
 @app.context_processor
 def inject_permissions():
-    """Injeta função has_permission nos templates"""
+    """Injeta funções de permissão e verificação de admin nos templates"""
     def has_permission(permission_name):
         from flask_login import current_user
         if not current_user.is_authenticated:
             return False
         return current_user.has_permission(permission_name)
     
-    return dict(has_permission=has_permission)
+    def is_super_admin():
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            return False
+        return current_user.is_super_admin()
+    
+    return dict(has_permission=has_permission, is_super_admin=is_super_admin)
 
 @app.route('/')
 def home():

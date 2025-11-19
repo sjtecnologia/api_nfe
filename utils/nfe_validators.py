@@ -198,8 +198,9 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
             elif len(re.sub(r'[^0-9]', '', item.get('cfop', ''))) != 4:
                 erros.append(f"{item_prefix}CFOP deve ter 4 dígitos")
             
-            if not item.get('cst_icms'):
-                erros.append(f"{item_prefix}CST ICMS é obrigatório")
+            # Validar CST ICMS ou CSOSN (um dos dois é obrigatório)
+            if not item.get('cst_icms') and not item.get('csosn'):
+                erros.append(f"{item_prefix}CST ICMS ou CSOSN é obrigatório")
             
             if item.get('origem') is None or item.get('origem') == '':
                 erros.append(f"{item_prefix}Origem da mercadoria é obrigatória")
