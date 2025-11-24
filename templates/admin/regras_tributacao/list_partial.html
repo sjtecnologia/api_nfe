@@ -17,7 +17,7 @@
                 {% for regra in regras_existentes %}
                 <tr>
                     <td>{{ regra.regra_tributacao_id }}</td>
-                    <td>{{ regra.descricao_regra | truncate(50, True, '...') }}</td>
+                    <td>{{ (regra.descricao_regra or 'Sem descrição') | truncate(50, True, '...') }}</td>
                     <td>{{ regra.regime_tributario.nome if regra.regime_tributario else 'N/A' }}</td>
                     <td>{{ regra.cfop.cfop if regra.cfop else 'N/A' }}</td>
                     <td>{{ regra.ncm.codigo if regra.ncm else 'N/A' }}</td>

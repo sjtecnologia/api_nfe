@@ -243,8 +243,8 @@
                                         <select class="form-control select2" name="cfop_{{ loop.index0 }}" required>
                                             <option value="">Selecione...</option>
                                             {% for cfop in cfops %}
-                                            <option value="{{ cfop.codigo }}" {% if item.cfop == cfop.codigo %}selected{% endif %}>
-                                                {{ cfop.codigo }} - {{ cfop.descricao }}
+                                            <option value="{{ cfop.cfop }}" {% if item.cfop == cfop.cfop %}selected{% endif %}>
+                                                {{ cfop.cfop }} - {{ cfop.descricao }}
                                             </option>
                                             {% endfor %}
                                         </select>

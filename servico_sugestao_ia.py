@@ -40,45 +40,26 @@ class ServicoSugestaoIA:
         self.ncm_api_url = ncm_api_url
         self.llm_url = llm_url
         
-        # System prompt otimizado para Llama-3.1-8B
-        self.system_prompt = """Você é um especialista brasileiro em classificação tributária NCM. Você receberá dados NCM oficiais do Siscomex e deve escolher o melhor código baseado APENAS nestes dados.
+        # System prompt otimizado para Llama-3.1-8B com Lei Complementar 214/2025 (Reforma Tributária)
+        self.system_prompt = """Você é especialista em classificação NCM e Lei Complementar 214/2025.
 
-FORMATO OBRIGATÓRIO DE RESPOSTA (JSON):
+FORMATO JSON (preencha com dados reais do produto):
 {
-  "ncm": "código de 8 dígitos exato dos dados fornecidos",
-  "cfop": "5101 para venda dentro do estado, 6101 para fora do estado",
-  "cst": "00 para tributado normal, 20 para redução, 40 para isento",
-  "csosn": "101 para Simples Nacional tributado",
-  "cest": "XX.XXX.XX se produto tem Substituição Tributária, senão null",
-  "explicacao": "justificativa técnica"
+  "ncm": "código de 8 dígitos",
+  "cfop": "5101",
+  "cst": "00",
+  "csosn": "101",
+  "cest": null,
+  "explicacao": "descreva o NCM e cite benefícios da LC 214/2025"
 }
 
-REGRAS CRÍTICAS:
-- Use APENAS os NCMs listados nos dados fornecidos
-- Escolha o NCM mais específico (8 dígitos)
-- NCM sintético não serve para NFe
-- CFOPs: 5101/6101 (venda), 1101/2101 (compra)
-- CEST: Obrigatório para produtos com ST (combustíveis, bebidas, cigarros, cosméticos, autopeças, materiais construção, limpeza)
-- Formato CEST: XX.XXX.XX (ex: 01.001.00 para gasolina, 03.001.00 para cerveja)
-- Responda APENAS JSON válido, sem markdown
+BENEFÍCIOS LC 214/2025 (sempre mencione na explicação):
+- Café (NCM inicia com 09.01): Anexo I - redução 100% IBS/CBS Cesta Básica
+- Ovos (NCM inicia com 04.07): Anexo XV - redução 100% IBS/CBS
+- TODAS Hortaliças (NCM inicia com 07): Anexo XV - redução 100% IBS/CBS
+- TODAS Frutas (NCM inicia com 08): Anexo XV - redução 100% IBS/CBS
 
-SEGMENTOS CEST (Substituição Tributária):
-01 - Combustíveis e Lubrificantes (gasolina, diesel, GLP, óleo lubrificante)
-02 - Bebidas alcoólicas exceto cerveja (aguardente, vodka, whisky, vinho)
-03 - Cervejas, refrigerantes, águas (cerveja, chope, refrigerante, água mineral, energético)
-06 - Cigarros e derivados do fumo (cigarro, charuto, cigarrilha)
-10 - Autopeças (pneu, bateria, amortecedor, filtros, velas)
-17 - Higiene pessoal (papel higiênico, absorvente, fralda, shampoo, perfume)
-20 - Produtos de limpeza (detergente, sabão em pó, amaciante, desinfetante)
-21 - Materiais de construção (cimento, tinta, argamassa, cal, verniz)
-28 - Materiais elétricos (lâmpada, fio elétrico, tomada, disjuntor)
-
-ATENÇÃO ESPECIAL:
-- SOFTWARE/SISTEMAS: NCM 38210000 (Meios de cultura preparados)
-- ELETRÔNICOS: Verifique se é mouse (84716053), teclado (84716052), monitor (85285900)
-- NÃO confunda produtos: mouse NÃO é equipamento odontológico
-- NÃO confunda: software NÃO é equipamento médico/dentário
-- Leia com atenção a descrição do produto antes de escolher o NCM"""
+Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100% IBS/CBS"."""
 
     def buscar_ncm_oficial(self, produto: str, limite: int = 3) -> List[Dict]:
         """Busca NCMs na API oficial"""
@@ -349,7 +330,7 @@ ATENÇÃO ESPECIAL:
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                "max_tokens": 300,  # Reduzido para resposta mais rápida
+                "max_tokens": 200,  # Reduzido para 200 tokens = resposta mais rápida
                 "temperature": 0.1,  # Mais determinística
             }
             
@@ -359,7 +340,7 @@ ATENÇÃO ESPECIAL:
             response = requests.post(
                 f"{self.llm_url}/v1/chat/completions",
                 json=payload,
-                timeout=5  # Timeout muito rápido para melhor UX
+                timeout=120  # Timeout aumentado para 120s para LLM lenta
             )
             
             elapsed = time.time() - start_time
@@ -402,10 +383,36 @@ ATENÇÃO ESPECIAL:
                 "cst": "00",
                 "csosn": "101", 
                 "cest": None,
-                "explicacao": "Classificação automática baseada no NCM encontrado (LLM indisponível)"
+                "explicacao": "Classificação automática baseada no NCM encontrado (LLM indisponível)",
+                "modo": "fallback-ncm"
             }
         
-        return {"erro": "Não foi possível gerar sugestão - LLM indisponível e NCM não identificado"}
+        # Se não encontrou NCM no prompt, tentar extrair do texto
+        # Buscar descrição do produto
+        produto_match = re.search(r'Produto/Serviço:\s*(.+)', prompt)
+        if produto_match:
+            produto = produto_match.group(1).strip()
+            print(f"🔄 Usando fallback para produto: {produto}")
+            # Criar um SugestaoRequest básico e chamar _gerar_sugestao_basica
+            from dataclasses import dataclass
+            request = SugestaoRequest(
+                descricao=produto,
+                tipo_item='Produto',
+                uf_origem='SP',
+                regime_tributario='Simples Nacional'
+            )
+            return self._gerar_sugestao_basica(request)
+        
+        # Último recurso
+        return {
+            "ncm": "00000000",
+            "cfop": "5101",
+            "cst": None,
+            "csosn": "101", 
+            "cest": None,
+            "explicacao": "Sugestão genérica (APIs indisponíveis). ATENÇÃO: Revise e corrija o NCM!",
+            "modo": "fallback-generico"
+        }
 
     def _parsear_resposta_llm(self, resposta: str) -> Dict:
         """Parseia e limpa a resposta da LLM"""
@@ -436,6 +443,107 @@ ATENÇÃO ESPECIAL:
                 "erro": f"Resposta JSON inválida: {str(e)}", 
                 "resposta_bruta": resposta
             }
+
+    def _gerar_sugestao_basica(self, request: SugestaoRequest) -> Dict:
+        """Gera sugestão básica usando regras heurísticas quando APIs não estão disponíveis"""
+        produto_lower = request.descricao.lower()
+        
+        # NCM genérico baseado em palavras-chave (produtos mais comuns)
+        ncm_map = {
+            # Informática
+            'software': '85234910',
+            'sistema': '85234910',
+            'programa': '85234910',
+            'mouse': '84716053',
+            'teclado': '84716052',
+            'monitor': '85285900',
+            'computador': '84713000',
+            'notebook': '84713010',
+            'impressora': '84433210',
+            'scanner': '84716051',
+            'webcam': '85258020',
+            'pendrive': '85235190',
+            'hd externo': '84717012',
+            'ssd': '84717012',
+            
+            # Celulares e Tablets
+            'celular': '85171231',
+            'smartphone': '85171231',
+            'iphone': '85171231',
+            'tablet': '85171270',
+            'ipad': '85171270',
+            
+            # Eletrônicos
+            'tv': '85287190',
+            'televisão': '85287190',
+            'televisao': '85287190',
+            'ar condicionado': '84151011',
+            'geladeira': '84182100',
+            'micro-ondas': '85165000',
+            'fogão': '85163100',
+            'fogao': '85163100',
+            'ventilador': '84145100',
+            
+            # Móveis e Decoração
+            'cadeira': '94013000',
+            'mesa': '94036000',
+            'estante': '94035000',
+            'sofá': '94011000',
+            'sofa': '94011000',
+            
+            # Vestuário
+            'camiseta': '61091000',
+            'calça': '62034200',
+            'calca': '62034200',
+            'jaqueta': '62033100',
+            'sapato': '64041100',
+            'tênis': '64041900',
+            'tenis': '64041900',
+            
+            # Livros e Papelaria
+            'livro': '49019900',
+            'caderno': '48201000',
+            'caneta': '96081000',
+            'lápis': '96091000',
+            'lapis': '96091000',
+        }
+        
+        ncm = '00000000'  # NCM padrão quando não encontrado
+        for palavra, codigo in ncm_map.items():
+            if palavra in produto_lower:
+                ncm = codigo
+                break
+        
+        # Determinar CFOP baseado em UF
+        cfop = "5101"  # Padrão: venda dentro do estado
+        if request.uf_origem:
+            cfop = "5101"  # Simplificado
+        
+        # Determinar CST/CSOSN baseado em regime
+        if request.regime_tributario == 'Simples Nacional':
+            csosn = "101"  # Tributado pelo Simples Nacional
+            cst = None
+        else:
+            cst = "00"  # Tributada integralmente
+            csosn = None
+        
+        resultado = {
+            "ncm": ncm,
+            "cfop": cfop,
+            "cst": cst,
+            "csosn": csosn,
+            "cest": None,
+            "explicacao": "Sugestão básica gerada por regras heurísticas (APIs offline). Verifique e ajuste conforme necessário.",
+            "modo": "fallback"
+        }
+        
+        # Tentar sugerir CEST se disponível
+        if CEST_DISPONIVEL and ncm != '00000000':
+            cest_sugerido = self._sugerir_cest(request.descricao, ncm)
+            if cest_sugerido:
+                resultado["cest"] = cest_sugerido
+        
+        return resultado
 
     def _sugerir_cest(self, produto: str, ncm: str) -> Optional[str]:
         """
@@ -474,19 +582,33 @@ ATENÇÃO ESPECIAL:
         print(f"🎯 Iniciando sugestão para: {request.descricao}")
         
         # 1. Verificar conectividade
-        if not self._verificar_apis():
-            return {"erro": "APIs não disponíveis"}
+        apis_status = self._verificar_apis()
         
-        # 2. Gerar prompt com dados NCM oficiais
-        print(f"📋 Gerando prompt...")
-        prompt = self.gerar_prompt_classificacao(request)
+        # Se nenhuma API está disponível, usar fallback básico
+        if not apis_status["ncm"] and not apis_status["llm"]:
+            print("⚠️ Modo fallback total - gerando sugestão básica")
+            return self._gerar_sugestao_basica(request)
         
-        if "Não foram encontrados NCMs" in prompt:
-            return {"erro": "Nenhum NCM encontrado para este produto"}
-        
-        # 3. Consultar LLM
-        print(f"🤖 Consultando IA...")
-        resultado = await self.consultar_llm(prompt)
+        # 2. Gerar prompt com dados NCM oficiais (se API disponível)
+        if apis_status["ncm"]:
+            print(f"📋 Gerando prompt...")
+            prompt = self.gerar_prompt_classificacao(request)
+            
+            if "Não foram encontrados NCMs" in prompt:
+                print("⚠️ NCM não encontrado via API - usando fallback")
+                return self._gerar_sugestao_basica(request)
+            
+            # 3. Consultar LLM com dados NCM (se disponível)
+            if apis_status["llm"]:
+                print(f"🤖 Consultando IA...")
+                resultado = await self.consultar_llm(prompt)
+            else:
+                print(f"⚙️ LLM offline - usando primeiro NCM encontrado")
+                resultado = self._gerar_resposta_fallback(prompt)
+        else:
+            # Sem API NCM, usar fallback direto
+            print("⚙️ API NCM offline - usando regras heurísticas")
+            resultado = self._gerar_sugestao_basica(request)
         
         # 4. Sugerir CEST se disponível
         if "erro" not in resultado:
@@ -507,27 +629,33 @@ ATENÇÃO ESPECIAL:
         
         return resultado
 
-    def _verificar_apis(self) -> bool:
-        """Verifica se as APIs estão disponíveis"""
+    def _verificar_apis(self) -> Dict[str, bool]:
+        """Verifica quais APIs estão disponíveis"""
+        status = {"ncm": False, "llm": False}
+        
         try:
             # Verifica API NCM
-            ncm_response = requests.get(f"{self.ncm_api_url}/health", timeout=5)
-            if ncm_response.status_code != 200:
-                print("❌ API NCM não disponível")
-                return False
-            
-            # Verifica LLM (endpoint models)
-            llm_response = requests.get(f"{self.llm_url}/v1/models", timeout=5)
-            if llm_response.status_code != 200:
-                print("❌ LLM não disponível")
-                return False
-            
-            print("✅ APIs verificadas")
-            return True
-            
+            ncm_response = requests.get(f"{self.ncm_api_url}/health", timeout=2)
+            if ncm_response.status_code == 200:
+                status["ncm"] = True
+                print("✅ API NCM disponível")
+            else:
+                print("⚠️ API NCM não disponível - usando fallback")
         except Exception as e:
-            print(f"❌ Erro ao verificar APIs: {e}")
-            return False
+            print(f"⚠️ API NCM offline: {str(e)[:50]} - usando fallback")
+        
+        try:
+            # Verifica LLM (endpoint models)
+            llm_response = requests.get(f"{self.llm_url}/v1/models", timeout=2)
+            if llm_response.status_code == 200:
+                status["llm"] = True
+                print("✅ LLM disponível")
+            else:
+                print("⚠️ LLM não disponível - usando regras heurísticas")
+        except Exception as e:
+            print(f"⚠️ LLM offline: {str(e)[:50]} - usando regras heurísticas")
+        
+        return status
 
 # Instância global do serviço
 servico_sugestao = ServicoSugestaoIA()

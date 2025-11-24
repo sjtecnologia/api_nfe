@@ -77,6 +77,7 @@
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total de NF-e</div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">{{ "{:,.0f}".format(kpis.total_nfes) }}</div>
+                            <div class="text-xs text-muted mt-1">Modelo 55</div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-file-invoice fa-2x text-gray-300"></i>
@@ -91,8 +92,9 @@
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Valor Total (R$)</div>
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total NF-e (R$)</div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "{:,.2f}".format(kpis.valor_total) }}</div>
+                            <div class="text-xs text-muted mt-1">Vendas NF-e</div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -151,7 +153,41 @@
     </div>
 
     <div class="row mb-4">
-        <div class="col-xl-4 col-md-6 mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2" style="border-left-color: #17a2b8 !important;">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-uppercase mb-1" style="color: #17a2b8;">Total de NFC-e</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ "{:,.0f}".format(kpis.total_nfces) }}</div>
+                            <div class="text-xs text-muted mt-1">Modelo 65</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-receipt fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2" style="border-left-color: #28a745 !important;">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-uppercase mb-1" style="color: #28a745;">Total NFC-e (R$)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "{:,.2f}".format(kpis.valor_total_nfce) }}</div>
+                            <div class="text-xs text-muted mt-1">Vendas NFC-e</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-cash-register fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-secondary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -167,7 +203,7 @@
             </div>
         </div>
 
-        <div class="col-xl-4 col-md-6 mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-dark shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -177,22 +213,6 @@
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-box fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-4 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">NF-e Este Mês</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ kpis.nfes_mes }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>

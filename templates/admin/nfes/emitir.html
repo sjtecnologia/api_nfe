@@ -1006,6 +1006,28 @@ function validarFormulario() {
     return true;
 }
 
+// Detectar mudança de modelo e redirecionar
+document.addEventListener('DOMContentLoaded', function() {
+    const modeloSelect = document.getElementById('modelo');
+    
+    if (modeloSelect) {
+        modeloSelect.addEventListener('change', function() {
+            const modeloSelecionado = this.value;
+            const clienteId = {{ emitente_data.cliente_id }};
+            
+            if (modeloSelecionado === '65') {
+                // Redirecionar para NFC-e
+                if (confirm('Você está mudando para NFC-e (Nota Fiscal de Consumidor).\n\nEste modelo é usado para vendas ao consumidor final.\n\nDeseja continuar?')) {
+                    window.location.href = `/admin/nfce/emitir?cliente_id=${clienteId}`;
+                } else {
+                    // Reverter seleção
+                    this.value = '55';
+                }
+            }
+        });
+    }
+});
+
 // Visualizar XML (funcionalidade futura)
 function previewXML() {
     alert('Funcionalidade de visualização XML em desenvolvimento');

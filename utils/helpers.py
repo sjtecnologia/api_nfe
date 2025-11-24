@@ -55,7 +55,6 @@ def produto_to_dict_for_template(produto):
         'preco_unitario_padrao': float(produto.preco_unitario_padrao) if produto.preco_unitario_padrao else 0.0,
         'unidade_comercial': produto.unidade_comercial or 'UN',
         'ncm': produto.ncm or '',
-        'categoria': produto.categoria or '',
         'ativo': bool(produto.ativo) if hasattr(produto, 'ativo') else True
     }
 

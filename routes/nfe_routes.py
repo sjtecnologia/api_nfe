@@ -762,6 +762,20 @@ def view(nfe_id):
             traceback.print_exc()
             # Fallback simples
             nfe_data = {key: getattr(nfe, key) for key in dir(nfe) if not key.startswith('_') and not callable(getattr(nfe, key))}
+        
+        # Se for NFC-e, redirecionar para a página correta
+        if nfe_data.get('tipo_nfe') == 'NFCE':
+            return redirect(url_for('nfce.consultar_nfce', nfce_id=nfe_id))
+        
+        # Parse json_nfe se for string
+        if nfe_data.get('json_nfe') and isinstance(nfe_data['json_nfe'], str):
+            try:
+                import json
+                nfe_data['json_nfe'] = json.loads(nfe_data['json_nfe'])
+            except Exception as e:
+                print(f"Erro ao fazer parse do json_nfe: {e}")
+                nfe_data['json_nfe'] = None
+        
         print(nfe_data)
         return render_template('admin/nfes/xml_preview.html', nfe=nfe_data)
         

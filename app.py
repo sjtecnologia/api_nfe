@@ -11,6 +11,7 @@ from models.user import User
 from routes.auth_routes import auth_bp
 from routes.api_routes import api_bp
 from routes.nfe_routes import nfe_bp
+from routes.nfce_routes import nfce_bp
 from routes.admin_routes import admin_bp
 from routes.home_routes import home_bp
 from routes.cliente_routes import cliente_bp
@@ -32,6 +33,7 @@ login_manager = init_login_manager(app)
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(api_bp, url_prefix='/api')
 app.register_blueprint(nfe_bp, url_prefix='/admin/nfe')
+app.register_blueprint(nfce_bp)  # NFC-e já tem url_prefix='/admin/nfce' no blueprint
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(cliente_bp, url_prefix='/cliente')
 app.register_blueprint(home_bp)

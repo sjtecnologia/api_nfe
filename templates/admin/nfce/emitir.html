@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block title %}Emitir NFC-e{% endblock %}
+
+{% block extra_css %}
+<style>
+    .produto-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        background: #fff;
+    }
+    .produto-selecionado {
+        background: #e3f2fd;
+        border-color: #2196F3;
+    }
+    .resumo-venda {
+        background: #f5f5f5;
+        padding: 20px;
+        border-radius: 8px;
+        position: sticky;
+        top: 20px;
+    }
+    .valor-total {
+        font-size: 2em;
+        font-weight: bold;
+        color: #4CAF50;
+    }
+    .btn-adicionar-produto {
+        width: 100%;
+        margin-top: 10px;
+    }
+    .produto-item-venda {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .busca-produto {
+        margin-bottom: 20px;
+    }
+    .alert-warning {
+        border-left: 5px solid #ff9800;
+        background-color: #fff3cd;
+        animation: pulse-warning 2s infinite;
+    }
+    @keyframes pulse-warning {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.85; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Alerta de Ambiente de Homologação -->
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong>AMBIENTE DE HOMOLOGAÇÃO</strong> - As notas emitidas aqui são apenas para testes e não têm validade fiscal.
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-cash-register"></i> Emitir NFC-e - Venda Rápida</h2>
+            <p class="text-muted">Emitente: {{ emitente.nome_fantasia or emitente.razao_social }}</p>
+        </div>
+    </div>
+
+    <form method="POST" id="formNFCe">
+        <div class="row">
+            <!-- Coluna Esquerda: Seleção de Produtos -->
+            <div class="col-md-8">
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-file-invoice"></i> Modelo da Nota</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-0">
+                            <label for="modelo">Modelo</label>
+                            <select class="form-control" name="modelo" id="modelo" required>
+                                <option value="55">55 - NFe (Empresas)</option>
+                                <option value="65" selected>65 - NFCe (Consumidor)</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                <strong>NFe:</strong> Venda para empresas (requer dados completos do destinatário)<br>
+                                <strong>NFCe:</strong> Venda para consumidor final (CPF opcional)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-shopping-cart"></i> Produtos</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Busca de Produto -->
+                        <div class="busca-produto">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="buscaProduto" 
+                                       placeholder="Buscar produto por nome, código ou código de barras...">
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lista de Produtos -->
+                        <div id="listaProdutos" style="max-height: 500px; overflow-y: auto;">
+                            {% for produto in produtos %}
+                            <div class="produto-card" data-produto-id="{{ produto.produto_id }}"
+                                 data-produto-nome="{{ produto.descricao }}"
+                                 data-produto-preco="{{ produto.preco_unitario_padrao }}"
+                                 data-produto-codigo="{{ produto.codigo_interno }}">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h6 class="mb-1">{{ produto.descricao }}</h6>
+                                        <small class="text-muted">
+                                            Cód: {{ produto.codigo_interno }}
+                                        </small>
+                                    </div>
+                                    <div class="col-md-4 text-right">
+                                        <div class="mb-2">
+                                            <strong class="text-success">R$ {{ "%.2f"|format(produto.preco_unitario_padrao) }}</strong>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-primary btn-adicionar-produto"
+                                                onclick="adicionarProduto({{ produto.produto_id }}, '{{ produto.descricao|replace("'", "\\'") }}', {{ produto.preco_unitario_padrao }})">
+                                            <i class="fas fa-plus"></i> Adicionar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna Direita: Resumo da Venda -->
+            <div class="col-md-4">
+                <div class="resumo-venda">
+                    <h5 class="mb-3"><i class="fas fa-receipt"></i> Resumo da Venda</h5>
+                    
+                    <!-- Itens da Venda -->
+                    <div id="itensVenda" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                        <p class="text-muted text-center">Nenhum produto adicionado</p>
+                    </div>
+
+                    <!-- Totais -->
+                    <div class="border-top pt-3 mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Subtotal:</span>
+                            <strong id="subtotal">R$ 0,00</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Desconto:</span>
+                            <strong id="desconto" class="text-danger">R$ 0,00</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Total:</span>
+                            <div class="valor-total" id="valorTotal">R$ 0,00</div>
+                        </div>
+                    </div>
+
+                    <!-- Forma de Pagamento -->
+                    <div class="form-group">
+                        <label>Forma de Pagamento</label>
+                        <select name="forma_pagamento" class="form-control" required>
+                            <option value="01">Dinheiro</option>
+                            <option value="02">Cheque</option>
+                            <option value="03">Cartão de Crédito</option>
+                            <option value="04">Cartão de Débito</option>
+                            <option value="05">Crédito Loja</option>
+                            <option value="10">Vale Alimentação</option>
+                            <option value="11">Vale Refeição</option>
+                            <option value="12">Vale Presente</option>
+                            <option value="13">Vale Combustível</option>
+                            <option value="15">Boleto Bancário</option>
+                            <option value="16">PIX</option>
+                            <option value="99">Outros</option>
+                        </select>
+                    </div>
+
+                    <!-- Valor Pago e Troco -->
+                    <div class="form-group">
+                        <label>Valor Pago</label>
+                        <input type="number" name="valor_pago" id="valorPago" class="form-control" 
+                               step="0.01" min="0" value="0" onchange="calcularTroco()">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Troco</label>
+                        <input type="number" name="troco" id="troco" class="form-control" 
+                               step="0.01" readonly value="0">
+                    </div>
+
+                    <!-- Destinatário (Opcional) -->
+                    <div class="card mb-3">
+                        <div class="card-header" style="cursor: pointer;" onclick="$('#collapseDestinatario').collapse('toggle')">
+                            <small><i class="fas fa-user"></i> Identificar Cliente (Opcional)</small>
+                        </div>
+                        <div class="collapse" id="collapseDestinatario">
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <input type="text" name="destinatario_cpf_cnpj" class="form-control form-control-sm" 
+                                           placeholder="CPF/CNPJ">
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" name="destinatario_nome" class="form-control form-control-sm" 
+                                           placeholder="Nome">
+                                </div>
+                                <div class="form-group">
+                                    <input type="email" name="destinatario_email" class="form-control form-control-sm" 
+                                           placeholder="E-mail">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Observações -->
+                    <div class="form-group">
+                        <label><small>Informações Adicionais</small></label>
+                        <textarea name="informacoes_adicionais" class="form-control form-control-sm" 
+                                  rows="2" placeholder="Observações..."></textarea>
+                    </div>
+
+                    <!-- Input Hidden com JSON dos Produtos -->
+                    <input type="hidden" name="produtos_json" id="produtosJson" value="[]">
+
+                    <!-- Opções Pós-Emissão -->
+                    <div class="form-group">
+                        <label><small>Após Emissão:</small></label>
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="enviarEmail" name="enviar_email">
+                            <label class="custom-control-label" for="enviarEmail">
+                                <i class="fas fa-envelope"></i> Enviar por e-mail
+                            </label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="imprimirDanfce" name="imprimir_danfce" checked>
+                            <label class="custom-control-label" for="imprimirDanfce">
+                                <i class="fas fa-print"></i> Imprimir DANFCE automaticamente
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Botões -->
+                    <div class="row">
+                        <div class="col-6">
+                            <a href="{{ url_for('nfce.listar_nfce') }}" class="btn btn-secondary btn-block">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                        </div>
+                        <div class="col-6">
+                            <button type="submit" class="btn btn-success btn-block" id="btnEmitir">
+                                <i class="fas fa-check"></i> Emitir NFC-e
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+let produtosVenda = [];
+
+// Adicionar produto à venda
+function adicionarProduto(produtoId, descricao, preco) {
+    // Verificar se produto já está na venda
+    let produtoExiste = produtosVenda.find(p => p.produto_id === produtoId);
+    
+    if (produtoExiste) {
+        produtoExiste.quantidade++;
+    } else {
+        produtosVenda.push({
+            produto_id: produtoId,
+            descricao: descricao,
+            quantidade: 1,
+            valor_unitario: preco,
+            desconto: 0
+        });
+    }
+    
+    atualizarResumo();
+}
+
+// Remover produto da venda
+function removerProduto(produtoId) {
+    produtosVenda = produtosVenda.filter(p => p.produto_id !== produtoId);
+    atualizarResumo();
+}
+
+// Alterar quantidade
+function alterarQuantidade(produtoId, novaQtd) {
+    let produto = produtosVenda.find(p => p.produto_id === produtoId);
+    if (produto) {
+        produto.quantidade = parseFloat(novaQtd);
+        if (produto.quantidade <= 0) {
+            removerProduto(produtoId);
+        } else {
+            atualizarResumo();
+        }
+    }
+}
+
+// Atualizar resumo da venda
+function atualizarResumo() {
+    let html = '';
+    let subtotal = 0;
+    let descontoTotal = 0;
+    
+    if (produtosVenda.length === 0) {
+        html = '<p class="text-muted text-center">Nenhum produto adicionado</p>';
+    } else {
+        produtosVenda.forEach(produto => {
+            let total = produto.quantidade * produto.valor_unitario - produto.desconto;
+            subtotal += produto.quantidade * produto.valor_unitario;
+            descontoTotal += produto.desconto;
+            
+            html += `
+                <div class="produto-item-venda">
+                    <div style="flex: 1;">
+                        <div><strong>${produto.descricao}</strong></div>
+                        <div class="small text-muted">
+                            <input type="number" class="form-control form-control-sm d-inline-block" 
+                                   style="width: 60px;" value="${produto.quantidade}" min="0.01" step="0.01"
+                                   onchange="alterarQuantidade(${produto.produto_id}, this.value)">
+                            x R$ ${produto.valor_unitario.toFixed(2)}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div><strong>R$ ${total.toFixed(2)}</strong></div>
+                        <button type="button" class="btn btn-sm btn-danger" 
+                                onclick="removerProduto(${produto.produto_id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    document.getElementById('itensVenda').innerHTML = html;
+    document.getElementById('subtotal').textContent = 'R$ ' + subtotal.toFixed(2);
+    document.getElementById('desconto').textContent = 'R$ ' + descontoTotal.toFixed(2);
+    document.getElementById('valorTotal').textContent = 'R$ ' + (subtotal - descontoTotal).toFixed(2);
+    document.getElementById('produtosJson').value = JSON.stringify(produtosVenda);
+    
+    // Sempre atualizar valor pago para o total atual
+    document.getElementById('valorPago').value = (subtotal - descontoTotal).toFixed(2);
+    calcularTroco();
+}
+
+// Calcular troco
+function calcularTroco() {
+    let total = produtosVenda.reduce((sum, p) => 
+        sum + (p.quantidade * p.valor_unitario - p.desconto), 0);
+    let valorPago = parseFloat(document.getElementById('valorPago').value) || 0;
+    let troco = Math.max(0, valorPago - total);
+    document.getElementById('troco').value = troco.toFixed(2);
+}
+
+// Busca de produto
+document.getElementById('buscaProduto').addEventListener('input', function(e) {
+    let termo = e.target.value.toLowerCase();
+    let produtos = document.querySelectorAll('.produto-card');
+    
+    produtos.forEach(produto => {
+        let nome = produto.dataset.produtoNome.toLowerCase();
+        let codigo = produto.dataset.produtoCodigo.toLowerCase();
+        
+        if (nome.includes(termo) || codigo.includes(termo)) {
+            produto.style.display = '';
+        } else {
+            produto.style.display = 'none';
+        }
+    });
+});
+
+// Validação antes de enviar
+document.getElementById('formNFCe').addEventListener('submit', function(e) {
+    if (produtosVenda.length === 0) {
+        e.preventDefault();
+        alert('Adicione pelo menos um produto à venda!');
+        return false;
+    }
+});
+
+// Atalho: Enter no campo de busca adiciona primeiro produto visível
+document.getElementById('buscaProduto').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        let primeiroVisivel = document.querySelector('.produto-card[style=""]');
+        if (!primeiroVisivel) {
+            primeiroVisivel = document.querySelector('.produto-card');
+        }
+        if (primeiroVisivel) {
+            primeiroVisivel.querySelector('.btn-adicionar-produto').click();
+            this.value = '';
+        }
+    }
+});
+
+// Detectar mudança de modelo e redirecionar para NF-e
+document.getElementById('modelo').addEventListener('change', function() {
+    const modeloSelecionado = this.value;
+    const clienteId = {{ emitente.cliente_id }};
+    
+    if (modeloSelecionado === '55') {
+        // Redirecionar para NF-e
+        if (confirm('Você está mudando para NF-e (Nota Fiscal Eletrônica).\n\nEste modelo é usado para vendas B2B (empresa para empresa) e requer dados completos do destinatário.\n\nDeseja continuar?')) {
+            window.location.href = `/admin/nfe/emitir?cliente_id=${clienteId}`;
+        } else {
+            // Reverter seleção
+            this.value = '65';
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1843,19 +1843,37 @@ def dashboard():
             where_and = "AND data_criacao BETWEEN :data_inicio AND :data_fim"
             params = {'data_inicio': data_inicio, 'data_fim': data_fim}
         
-        # 1. Total de NFes emitidas
+        # 1. Total de NFes emitidas (modelo 55)
         kpis['total_nfes'] = db.execute(text(f"""
-            SELECT COUNT(*) FROM nfe_emitidas {where_clause}
+            SELECT COUNT(*) FROM nfe_emitidas 
+            WHERE modelo = '55' {where_and}
         """), params).scalar() or 0
         
-        # 2. Valor total de NFes (extraindo do JSON)
-        # O valor total está em form_data->valorPagamento
+        # 1b. Total de NFC-es emitidas (modelo 65)
+        kpis['total_nfces'] = db.execute(text(f"""
+            SELECT COUNT(*) FROM nfe_emitidas 
+            WHERE modelo = '65' {where_and}
+        """), params).scalar() or 0
+        
+        # 2. Valor total de NFes (modelo 55, extraindo do JSON)
         kpis['valor_total'] = db.execute(text(f"""
             SELECT COALESCE(SUM(
                 (json_nfe->'form_data'->>'valorPagamento')::numeric
             ), 0) FROM nfe_emitidas
             WHERE json_nfe IS NOT NULL 
                 AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
+                AND modelo = '55'
+                {where_and}
+        """), params).scalar() or 0
+        
+        # 2b. Valor total de NFC-es (modelo 65)
+        kpis['valor_total_nfce'] = db.execute(text(f"""
+            SELECT COALESCE(SUM(
+                (json_nfe->'form_data'->>'valorPagamento')::numeric
+            ), 0) FROM nfe_emitidas
+            WHERE json_nfe IS NOT NULL 
+                AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
+                AND modelo = '65'
                 {where_and}
         """), params).scalar() or 0
         
@@ -4302,7 +4320,7 @@ def api_sugestao_tributaria():
                 'codigo_interno': dados.get('codigo_interno'),
                 'cliente_id': cliente_id
             },
-            timeout=30
+            timeout=150  # Aumentado para 150s para LLM lenta (120s + margem)
         )
         
         if api_response.status_code != 200:

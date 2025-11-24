@@ -583,7 +583,7 @@ $(document).ready(function() {
                 method: 'POST',
                 contentType: 'application/json',
                 data: JSON.stringify(dados),
-                timeout: 30000, // 30 segundos de timeout
+                timeout: 180000, // 180 segundos (3 minutos) para LLM lenta
                 success: function(resp) {
                     console.log('[IA] ✅ Resposta da API IA Unificada:', resp);
                     hideLoading();
