@@ -72,7 +72,7 @@ def emitir_nfe():
         
         # Buscar regime tributário
         regime_tributario_nome = 'Regime Normal'
-        if emitente_data.regime_tributario_id:
+        if emitente_data.regime_tributario_id is not None:
             regime_trib = db.query(RegimeTributario).filter_by(
                 regime_tributario_id=emitente_data.regime_tributario_id
             ).first()
@@ -479,26 +479,30 @@ def emitir_nfe():
             
             # Buscar códigos NCM e CFOP (não IDs)
             ncm_codigo = None
-            if prod.ncm_id:
-                ncm_obj = db.query(Ncm).filter_by(ncm_id=prod.ncm_id).first()
+            ncm_id_value = getattr(prod, 'ncm_id', None)
+            if ncm_id_value is not None:
+                ncm_obj = db.query(Ncm).filter_by(ncm_id=ncm_id_value).first()
                 if ncm_obj:
                     ncm_codigo = ncm_obj.codigo
             
             cfop_codigo = None
-            if prod.cfop_id:
-                cfop_obj = db.query(Cfop).filter_by(cfop_id=prod.cfop_id).first()
+            cfop_id_value = getattr(prod, 'cfop_id', None)
+            if cfop_id_value is not None:
+                cfop_obj = db.query(Cfop).filter_by(cfop_id=cfop_id_value).first()
                 if cfop_obj:
                     cfop_codigo = cfop_obj.cfop
             
             cst_codigo = None
-            if prod.cst_id:
-                cst_obj = db.query(Csticms).filter_by(cst_id=prod.cst_id).first()
+            cst_id_value = getattr(prod, 'cst_id', None)
+            if cst_id_value is not None:
+                cst_obj = db.query(Csticms).filter_by(cst_id=cst_id_value).first()
                 if cst_obj:
                     cst_codigo = cst_obj.codigo
             
             csosn_codigo = None
-            if prod.csosn_id:
-                csosn_obj = db.query(Csosnicms).filter_by(csosn_id=prod.csosn_id).first()
+            csosn_id_value = getattr(prod, 'csosn_id', None)
+            if csosn_id_value is not None:
+                csosn_obj = db.query(Csosnicms).filter_by(csosn_id=csosn_id_value).first()
                 if csosn_obj:
                     csosn_codigo = csosn_obj.codigo
             
