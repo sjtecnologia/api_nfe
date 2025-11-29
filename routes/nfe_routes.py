@@ -33,13 +33,13 @@ def emitir_nfe():
     db = next(get_db())
     
     try:
-        # ✅ BUSCAR CLIENTES ACESSÍVEIS PRIMEIRO
+        # OK: BUSCAR CLIENTES ACESSÍVEIS PRIMEIRO
         accessible_clients = get_accessible_client_ids(db)
         if not accessible_clients:
             flash('Você não tem acesso a nenhum cliente.', 'danger')
             return redirect(url_for('home.home'))
         
-        # ✅ DETERMINAR CLIENTE
+        # OK: DETERMINAR CLIENTE
         emitente_cliente_id = None
         
         # 1. Tentar pegar cliente_id da URL
@@ -47,7 +47,7 @@ def emitir_nfe():
         if cliente_id_from_url:
             try:
                 emitente_cliente_id = int(cliente_id_from_url)
-                print(f"🔍 Cliente ID da URL: {emitente_cliente_id}")
+                print(f" Cliente ID da URL: {emitente_cliente_id}")
                 
                 # Verificar se usuário tem acesso a este cliente
                 if emitente_cliente_id not in accessible_clients:
@@ -60,7 +60,7 @@ def emitir_nfe():
         # 2. Se não tem cliente_id na URL, usar primeiro disponível
         else:
             emitente_cliente_id = accessible_clients[0]
-            print(f"🔍 Usando primeiro cliente disponível: {emitente_cliente_id}")
+            print(f" Usando primeiro cliente disponível: {emitente_cliente_id}")
         
         # 3. Buscar dados do cliente
         emitente_data = db.query(Cliente).filter_by(cliente_id=emitente_cliente_id).first()
@@ -68,7 +68,7 @@ def emitir_nfe():
             flash('Cliente não encontrado', 'danger')
             return redirect(url_for('home.home'))
         
-        print(f"✅ Emitente encontrado: {emitente_data.razao_social}")
+        print(f"OK: Emitente encontrado: {emitente_data.razao_social}")
         
         # Buscar regime tributário
         regime_tributario_nome = 'Regime Normal'
@@ -96,7 +96,7 @@ def emitir_nfe():
         }
         
         if request.method == 'POST':
-            print("📥 === INICIANDO PROCESSAMENTO POST ===")
+            print(" === INICIANDO PROCESSAMENTO POST ===")
             
             # CAPTURAR DADOS DO FORMULÁRIO
             form_data_initial = {
@@ -111,27 +111,27 @@ def emitir_nfe():
                 'modFrete': request.form.get('modFrete', '9')
             }
             
-            print(f"📋 Form data: {form_data_initial}")
+            print(f" Form data: {form_data_initial}")
             
             # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
             action = request.form.get('action')
             ambiente = request.form.get('ambiente', 'homologacao')
             
-            print(f"🔍 DEBUG - Ação recebida: {action}, Ambiente: {ambiente}")
+            print(f" DEBUG - Ação recebida: {action}, Ambiente: {ambiente}")
             
-            # ✅ INICIALIZAR VARIÁVEIS OBRIGATÓRIAS
+            # OK: INICIALIZAR VARIÁVEIS OBRIGATÓRIAS
             destinatario_data = {}
             nfe_items = []
             
             if action == 'emitir':
-                print("🚀 === PROCESSANDO EMISSÃO ===")
+                print(" === PROCESSANDO EMISSÃO ===")
                 try:
-                    # ✅ BUSCAR DESTINATÁRIO SELECIONADO
+                    # OK: BUSCAR DESTINATÁRIO SELECIONADO
                     destinatario_id = request.form.get('destinatario')
-                    print(f"🎯 Destinatário ID: {destinatario_id}")
+                    print(f" Destinatário ID: {destinatario_id}")
                     
                     if not destinatario_id:
-                        print("❌ Destinatário não selecionado")
+                        print("ERRO: Destinatário não selecionado")
                         flash('Destinatário é obrigatório para emitir NFe', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
@@ -141,13 +141,13 @@ def emitir_nfe():
                     ).first()
                     
                     if not destinatario:
-                        print("❌ Destinatário não encontrado no banco")
+                        print("ERRO: Destinatário não encontrado no banco")
                         flash('Destinatário não encontrado', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
-                    print(f"✅ Destinatário encontrado: {destinatario.nome_razao_social}")
+                    print(f"OK: Destinatário encontrado: {destinatario.nome_razao_social}")
                     
-                    # ✅ CONVERTER DESTINATÁRIO PARA DICIONÁRIO
+                    # OK: CONVERTER DESTINATÁRIO PARA DICIONÁRIO
                     destinatario_data = {
                         'nome_razao_social': destinatario.nome_razao_social,
                         'cpf_cnpj': destinatario.cpf_cnpj,
@@ -160,59 +160,59 @@ def emitir_nfe():
                         'uf': destinatario.uf
                     }
                     
-                    print(f"📋 Destinatário data: {destinatario_data}")
+                    print(f" Destinatário data: {destinatario_data}")
                     
-                    # ✅ PROCESSAR ITENS DA NFE
-                    print("📦 === PROCESSANDO ITENS ===")
+                    # OK: PROCESSAR ITENS DA NFE
+                    print(" === PROCESSANDO ITENS ===")
                     item_index = 0
                     
                     while f'items[{item_index}][json]' in request.form:
                         item_json = request.form[f'items[{item_index}][json]']
-                        print(f"📄 Item {item_index} JSON: {item_json[:100]}...")
+                        print(f" Item {item_index} JSON: {item_json[:100]}...")
                         
                         if item_json:
                             try:
                                 item_data = json.loads(item_json)
                                 nfe_items.append(item_data)
-                                print(f"📦 Item {item_index + 1}: {item_data.get('descricao', 'Sem descrição')}")
+                                print(f" Item {item_index + 1}: {item_data.get('descricao', 'Sem descrição')}")
                             except json.JSONDecodeError as e:
-                                print(f"❌ Erro JSON no item {item_index}: {e}")
+                                print(f"ERRO: Erro JSON no item {item_index}: {e}")
                                 flash(f'Erro no formato do item {item_index + 1}: {str(e)}', 'danger')
                                 return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                         item_index += 1
                     
                     if not nfe_items:
-                        print("❌ Nenhum item encontrado")
+                        print("ERRO: Nenhum item encontrado")
                         flash('Adicione pelo menos um item à NFe', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
-                    print(f"📦 Processando {len(nfe_items)} itens")
+                    print(f" Processando {len(nfe_items)} itens")
                     
-                    # ✅ VALIDAR DADOS ANTES DE PROCESSAR
-                    print("🔍 === VALIDANDO DADOS ===")
+                    # OK: VALIDAR DADOS ANTES DE PROCESSAR
+                    print(" === VALIDANDO DADOS ===")
                     
                     # Verificar se destinatario_data foi preenchido
                     if not destinatario_data:
-                        print("❌ Dados do destinatário não foram processados")
+                        print("ERRO: Dados do destinatário não foram processados")
                         flash('Erro: dados do destinatário não encontrados', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     erros_validacao = validar_dados_nfe(form_data_initial, emitente_data_for_template, destinatario_data, nfe_items)
                     
                     if erros_validacao:
-                        print(f"❌ Erros de validação: {erros_validacao}")
+                        print(f"ERRO: Erros de validação: {erros_validacao}")
                         for erro in erros_validacao:
-                            flash(f"❌ {erro}", 'danger')
+                            flash(f"ERRO: {erro}", 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
-                    print("✅ Validação passou")
+                    print("OK: Validação passou")
                     
                     # PROCESSAR EMISSÃO DA NFE
                     tp_amb = 2 if ambiente == 'homologacao' else 1
-                    print(f"🌍 Ambiente SEFAZ: {tp_amb} ({ambiente})")
+                    print(f" Ambiente SEFAZ: {tp_amb} ({ambiente})")
                     
                     # 1. GERAR XML DA NFE
-                    print("🔧 === GERANDO XML ===")
+                    print(" === GERANDO XML ===")
                     try:
                         xml_nfe = generate_nfe_xml(
                             form_data_initial, 
@@ -222,59 +222,59 @@ def emitir_nfe():
                             tp_amb, 
                             'emitir'
                         )
-                        print(f"✅ XML gerado: {len(xml_nfe)} caracteres")
-                        print(f"🔍 XML preview: {xml_nfe[:200]}...")
+                        print(f"OK: XML gerado: {len(xml_nfe)} caracteres")
+                        print(f" XML preview: {xml_nfe[:200]}...")
                     except Exception as e:
-                        print(f"❌ ERRO ao gerar XML: {e}")
+                        print(f"ERRO: ERRO ao gerar XML: {e}")
                         import traceback
                         traceback.print_exc()
                         flash(f'Erro ao gerar XML: {str(e)}', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
-                    # ✅ VALIDAR XML GERADO
-                    print("🔍 === VALIDANDO XML ===")
+                    # OK: VALIDAR XML GERADO
+                    print(" === VALIDANDO XML ===")
                     try:
                         xml_valido, erros_xml = validar_xml_nfe(xml_nfe)
                         if not xml_valido:
-                            print(f"❌ XML inválido: {erros_xml}")
+                            print(f"ERRO: XML inválido: {erros_xml}")
                             for erro in erros_xml:
-                                flash(f"❌ XML: {erro}", 'danger')
+                                flash(f"ERRO: XML: {erro}", 'danger')
                             return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
-                        print("✅ XML válido")
+                        print("OK: XML válido")
                     except Exception as e:
-                        print(f"❌ ERRO na validação XML: {e}")
+                        print(f"ERRO: ERRO na validação XML: {e}")
                         flash(f'Erro na validação do XML: {str(e)}', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     # 2. BUSCAR CERTIFICADO ATIVO
-                    print("🔐 === BUSCANDO CERTIFICADO ===")
+                    print(" === BUSCANDO CERTIFICADO ===")
                     try:
                         certificado = get_active_certificate_for_client(db, emitente_cliente_id)
                         
                         if not certificado:
-                            print("❌ Certificado não encontrado")
+                            print("ERRO: Certificado não encontrado")
                             flash('Nenhum certificado digital ativo encontrado. Cadastre um certificado válido.', 'danger')
                             return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                         
-                        print(f"✅ Certificado encontrado: {certificado.get('common_name', 'N/A')}")
+                        print(f"OK: Certificado encontrado: {certificado.get('common_name', 'N/A')}")
                     except Exception as e:
-                        print(f"❌ ERRO ao buscar certificado: {e}")
+                        print(f"ERRO: ERRO ao buscar certificado: {e}")
                         flash(f'Erro ao buscar certificado: {str(e)}', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                    # 3. ASSINAR XML
-                    print("✍️ === ASSINANDO XML ===")
+                    print("️ === ASSINANDO XML ===")
                     try:
                         from services.xml_signature_service import xml_signature_service
-                        xml_assinado = xml_signature_service.sign_nfe_xml(xml_nfe, db, emitente_cliente_id)  # ✅ CORRIGIDO
-                        print(f"✅ XML assinado: {len(xml_assinado)} caracteres")
+                        xml_assinado = xml_signature_service.sign_nfe_xml(xml_nfe, db, emitente_cliente_id)  # OK: CORRIGIDO
+                        print(f"OK: XML assinado: {len(xml_assinado)} caracteres")
                     except Exception as e:
-                        print(f"❌ Erro na assinatura: {e}")
+                        print(f"ERRO: Erro na assinatura: {e}")
                         flash(f'Erro na assinatura do XML: {e}', 'danger')
-                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))  # ✅ CORRIGIDO
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))  # OK: CORRIGIDO
                     
                     # 4. ENVIAR PARA SEFAZ
-                    print(f"📤 === ENVIANDO PARA SEFAZ ===")
+                    print(f" === ENVIANDO PARA SEFAZ ===")
                     try:
                         nfe_service = NFeService(db)
                         resultado_sefaz = nfe_service._processar_envio_sefaz(
@@ -282,20 +282,20 @@ def emitir_nfe():
                             certificado,
                             ambiente
                         )
-                        print(f"📨 Resultado SEFAZ: {resultado_sefaz}")
+                        print(f" Resultado SEFAZ: {resultado_sefaz}")
                     except Exception as e:
-                        print(f"❌ ERRO ao enviar para SEFAZ: {e}")
+                        print(f"ERRO: ERRO ao enviar para SEFAZ: {e}")
                         import traceback
                         traceback.print_exc()
                         flash(f'Erro ao enviar para SEFAZ: {str(e)}', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     # 5. SALVAR NO BANCO
-                    print("💾 === SALVANDO NO BANCO ===")
+                    print(" === SALVANDO NO BANCO ===")
                     try:
                         # CORREÇÃO: Usar o status retornado pelo serviço em vez de verificar apenas o código
                         status_nfe = resultado_sefaz.get('status', 'REJEITADA') if resultado_sefaz.get('success', False) else 'REJEITADA'
-                        print(f"📊 Status NFe: {status_nfe}")
+                        print(f" Status NFe: {status_nfe}")
                         
                         nova_nfe = NFeEmitidas(
                             cliente_id=emitente_cliente_id,
@@ -324,9 +324,9 @@ def emitir_nfe():
                         db.add(nova_nfe)
                         db.commit()
                         
-                        # ✅ CORREÇÃO: Refresh para obter o ID real após commit
+                        # OK: CORREÇÃO: Refresh para obter o ID real após commit
                         db.refresh(nova_nfe)
-                        # ✅ CORREÇÃO: Acessar o valor do ID corretamente
+                        # OK: CORREÇÃO: Acessar o valor do ID corretamente
                         nfe_id_raw = getattr(nova_nfe, 'nfe_emitida_id')
                         
                         # Verificar se o valor pode ser convertido para int
@@ -348,10 +348,10 @@ def emitir_nfe():
                                 nfe_id = int(nfe_id_str)
                         except (ValueError, TypeError, AttributeError) as e:
                             raise ValueError(f"Não foi possível converter o ID da NFe para inteiro: {nfe_id_raw}, tipo: {type(nfe_id_raw)}") from e
-                        print(f"✅ NFe salva no banco com ID: {nfe_id}")
+                        print(f"OK: NFe salva no banco com ID: {nfe_id}")
                         
                     except Exception as e:
-                        print(f"❌ ERRO ao salvar no banco: {e}")
+                        print(f"ERRO: ERRO ao salvar no banco: {e}")
                         db.rollback()
                         import traceback
                         traceback.print_exc()
@@ -359,9 +359,9 @@ def emitir_nfe():
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     # 6. FEEDBACK PARA O USUÁRIO
-                    print("🎉 === FINALIZANDO ===")
+                    print(" === FINALIZANDO ===")
                     if status_nfe == 'AUTORIZADA':
-                        msg = f'✅ NFe emitida com sucesso em {ambiente}! Protocolo: {resultado_sefaz.get("protocolo")}'
+                        msg = f'OK: NFe emitida com sucesso em {ambiente}! Protocolo: {resultado_sefaz.get("protocolo")}'
                         print(msg)
                         flash(msg, 'success')
                         # Se o DANFE deve ser gerado automaticamente, faça isso aqui
@@ -369,7 +369,7 @@ def emitir_nfe():
                         if gerar_danfe_automatico == 'true':
                             try:
                                 from services.danfe_service import generate_danfe
-                                # ✅ CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
+                                # OK: CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
                                 pdf_path = generate_danfe(xml_assinado, nfe_id)
                                 pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
                                 # Adicionar URL do DANFE à sessão para mostrar no template de lista
@@ -381,29 +381,29 @@ def emitir_nfe():
                                 }
                                 
                                 # Adicionar mensagem de sucesso
-                                flash(f'✅ DANFE gerado automaticamente! <a href="{pdf_url}" target="_blank">Visualizar</a>', 'success')
+                                flash(f'OK: DANFE gerado automaticamente! <a href="{pdf_url}" target="_blank">Visualizar</a>', 'success')
                             except Exception as e:
-                                print(f"❌ Erro ao gerar DANFE automático: {e}")
-                                flash(f'⚠️ NFe emitida com sucesso, mas houve um erro ao gerar o DANFE: {str(e)}', 'warning')
+                                print(f"ERRO: Erro ao gerar DANFE automático: {e}")
+                                flash(f'AVISO: NFe emitida com sucesso, mas houve um erro ao gerar o DANFE: {str(e)}', 'warning')
                     else:
-                        msg = f'❌ NFe rejeitada: {resultado_sefaz.get("message")}'
+                        msg = f'ERRO: NFe rejeitada: {resultado_sefaz.get("message")}'
                         print(msg)
                         flash(msg, 'danger')
                     
-                    print("🔄 Redirecionando para lista de NFes...")
+                    print(" Redirecionando para lista de NFes...")
                     return redirect(url_for('nfe.list_nfes', cliente_id=emitente_cliente_id))
                     
                 except Exception as e:
                     db.rollback()
-                    print(f"❌ ERRO GERAL na emissão: {e}")
+                    print(f"ERRO: ERRO GERAL na emissão: {e}")
                     import traceback
                     traceback.print_exc()
                     flash(f'Erro ao emitir NFe: {str(e)}', 'danger')
                     return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                         
             elif action == 'rascunho':
-                print("📝 === SALVANDO RASCUNHO ===")
-                # ✅ SALVAR COMO RASCUNHO (SEM VALIDAÇÕES RIGOROSAS)
+                print("NOTA: === SALVANDO RASCUNHO ===")
+                # OK: SALVAR COMO RASCUNHO (SEM VALIDAÇÕES RIGOROSAS)
                 try:
                     # Processar itens básicos para rascunho
                     item_index = 0
@@ -437,17 +437,17 @@ def emitir_nfe():
                     db.add(nova_nfe)
                     db.commit()
                     
-                    print("✅ Rascunho salvo")
-                    flash('📄 NFe salva como rascunho!', 'success')
+                    print("OK: Rascunho salvo")
+                    flash(' NFe salva como rascunho!', 'success')
                     return redirect(url_for('nfe.list_nfes', cliente_id=emitente_cliente_id))
                     
                 except Exception as e:
                     db.rollback()
-                    print(f"❌ ERRO ao salvar rascunho: {e}")
+                    print(f"ERRO: ERRO ao salvar rascunho: {e}")
                     flash(f'Erro ao salvar rascunho: {str(e)}', 'danger')
         
         # MÉTODO GET - CARREGAR DADOS PARA O FORMULÁRIO
-        print("📋 === CARREGANDO FORMULÁRIO (GET) ===")
+        print(" === CARREGANDO FORMULÁRIO (GET) ===")
         
         # BUSCAR DESTINATÁRIOS
         destinatarios = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
@@ -541,7 +541,7 @@ def emitir_nfe():
                 'descricao': ncm.descricao
             })
 
-        # ✅ BUSCAR CSTs E CSOSNs
+        # OK: BUSCAR CSTs E CSOSNs
         try:
             all_csts = db.query(Csticms).all()
             csts_data = []
@@ -552,10 +552,10 @@ def emitir_nfe():
                     'descricao': cst.descricao
                 })
             
-            print(f"📋 CSTs carregados: {len(csts_data)} registros")
+            print(f" CSTs carregados: {len(csts_data)} registros")
             
         except Exception as e:
-            print(f"⚠️ Erro ao carregar CSTs: {e}")
+            print(f"AVISO: Erro ao carregar CSTs: {e}")
             csts_data = []
         
         try:
@@ -568,13 +568,13 @@ def emitir_nfe():
                     'descricao': csosn.descricao
                 })
             
-            print(f"📋 CSOSNs carregados: {len(csosns_data)} registros")
+            print(f" CSOSNs carregados: {len(csosns_data)} registros")
             
         except Exception as e:
-            print(f"⚠️ Erro ao carregar CSOSNs: {e}")
+            print(f"AVISO: Erro ao carregar CSOSNs: {e}")
             csosns_data = []
         
-        print(f"📋 Renderizando template com {len(destinatarios_data)} destinatários e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
+        print(f" Renderizando template com {len(destinatarios_data)} destinatários e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
         
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,
@@ -588,7 +588,7 @@ def emitir_nfe():
                              initial_nfe_items=[])
         
     except Exception as e:
-        print(f"❌ Erro geral em emitir_nfe: {e}")
+        print(f"ERRO: Erro geral em emitir_nfe: {e}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar formulário de NFe: {str(e)}', 'danger')
@@ -606,31 +606,31 @@ def list_nfes():
     try:
         cliente_id = request.args.get('cliente_id')
         
-        # ✅ AJUSTE: Admin comum só vê NFes do cliente ativo
+        # OK: AJUSTE: Admin comum só vê NFes do cliente ativo
         # Super Admin vê todas as NFes quando cliente_id não é fornecido
         if not cliente_id:
             # Se não forneceu cliente_id, verificar se é Super Admin
             if hasattr(current_user, 'is_super_admin') and current_user.is_super_admin():
                 # Super Admin: buscar todos os clientes acessíveis
                 accessible_client_ids = get_accessible_client_ids(db)
-                print(f"🔑 Super Admin - Clientes acessíveis: {accessible_client_ids}")
+                print(f" Super Admin - Clientes acessíveis: {accessible_client_ids}")
             else:
                 # Admin Comum: pegar apenas cliente ativo da sessão
-                # ✅ CORREÇÃO: usar 'current_client_id' que é a chave correta na sessão
+                # OK: CORREÇÃO: usar 'current_client_id' que é a chave correta na sessão
                 cliente_ativo_id = session.get('current_client_id')
-                print(f"🔍 Admin Comum - Cliente ativo na sessão: {cliente_ativo_id}")
-                print(f"🔍 Sessão completa: {dict(session)}")
+                print(f" Admin Comum - Cliente ativo na sessão: {cliente_ativo_id}")
+                print(f" Sessão completa: {dict(session)}")
                 
                 if not cliente_ativo_id:
                     flash('Selecione um cliente para visualizar as NFes.', 'warning')
                     return redirect(url_for('home.home'))
                 accessible_client_ids = [cliente_ativo_id]
-                print(f"✅ Admin Comum - Filtrando NFes do cliente: {cliente_ativo_id}")
+                print(f"OK: Admin Comum - Filtrando NFes do cliente: {cliente_ativo_id}")
         else:
             # Se forneceu cliente_id específico, usar ele
             accessible_client_ids = [int(cliente_id)]
             cliente_id = int(cliente_id)  # Garantir que é int
-            print(f"🎯 Cliente específico fornecido: {cliente_id}")
+            print(f" Cliente específico fornecido: {cliente_id}")
         
         # Verificar se tem acesso aos clientes
         if not accessible_client_ids:
@@ -715,7 +715,7 @@ def list_nfes():
                              cliente_id=cliente_id)
         
     except Exception as e:
-        print(f"❌ Erro ao listar NFes: {e}")
+        print(f"ERRO: Erro ao listar NFes: {e}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao listar NFes: {str(e)}', 'error')
@@ -930,7 +930,7 @@ def edit(nfe_id):
                     flash('NF-e não encontrada', 'error')
                     return redirect(url_for('nfe.list_nfes'))
                 
-                # ✅ CONVERSÃO SEGURA PARA DICIONÁRIO - CORREÇÃO PRINCIPAL
+                # OK: CONVERSÃO SEGURA PARA DICIONÁRIO - CORREÇÃO PRINCIPAL
                 try:
                     # Método 1: _asdict() para Row objects
                     if hasattr(nfe_result, '_asdict') and callable(nfe_result._asdict):
@@ -987,17 +987,17 @@ def edit(nfe_id):
                                 nfe_data[coluna] = None
                 
                 except Exception as conv_error:
-                    print(f"❌ Erro na conversão manual: {conv_error}")
+                    print(f"ERRO: Erro na conversão manual: {conv_error}")
                     flash('Erro ao processar dados da NFe', 'error')
                     return redirect(url_for('nfe.list_nfes'))
                 
-                print(f"✅ NFe {nfe_id} carregada para edição - Status: {nfe_data.get('status', 'N/A')}")
+                print(f"OK: NFe {nfe_id} carregada para edição - Status: {nfe_data.get('status', 'N/A')}")
                 
                 # Verificar se pode ser editada
                 status_editaveis = ['RASCUNHO', 'REJEITADA', 'ERRO']
                 current_status = nfe_data.get('status', '').upper()
                 if current_status not in status_editaveis:
-                    print(f"⚠️ Status '{current_status}' não é editável")
+                    print(f"AVISO: Status '{current_status}' não é editável")
                     flash('Esta NF-e não pode ser editada', 'error')
                     return redirect(url_for('nfe.view', nfe_id=nfe_id))
                 
@@ -1013,17 +1013,17 @@ def edit(nfe_id):
                         elif isinstance(json_nfe_raw, dict):
                             json_data = json_nfe_raw
                         else:
-                            print(f"⚠️ json_nfe em formato inesperado: {type(json_nfe_raw)}")
+                            print(f"AVISO: json_nfe em formato inesperado: {type(json_nfe_raw)}")
                             json_data = {}
                         
                         form_data = json_data.get('form_data', {})
                         items_data = json_data.get('items', [])
                         
-                        print(f"📋 Form data extraído: {len(form_data)} campos")
-                        print(f"📦 Items extraídos: {len(items_data)} itens")
+                        print(f" Form data extraído: {len(form_data)} campos")
+                        print(f" Items extraídos: {len(items_data)} itens")
                         
                     except (json.JSONDecodeError, TypeError) as e:
-                        print(f"⚠️ Erro ao decodificar JSON NFe: {e}")
+                        print(f"AVISO: Erro ao decodificar JSON NFe: {e}")
                         # Criar form_data básico a partir dos campos da tabela
                         data_emissao = nfe_data.get('data_emissao')
                         form_data = {
@@ -1037,9 +1037,9 @@ def edit(nfe_id):
                         items_data = []
                 
                 # Buscar dados auxiliares com conversão segura
-                print("📊 Carregando dados auxiliares...")
+                print(" Carregando dados auxiliares...")
                 
-                # ✅ CLIENTES
+                # OK: CLIENTES
                 try:
                     clientes_query = text("SELECT cliente_id, razao_social FROM clientes WHERE ativo = true ORDER BY razao_social")
                     clientes_result = db.execute(clientes_query).fetchall()
@@ -1060,13 +1060,13 @@ def edit(nfe_id):
                                     'razao_social': cliente_row[1]
                                 })
                         except Exception as e:
-                            print(f"⚠️ Erro ao processar cliente: {e}")
+                            print(f"AVISO: Erro ao processar cliente: {e}")
                             continue
                 except Exception as e:
-                    print(f"⚠️ Erro ao buscar clientes: {e}")
+                    print(f"AVISO: Erro ao buscar clientes: {e}")
                     clientes = []
                 
-                # ✅ CFOPS
+                # OK: CFOPS
                 try:
                     cfops_query = text("SELECT cfop, descricao FROM cfops ORDER BY cfop")
                     cfops_result = db.execute(cfops_query).fetchall()
@@ -1087,13 +1087,13 @@ def edit(nfe_id):
                                     'descricao': cfop_row[1]
                                 })
                         except Exception as e:
-                            print(f"⚠️ Erro ao processar CFOP: {e}")
+                            print(f"AVISO: Erro ao processar CFOP: {e}")
                             continue
                 except Exception as e:
-                    print(f"⚠️ Erro ao buscar CFOPs: {e}")
+                    print(f"AVISO: Erro ao buscar CFOPs: {e}")
                     cfops = []
                 
-                # ✅ NCMs
+                # OK: NCMs
                 try:
                     ncms_query = text("SELECT codigo, descricao FROM ncms ORDER BY codigo")
                     ncms_result = db.execute(ncms_query).fetchall()
@@ -1114,13 +1114,13 @@ def edit(nfe_id):
                                     'descricao': ncm_row[1]
                                 })
                         except Exception as e:
-                            print(f"⚠️ Erro ao processar NCM: {e}")
+                            print(f"AVISO: Erro ao processar NCM: {e}")
                             continue
                 except Exception as e:
-                    print(f"⚠️ Erro ao buscar NCMs: {e}")
+                    print(f"AVISO: Erro ao buscar NCMs: {e}")
                     ncms = []
 
-                # ✅ CSTs
+                # OK: CSTs
                 try:
                     csts_query = text("SELECT codigo, descricao FROM cst_icms ORDER BY codigo ")
                     csts_result = db.execute(csts_query).fetchall()
@@ -1141,13 +1141,13 @@ def edit(nfe_id):
                                     'descricao': cst_row[1]
                                 })
                         except Exception as e:
-                            print(f"⚠️ Erro ao processar CST: {e}")
+                            print(f"AVISO: Erro ao processar CST: {e}")
                             continue
                 except Exception as e:
-                    print(f"⚠️ Erro ao buscar CSTs: {e}")
+                    print(f"AVISO: Erro ao buscar CSTs: {e}")
                     csts = []
                 
-                # ✅ PRODUTOS
+                # OK: PRODUTOS
                 try:
                     produtos_query = text("SELECT produto_id, codigo_interno, descricao FROM produtos WHERE ativo = true ORDER BY descricao")
                     produtos_result = db.execute(produtos_query).fetchall()
@@ -1169,13 +1169,13 @@ def edit(nfe_id):
                                     'descricao': produto_row[2]
                                 })
                         except Exception as e:
-                            print(f"⚠️ Erro ao processar produto: {e}")
+                            print(f"AVISO: Erro ao processar produto: {e}")
                             continue
                 except Exception as e:
-                    print(f"⚠️ Erro ao buscar produtos: {e}")
+                    print(f"AVISO: Erro ao buscar produtos: {e}")
                     produtos = []
                 
-                print(f"📊 Dados auxiliares carregados: {len(clientes)} clientes, {len(cfops)} CFOPs, {len(ncms)} NCMs, {len(produtos)} produtos")
+                print(f" Dados auxiliares carregados: {len(clientes)} clientes, {len(cfops)} CFOPs, {len(ncms)} NCMs, {len(produtos)} produtos")
                 
                 return render_template('admin/nfes/edit.html',
                                      nfe=nfe_data,
@@ -1189,7 +1189,7 @@ def edit(nfe_id):
                                      from_rejected=request.args.get('from') == 'rejected')
                 
             except Exception as e:
-                print(f"❌ Erro ao carregar NFe para edição: {e}")
+                print(f"ERRO: Erro ao carregar NFe para edição: {e}")
                 import traceback
                 traceback.print_exc()
                 flash('Erro ao carregar NF-e', 'error')
@@ -1211,18 +1211,18 @@ def edit(nfe_id):
                     'infCpl': request.form.get('infCpl', '')
                 }
                 
-                # ✅ CORREÇÃO: Processar itens com CFOP obrigatório
+                # OK: CORREÇÃO: Processar itens com CFOP obrigatório
                 itens = []
                 item_indices = request.form.getlist('item_index')
                 
                 for i, idx in enumerate(item_indices):
-                    # ✅ BUSCAR CFOP DO PRODUTO SE NÃO FORNECIDO
+                    # OK: BUSCAR CFOP DO PRODUTO SE NÃO FORNECIDO
                     cfop_item = request.form.get(f'cfop_{idx}')
                     codigo_produto = request.form.get(f'codigo_produto_{idx}')
                     
                     # Se CFOP não fornecido, buscar do produto
                     if not cfop_item or cfop_item.strip() == '':
-                        print(f"⚠️ CFOP vazio para item {i+1}, buscando do produto {codigo_produto}")
+                        print(f"AVISO: CFOP vazio para item {i+1}, buscando do produto {codigo_produto}")
                         
                         if codigo_produto:
                             try:
@@ -1245,25 +1245,25 @@ def edit(nfe_id):
                                     cfop_produto = produto_result[1] or produto_result[0]
                                     if cfop_produto:
                                         cfop_item = str(cfop_produto).replace('.', '').replace('-', '')
-                                        print(f"✅ CFOP encontrado para produto {codigo_produto}: {cfop_item}")
+                                        print(f"OK: CFOP encontrado para produto {codigo_produto}: {cfop_item}")
                                     else:
                                         cfop_item = '5102'  # CFOP padrão para venda
-                                        print(f"⚠️ CFOP não encontrado para produto {codigo_produto}, usando padrão: {cfop_item}")
+                                        print(f"AVISO: CFOP não encontrado para produto {codigo_produto}, usando padrão: {cfop_item}")
                                 else:
                                     cfop_item = '5102'
-                                    print(f"⚠️ Produto {codigo_produto} não encontrado, usando CFOP padrão: {cfop_item}")
+                                    print(f"AVISO: Produto {codigo_produto} não encontrado, usando CFOP padrão: {cfop_item}")
                             except Exception as e:
-                                print(f"❌ Erro ao buscar CFOP do produto: {e}")
+                                print(f"ERRO: Erro ao buscar CFOP do produto: {e}")
                                 cfop_item = '5102'
                         else:
                             cfop_item = '5102'
-                            print(f"⚠️ Código do produto vazio, usando CFOP padrão: {cfop_item}")
+                            print(f"AVISO: Código do produto vazio, usando CFOP padrão: {cfop_item}")
                     
-                    # ✅ VALIDAR E FORMATAR CFOP
+                    # OK: VALIDAR E FORMATAR CFOP
                     if cfop_item:
                         cfop_item = str(cfop_item).replace('.', '').replace('-', '').strip()
                         if len(cfop_item) != 4 or not cfop_item.isdigit():
-                            print(f"⚠️ CFOP inválido '{cfop_item}', usando padrão '5102'")
+                            print(f"AVISO: CFOP inválido '{cfop_item}', usando padrão '5102'")
                             cfop_item = '5102'
                     else:
                         cfop_item = '5102'
@@ -1272,7 +1272,7 @@ def edit(nfe_id):
                         'codigo_produto': codigo_produto,
                         'descricao': request.form.get(f'descricao_{idx}'),
                         'ncm': request.form.get(f'ncm_{idx}'),
-                        'cfop': cfop_item,  # ✅ CFOP garantido
+                        'cfop': cfop_item,  # OK: CFOP garantido
                         'origem': request.form.get(f'origem_{idx}', '0'),
                         'cst_icms': request.form.get(f'cst_icms_{idx}', '00'),
                         'aliquota_icms': request.form.get(f'aliquota_icms_{idx}', '0'),
@@ -1284,7 +1284,7 @@ def edit(nfe_id):
                         'valor_total': request.form.get(f'valor_total_{idx}')
                     }
                     
-                    print(f"📦 Item {i+1} processado - CFOP: {item['cfop']}, Produto: {item['codigo_produto']}")
+                    print(f" Item {i+1} processado - CFOP: {item['cfop']}, Produto: {item['codigo_produto']}")
                     itens.append(item)
                 
                 cliente_id = request.form.get('cliente_id')
@@ -1353,7 +1353,7 @@ def edit(nfe_id):
                     new_status = 'RASCUNHO'
                     mensagem = 'Rascunho atualizado'
                 
-                # ✅ CORREÇÃO: Acessar dados do destinatário por índice ou atributo
+                # OK: CORREÇÃO: Acessar dados do destinatário por índice ou atributo
                 try:
                     if hasattr(destinatario_result, '_asdict'):
                         dest_data = destinatario_result._asdict()
@@ -1364,7 +1364,7 @@ def edit(nfe_id):
                         dest_razao = destinatario_result[1] if len(destinatario_result) > 1 else ''
                         dest_cnpj = destinatario_result[2] if len(destinatario_result) > 2 else ''
                 except Exception as e:
-                    print(f"⚠️ Erro ao extrair dados do destinatário: {e}")
+                    print(f"AVISO: Erro ao extrair dados do destinatário: {e}")
                     dest_razao = 'N/A'
                     dest_cnpj = 'N/A'
                 
@@ -1383,12 +1383,12 @@ def edit(nfe_id):
                 })
                 db.commit()
                 
-                print(f"✅ NFe {nfe_id} atualizada - Status: {new_status}")
+                print(f"OK: NFe {nfe_id} atualizada - Status: {new_status}")
                 
                 # Se escolheu emitir, processar na SEFAZ
                 if action == 'emit':
                     try:
-                        print(f"🚀 Tentando emitir NFe {nfe_id}...")
+                        print(f" Tentando emitir NFe {nfe_id}...")
                         
                         # Usar serviço NFeService para processar
                         from services.nfe_service import NFeService
@@ -1403,7 +1403,7 @@ def edit(nfe_id):
                             flash(f'NF-e atualizada, mas erro na emissão: {resultado.get("message", "Erro desconhecido")}', 'warning')
                     
                     except Exception as e:
-                        print(f"❌ Erro ao emitir NFe editada: {e}")
+                        print(f"ERRO: Erro ao emitir NFe editada: {e}")
                         import traceback
                         traceback.print_exc()
                         flash(f'NF-e atualizada, mas erro na emissão: {str(e)}', 'danger')
@@ -1413,7 +1413,7 @@ def edit(nfe_id):
                 return redirect(url_for('nfe.view', nfe_id=nfe_id))
                 
             except Exception as e:
-                print(f"❌ Erro ao atualizar NFe: {e}")
+                print(f"ERRO: Erro ao atualizar NFe: {e}")
                 import traceback
                 traceback.print_exc()
                 flash(f'Erro ao atualizar NF-e: {str(e)}', 'error')
@@ -1440,7 +1440,7 @@ def download(nfe_id):
 def reenviar_nfe(nfe_id):
     """Reenviar NFe rejeitada para a SEFAZ"""
     try:
-        print(f"🔄 Tentando reenviar NFe ID: {nfe_id}")
+        print(f" Tentando reenviar NFe ID: {nfe_id}")
         
         db = next(get_db())
         
@@ -1468,7 +1468,7 @@ def reenviar_nfe(nfe_id):
                 'message': 'Apenas NF-es rejeitadas podem ser reenviadas'
             }), 400
         
-        print(f"✅ NFe encontrada - Status: {nfe_data['status']}")
+        print(f"OK: NFe encontrada - Status: {nfe_data['status']}")
         
         # Verificar se tem dados JSON
         if not nfe_data['json_nfe']:
@@ -1487,7 +1487,7 @@ def reenviar_nfe(nfe_id):
         db.execute(update_query, {'nfe_id': nfe_id})
         db.commit()
         
-        print(f"🔄 Status atualizado para PROCESSANDO")
+        print(f" Status atualizado para PROCESSANDO")
         
         # Reenviar para SEFAZ
         from services.nfe_service import NFeService
@@ -1544,7 +1544,7 @@ def reenviar_nfe(nfe_id):
                     'uf': destinatario.uf
                 }
         
-        # ✅ CORREÇÃO: Verificar se destinatário foi encontrado
+        # OK: CORREÇÃO: Verificar se destinatário foi encontrado
         if not destinatario_data:
             # Atualizar status de volta para rascunho
             update_back_query = text("""
@@ -1606,7 +1606,7 @@ def reenviar_nfe(nfe_id):
         }
         
         if resultado['success']:
-            print(f"✅ NFe reenviada com sucesso")
+            print(f"OK: NFe reenviada com sucesso")
             return jsonify({
                 'success': True,
                 'message': 'NF-e reenviada com sucesso!',
@@ -1614,7 +1614,7 @@ def reenviar_nfe(nfe_id):
                 'chave_acesso': resultado.get('chave_acesso')
             })
         else:
-            print(f"❌ Erro no reenvio: {resultado.get('message')}")
+            print(f"ERRO: Erro no reenvio: {resultado.get('message')}")
             
             # Atualizar status para rejeitada novamente
             error_query = text("""
@@ -1635,7 +1635,7 @@ def reenviar_nfe(nfe_id):
             }), 400
         
     except Exception as e:
-        print(f"❌ Erro no reenvio da NFe: {e}")
+        print(f"ERRO: Erro no reenvio da NFe: {e}")
         import traceback
         traceback.print_exc()
         
@@ -1649,7 +1649,7 @@ def emitir_rascunho(nfe_id):
     """Emitir NFe que está em rascunho"""
     db = None
     try:
-        print(f"📝 Emitindo rascunho NFe ID: {nfe_id}")
+        print(f"NOTA: Emitindo rascunho NFe ID: {nfe_id}")
         
         db = next(get_db())
         db = next(get_db())
@@ -1678,7 +1678,7 @@ def emitir_rascunho(nfe_id):
                 'message': 'Apenas rascunhos podem ser emitidos por esta função'
             }), 400
         
-        print(f"✅ Rascunho encontrado")
+        print(f"OK: Rascunho encontrado")
         
         # Verificar se tem dados JSON
         if not nfe_data['json_nfe']:
@@ -1697,7 +1697,7 @@ def emitir_rascunho(nfe_id):
         db.execute(update_query, {'nfe_id': nfe_id})
         db.commit()
         
-        print(f"🔄 Status atualizado para PROCESSANDO")
+        print(f" Status atualizado para PROCESSANDO")
         
         # Emitir na SEFAZ
         from services.nfe_service import NFeService
@@ -1761,14 +1761,14 @@ def emitir_rascunho(nfe_id):
                 'message': 'Dados do destinatário não encontrados no rascunho'
             }), 400
         
-        # ✅ CORREÇÃO: Gerar XML com dados válidos
+        # OK: CORREÇÃO: Gerar XML com dados válidos
         ambiente = json_data.get('ambiente', 'homologacao')
         tp_amb = 2 if ambiente == 'homologacao' else 1
         
         xml_gerado = generate_nfe_xml(
             json_data.get('form_data', {}),
             emitente_data_for_template,
-            destinatario_data,  # ✅ AGORA É DICT VÁLIDO
+            destinatario_data,  # OK: AGORA É DICT VÁLIDO
             json_data.get('items', []),
             tp_amb,
             'emitir'
@@ -1841,7 +1841,7 @@ def emitir_rascunho(nfe_id):
             db.commit()
         
         if resultado['success']:
-            print(f"✅ Rascunho emitido com sucesso")
+            print(f"OK: Rascunho emitido com sucesso")
             return jsonify({
                 'success': True,
                 'message': 'NF-e emitida com sucesso!',
@@ -1849,7 +1849,7 @@ def emitir_rascunho(nfe_id):
                 'chave_acesso': resultado.get('chave_acesso')
             })
         else:
-            print(f"❌ Erro na emissão: {resultado.get('message')}")
+            print(f"ERRO: Erro na emissão: {resultado.get('message')}")
             
             return jsonify({
                 'success': False,
@@ -1857,7 +1857,7 @@ def emitir_rascunho(nfe_id):
             }), 400
         
     except Exception as e:
-        print(f"❌ Erro na emissão do rascunho: {e}")
+        print(f"ERRO: Erro na emissão do rascunho: {e}")
         import traceback
         traceback.print_exc()
         
@@ -1902,7 +1902,7 @@ def compartilhar_nfe(nfe_id):
         include_danfe = data.get('include_danfe', True)
         include_xml = data.get('include_xml', True)
         
-        print(f"📧 Compartilhando NFe {nfe_id} para {email_destino}")
+        print(f" Compartilhando NFe {nfe_id} para {email_destino}")
         
         if not email_destino:
             return jsonify({'success': False, 'message': 'Email não informado'}), 400
@@ -1959,7 +1959,7 @@ def compartilhar_nfe(nfe_id):
         try:
             # XML
             if include_xml:
-                print(f"📄 Incluindo XML...")
+                print(f" Incluindo XML...")
                 json_nfe = nfe_data.get('json_nfe')
                 if json_nfe:
                     # Se json_nfe for string, converter para dict
@@ -1977,13 +1977,13 @@ def compartilhar_nfe(nfe_id):
                             'conteudo': xml_content.encode('utf-8'),
                             'tipo': 'application/xml'
                         })
-                        print(f"✅ XML adicionado aos anexos")
+                        print(f"OK: XML adicionado aos anexos")
                     else:
-                        print(f"⚠️ XML content não encontrado")
+                        print(f"AVISO: XML content não encontrado")
             
             # DANFE PDF
             if include_danfe:
-                print(f"📋 Incluindo DANFE...")
+                print(f" Incluindo DANFE...")
                 try:
                     json_nfe = nfe_data.get('json_nfe')
                     if json_nfe:
@@ -1992,12 +1992,12 @@ def compartilhar_nfe(nfe_id):
                         
                         xml_content = json_nfe.get('xml_content')
                         if xml_content:
-                            # ✅ CORREÇÃO: Usar caminho absoluto e verificar se existe
+                            # OK: CORREÇÃO: Usar caminho absoluto e verificar se existe
                             from services.danfe_service import generate_danfe
                             
                             # Gerar DANFE
                             pdf_path = generate_danfe(xml_content, nfe_id)
-                            print(f"📋 DANFE path: {pdf_path}")
+                            print(f" DANFE path: {pdf_path}")
                             
                             if pdf_path:
                                 # Verificar se é caminho absoluto
@@ -2006,7 +2006,7 @@ def compartilhar_nfe(nfe_id):
                                     app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                                     pdf_path = os.path.join(app_root, pdf_path)
                                 
-                                print(f"📋 Caminho absoluto DANFE: {pdf_path}")
+                                print(f" Caminho absoluto DANFE: {pdf_path}")
                                 
                                 if os.path.exists(pdf_path):
                                     with open(pdf_path, 'rb') as pdf_file:
@@ -2016,15 +2016,15 @@ def compartilhar_nfe(nfe_id):
                                             'conteudo': pdf_content,
                                             'tipo': 'application/pdf'
                                         })
-                                        print(f"✅ DANFE adicionado aos anexos ({len(pdf_content)} bytes)")
+                                        print(f"OK: DANFE adicionado aos anexos ({len(pdf_content)} bytes)")
                                 else:
-                                    print(f"❌ Arquivo DANFE não encontrado: {pdf_path}")
+                                    print(f"ERRO: Arquivo DANFE não encontrado: {pdf_path}")
                             else:
-                                print(f"❌ DANFE não foi gerado")
+                                print(f"ERRO: DANFE não foi gerado")
                         else:
-                            print(f"⚠️ XML content não disponível para gerar DANFE")
+                            print(f"AVISO: XML content não disponível para gerar DANFE")
                 except Exception as e:
-                    print(f"❌ Erro ao gerar DANFE para compartilhamento: {e}")
+                    print(f"ERRO: Erro ao gerar DANFE para compartilhamento: {e}")
                     import traceback
                     traceback.print_exc()
                     # Continuar sem o DANFE se houver erro
@@ -2035,7 +2035,7 @@ def compartilhar_nfe(nfe_id):
                     'message': 'Nenhum anexo disponível para envio'
                 }), 400
             
-            print(f"📎 Total de anexos preparados: {len(anexos)}")
+            print(f" Total de anexos preparados: {len(anexos)}")
             
             # Enviar email
             from services.email_service import EmailService
@@ -2057,7 +2057,7 @@ def compartilhar_nfe(nfe_id):
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                        <h2 style="color: #007bff; margin: 0;">📋 Nota Fiscal Eletrônica</h2>
+                        <h2 style="color: #007bff; margin: 0;"> Nota Fiscal Eletrônica</h2>
                     </div>
                     
                     <p>Prezado(a),</p>
@@ -2093,10 +2093,10 @@ def compartilhar_nfe(nfe_id):
                     </div>
                     
                     <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; font-size: 14px;">
-                        <strong>📎 Anexos inclusos:</strong>
+                        <strong> Anexos inclusos:</strong>
                         <ul style="margin: 10px 0; padding-left: 20px;">
-                            {"<li>📋 DANFE (PDF)</li>" if include_danfe else ""}
-                            {"<li>📄 XML da NFe</li>" if include_xml else ""}
+                            {"<li> DANFE (PDF)</li>" if include_danfe else ""}
+                            {"<li> XML da NFe</li>" if include_xml else ""}
                         </ul>
                     </div>
                     
@@ -2110,7 +2110,7 @@ def compartilhar_nfe(nfe_id):
             </html>
             """
             
-            print(f"📧 Enviando email...")
+            print(f" Enviando email...")
             
             # Enviar
             resultado = email_service.enviar_email(
@@ -2120,7 +2120,7 @@ def compartilhar_nfe(nfe_id):
                 anexos=anexos
             )
             
-            print(f"📧 Resultado do envio: {resultado}")
+            print(f" Resultado do envio: {resultado}")
             
             if resultado.get('success', False):
                 # Log do compartilhamento (opcional - se a tabela existir)
@@ -2140,9 +2140,9 @@ def compartilhar_nfe(nfe_id):
                         'xml': include_xml
                     })
                     db.commit()
-                    print(f"✅ Log de compartilhamento salvo")
+                    print(f"OK: Log de compartilhamento salvo")
                 except Exception as e:
-                    print(f"⚠️ Erro ao salvar log de compartilhamento: {e}")            
+                    print(f"AVISO: Erro ao salvar log de compartilhamento: {e}")            
                 
                 return jsonify({
                     'success': True,
@@ -2155,7 +2155,7 @@ def compartilhar_nfe(nfe_id):
                 }), 500
                 
         except Exception as e:
-            print(f"❌ Erro no compartilhamento: {str(e)}")
+            print(f"ERRO: Erro no compartilhamento: {str(e)}")
             import traceback
             traceback.print_exc()
             return jsonify({
@@ -2164,7 +2164,7 @@ def compartilhar_nfe(nfe_id):
             }), 500
         
     except Exception as e:
-        print(f"❌ Erro geral no compartilhamento: {str(e)}")
+        print(f"ERRO: Erro geral no compartilhamento: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({
