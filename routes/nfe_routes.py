@@ -92,7 +92,8 @@ def emitir_nfe():
             'codigo_municipio': emitente_data.codigo_municipio,
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
-            'inscricao_estadual': emitente_data.inscricao_estadual
+            'inscricao_estadual': emitente_data.inscricao_estadual,
+            'regime_tributario_id': emitente_data.regime_tributario_id  # 🔥 CRÍTICO para buscar regras tributárias
         }
         
         if request.method == 'POST':
@@ -1517,7 +1518,8 @@ def reenviar_nfe(nfe_id):
             'codigo_municipio': emitente_data.codigo_municipio,
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
-            'inscricao_estadual': emitente_data.inscricao_estadual
+            'inscricao_estadual': emitente_data.inscricao_estadual,
+            'regime_tributario_id': emitente_data.regime_tributario_id  # 🔥 CRÍTICO para buscar regras tributárias
         }
         # Buscar destinatário baseado nos dados do form_data
         
@@ -1727,7 +1729,8 @@ def emitir_rascunho(nfe_id):
             'codigo_municipio': emitente_data.codigo_municipio,
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
-            'inscricao_estadual': emitente_data.inscricao_estadual
+            'inscricao_estadual': emitente_data.inscricao_estadual,
+            'regime_tributario_id': emitente_data.regime_tributario_id  # 🔥 CRÍTICO para buscar regras tributárias
         }
         
         # Buscar destinatário para o rascunho
