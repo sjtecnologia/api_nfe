@@ -940,7 +940,36 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         const regimeTributario = '{{ regime_tributario }}';
         const regimeId = {% if emitente_data and emitente_data.regime_tributario_id %}{{ emitente_data.regime_tributario_id }}{% else %}null{% endif %};
         
+        // ⚠️ VERIFICAÇÃO CRÍTICA
+        if (!regimeId) {
+            console.error('❌ ERRO: regime_tributario_id está NULL!');
+            console.error('   Isso impedirá a busca da regra tributária.');
+            console.error('   Verifique se emitente_data.regime_tributario_id está preenchido.');
+        }
+        
+        // Obter UF do emitente (origem)
+        const ufOrigem = '{% if emitente_data and emitente_data.uf %}{{ emitente_data.uf }}{% else %}SP{% endif %}';
+        
+        // Obter UF do destinatário (destino)
+        const destinatarioSelect = document.getElementById('destinatario');
+        const destinatarioOption = destinatarioSelect?.options[destinatarioSelect.selectedIndex];
+        const ufDestino = destinatarioOption?.dataset.uf || ufOrigem;
+        
         console.log('   Regime:', regimeTributario, '(ID:', regimeId, ')');
+        console.log('   UF Origem:', ufOrigem, '| UF Destino:', ufDestino);
+        
+        // Preparar payload
+        const payload = {
+            cliente_id: clienteId,
+            regime_tributario_id: regimeId,
+            ncm_codigo: ncmCodigo,
+            cfop_codigo: cfopCodigo,
+            uf_origem: ufOrigem,
+            uf_destino: ufDestino,
+            tipo_item: 'PRODUTO'
+        };
+        
+        console.log('📤 Enviando para API:', payload);
         
         // Buscar regra tributária
         const response = await fetch('/api/regras_tributacao/buscar', {
@@ -948,18 +977,13 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                cliente_id: clienteId,
-                regime_tributario_id: regimeId,
-                ncm_codigo: ncmCodigo,
-                cfop_codigo: cfopCodigo,
-                uf_origem: 'SP',
-                uf_destino: 'SP',
-                tipo_item: 'PRODUTO'
-            })
+            body: JSON.stringify(payload)
         });
         
+        console.log('📥 Status da resposta:', response.status, response.statusText);
+        
         const result = await response.json();
+        console.log('📥 Resposta da API:', result);
         
         if (result.sucesso && result.regra) {
             console.log('✅ Regra tributária encontrada:', result.regra);
