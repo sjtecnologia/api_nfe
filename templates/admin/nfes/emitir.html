@@ -922,18 +922,8 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         const select = document.querySelector(`select[name="produto_${itemId}"]`);
         const option = select.options[select.selectedIndex];
         
-        let ncmCodigo = option.dataset.ncm;
-        let cfopCodigo = option.dataset.cfop;
-        
-        // Remover pontos do CFOP se existirem (5.101 -> 5101)
-        if (cfopCodigo) {
-            cfopCodigo = cfopCodigo.replace(/\./g, '');
-        }
-        
-        // Remover pontos do NCM se existirem
-        if (ncmCodigo) {
-            ncmCodigo = ncmCodigo.replace(/\./g, '');
-        }
+        const ncmCodigo = option.dataset.ncm;
+        const cfopCodigo = option.dataset.cfop;
         
         if (!ncmCodigo || !cfopCodigo) {
             console.log('ℹ️ Produto sem NCM/CFOP definidos, pulando busca de regra');
