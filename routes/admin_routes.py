@@ -3076,18 +3076,30 @@ def admin_destinatarios_nfe_add(cliente_id: int):
 @permission_required('destinatarios_nfe.delete')
 def delete_destinatario(destinatario_id: int):
     db = _get_db()
+    cliente_id = None
     try:
+        # Get cliente_id before deleting
+        row = db.execute(text("SELECT cliente_id FROM destinatarios_nfe WHERE destinatario_id = :cid"),
+                        {'cid': destinatario_id}).fetchone()
+        if row:
+            cliente_id = row[0]
+        
         db.execute(text("DELETE FROM destinatarios_nfe WHERE destinatario_id = :cid"),
                    {'cid': destinatario_id})
         db.commit()
         flash('Destinatário excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_destinatario: {e}")
+        print(f"ERRO: Erro delete_destinatario: {e}")
         flash('Erro ao excluir destinatário', 'error')
     finally:
         db.close()
-    return redirect(url_for('admin.list_destinatarios'))
+    
+    # Redirect with cliente_id if available, otherwise to client list
+    if cliente_id:
+        return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
+    else:
+        return redirect(url_for('admin.list_clientes'))
 # -------------------------------------------------------------------
 # PRODUTOS
 # -------------------------------------------------------------------
@@ -3597,12 +3609,20 @@ def edit_destinatario(destinatario_id: int):
         ])
         if not destinatario:
             flash('Destinatário não encontrado', 'warning')
-            return redirect(url_for('admin.list_destinatarios'))
+            cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
+            if cliente_id:
+                return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
+            else:
+                return redirect(url_for('admin.list_clientes'))
         return render_template('admin/destinatarios/form.html', destinatario=destinatario)
     except Exception as e:
-        print(f"❌ Erro edit_destinatario: {e}")
+        print(f"ERRO: Erro edit_destinatario: {e}")
         flash('Erro ao carregar destinatário', 'error')
-        return redirect(url_for('admin.list_destinatarios'))
+        cliente_id = request.args.get('cliente_id') or session.get('current_client_id') or (destinatario.get('cliente_id') if destinatario else None)
+        if cliente_id:
+            return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
+        else:
+            return redirect(url_for('admin.list_clientes'))
     finally:
         db.close()
 

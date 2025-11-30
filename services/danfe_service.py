@@ -148,7 +148,11 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
         bool: True se gerado com sucesso, False caso contrário
     """
     try:
+        print("\n" + "=" * 80)
+        print("DENTRO DE generate_danfe_nfelib")
+        print("=" * 80)
         logger.info("🚀 Tentando gerar DANFE oficial usando nfelib")
+        print("🚀 Tentando gerar DANFE oficial usando nfelib")
         
         # Garantir que xml_content é string
         xml_str = xml_content.decode('utf-8') if isinstance(xml_content, bytes) else xml_content
@@ -182,20 +186,28 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
             
             # Processar como NFe normal
             logger.info("📄 Processando como NFe")
+            print("📄 Processando como NFe")
             
             # Importar bindings corretos baseado na versão
             NfeProc = None
             try:
                 # Tentar versão 4.0 primeiro (mais comum)
+                print("🔄 Tentando importar bindings v4.0...")
                 from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
                 logger.info("📚 Usando bindings v4.0")
-            except ImportError:
+                print("✅ Bindings v4.0 importados com sucesso")
+            except ImportError as e:
+                print(f"❌ Falha ao importar v4.0: {str(e)}")
                 try:
                     # Fallback para versão 3.1 (corrigindo o path)
+                    print("🔄 Tentando importar bindings v3.1...")
                     from nfelib.nfe.bindings.v3_1.proc_nfe_v3_10 import NfeProc  # type: ignore
                     logger.info("📚 Usando bindings v3.1")
-                except ImportError:
+                    print("✅ Bindings v3.1 importados com sucesso")
+                except ImportError as e2:
+                    print(f"❌ Falha ao importar v3.1: {str(e2)}")
                     logger.error("❌ Não foi possível importar bindings da nfelib")
+                    print("❌ Não foi possível importar bindings da nfelib")
                     return False
             
             if NfeProc is None:
@@ -585,19 +597,39 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> s
         if not danfe_generated:
             try:
                 # Verificar se nfelib está instalada
+                print("=" * 80)
+                print("INICIANDO GERAÇÃO DE DANFE")
+                print(f"NFe ID: {nfe_id}")
+                print(f"Output path: {output_pdf_path}")
+                print("=" * 80)
+                
                 if not check_module_exists('nfelib'):
+                    print("❌ nfelib não encontrado, tentando instalar...")
                     logger.info("📦 nfelib não encontrado, tentando instalar...")
                     if install_package('nfelib'):
+                        print("✅ nfelib instalado com sucesso")
                         logger.info("✅ nfelib instalado com sucesso")
                     else:
+                        print("❌ Falha ao instalar nfelib")
                         logger.error("❌ Falha ao instalar nfelib")
+                else:
+                    print("✅ nfelib está disponível")
                 
                 # Tentar usar nfelib se disponível
                 if check_module_exists('nfelib'):
-                    if generate_danfe_nfelib(xml_content, output_pdf_path, logo_path):
+                    print("🚀 Chamando generate_danfe_nfelib...")
+                    resultado = generate_danfe_nfelib(xml_content, output_pdf_path, logo_path)
+                    print(f"📊 Resultado generate_danfe_nfelib: {resultado}")
+                    
+                    if resultado:
                         danfe_generated = True
+                        print("🎉 DANFE oficial gerado com sucesso usando nfelib")
                         logger.info("🎉 DANFE oficial gerado com sucesso usando nfelib")
+                    else:
+                        print("❌ generate_danfe_nfelib retornou False")
+                        logger.warning("❌ generate_danfe_nfelib retornou False")
                 else:
+                    print("⚠️ nfelib não está disponível")
                     logger.warning("⚠️ nfelib não está disponível")
                     
             except Exception as e:
