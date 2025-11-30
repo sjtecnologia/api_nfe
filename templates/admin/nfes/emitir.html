@@ -899,8 +899,143 @@ function carregarProduto(itemId) {
             cstSelect.val(option.dataset.cst).trigger('change');
         }
         
+        // ✅ BUSCAR REGRA TRIBUTÁRIA AUTOMATICAMENTE
+        aplicarRegraTributaria(itemId, option.value);
+        
         // Atualizar JSON do item
         atualizarItemJSON(itemId);
+    }
+}
+
+// ✅ FUNÇÃO PARA APLICAR REGRA TRIBUTÁRIA AUTOMATICAMENTE
+async function aplicarRegraTributaria(itemId, produtoId) {
+    try {
+        // Buscar informações do cliente e produto
+        const clienteId = {{ emitente_data.cliente_id if emitente_data else 'null' }};
+        
+        if (!clienteId || !produtoId) {
+            console.log('ℹ️ Cliente ou produto não identificado, pulando busca de regra tributária');
+            return;
+        }
+        
+        // Buscar dados do cliente (regime tributário e UF)
+        const clienteResponse = await fetch(`/admin/api/cliente/${clienteId}/info`);
+        const clienteData = await clienteResponse.json();
+        
+        // Buscar produto para pegar NCM e CFOP
+        const produto = window.produtosDisponiveis.find(p => p.produto_id == produtoId);
+        
+        if (!produto || !produto.ncm_codigo || !produto.cfop_codigo) {
+            console.log('ℹ️ Produto sem NCM/CFOP definidos, pulando busca de regra');
+            return;
+        }
+        
+        // Buscar regra tributária
+        const response = await fetch('/api/regras_tributacao/buscar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                cliente_id: clienteId,
+                regime_tributario_id: clienteData.regime_tributario_id,
+                ncm_codigo: produto.ncm_codigo,
+                cfop_codigo: produto.cfop_codigo,
+                uf_origem: clienteData.uf || 'SP',
+                uf_destino: document.getElementById('destinatario')?.options[document.getElementById('destinatario')?.selectedIndex]?.dataset.uf || clienteData.uf || 'SP',
+                tipo_item: 'PRODUTO'
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.sucesso && result.regra) {
+            console.log('✅ Regra tributária encontrada:', result.regra.descricao);
+            
+            // Aplicar CSOSN/CST ICMS
+            if (result.regra.csosn_id) {
+                const csosnSelect = $(`select[name="csosn_${itemId}"]`);
+                if (csosnSelect.length) {
+                    csosnSelect.val(result.regra.csosn_id).trigger('change');
+                }
+            } else if (result.regra.cst_icms_id) {
+                const cstSelect = $(`select[name="cst_icms_${itemId}"]`);
+                if (cstSelect.length) {
+                    cstSelect.val(result.regra.cst_icms_id).trigger('change');
+                }
+            }
+            
+            // Aplicar alíquota ICMS
+            if (result.regra.aliquota_icms) {
+                const aliquotaInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
+                if (aliquotaInput) {
+                    aliquotaInput.value = result.regra.aliquota_icms;
+                }
+            }
+            
+            // Aplicar CST e alíquota PIS
+            if (result.regra.cst_pis) {
+                const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
+                if (cstPisInput) {
+                    cstPisInput.value = result.regra.cst_pis;
+                }
+            }
+            if (result.regra.aliquota_pis) {
+                const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
+                if (aliquotaPisInput) {
+                    aliquotaPisInput.value = result.regra.aliquota_pis;
+                }
+            }
+            
+            // Aplicar CST e alíquota COFINS
+            if (result.regra.cst_cofins) {
+                const cstCofinsInput = document.querySelector(`input[name="cst_cofins_${itemId}"]`);
+                if (cstCofinsInput) {
+                    cstCofinsInput.value = result.regra.cst_cofins;
+                }
+            }
+            if (result.regra.aliquota_cofins) {
+                const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
+                if (aliquotaCofinsInput) {
+                    aliquotaCofinsInput.value = result.regra.aliquota_cofins;
+                }
+            }
+            
+            // Aplicar CST e alíquota IPI (se aplicável)
+            if (result.regra.cst_ipi) {
+                const cstIpiInput = document.querySelector(`input[name="cst_ipi_${itemId}"]`);
+                if (cstIpiInput) {
+                    cstIpiInput.value = result.regra.cst_ipi;
+                }
+            }
+            if (result.regra.aliquota_ipi) {
+                const aliquotaIpiInput = document.querySelector(`input[name="aliquota_ipi_${itemId}"]`);
+                if (aliquotaIpiInput) {
+                    aliquotaIpiInput.value = result.regra.aliquota_ipi;
+                }
+            }
+            
+            // Mostrar mensagem de sucesso
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <strong>✅ Regra aplicada:</strong> ${result.regra.descricao}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            `;
+            document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
+            
+            // Remover alerta após 5 segundos
+            setTimeout(() => alertDiv.remove(), 5000);
+            
+            // Recalcular totais
+            calcularTotal(itemId);
+            
+        } else {
+            console.log('ℹ️ Nenhuma regra tributária encontrada para este produto');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao buscar regra tributária:', error);
     }
 }
 
