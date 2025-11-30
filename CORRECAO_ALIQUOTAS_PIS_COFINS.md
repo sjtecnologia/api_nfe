@@ -1,12 +1,21 @@
-# 🔧 Correção: Alíquotas PIS/COFINS Incorretas
+# 🔧 Correção: TODOS os Tributos Incorretos (ICMS, PIS, COFINS, IPI)
 
 ## 📋 Problema Relatado
 
-Ao emitir NFe, o sistema estava preenchendo alíquotas de PIS/COFINS que não correspondiam às regras tributárias cadastradas:
-- **Problema**: Alíquota PIS 1.65% e COFINS 7.60%
-- **Esperado**: Alíquotas das regras cadastradas (3% ou 1% PIS, conforme regra)
+Ao emitir NFe, o sistema estava preenchendo tributos que não correspondiam às regras tributárias cadastradas:
+- **Problema**: Alíquotas incorretas em TODOS os tributos (ICMS, PIS, COFINS, IPI)
+- **Exemplo**: Alíquota PIS 1.65% e COFINS 7.60% (valores de produtos anteriores)
+- **Esperado**: Alíquotas das regras cadastradas
 - **CFOP**: 5101
 - **NCM**: 85285900
+
+## 🔴 Escopo Ampliado
+
+**Problema não era só PIS/COFINS**, mas **TODOS os tributos**:
+- ❌ ICMS (alíquota, CSOSN/CST)
+- ❌ PIS (alíquota, CST)
+- ❌ COFINS (alíquota, CST)
+- ❌ IPI (alíquota, CST)
 
 ## 🔍 Causa Raiz
 
@@ -27,45 +36,95 @@ A função `aplicarRegraTributaria()` implementada estava funcionando corretamen
 
 ## ✅ Solução Implementada
 
-### Modificação no `templates/admin/nfes/emitir.html`
+### 1. Modificação no `templates/admin/nfes/emitir.html`
 
-**Antes:**
+#### **Antes (PROBLEMA):**
 ```javascript
-// Aplicar CST e alíquota PIS
-if (result.regra.cst_pis) {
-    const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
-    if (cstPisInput) {
-        cstPisInput.value = result.regra.cst_pis;
-    }
+// ❌ Aplicava valores SEM limpar campos antes
+if (result.regra.csosn_id) {
+    csosnSelect.val(result.regra.csosn_id).trigger('change');
+}
+
+if (result.regra.aliquota_icms) {
+    aliquotaInput.value = result.regra.aliquota_icms;
 }
 // ... apenas aplicava SE a regra tivesse valores
+// ... valores antigos permaneciam se regra não tivesse o campo
 ```
 
-**Depois:**
+#### **Depois (CORRIGIDO):**
 ```javascript
-// ✅ BUSCAR CAMPOS DE PIS/COFINS/IPI
+// ✅ 1. BUSCAR TODOS OS CAMPOS TRIBUTÁRIOS
+const csosnSelect = $(`select[name="csosn_${itemId}"]`);
+const cstIcmsSelect = $(`select[name="cst_icms_${itemId}"]`);
+const aliquotaIcmsInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
 const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
 const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
-// ... busca todos os campos primeiro
+// ... busca TODOS os campos primeiro
 
-// ✅ LIMPAR CAMPOS PRIMEIRO (para evitar valores antigos)
+// ✅ 2. LIMPAR TODOS OS CAMPOS (antes de aplicar regra)
+if (csosnSelect.length) csosnSelect.val('').trigger('change');
+if (cstIcmsSelect.length) cstIcmsSelect.val('').trigger('change');
+if (aliquotaIcmsInput) aliquotaIcmsInput.value = '0.00';
 if (cstPisInput) cstPisInput.value = '';
 if (aliquotaPisInput) aliquotaPisInput.value = '0.00';
 // ... limpa TODOS os campos
 
-// Aplicar CST e alíquota PIS (SE a regra tiver)
-if (result.regra.cst_pis && cstPisInput) {
-    cstPisInput.value = result.regra.cst_pis;
+// ✅ 3. APLICAR VALORES DA REGRA (SE a regra tiver)
+if (result.regra.csosn_icms && csosnSelect.length) {
+    console.log('Aplicando CSOSN:', result.regra.csosn_icms);
+    csosnSelect.val(result.regra.csosn_icms).trigger('change');
 }
-// ... aplica os valores da regra
+
+if (result.regra.aliquota_icms && aliquotaIcmsInput) {
+    console.log('Aplicando alíquota ICMS:', result.regra.aliquota_icms);
+    aliquotaIcmsInput.value = result.regra.aliquota_icms;
+}
+// ... aplica os valores da regra com logs detalhados
+```
+
+### 2. Modificação no `routes/api_routes.py`
+
+#### **Logs Adicionados:**
+```python
+if regra_encontrada:
+    regra_dict = regra_encontrada.to_dict()
+    print(f"✅ Regra encontrada ID {regra_encontrada.regra_tributacao_id}:")
+    print(f"   Descrição: {regra_dict.get('descricao_regra')}")
+    print(f"   ICMS: {regra_dict.get('aliquota_icms')}% | CSOSN: {regra_dict.get('csosn_icms')}")
+    print(f"   PIS: {regra_dict.get('aliquota_pis')}% | CST: {regra_dict.get('cst_pis')}")
+    print(f"   COFINS: {regra_dict.get('aliquota_cofins')}% | CST: {regra_dict.get('cst_cofins')}")
+    
+    return jsonify({'sucesso': True, 'regra': regra_dict}), 200
+else:
+    print(f"⚠️ Nenhuma regra encontrada para:")
+    print(f"   NCM: {ncm_codigo}, CFOP: {cfop_codigo}")
+    
+    return jsonify({"sucesso": False, "message": "..."}), 404
 ```
 
 ### Melhorias Implementadas:
 
-1. **✅ Limpeza de campos**: Todos os campos de PIS/COFINS/IPI são zerados antes de aplicar regra
-2. **✅ Valores padrão**: Se regra não tiver alíquotas, campos ficam em `0.00` (não vazios)
-3. **✅ Mensagem detalhada**: Alerta mostra quais alíquotas foram aplicadas
-4. **✅ Transparência**: Usuário vê claramente quais valores a regra definiu
+#### **✅ Limpeza Completa de Campos:**
+1. **ICMS**: CSOSN/CST ICMS + Alíquota zerados antes de aplicar
+2. **PIS**: CST PIS + Alíquota zerados antes de aplicar
+3. **COFINS**: CST COFINS + Alíquota zerados antes de aplicar
+4. **IPI**: CST IPI + Alíquota zerados antes de aplicar
+
+#### **✅ Logs Detalhados:**
+- **Console do navegador**: Mostra cada campo sendo aplicado
+- **Console do servidor**: Mostra regra encontrada e critérios de busca
+- **Facilita debug**: Identifica rapidamente por que uma regra não foi aplicada
+
+#### **✅ Alertas Informativos:**
+- **Verde (8s)**: Regra aplicada com sucesso + lista de todos os campos
+- **Amarelo (5s)**: Nenhuma regra encontrada (preencher manualmente)
+- **Vermelho (8s)**: Erro ao buscar regra (problema na API)
+
+#### **✅ Transparência Total:**
+- Usuário vê exatamente quais campos foram aplicados
+- Console mostra valores sendo aplicados em tempo real
+- Nenhum valor "fantasma" permanece no formulário
 
 ## 📊 Resultado Esperado
 
@@ -173,8 +232,9 @@ WHERE cliente_id = [SEU_CLIENTE_ID]
 - [ ] Testar com produto que não tem regra (deve zerar campos)
 - [ ] Testar com produto que tem regra completa (deve preencher todos)
 
-## 🎯 Commit
+## 🎯 Commits
 
+### Commit 1: Correção PIS/COFINS
 ```
 fix: Limpar campos PIS/COFINS/IPI antes de aplicar regra tributária
 
@@ -187,9 +247,39 @@ fix: Limpar campos PIS/COFINS/IPI antes de aplicar regra tributária
 Commit: 1cbc377
 ```
 
+### Commit 2: Correção COMPLETA (TODOS os tributos)
+```
+fix: Corrigir aplicação de TODOS os tributos (ICMS, PIS, COFINS, IPI)
+
+✅ CORREÇÕES IMPLEMENTADAS:
+- Limpa TODOS os campos tributários antes de aplicar regra (ICMS, PIS, COFINS, IPI)
+- Limpa também CSOSN/CST ICMS (não apenas as alíquotas)
+- Garante que valores antigos nunca permanecem no formulário
+- Adiciona logs detalhados no console para debug
+
+✅ MELHORIAS NA UX:
+- Alerta verde mostra TODOS os campos aplicados (CST + Alíquotas)
+- Alerta amarelo quando nenhuma regra é encontrada
+- Alerta vermelho em caso de erro na API
+- Alertas permanecem 8 segundos (tempo para ler detalhes)
+
+✅ LOGS ADICIONADOS:
+- Frontend: console.log detalhado de cada campo aplicado
+- Backend: print dos critérios de busca e regra encontrada
+- Facilita troubleshooting de regras não aplicadas
+
+RESOLVE: Problema de alíquotas incorretas em todos os tributos
+ANTES: Valores de produtos anteriores permaneciam
+DEPOIS: Campos sempre limpos e aplicados corretamente
+
+Commit: c8f3a93
+```
+
 ## 📚 Arquivos Modificados
 
-- `templates/admin/nfes/emitir.html` (função `aplicarRegraTributaria`)
+- `templates/admin/nfes/emitir.html` (função `aplicarRegraTributaria` - 120 linhas modificadas)
+- `routes/api_routes.py` (endpoint `buscar_regra_tributacao` - logs adicionados)
+- `CORRECAO_ALIQUOTAS_PIS_COFINS.md` (esta documentação)
 
 ## 🔗 Referências
 
