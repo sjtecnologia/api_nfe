@@ -911,24 +911,36 @@ function carregarProduto(itemId) {
 async function aplicarRegraTributaria(itemId, produtoId) {
     try {
         // Buscar informações do cliente e produto
-        const clienteId = {{ emitente_data.cliente_id if emitente_data else 'null' }};
+        const clienteId = {% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}null{% endif %};
         
         if (!clienteId || !produtoId) {
             console.log('ℹ️ Cliente ou produto não identificado, pulando busca de regra tributária');
             return;
         }
         
-        // Buscar dados do cliente (regime tributário e UF)
-        const clienteResponse = await fetch(`/admin/api/cliente/${clienteId}/info`);
-        const clienteData = await clienteResponse.json();
+        // Obter dados do produto selecionado
+        const select = document.querySelector(`select[name="produto_${itemId}"]`);
+        const option = select.options[select.selectedIndex];
         
-        // Buscar produto para pegar NCM e CFOP
-        const produto = window.produtosDisponiveis.find(p => p.produto_id == produtoId);
+        const ncmCodigo = option.dataset.ncm;
+        const cfopCodigo = option.dataset.cfop;
         
-        if (!produto || !produto.ncm_codigo || !produto.cfop_codigo) {
+        if (!ncmCodigo || !cfopCodigo) {
             console.log('ℹ️ Produto sem NCM/CFOP definidos, pulando busca de regra');
+            console.log('   NCM:', ncmCodigo, '| CFOP:', cfopCodigo);
             return;
         }
+        
+        console.log('🔍 Buscando regra tributária para:');
+        console.log('   Produto ID:', produtoId);
+        console.log('   NCM:', ncmCodigo);
+        console.log('   CFOP:', cfopCodigo);
+        
+        // Obter regime tributário do emitente
+        const regimeTributario = '{{ regime_tributario }}';
+        const regimeId = {% if emitente_data and emitente_data.regime_tributario_id %}{{ emitente_data.regime_tributario_id }}{% else %}null{% endif %};
+        
+        console.log('   Regime:', regimeTributario, '(ID:', regimeId, ')');
         
         // Buscar regra tributária
         const response = await fetch('/api/regras_tributacao/buscar', {
@@ -938,11 +950,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             },
             body: JSON.stringify({
                 cliente_id: clienteId,
-                regime_tributario_id: clienteData.regime_tributario_id,
-                ncm_codigo: produto.ncm_codigo,
-                cfop_codigo: produto.cfop_codigo,
-                uf_origem: clienteData.uf || 'SP',
-                uf_destino: document.getElementById('destinatario')?.options[document.getElementById('destinatario')?.selectedIndex]?.dataset.uf || clienteData.uf || 'SP',
+                regime_tributario_id: regimeId,
+                ncm_codigo: ncmCodigo,
+                cfop_codigo: cfopCodigo,
+                uf_origem: 'SP',
+                uf_destino: 'SP',
                 tipo_item: 'PRODUTO'
             })
         });
@@ -1079,7 +1091,10 @@ async function aplicarRegraTributaria(itemId, produtoId) {
                 ${result.regra.descricao_regra || 'Regra automática'}${detalhesTexto}
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
             `;
-            document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
+            const container = document.getElementById('itensContainer');
+            if (container && container.parentElement) {
+                container.parentElement.insertBefore(alertDiv, container);
+            }
             
             console.log('✅ Alerta de sucesso exibido');
             
@@ -1096,9 +1111,9 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             console.log('⚠️ Nenhuma regra tributária encontrada para este produto');
             console.log('📋 Critérios de busca:', {
                 cliente_id: clienteId,
-                ncm_codigo: produto.ncm_codigo,
-                cfop_codigo: produto.cfop_codigo,
-                uf_origem: clienteData.uf,
+                ncm_codigo: ncmCodigo,
+                cfop_codigo: cfopCodigo,
+                regime: regimeTributario,
                 tipo_item: 'PRODUTO'
             });
             
@@ -1110,7 +1125,10 @@ async function aplicarRegraTributaria(itemId, produtoId) {
                 <small>Preencha manualmente os campos tributários para este produto.</small>
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
             `;
-            document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
+            const container = document.getElementById('itensContainer');
+            if (container && container.parentElement) {
+                container.parentElement.insertBefore(alertDiv, container);
+            }
             
             // Remover alerta após 5 segundos
             setTimeout(() => alertDiv.remove(), 5000);
@@ -1128,7 +1146,10 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             <small>${error.message}</small>
             <button type="button" class="close" data-dismiss="alert">&times;</button>
         `;
-        document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
+        const container = document.getElementById('itensContainer');
+        if (container && container.parentElement) {
+            container.parentElement.insertBefore(alertDiv, container);
+        }
         
         setTimeout(() => alertDiv.remove(), 8000);
     }
@@ -1243,7 +1264,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (modeloSelect) {
         modeloSelect.addEventListener('change', function() {
             const modeloSelecionado = this.value;
-            const clienteId = {{ emitente_data.cliente_id }};
+            const clienteId = {% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}null{% endif %};
             
             if (modeloSelecionado === '65') {
                 // Redirecionar para NFC-e
