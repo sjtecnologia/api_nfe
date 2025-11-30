@@ -216,8 +216,13 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
             
             # Carregar NFe do XML
             try:
+                print("🔄 Tentando carregar NFe do XML...")
+                print(f"📏 Tamanho do XML: {len(xml_str)} caracteres")
+                print(f"📝 Primeiros 200 chars: {xml_str[:200]}")
+                
                 nfe_proc = NfeProc.from_xml(xml_str)
                 logger.info("✅ NFe carregada do XML com sucesso")
+                print("✅ NFe carregada do XML com sucesso")
                 
                 # Extrair informações básicas para log
                 try:
@@ -225,16 +230,21 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
                     serie = nfe_proc.NFe.infNFe.ide.serie
                     emitente = nfe_proc.NFe.infNFe.emit.xNome
                     logger.info(f"📋 NFe #{nfe_num}, Série {serie}, Emitente: {emitente}")
-                except Exception:
+                    print(f"📋 NFe #{nfe_num}, Série {serie}, Emitente: {emitente}")
+                except Exception as e:
                     logger.info("📋 NFe carregada (detalhes não disponíveis)")
+                    print(f"⚠️ Não foi possível extrair detalhes: {e}")
                 
             except Exception as e:
                 logger.error(f"❌ Erro ao carregar NFe do XML: {str(e)}")
+                print(f"❌ ERRO ao carregar NFe do XML: {str(e)}")
+                print(f"❌ Traceback: {traceback.format_exc()}")
                 return False
             
             # Gerar PDF
             try:
                 logger.info("🔄 Gerando PDF...")
+                print("🔄 Gerando PDF...")
                 
                 # Tentar diferentes engines em ordem de preferência
                 pdf_engines = [
@@ -250,22 +260,28 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
                     try:
                         if engine:
                             logger.info(f"🔄 Tentando engine: {engine}")
+                            print(f"🔄 Tentando engine: {engine}")
                             pdf_bytes = nfe_proc.to_pdf(engine=engine)
                             used_engine = engine
                         else:
                             logger.info("🔄 Tentando engine padrão")
+                            print("🔄 Tentando engine padrão (None)...")
                             pdf_bytes = nfe_proc.to_pdf()
                             used_engine = "padrão"
                         
                         if pdf_bytes:
                             logger.info(f"✅ PDF gerado com engine {used_engine}")
+                            print(f"✅ PDF gerado com engine {used_engine}, tamanho: {len(pdf_bytes)} bytes")
                             break
                             
                     except ImportError as e:
                         logger.warning(f"❌ Engine {engine} não disponível: {str(e)}")
+                        print(f"❌ Engine {engine} não disponível: {str(e)}")
                         continue
                     except Exception as e:
                         logger.warning(f"❌ Erro com engine {engine}: {str(e)}")
+                        print(f"❌ Erro com engine {engine}: {str(e)}")
+                        print(f"   Traceback: {traceback.format_exc()}")
                         continue
                 
                 if not pdf_bytes:
