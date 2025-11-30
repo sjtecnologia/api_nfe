@@ -44,4 +44,6 @@
  * Running on http://127.0.0.1:9000
  * Running on http://192.168.0.97:9000
 [33mPress CTRL+C to quit[0m
-127.0.0.1 - - [18/Nov/2025 08:20:01] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:12:28] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:34:43] "POST /api/sugestao HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:35:52] "POST /api/sugestao HTTP/1.1" 200 -

@@ -120,9 +120,23 @@ def buscar_regra_tributacao():
     
     regra_encontrada = query.first()
     if regra_encontrada:
-        return jsonify(regra_encontrada.to_dict()), 200
+        regra_dict = regra_encontrada.to_dict()
+        print(f"✅ Regra encontrada ID {regra_encontrada.regra_tributacao_id}:")
+        print(f"   Descrição: {regra_dict.get('descricao_regra')}")
+        print(f"   ICMS: {regra_dict.get('aliquota_icms')}% | CSOSN: {regra_dict.get('csosn_icms')} | CST: {regra_dict.get('cst_icms')}")
+        print(f"   PIS: {regra_dict.get('aliquota_pis')}% | CST: {regra_dict.get('cst_pis')}")
+        print(f"   COFINS: {regra_dict.get('aliquota_cofins')}% | CST: {regra_dict.get('cst_cofins')}")
+        print(f"   IPI: {regra_dict.get('aliquota_ipi')}% | CST: {regra_dict.get('cst_ipi')}")
+        
+        return jsonify({'sucesso': True, 'regra': regra_dict}), 200
     else:
-        return jsonify({"message": "Nenhuma regra de tributação encontrada para os critérios fornecidos."}), 404
+        print(f"⚠️ Nenhuma regra encontrada para:")
+        print(f"   Cliente: {cliente_id}, Regime: {regime_tributario_id}")
+        print(f"   NCM: {ncm_codigo}, CFOP: {cfop_codigo}")
+        print(f"   UF Origem: {uf_origem}, UF Destino: {uf_destino}")
+        print(f"   Tipo: {tipo_item}")
+        
+        return jsonify({"sucesso": False, "message": "Nenhuma regra de tributação encontrada para os critérios fornecidos."}), 404
 
 @api_bp.route('/clientes', methods=['GET'])
 @login_required

@@ -32,7 +32,10 @@
  * Running on http://127.0.0.1:8081
  * Running on http://192.168.0.97:8081
 [33mPress CTRL+C to quit[0m
-127.0.0.1 - - [18/Nov/2025 08:20:01] "GET /health HTTP/1.1" 200 -
-127.0.0.1 - - [18/Nov/2025 08:20:01] "GET /health HTTP/1.1" 200 -
-127.0.0.1 - - [18/Nov/2025 08:22:35] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [18/Nov/2025 08:22:35] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [30/Nov/2025 12:12:25] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:12:25] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:12:28] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:32:54] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:32:54] "GET /api/llm/ncms/search?q=85285900&tipo=analitico&limit=1 HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:35:35] "GET /health HTTP/1.1" 200 -
+127.0.0.1 - - [30/Nov/2025 12:35:35] "GET /api/llm/ncms/search?q=85285900&tipo=analitico&limit=1 HTTP/1.1" 200 -

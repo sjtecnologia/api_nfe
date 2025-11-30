@@ -950,98 +950,187 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         const result = await response.json();
         
         if (result.sucesso && result.regra) {
-            console.log('✅ Regra tributária encontrada:', result.regra.descricao);
+            console.log('✅ Regra tributária encontrada:', result.regra);
+            console.log('📋 Descrição:', result.regra.descricao_regra);
+            console.log('💰 Alíquotas - ICMS:', result.regra.aliquota_icms, '% | PIS:', result.regra.aliquota_pis, '% | COFINS:', result.regra.aliquota_cofins, '%');
             
-            // Aplicar CSOSN/CST ICMS
-            if (result.regra.csosn_id) {
-                const csosnSelect = $(`select[name="csosn_${itemId}"]`);
-                if (csosnSelect.length) {
-                    csosnSelect.val(result.regra.csosn_id).trigger('change');
-                }
-            } else if (result.regra.cst_icms_id) {
-                const cstSelect = $(`select[name="cst_icms_${itemId}"]`);
-                if (cstSelect.length) {
-                    cstSelect.val(result.regra.cst_icms_id).trigger('change');
-                }
-            }
+            // ============================================
+            // ✅ BUSCAR TODOS OS CAMPOS TRIBUTÁRIOS
+            // ============================================
             
-            // Aplicar alíquota ICMS
-            if (result.regra.aliquota_icms) {
-                const aliquotaInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
-                if (aliquotaInput) {
-                    aliquotaInput.value = result.regra.aliquota_icms;
-                }
-            }
+            // ICMS
+            const csosnSelect = $(`select[name="csosn_${itemId}"]`);
+            const cstIcmsSelect = $(`select[name="cst_icms_${itemId}"]`);
+            const aliquotaIcmsInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
             
-            // ✅ BUSCAR CAMPOS DE PIS/COFINS/IPI
+            // PIS
             const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
             const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
+            
+            // COFINS
             const cstCofinsInput = document.querySelector(`input[name="cst_cofins_${itemId}"]`);
             const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
+            
+            // IPI
             const cstIpiInput = document.querySelector(`input[name="cst_ipi_${itemId}"]`);
             const aliquotaIpiInput = document.querySelector(`input[name="aliquota_ipi_${itemId}"]`);
             
-            // ✅ LIMPAR CAMPOS PRIMEIRO (para evitar valores antigos)
+            // ============================================
+            // ✅ LIMPAR TODOS OS CAMPOS PRIMEIRO
+            // ============================================
+            
+            // Limpar CSOSN/CST ICMS
+            if (csosnSelect.length) csosnSelect.val('').trigger('change');
+            if (cstIcmsSelect.length) cstIcmsSelect.val('').trigger('change');
+            
+            // Limpar ICMS
+            if (aliquotaIcmsInput) aliquotaIcmsInput.value = '0.00';
+            
+            // Limpar PIS
             if (cstPisInput) cstPisInput.value = '';
             if (aliquotaPisInput) aliquotaPisInput.value = '0.00';
+            
+            // Limpar COFINS
             if (cstCofinsInput) cstCofinsInput.value = '';
             if (aliquotaCofinsInput) aliquotaCofinsInput.value = '0.00';
+            
+            // Limpar IPI
             if (cstIpiInput) cstIpiInput.value = '';
             if (aliquotaIpiInput) aliquotaIpiInput.value = '0.00';
             
-            // Aplicar CST e alíquota PIS (SE a regra tiver)
+            // ============================================
+            // ✅ APLICAR VALORES DA REGRA TRIBUTÁRIA
+            // ============================================
+            
+            // ICMS - Aplicar CSOSN ou CST
+            if (result.regra.csosn_icms && csosnSelect.length) {
+                console.log('Aplicando CSOSN:', result.regra.csosn_icms);
+                csosnSelect.val(result.regra.csosn_icms).trigger('change');
+            } else if (result.regra.cst_icms && cstIcmsSelect.length) {
+                console.log('Aplicando CST ICMS:', result.regra.cst_icms);
+                cstIcmsSelect.val(result.regra.cst_icms).trigger('change');
+            }
+            
+            // ICMS - Aplicar alíquota
+            if (result.regra.aliquota_icms && aliquotaIcmsInput) {
+                console.log('Aplicando alíquota ICMS:', result.regra.aliquota_icms);
+                aliquotaIcmsInput.value = result.regra.aliquota_icms;
+            }
+            
+            // PIS - Aplicar CST e alíquota
             if (result.regra.cst_pis && cstPisInput) {
+                console.log('Aplicando CST PIS:', result.regra.cst_pis);
                 cstPisInput.value = result.regra.cst_pis;
             }
             if (result.regra.aliquota_pis && aliquotaPisInput) {
+                console.log('Aplicando alíquota PIS:', result.regra.aliquota_pis);
                 aliquotaPisInput.value = result.regra.aliquota_pis;
             }
             
-            // Aplicar CST e alíquota COFINS (SE a regra tiver)
+            // COFINS - Aplicar CST e alíquota
             if (result.regra.cst_cofins && cstCofinsInput) {
+                console.log('Aplicando CST COFINS:', result.regra.cst_cofins);
                 cstCofinsInput.value = result.regra.cst_cofins;
             }
             if (result.regra.aliquota_cofins && aliquotaCofinsInput) {
+                console.log('Aplicando alíquota COFINS:', result.regra.aliquota_cofins);
                 aliquotaCofinsInput.value = result.regra.aliquota_cofins;
             }
             
-            // Aplicar CST e alíquota IPI (SE a regra tiver)
+            // IPI - Aplicar CST e alíquota
             if (result.regra.cst_ipi && cstIpiInput) {
+                console.log('Aplicando CST IPI:', result.regra.cst_ipi);
                 cstIpiInput.value = result.regra.cst_ipi;
             }
             if (result.regra.aliquota_ipi && aliquotaIpiInput) {
+                console.log('Aplicando alíquota IPI:', result.regra.aliquota_ipi);
                 aliquotaIpiInput.value = result.regra.aliquota_ipi;
             }
             
-            // Mostrar mensagem de sucesso com detalhes
+            // ============================================
+            // ✅ MOSTRAR MENSAGEM DE SUCESSO COM DETALHES
+            // ============================================
+            
             const detalhes = [];
-            if (result.regra.aliquota_pis) detalhes.push(`PIS: ${result.regra.aliquota_pis}%`);
-            if (result.regra.aliquota_cofins) detalhes.push(`COFINS: ${result.regra.aliquota_cofins}%`);
+            
+            // ICMS
+            if (result.regra.csosn_icms) detalhes.push(`CSOSN: ${result.regra.csosn_icms}`);
+            if (result.regra.cst_icms) detalhes.push(`CST ICMS: ${result.regra.cst_icms}`);
             if (result.regra.aliquota_icms) detalhes.push(`ICMS: ${result.regra.aliquota_icms}%`);
+            
+            // PIS
+            if (result.regra.cst_pis) detalhes.push(`CST PIS: ${result.regra.cst_pis}`);
+            if (result.regra.aliquota_pis) detalhes.push(`PIS: ${result.regra.aliquota_pis}%`);
+            
+            // COFINS
+            if (result.regra.cst_cofins) detalhes.push(`CST COFINS: ${result.regra.cst_cofins}`);
+            if (result.regra.aliquota_cofins) detalhes.push(`COFINS: ${result.regra.aliquota_cofins}%`);
+            
+            // IPI
+            if (result.regra.cst_ipi) detalhes.push(`CST IPI: ${result.regra.cst_ipi}`);
             if (result.regra.aliquota_ipi) detalhes.push(`IPI: ${result.regra.aliquota_ipi}%`);
             
-            const detalhesTexto = detalhes.length > 0 ? ` (${detalhes.join(', ')})` : '';
+            const detalhesTexto = detalhes.length > 0 ? `<br><small>${detalhes.join(' | ')}</small>` : '';
             
             const alertDiv = document.createElement('div');
             alertDiv.className = 'alert alert-success alert-dismissible fade show';
             alertDiv.innerHTML = `
-                <strong>✅ Regra aplicada:</strong> ${result.regra.descricao_regra || 'Regra tributária'}${detalhesTexto}
+                <strong>✅ Regra tributária aplicada</strong><br>
+                ${result.regra.descricao_regra || 'Regra automática'}${detalhesTexto}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            `;
+            document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
+            
+            console.log('✅ Alerta de sucesso exibido');
+            
+            // Remover alerta após 8 segundos (mais tempo para ler os detalhes)
+            setTimeout(() => {
+                alertDiv.remove();
+                console.log('Alerta removido');
+            }, 8000);
+            
+            // Recalcular totais
+            calcularTotal(itemId);
+            
+        } else {
+            console.log('⚠️ Nenhuma regra tributária encontrada para este produto');
+            console.log('📋 Critérios de busca:', {
+                cliente_id: clienteId,
+                ncm_codigo: produto.ncm_codigo,
+                cfop_codigo: produto.cfop_codigo,
+                uf_origem: clienteData.uf,
+                tipo_item: 'PRODUTO'
+            });
+            
+            // Mostrar alerta amarelo informando que não há regra
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-warning alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <strong>⚠️ Nenhuma regra tributária encontrada</strong><br>
+                <small>Preencha manualmente os campos tributários para este produto.</small>
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
             `;
             document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
             
             // Remover alerta após 5 segundos
             setTimeout(() => alertDiv.remove(), 5000);
-            
-            // Recalcular totais
-            calcularTotal(itemId);
-            
-        } else {
-            console.log('ℹ️ Nenhuma regra tributária encontrada para este produto');
         }
         
     } catch (error) {
         console.error('❌ Erro ao buscar regra tributária:', error);
+        console.error('Stack:', error.stack);
+        
+        // Mostrar alerta de erro
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+        alertDiv.innerHTML = `
+            <strong>❌ Erro ao buscar regra tributária</strong><br>
+            <small>${error.message}</small>
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+        `;
+        document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
+        
+        setTimeout(() => alertDiv.remove(), 8000);
     }
 }
 
