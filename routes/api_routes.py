@@ -99,18 +99,22 @@ def buscar_regra_tributacao():
     # Filtros condicionais
     if cfop_codigo:
         cfop_subquery = db.query(Cfop.cfop_id).filter(Cfop.cfop == cfop_codigo)
-        query = query.filter(RegraTributacao.cfop_id.in_(cfop_subquery))
+        cfop_ids = [c.cfop_id for c in cfop_subquery.all()]
+        print(f"🔍 CFOP '{cfop_codigo}' → IDs encontrados: {cfop_ids}")
+        query = query.filter(or_(RegraTributacao.cfop_id.in_(cfop_subquery), RegraTributacao.cfop_id.is_(None)))
     
     if ncm_codigo:
         ncm_subquery = db.query(Ncm.ncm_id).filter(Ncm.codigo == ncm_codigo)
-        query = query.filter(RegraTributacao.ncm_id.in_(ncm_subquery))
+        ncm_ids = [n.ncm_id for n in ncm_subquery.all()]
+        print(f"🔍 NCM '{ncm_codigo}' → IDs encontrados: {ncm_ids}")
+        query = query.filter(or_(RegraTributacao.ncm_id.in_(ncm_subquery), RegraTributacao.ncm_id.is_(None)))
         
     if uf_origem:
-        query = query.filter(RegraTributacao.uf_origem == uf_origem)
+        query = query.filter(or_(RegraTributacao.uf_origem == uf_origem, RegraTributacao.uf_origem.is_(None)))
     if uf_destino:
-        query = query.filter(RegraTributacao.uf_destino == uf_destino)
+        query = query.filter(or_(RegraTributacao.uf_destino == uf_destino, RegraTributacao.uf_destino.is_(None)))
     if tipo_item:
-        query = query.filter(RegraTributacao.tipo_item == tipo_item)
+        query = query.filter(or_(RegraTributacao.tipo_item == tipo_item, RegraTributacao.tipo_item.is_(None)))
     
     # Ordenar por prioridade
     query = query.order_by(
