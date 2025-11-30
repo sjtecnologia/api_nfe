@@ -973,53 +973,59 @@ async function aplicarRegraTributaria(itemId, produtoId) {
                 }
             }
             
-            // Aplicar CST e alíquota PIS
-            if (result.regra.cst_pis) {
-                const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
-                if (cstPisInput) {
-                    cstPisInput.value = result.regra.cst_pis;
-                }
+            // ✅ BUSCAR CAMPOS DE PIS/COFINS/IPI
+            const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
+            const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
+            const cstCofinsInput = document.querySelector(`input[name="cst_cofins_${itemId}"]`);
+            const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
+            const cstIpiInput = document.querySelector(`input[name="cst_ipi_${itemId}"]`);
+            const aliquotaIpiInput = document.querySelector(`input[name="aliquota_ipi_${itemId}"]`);
+            
+            // ✅ LIMPAR CAMPOS PRIMEIRO (para evitar valores antigos)
+            if (cstPisInput) cstPisInput.value = '';
+            if (aliquotaPisInput) aliquotaPisInput.value = '0.00';
+            if (cstCofinsInput) cstCofinsInput.value = '';
+            if (aliquotaCofinsInput) aliquotaCofinsInput.value = '0.00';
+            if (cstIpiInput) cstIpiInput.value = '';
+            if (aliquotaIpiInput) aliquotaIpiInput.value = '0.00';
+            
+            // Aplicar CST e alíquota PIS (SE a regra tiver)
+            if (result.regra.cst_pis && cstPisInput) {
+                cstPisInput.value = result.regra.cst_pis;
             }
-            if (result.regra.aliquota_pis) {
-                const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
-                if (aliquotaPisInput) {
-                    aliquotaPisInput.value = result.regra.aliquota_pis;
-                }
+            if (result.regra.aliquota_pis && aliquotaPisInput) {
+                aliquotaPisInput.value = result.regra.aliquota_pis;
             }
             
-            // Aplicar CST e alíquota COFINS
-            if (result.regra.cst_cofins) {
-                const cstCofinsInput = document.querySelector(`input[name="cst_cofins_${itemId}"]`);
-                if (cstCofinsInput) {
-                    cstCofinsInput.value = result.regra.cst_cofins;
-                }
+            // Aplicar CST e alíquota COFINS (SE a regra tiver)
+            if (result.regra.cst_cofins && cstCofinsInput) {
+                cstCofinsInput.value = result.regra.cst_cofins;
             }
-            if (result.regra.aliquota_cofins) {
-                const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
-                if (aliquotaCofinsInput) {
-                    aliquotaCofinsInput.value = result.regra.aliquota_cofins;
-                }
+            if (result.regra.aliquota_cofins && aliquotaCofinsInput) {
+                aliquotaCofinsInput.value = result.regra.aliquota_cofins;
             }
             
-            // Aplicar CST e alíquota IPI (se aplicável)
-            if (result.regra.cst_ipi) {
-                const cstIpiInput = document.querySelector(`input[name="cst_ipi_${itemId}"]`);
-                if (cstIpiInput) {
-                    cstIpiInput.value = result.regra.cst_ipi;
-                }
+            // Aplicar CST e alíquota IPI (SE a regra tiver)
+            if (result.regra.cst_ipi && cstIpiInput) {
+                cstIpiInput.value = result.regra.cst_ipi;
             }
-            if (result.regra.aliquota_ipi) {
-                const aliquotaIpiInput = document.querySelector(`input[name="aliquota_ipi_${itemId}"]`);
-                if (aliquotaIpiInput) {
-                    aliquotaIpiInput.value = result.regra.aliquota_ipi;
-                }
+            if (result.regra.aliquota_ipi && aliquotaIpiInput) {
+                aliquotaIpiInput.value = result.regra.aliquota_ipi;
             }
             
-            // Mostrar mensagem de sucesso
+            // Mostrar mensagem de sucesso com detalhes
+            const detalhes = [];
+            if (result.regra.aliquota_pis) detalhes.push(`PIS: ${result.regra.aliquota_pis}%`);
+            if (result.regra.aliquota_cofins) detalhes.push(`COFINS: ${result.regra.aliquota_cofins}%`);
+            if (result.regra.aliquota_icms) detalhes.push(`ICMS: ${result.regra.aliquota_icms}%`);
+            if (result.regra.aliquota_ipi) detalhes.push(`IPI: ${result.regra.aliquota_ipi}%`);
+            
+            const detalhesTexto = detalhes.length > 0 ? ` (${detalhes.join(', ')})` : '';
+            
             const alertDiv = document.createElement('div');
             alertDiv.className = 'alert alert-success alert-dismissible fade show';
             alertDiv.innerHTML = `
-                <strong>✅ Regra aplicada:</strong> ${result.regra.descricao}
+                <strong>✅ Regra aplicada:</strong> ${result.regra.descricao_regra || 'Regra tributária'}${detalhesTexto}
                 <button type="button" class="close" data-dismiss="alert">&times;</button>
             `;
             document.getElementById('produtos-container').insertAdjacentElement('beforebegin', alertDiv);
