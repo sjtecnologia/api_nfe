@@ -14,10 +14,10 @@ def print_header(texto):
     print("="*70)
 
 def print_sucesso(texto):
-    print(f"✅ {texto}")
+    print(f"[OK] {texto}")
 
 def print_erro(texto):
-    print(f"❌ {texto}")
+    print(f"[ERRO] {texto}")
 
 def print_info(texto):
     print(f"ℹ️  {texto}")
@@ -67,7 +67,7 @@ def testar_api_ia_unificada():
                     print(f"   CST: {classificacao.get('cst', 'N/A')}")
                     print(f"   CSOSN: {classificacao.get('csosn', 'N/A')}")
                     print(f"   CEST: {classificacao.get('cest', 'N/A')}")
-                    print(f"   💡 {classificacao.get('explicacao', '')[:100]}...")
+                    print(f"   [INFO] {classificacao.get('explicacao', '')[:100]}...")
                 else:
                     print_erro(f"Erro: {resultado.get('erro')}")
             else:
@@ -84,7 +84,7 @@ def testar_api_ia_unificada():
 def testar_endpoint_admin():
     """Testa o endpoint do admin que converte para IDs"""
     print_header("Teste 2: Endpoint Admin com Conversão de IDs")
-    print_info("⚠️  Este teste requer autenticação no sistema")
+    print_info("[AVISO]  Este teste requer autenticação no sistema")
     print_info("Execute manualmente via navegador ou curl com cookie de sessão")
     
     print("\n📋 Comando curl de exemplo:")
@@ -152,8 +152,8 @@ def verificar_servicos():
     print()
     
     if not todos_ok:
-        print_info("💡 Para iniciar as APIs de IA: ./start_apis.sh")
-        print_info("💡 Para iniciar o app principal: python app.py")
+        print_info("[INFO] Para iniciar as APIs de IA: ./start_apis.sh")
+        print_info("[INFO] Para iniciar o app principal: python app.py")
     
     return todos_ok
 
@@ -163,7 +163,7 @@ def main():
     
     # 1. Verificar serviços
     if not verificar_servicos():
-        print_erro("\n⚠️  Alguns serviços não estão disponíveis!")
+        print_erro("\n[AVISO]  Alguns serviços não estão disponíveis!")
         print_info("Iniciando testes apenas com serviços disponíveis...\n")
     
     # 2. Testar API IA Unificada
@@ -175,9 +175,9 @@ def main():
     # Resumo final
     print_header("Resumo e Próximos Passos")
     print("""
-✅ API IA Unificada (porta 9000) - Consolida NCM + LLM
-✅ Endpoint Admin (/admin/api/sugestao_tributaria) - Converte códigos para IDs
-✅ JavaScript atualizado - Preenche campos automaticamente usando IDs
+[OK] API IA Unificada (porta 9000) - Consolida NCM + LLM
+[OK] Endpoint Admin (/admin/api/sugestao_tributaria) - Converte códigos para IDs
+[OK] JavaScript atualizado - Preenche campos automaticamente usando IDs
 
 📋 COMO TESTAR NO NAVEGADOR:
 
@@ -189,7 +189,7 @@ def main():
 6. Clique no botão "🤖 Sugestão automática IA"
 7. Os campos NCM, CFOP, CST/CSOSN serão preenchidos automaticamente!
 
-🎯 CAMPOS QUE SERÃO PREENCHIDOS:
+[FOCO] CAMPOS QUE SERÃO PREENCHIDOS:
    • NCM (select com ID do banco)
    • CFOP (select com ID do banco)
    • CST (select com ID do banco - se regime normal)
@@ -211,8 +211,8 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n⚠️  Teste interrompido pelo usuário")
+        print("\n\n[AVISO]  Teste interrompido pelo usuário")
     except Exception as e:
-        print(f"\n❌ Erro inesperado: {e}")
+        print(f"\n[ERRO] Erro inesperado: {e}")
         import traceback
         traceback.print_exc()

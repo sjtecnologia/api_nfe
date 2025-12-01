@@ -242,7 +242,7 @@ def home():
     return jsonify({
         "api": "🤖 API IA Unificada - Sugestão Tributária",
         "versao": "1.0",
-        "status": "✅ Funcionando",
+        "status": "[OK] Funcionando",
         "documentacao": {
             "sugestao_individual": {
                 "endpoint": "POST /api/sugestao",
@@ -291,10 +291,10 @@ if __name__ == '__main__':
     print("=" * 70)
     print()
     print("📋 SERVIÇOS INTEGRADOS:")
-    print("   ✅ API NCM (13.217 códigos oficiais)")
-    print("   ✅ LLM Llama-3.1-8B-Instruct")
-    print("   ✅ Gerador de Prompts Otimizado")
-    print("   ✅ Fallback Automático")
+    print("   [OK] API NCM (13.217 códigos oficiais)")
+    print("   [OK] LLM Llama-3.1-8B-Instruct")
+    print("   [OK] Gerador de Prompts Otimizado")
+    print("   [OK] Fallback Automático")
     print()
     print("🌐 SERVIDOR:")
     print("   • URL: http://localhost:9000")
@@ -317,11 +317,11 @@ if __name__ == '__main__':
     print('     -H "Content-Type: application/json" \\')
     print('     -d \'{"descricao": "Smartphone Samsung", "tipo_item": "Produto", "uf_origem": "SP"}\'')
     print()
-    print("💡 IMPORTANTE:")
+    print("[INFO] IMPORTANTE:")
     print("   • API NCM deve estar rodando na porta 8081")
     print("   • LLM deve estar rodando no IP 192.168.0.52:1234")
     print()
-    print("🚀 Iniciando servidor na porta 9000...")
+    print("[INICIO] Iniciando servidor na porta 9000...")
     print("=" * 70)
     print()
     

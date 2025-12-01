@@ -29,9 +29,9 @@ def testar_busca_ncm():
         print(f"  {count:2}. ID: {row.ncm_id:6} | {row.codigo} | {row.descricao[:60]}...")
     
     if count == 0:
-        print("  ❌ Nenhum NCM encontrado!")
+        print("  [ERRO] Nenhum NCM encontrado!")
     else:
-        print(f"\n  ✅ {count} NCMs encontrados!")
+        print(f"\n  [OK] {count} NCMs encontrados!")
     
     # Testa busca com termo
     print("\n2️⃣ Busca COM filtro ('mouse'):")
@@ -55,9 +55,9 @@ def testar_busca_ncm():
         print(f"  {count:2}. ID: {row.ncm_id:6} | {row.codigo} | {row.descricao[:60]}...")
     
     if count == 0:
-        print("  ❌ Nenhum NCM encontrado!")
+        print("  [ERRO] Nenhum NCM encontrado!")
     else:
-        print(f"\n  ✅ {count} NCMs encontrados!")
+        print(f"\n  [OK] {count} NCMs encontrados!")
     
     # Conta total de NCMs
     print("\n3️⃣ Total de NCMs no banco:")
@@ -69,7 +69,7 @@ def testar_busca_ncm():
     row = result.fetchone()
     total = row.total if row else 0
     
-    print(f"  📊 Total de NCMs analíticos: {total:,}")
+    print(f"  [STATS] Total de NCMs analíticos: {total:,}")
     
     print("\n" + "=" * 70)
 

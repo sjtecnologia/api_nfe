@@ -1,5 +1,5 @@
 """
-🎯 NCM INTEGRATION - CÓDIGO FINAL PARA SUA LLM
+[FOCO] NCM INTEGRATION - CÓDIGO FINAL PARA SUA LLM
 ================================================================
 
 Classe de integração completa para conectar sua LLM com a API NCM
@@ -32,11 +32,11 @@ class NCMExpert:
             response = self.session.get(f"{self.api_base}/health", timeout=5)
             if response.status_code == 200:
                 data = response.json()
-                print(f"✅ API NCM conectada - {data.get('total_ncms', 0)} códigos disponíveis")
+                print(f"[OK] API NCM conectada - {data.get('total_ncms', 0)} códigos disponíveis")
             else:
-                print("⚠️ API NCM com problemas de conectividade")
+                print("[AVISO] API NCM com problemas de conectividade")
         except Exception as e:
-            print(f"❌ Erro de conexão com API NCM: {e}")
+            print(f"[ERRO] Erro de conexão com API NCM: {e}")
     
     def buscar_ncm_para_produto(self, produto: str, apenas_analiticos: bool = True) -> List[Dict]:
         """
@@ -292,17 +292,17 @@ Você é um especialista em classificação fiscal brasileira (NCM - Nomenclatur
 - Se não tiver certeza, ofereça múltiplas opções
 
 FORMATO DE RESPOSTA:
-🎯 NCM Recomendado: XX.XX.XX.XX
+[FOCO] NCM Recomendado: XX.XX.XX.XX
 📝 Descrição: [descrição oficial]
-📊 Tipo: Analítico/Sintético
-✅ Utilizável em NFe: Sim/Não
+[STATS] Tipo: Analítico/Sintético
+[OK] Utilizável em NFe: Sim/Não
 
 📋 Contexto Hierárquico:
 - Seção: [descrição]
 - Capítulo: [descrição] 
 - Posição: [descrição]
 
-💡 Observações: [detalhes relevantes]
+[INFO] Observações: [detalhes relevantes]
 
 Você tem acesso às funções NCM para consultar a base oficial. Use-as sempre!
 """
@@ -310,7 +310,7 @@ Você tem acesso às funções NCM para consultar a base oficial. Use-as sempre!
 
 # Exemplo de uso e testes
 if __name__ == "__main__":
-    print("🚀 Iniciando testes da integração NCM...")
+    print("[INICIO] Iniciando testes da integração NCM...")
     
     # Inicializar especialista
     expert = NCMExpert()
@@ -333,6 +333,6 @@ if __name__ == "__main__":
     # Teste 4: Setup de funções
     print("\n=== TESTE 4: SETUP FUNÇÕES ===")
     functions, handler = setup_ncm_functions()
-    print(f"✅ {len(functions)} funções configuradas para LLM")
+    print(f"[OK] {len(functions)} funções configuradas para LLM")
     
     print("\n🎉 Testes concluídos! Integração pronta para deploy.")

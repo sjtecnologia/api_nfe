@@ -117,7 +117,7 @@ class CalculoIBS:
             return None
         
         except Exception as e:
-            print(f"⚠️ Erro ao buscar alíquota: {e}")
+            print(f"[AVISO] Erro ao buscar alíquota: {e}")
             return None
         finally:
             db.close()
@@ -224,7 +224,7 @@ class CalculoIBS:
             return True
         
         except Exception as e:
-            print(f"⚠️ Erro ao registrar cálculo: {e}")
+            print(f"[AVISO] Erro ao registrar cálculo: {e}")
             db.rollback()
             return False
         finally:
@@ -254,7 +254,7 @@ class CalculoIBS:
             return result[0] > 0 if result else False
         
         except Exception as e:
-            print(f"⚠️ Erro ao validar código: {e}")
+            print(f"[AVISO] Erro ao validar código: {e}")
             return False
         finally:
             db.close()

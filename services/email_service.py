@@ -1,7 +1,7 @@
 import smtplib
 import os
-from dotenv import load_dotenv  # ✅ ADICIONAR ESTA LINHA
-# ✅ CARREGAR .env ANTES DE TUDO
+from dotenv import load_dotenv  # [OK] ADICIONAR ESTA LINHA
+# [OK] CARREGAR .env ANTES DE TUDO
 load_dotenv()
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -37,23 +37,23 @@ class EmailService:
             missing_vars.append('SMTP_PASSWORD')
             
         if missing_vars:
-            print(f"❌ Variáveis faltando no .env: {', '.join(missing_vars)}")
+            print(f"[ERRO] Variáveis faltando no .env: {', '.join(missing_vars)}")
         else:
-            print(f"✅ Todas as variáveis de email estão configuradas")
+            print(f"[OK] Todas as variáveis de email estão configuradas")
     
     def enviar_email(self, destinatario, assunto, corpo_html, anexos=None):
         """Enviar email com anexos opcionais"""
         try:
             # Verificação mais específica
             if not self.smtp_user:
-                print(f"❌ SMTP_USER não definido")
+                print(f"[ERRO] SMTP_USER não definido")
                 return {
                     'success': False,
                     'message': 'SMTP_USER não definido no arquivo .env'
                 }
                 
             if not self.smtp_password:
-                print(f"❌ SMTP_PASSWORD não definido")
+                print(f"[ERRO] SMTP_PASSWORD não definido")
                 return {
                     'success': False,
                     'message': 'SMTP_PASSWORD não definido no arquivo .env'
@@ -73,7 +73,7 @@ class EmailService:
             
             # Corpo do email
             msg.attach(MIMEText(corpo_html, 'html', 'utf-8'))
-            print(f"✅ Corpo do email anexado")
+            print(f"[OK] Corpo do email anexado")
             
             # Anexos
             if anexos:
@@ -88,9 +88,9 @@ class EmailService:
                             f'attachment; filename="{anexo["nome"]}"'
                         )
                         msg.attach(part)
-                        print(f"✅ Anexo {i+1}: {anexo['nome']} ({len(anexo['conteudo'])} bytes)")
+                        print(f"[OK] Anexo {i+1}: {anexo['nome']} ({len(anexo['conteudo'])} bytes)")
                     except Exception as e:
-                        print(f"❌ Erro no anexo {i+1}: {str(e)}")
+                        print(f"[ERRO] Erro no anexo {i+1}: {str(e)}")
                         return {
                             'success': False,
                             'message': f'Erro ao processar anexo {anexo["nome"]}: {str(e)}'
@@ -101,13 +101,13 @@ class EmailService:
             # Enviar com tratamento de erro específico
             try:
                 server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-                print(f"✅ Conectado ao servidor SMTP")
+                print(f"[OK] Conectado ao servidor SMTP")
                 
                 server.starttls()
-                print(f"✅ TLS iniciado")
+                print(f"[OK] TLS iniciado")
                 
                 server.login(self.smtp_user, self.smtp_password)
-                print(f"✅ Login realizado com sucesso")
+                print(f"[OK] Login realizado com sucesso")
                 
                 texto = msg.as_string()
                 server.sendmail(self.smtp_user, destinatario, texto)
@@ -121,26 +121,26 @@ class EmailService:
                 }
                 
             except smtplib.SMTPAuthenticationError as e:
-                print(f"❌ Erro de autenticação SMTP: {str(e)}")
+                print(f"[ERRO] Erro de autenticação SMTP: {str(e)}")
                 return {
                     'success': False,
                     'message': 'Erro de autenticação: Verifique o email e senha de app do Gmail'
                 }
             except smtplib.SMTPRecipientsRefused as e:
-                print(f"❌ Destinatário rejeitado: {str(e)}")
+                print(f"[ERRO] Destinatário rejeitado: {str(e)}")
                 return {
                     'success': False,
                     'message': f'Email destinatário inválido: {destinatario}'
                 }
             except smtplib.SMTPException as e:
-                print(f"❌ Erro SMTP geral: {str(e)}")
+                print(f"[ERRO] Erro SMTP geral: {str(e)}")
                 return {
                     'success': False,
                     'message': f'Erro no servidor de email: {str(e)}'
                 }
             
         except Exception as e:
-            print(f"❌ Erro geral ao enviar email: {str(e)}")
+            print(f"[ERRO] Erro geral ao enviar email: {str(e)}")
             import traceback
             traceback.print_exc()
             return {

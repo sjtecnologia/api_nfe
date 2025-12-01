@@ -77,7 +77,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
                     data = response.json()
                     resultados = data.get("resultados", [])
                     if resultados:
-                        print(f"✅ Usando NCM direto: {ncm_direto}")
+                        print(f"[OK] Usando NCM direto: {ncm_direto}")
                         return resultados
             
             # 2. Tentar busca com produto completo
@@ -93,7 +93,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
             if response.status_code == 200:
                 data = response.json()
                 resultados = data.get("resultados", [])
-                print(f"📊 Encontrados {len(resultados)} NCMs")
+                print(f"[STATS] Encontrados {len(resultados)} NCMs")
                 
                 # Se não encontrar, tentar com palavras-chave
                 if len(resultados) == 0:
@@ -109,12 +109,12 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
                             data = response.json()
                             novos_resultados = data.get("resultados", [])
                             if novos_resultados:
-                                print(f"✅ Encontrados {len(novos_resultados)} NCMs com '{palavra}'")
+                                print(f"[OK] Encontrados {len(novos_resultados)} NCMs com '{palavra}'")
                                 return novos_resultados[:limite]
                 
                 return resultados
         except Exception as e:
-            print(f"❌ Erro na API NCM: {e}")
+            print(f"[ERRO] Erro na API NCM: {e}")
         return []
 
     def _obter_ncm_direto(self, produto: str) -> Optional[str]:
@@ -208,7 +208,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
         # Verifica correspondências
         for chave, ncm in ncm_direto.items():
             if chave in produto_lower:
-                print(f"✅ NCM direto encontrado: {produto} → {ncm} ({chave})")
+                print(f"[OK] NCM direto encontrado: {produto} → {ncm} ({chave})")
                 return ncm
         
         return None
@@ -299,7 +299,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
 """
         
         for i, ncm in enumerate(ncms, 1):
-            tipo_status = "✅ Pode usar" if ncm.get('tipo') == 'analitico' else "❌ Não usar em NFe"
+            tipo_status = "[OK] Pode usar" if ncm.get('tipo') == 'analitico' else "[ERRO] Não usar em NFe"
             prompt += f"""{i}. **NCM {ncm.get('codigo_formatado', ncm.get('codigo', ''))}**
    Descrição: {ncm.get('descricao', '')}
    Tipo: {ncm.get('tipo', '').title()}
@@ -359,7 +359,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
             print("⏰ Timeout da LLM - usando fallback")
             return self._gerar_resposta_fallback(prompt)
         except Exception as e:
-            print(f"❌ Erro LLM - usando fallback: {e}")
+            print(f"[ERRO] Erro LLM - usando fallback: {e}")
             return self._gerar_resposta_fallback(prompt)
 
     def _gerar_resposta_fallback(self, prompt: str) -> Dict:
@@ -392,7 +392,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
         produto_match = re.search(r'Produto/Serviço:\s*(.+)', prompt)
         if produto_match:
             produto = produto_match.group(1).strip()
-            print(f"🔄 Usando fallback para produto: {produto}")
+            print(f"[PROC] Usando fallback para produto: {produto}")
             # Criar um SugestaoRequest básico e chamar _gerar_sugestao_basica
             from dataclasses import dataclass
             request = SugestaoRequest(
@@ -565,7 +565,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
             
             if resultado and resultado.get('confianca', 0) >= 60:
                 cest = resultado.get('cest')
-                print(f"✅ CEST sugerido: {cest} (confiança: {resultado.get('confianca')}%)")
+                print(f"[OK] CEST sugerido: {cest} (confiança: {resultado.get('confianca')}%)")
                 print(f"   Segmento: {resultado.get('segmento')}")
                 print(f"   Palavra-chave: {resultado.get('palavra_chave_encontrada')}")
                 return cest
@@ -574,19 +574,19 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
                 return None
                 
         except Exception as e:
-            print(f"⚠️ Erro ao sugerir CEST: {e}")
+            print(f"[AVISO] Erro ao sugerir CEST: {e}")
             return None
 
     async def gerar_sugestao(self, request: SugestaoRequest) -> Dict:
         """Método principal para gerar sugestão tributária"""
-        print(f"🎯 Iniciando sugestão para: {request.descricao}")
+        print(f"[FOCO] Iniciando sugestão para: {request.descricao}")
         
         # 1. Verificar conectividade
         apis_status = self._verificar_apis()
         
         # Se nenhuma API está disponível, usar fallback básico
         if not apis_status["ncm"] and not apis_status["llm"]:
-            print("⚠️ Modo fallback total - gerando sugestão básica")
+            print("[AVISO] Modo fallback total - gerando sugestão básica")
             return self._gerar_sugestao_basica(request)
         
         # 2. Gerar prompt com dados NCM oficiais (se API disponível)
@@ -595,7 +595,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
             prompt = self.gerar_prompt_classificacao(request)
             
             if "Não foram encontrados NCMs" in prompt:
-                print("⚠️ NCM não encontrado via API - usando fallback")
+                print("[AVISO] NCM não encontrado via API - usando fallback")
                 return self._gerar_sugestao_basica(request)
             
             # 3. Consultar LLM com dados NCM (se disponível)
@@ -612,7 +612,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
         
         # 4. Sugerir CEST se disponível
         if "erro" not in resultado:
-            print(f"✅ Sugestão gerada com sucesso!")
+            print(f"[OK] Sugestão gerada com sucesso!")
             
             # Tentar sugerir CEST baseado no produto
             if CEST_DISPONIVEL:
@@ -625,7 +625,7 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
                     if cest_sugerido:
                         resultado["cest_fonte"] = "Base CONFAZ (automático)"
         else:
-            print(f"❌ Erro na sugestão: {resultado.get('erro')}")
+            print(f"[ERRO] Erro na sugestão: {resultado.get('erro')}")
         
         return resultado
 
@@ -638,22 +638,22 @@ Se NCM começa com 07 ou 08, SEMPRE cite: "Anexo XV LC 214/2025 - redução 100%
             ncm_response = requests.get(f"{self.ncm_api_url}/health", timeout=2)
             if ncm_response.status_code == 200:
                 status["ncm"] = True
-                print("✅ API NCM disponível")
+                print("[OK] API NCM disponível")
             else:
-                print("⚠️ API NCM não disponível - usando fallback")
+                print("[AVISO] API NCM não disponível - usando fallback")
         except Exception as e:
-            print(f"⚠️ API NCM offline: {str(e)[:50]} - usando fallback")
+            print(f"[AVISO] API NCM offline: {str(e)[:50]} - usando fallback")
         
         try:
             # Verifica LLM (endpoint models)
             llm_response = requests.get(f"{self.llm_url}/v1/models", timeout=2)
             if llm_response.status_code == 200:
                 status["llm"] = True
-                print("✅ LLM disponível")
+                print("[OK] LLM disponível")
             else:
-                print("⚠️ LLM não disponível - usando regras heurísticas")
+                print("[AVISO] LLM não disponível - usando regras heurísticas")
         except Exception as e:
-            print(f"⚠️ LLM offline: {str(e)[:50]} - usando regras heurísticas")
+            print(f"[AVISO] LLM offline: {str(e)[:50]} - usando regras heurísticas")
         
         return status
 
