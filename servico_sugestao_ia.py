@@ -13,12 +13,12 @@ from dataclasses import dataclass
 try:
     from cest_database import buscar_cest_por_produto, CEST_DATABASE
     CEST_DISPONIVEL = True
-    print("✅ Base CEST carregada com sucesso")
+    print("[OK] Base CEST carregada com sucesso")
 except ImportError:
     CEST_DISPONIVEL = False
     buscar_cest_por_produto = None
     CEST_DATABASE = None
-    print("⚠️ Base CEST não disponível")
+    print("[AVISO] Base CEST nao disponivel")
 
 @dataclass
 class SugestaoRequest:
