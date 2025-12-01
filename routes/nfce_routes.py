@@ -319,11 +319,12 @@ def emitir_nfce():
                     # Salvar no banco usando campos existentes
                     nfce = NFeEmitidas(
                         cliente_id=emitente_cliente_id,
-                        tipo_nfe='NFCE',
+                        tipo_nfe='1',  # 1=Saída
+                        modelo='65',  # 65=NFCe
                         finalidade_emissao=1,  # 1=NF-e normal
                         natureza_operacao='Venda',
                         informacoes_adicionais=dados_nfce.get('informacoes_adicionais', ''),
-                        destinatario_razao_social=dest_razao,
+                        destinatario_razao_social=dest_razao or 'Consumidor Final',
                         destinatario_cnpj_cpf=dest_cpf_cnpj,
                         json_nfe=json.dumps(dados_nfce_json),
                         chave_acesso=chave_acesso,
@@ -402,7 +403,7 @@ def listar_nfce():
         # Query
         query = db.query(NFeEmitidas).filter(
             NFeEmitidas.cliente_id.in_(accessible_clients),
-            NFeEmitidas.tipo_nfe == 'NFCE'  # NFC-e
+            NFeEmitidas.modelo == '65'  # NFC-e
         )
         
         if cliente_id:
@@ -456,7 +457,7 @@ def consultar_nfce(nfce_id: int):
         nfce = db.query(NFeEmitidas).filter(
             NFeEmitidas.nfe_emitida_id == nfce_id,
             NFeEmitidas.cliente_id.in_(accessible_clients),
-            NFeEmitidas.tipo_nfe == 'NFCE'
+            NFeEmitidas.modelo == '65'
         ).first()
         
         if not nfce:
@@ -498,7 +499,7 @@ def download_xml_nfce(nfce_id: int):
         nfce = db.query(NFeEmitidas).filter(
             NFeEmitidas.nfe_emitida_id == nfce_id,
             NFeEmitidas.cliente_id.in_(accessible_clients),
-            NFeEmitidas.tipo_nfe == 'NFCE'
+            NFeEmitidas.modelo == '65'
         ).first()
         
         if not nfce:
@@ -537,7 +538,7 @@ def cancelar_nfce_route(nfce_id: int):
         nfce = db.query(NFeEmitidas).filter(
             NFeEmitidas.nfe_emitida_id == nfce_id,
             NFeEmitidas.cliente_id.in_(accessible_clients),
-            NFeEmitidas.tipo_nfe == 'NFCE'
+            NFeEmitidas.modelo == '65'
         ).first()
         
         if not nfce:

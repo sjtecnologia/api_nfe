@@ -471,7 +471,8 @@ class NFeEmitidas(Base):
     __tablename__ = 'nfe_emitidas'
     nfe_emitida_id = Column(BigInteger, primary_key=True, index=True)
     cliente_id = Column(BigInteger, ForeignKey('clientes.cliente_id'), nullable=False)
-    tipo_nfe = Column(String(10), nullable=False) 
+    tipo_nfe = Column(String(10), nullable=False)  # 0=Entrada, 1=Saída
+    modelo = Column(String(2), nullable=True)  # 55=NFe, 65=NFCe
     finalidade_emissao = Column(Integer, nullable=False) 
     natureza_operacao = Column(String(255), nullable=False) 
     informacoes_adicionais = Column(Text, nullable=True)
