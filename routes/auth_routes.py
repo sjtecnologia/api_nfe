@@ -56,8 +56,8 @@ def login():
                 
                 # Determinar redirecionamento
                 if role_name == 'admin':
-                    # Super admin deve selecionar um cliente antes de acessar o dashboard
-                    return redirect(url_for('cliente.selecionar_cliente'))
+                    # Super admin vai para dashboard que mostra dados de todos os clientes
+                    return redirect(url_for('admin.dashboard'))
                 else:
                     # Buscar todos os clientes acessíveis do usuário
                     clientes_result = db.execute(text("""

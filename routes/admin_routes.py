@@ -424,9 +424,8 @@ from database.connection import get_db
 @admin_bp.route('/')
 @login_required
 def admin_home():
-    """Redireciona super admin para selecao de cliente, outros para dashboard"""
-    if current_user.is_super_admin():
-        return redirect(url_for('cliente.selecionar_cliente'))
+    """Dashboard admin - super admin vê todos os clientes, outros selecionam"""
+    # Super admin tem acesso direto ao dashboard com dados de todos os clientes
     return redirect(url_for('admin.dashboard'))
 
 @admin_bp.route('/nfes')
@@ -1929,10 +1928,10 @@ def dashboard():
         
     except Exception as e:
         print(f"[ERRO] Erro dashboard: {e}")
+        import traceback
+        traceback.print_exc()
         flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
-        # Super admin deve selecionar cliente, não criar loop
-        if current_user.is_super_admin():
-            return redirect(url_for('cliente.selecionar_cliente'))
+        # Redirecionar para home ao invés de criar loop
         return redirect(url_for('home.home'))
 
 @admin_bp.route('/certificados/vencimento')
