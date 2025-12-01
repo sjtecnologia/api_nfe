@@ -1849,13 +1849,13 @@ def dashboard():
         # 1. Total de NFes emitidas (modelo 55)
         kpis['total_nfes'] = db.execute(text(f"""
             SELECT COUNT(*) FROM nfe_emitidas 
-            WHERE modelo = '55' {where_and}
+            WHERE tipo_nfe = '55' {where_and}
         """), params).scalar() or 0
         
         # 1b. Total de NFC-es emitidas (modelo 65)
         kpis['total_nfces'] = db.execute(text(f"""
             SELECT COUNT(*) FROM nfe_emitidas 
-            WHERE modelo = '65' {where_and}
+            WHERE tipo_nfe = '65' {where_and}
         """), params).scalar() or 0
         
         # 2. Valor total de NFes (modelo 55, extraindo do JSON)
@@ -1865,7 +1865,7 @@ def dashboard():
             ), 0) FROM nfe_emitidas
             WHERE json_nfe IS NOT NULL 
                 AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
-                AND modelo = '55'
+                AND tipo_nfe = '55'
                 {where_and}
         """), params).scalar() or 0
         
@@ -1876,7 +1876,7 @@ def dashboard():
             ), 0) FROM nfe_emitidas
             WHERE json_nfe IS NOT NULL 
                 AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
-                AND modelo = '65'
+                AND tipo_nfe = '65'
                 {where_and}
         """), params).scalar() or 0
         
