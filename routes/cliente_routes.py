@@ -105,6 +105,7 @@ def dashboard(cliente_id):
                 protocolo_sefaz,
                 destinatario_razao_social,
                 destinatario_cnpj_cpf,
+                tipo_nfe,
                 json_nfe
             FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
@@ -118,7 +119,7 @@ def dashboard(cliente_id):
         for row in ultimas_nfes_result:
             nfe_dict = dict(row._mapping)
             
-            # CORRIGIDO: Extrair valor da NFe do JSON
+            # CORRIGIDO: Extrair valor da NFe/NFCe do JSON
             try:
                 import json
                 json_data = json.loads(nfe_dict['json_nfe']) if isinstance(nfe_dict['json_nfe'], str) else nfe_dict['json_nfe']
@@ -126,12 +127,16 @@ def dashboard(cliente_id):
                 # Tentar extrair o valor total de diferentes formas possíveis na estrutura JSON
                 valor_total = None
                 if isinstance(json_data, dict):
-                    # Verificar várias possíveis localizações do valor total
-                    if 'total' in json_data and isinstance(json_data['total'], dict):
+                    # 1. NFCe: Verificar em totais -> valor_total
+                    if 'totais' in json_data and isinstance(json_data['totais'], dict):
+                        valor_total = json_data['totais'].get('valor_total')
+                    
+                    # 2. NFe: Verificar várias possíveis localizações do valor total
+                    elif 'total' in json_data and isinstance(json_data['total'], dict):
                         if 'ICMSTot' in json_data['total'] and isinstance(json_data['total']['ICMSTot'], dict):
                             valor_total = json_data['total']['ICMSTot'].get('vNF')
                     
-                    # Verificar na estrutura form_data -> valorPagamento
+                    # 3. Verificar na estrutura form_data -> valorPagamento
                     elif 'form_data' in json_data and isinstance(json_data['form_data'], dict):
                         valor_total = json_data['form_data'].get('valorPagamento')
                 
