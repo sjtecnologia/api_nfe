@@ -52,11 +52,12 @@ def login():
                 )
                 login_user(user)
                 
-                print(f"✅ LOGIN: Usuário {username} (ID: {user_data.id}) logado com role {role_name}")
+                print(f"[OK] LOGIN: Usuario {username} (ID: {user_data.id}) logado com role {role_name}")
                 
                 # Determinar redirecionamento
                 if role_name == 'admin':
-                    return redirect(url_for('admin.admin_home'))
+                    # Super admin deve selecionar um cliente antes de acessar o dashboard
+                    return redirect(url_for('cliente.selecionar_cliente'))
                 else:
                     # Buscar todos os clientes acessíveis do usuário
                     clientes_result = db.execute(text("""
