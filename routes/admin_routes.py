@@ -1931,8 +1931,19 @@ def dashboard():
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
-        # Redirecionar para home ao invés de criar loop
-        return redirect(url_for('home.home'))
+        # Retornar template vazio ao invés de redirecionar (evita loop)
+        return render_template('admin/dashboard.html', kpis={
+            'total_nfes': 0,
+            'total_nfces': 0,
+            'valor_total': 0,
+            'valor_total_nfce': 0,
+            'taxa_sucesso': 0,
+            'dias_certificado': 0,
+            'total_clientes': 0,
+            'total_produtos': 0,
+            'sugestoes_ia_aceitas': 0,
+            'nfes_mes': 0
+        })
 
 @admin_bp.route('/certificados/vencimento')
 @login_required
