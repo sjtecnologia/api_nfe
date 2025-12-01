@@ -1797,8 +1797,10 @@ def dashboard():
     """
     Dashboard principal com analytics, gráficos e KPIs do sistema.
     """
+    print(f"[DEBUG] Dashboard acessado por: {current_user.username}, Super Admin: {current_user.is_super_admin()}")
     db = _get_db()
     try:
+        print("[DEBUG] Iniciando cálculo de KPIs...")
         from datetime import datetime, timedelta
         
         # Processar filtros de período
