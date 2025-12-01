@@ -364,6 +364,7 @@ class Cliente(Base):
     cep = Column(String(9), nullable=False) 
     email_contato = Column(String(255), nullable=True)
     telefone_contato = Column(String(20), nullable=True)
+    ambiente = Column(Integer, default=1, nullable=False)  # 1=Homologação, 2=Produção
     ativo = Column(Boolean, default=True, nullable=False) 
     data_cadastro = Column(DateTime, default=datetime.now, nullable=False) 
     data_atualizacao = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False) 

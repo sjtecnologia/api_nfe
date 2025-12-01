@@ -68,6 +68,17 @@
                             </select>
                         </div>
                         <div class="mb-3">
+                            <label for="ambiente" class="form-label">Ambiente de Emissão de NFe *</label>
+                            <select class="form-select" id="ambiente" name="ambiente" required>
+                                <option value="1" {% if form_data.ambiente == 1 or not form_data.ambiente %}selected{% endif %}>1 - Homologação (Testes)</option>
+                                <option value="2" {% if form_data.ambiente == 2 %}selected{% endif %}>2 - Produção (NFe Válida)</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i> <strong>Homologação:</strong> Para testes (NFe não tem valor fiscal). 
+                                <strong>Produção:</strong> NFe válida fiscalmente (requer certificado válido e aprovação da SEFAZ).
+                            </small>
+                        </div>
+                        <div class="mb-3">
                             <label for="cnae" class="form-label">CNAE</label>
                             <input type="text" class="form-control" id="cnae" name="cnae" value="{{ form_data.cnae | default('') }}">
                         </div>

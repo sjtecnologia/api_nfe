@@ -116,9 +116,11 @@ def emitir_nfe():
             
             # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
             action = request.form.get('action')
-            ambiente = request.form.get('ambiente', 'homologacao')
+            # Usar ambiente do cliente (1=Homologação, 2=Produção)
+            ambiente_cliente = emitente_data.ambiente
+            ambiente = 'homologacao' if ambiente_cliente == 1 else 'producao'
             
-            print(f" DEBUG - Ação recebida: {action}, Ambiente: {ambiente}")
+            print(f" DEBUG - Ação recebida: {action}, Ambiente do cliente: {ambiente} ({ambiente_cliente})")
             
             # OK: INICIALIZAR VARIÁVEIS OBRIGATÓRIAS
             destinatario_data = {}

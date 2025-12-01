@@ -108,23 +108,14 @@ input[readonly] {
                 </div>
                 
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="form-group">
                             <label for="natOp">Natureza da Operação *</label>
                             <input type="text" class="form-control" name="natOp" id="natOp" 
                                    placeholder="Ex: Venda de mercadoria" maxlength="60" required>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="form-group">
-                            <label for="indFinal">Consumidor Final *</label>
-                            <select class="form-control" name="indFinal" id="indFinal" required>
-                                <option value="0">0 - Normal</option>
-                                <option value="1" selected>1 - Consumidor Final</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <div class="form-group">
                             <label for="indPres">Indicador de Presença *</label>
                             <select class="form-control" name="indPres" id="indPres" required>
@@ -149,11 +140,11 @@ input[readonly] {
                     </div>
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="ambiente">Ambiente *</label>
-                            <select class="form-control" name="ambiente" id="ambiente" required>
-                                <option value="homologacao" selected>Homologação</option>
-                                <option value="producao">Produção</option>
-                            </select>
+                            <label for="ambiente">Ambiente</label>
+                            <input type="text" class="form-control" id="ambiente" readonly 
+                                   value="{% if emitente_data.ambiente == 2 %}Produção{% else %}Homologação{% endif %}" 
+                                   style="background-color: {% if emitente_data.ambiente == 2 %}#28a745{% else %}#ffc107{% endif %}; color: white; font-weight: bold;">
+                            <small class="form-text text-muted">Configurado no cadastro do cliente</small>
                         </div>
                     </div>
                 </div>
@@ -276,7 +267,7 @@ input[readonly] {
                     <div class="col-md-12">
                         <div class="form-group">
                             <label for="modFrete">Modalidade do Frete *</label>
-                            <select class="form-control" name="modFrete" id="modFrete" required>
+                            <select class="form-control" name="modFrete" id="modFrete" required onchange="toggleDadosTransportadora()">
                                 <option value="0">0 - Contratação do Frete por conta do Remetente (CIF)</option>
                                 <option value="1">1 - Contratação do Frete por conta do destinatário/remetente (FOB)</option>
                                 <option value="2">2 - Contratação do Frete por conta de terceiros</option>
@@ -284,6 +275,164 @@ input[readonly] {
                                 <option value="4">4 - Transporte próprio por conta do destinatário</option>
                                 <option value="9" selected>9 - Sem Ocorrência de transporte</option>
                             </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Dados da Transportadora (oculto por padrão) -->
+                <div id="dadosTransportadora" style="display: none;">
+                    <hr>
+                    <h6 class="mb-3">Dados da Transportadora</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="transportadoraNome">Razão Social / Nome</label>
+                                <input type="text" class="form-control" name="transportadoraNome" id="transportadoraNome" 
+                                       maxlength="60" placeholder="Nome da transportadora">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="transportadoraCnpjCpf">CNPJ/CPF</label>
+                                <input type="text" class="form-control" name="transportadoraCnpjCpf" id="transportadoraCnpjCpf" 
+                                       maxlength="14" placeholder="CNPJ ou CPF (somente números)">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="transportadoraEndereco">Endereço Completo</label>
+                                <input type="text" class="form-control" name="transportadoraEndereco" id="transportadoraEndereco" 
+                                       maxlength="60" placeholder="Logradouro, número">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="transportadoraMunicipio">Município</label>
+                                <input type="text" class="form-control" name="transportadoraMunicipio" id="transportadoraMunicipio" 
+                                       maxlength="60" placeholder="Nome do município">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="transportadoraUF">UF</label>
+                                <select class="form-control" name="transportadoraUF" id="transportadoraUF">
+                                    <option value="">Selecione</option>
+                                    <option value="AC">AC</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AP">AP</option>
+                                    <option value="AM">AM</option>
+                                    <option value="BA">BA</option>
+                                    <option value="CE">CE</option>
+                                    <option value="DF">DF</option>
+                                    <option value="ES">ES</option>
+                                    <option value="GO">GO</option>
+                                    <option value="MA">MA</option>
+                                    <option value="MT">MT</option>
+                                    <option value="MS">MS</option>
+                                    <option value="MG">MG</option>
+                                    <option value="PA">PA</option>
+                                    <option value="PB">PB</option>
+                                    <option value="PR">PR</option>
+                                    <option value="PE">PE</option>
+                                    <option value="PI">PI</option>
+                                    <option value="RJ">RJ</option>
+                                    <option value="RN">RN</option>
+                                    <option value="RS">RS</option>
+                                    <option value="RO">RO</option>
+                                    <option value="RR">RR</option>
+                                    <option value="SC">SC</option>
+                                    <option value="SP">SP</option>
+                                    <option value="SE">SE</option>
+                                    <option value="TO">TO</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="transportadoraIE">Inscrição Estadual</label>
+                                <input type="text" class="form-control" name="transportadoraIE" id="transportadoraIE" 
+                                       maxlength="14" placeholder="IE da transportadora">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="veiculoPlaca">Placa do Veículo</label>
+                                <input type="text" class="form-control" name="veiculoPlaca" id="veiculoPlaca" 
+                                       maxlength="8" placeholder="ABC-1234">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="veiculoUF">UF do Veículo</label>
+                                <select class="form-control" name="veiculoUF" id="veiculoUF">
+                                    <option value="">Selecione</option>
+                                    <option value="AC">AC</option>
+                                    <option value="AL">AL</option>
+                                    <option value="AP">AP</option>
+                                    <option value="AM">AM</option>
+                                    <option value="BA">BA</option>
+                                    <option value="CE">CE</option>
+                                    <option value="DF">DF</option>
+                                    <option value="ES">ES</option>
+                                    <option value="GO">GO</option>
+                                    <option value="MA">MA</option>
+                                    <option value="MT">MT</option>
+                                    <option value="MS">MS</option>
+                                    <option value="MG">MG</option>
+                                    <option value="PA">PA</option>
+                                    <option value="PB">PB</option>
+                                    <option value="PR">PR</option>
+                                    <option value="PE">PE</option>
+                                    <option value="PI">PI</option>
+                                    <option value="RJ">RJ</option>
+                                    <option value="RN">RN</option>
+                                    <option value="RS">RS</option>
+                                    <option value="RO">RO</option>
+                                    <option value="RR">RR</option>
+                                    <option value="SC">SC</option>
+                                    <option value="SP">SP</option>
+                                    <option value="SE">SE</option>
+                                    <option value="TO">TO</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="volumeQuantidade">Quantidade de Volumes</label>
+                                <input type="number" class="form-control" name="volumeQuantidade" id="volumeQuantidade" 
+                                       min="0" placeholder="0">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="volumeEspecie">Espécie</label>
+                                <input type="text" class="form-control" name="volumeEspecie" id="volumeEspecie" 
+                                       maxlength="60" placeholder="Ex: Caixa, Pacote">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="volumePesoBruto">Peso Bruto (Kg)</label>
+                                <input type="number" step="0.001" class="form-control" name="volumePesoBruto" id="volumePesoBruto" 
+                                       min="0" placeholder="0.000">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="volumePesoLiquido">Peso Líquido (Kg)</label>
+                                <input type="number" step="0.001" class="form-control" name="volumePesoLiquido" id="volumePesoLiquido" 
+                                       min="0" placeholder="0.000">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -368,6 +517,7 @@ input[readonly] {
 
 {% block extra_js %}
 <script>
+// @ts-nocheck - Template Jinja2 com sintaxe Flask
 console.log('🔍 Verificando se jQuery está disponível...');
 
 let itemCounter = 0;
@@ -1306,6 +1456,20 @@ document.addEventListener('DOMContentLoaded', function() {
 // Visualizar XML (funcionalidade futura)
 function previewXML() {
     alert('Funcionalidade de visualização XML em desenvolvimento');
+}
+
+// Mostrar/ocultar campos da transportadora baseado na modalidade de frete
+function toggleDadosTransportadora() {
+    const modFrete = document.getElementById('modFrete').value;
+    const dadosTransportadora = document.getElementById('dadosTransportadora');
+    
+    // Modalidades que exigem dados da transportadora: 0, 1, 2, 3, 4
+    // Modalidade 9 (sem transporte) não exige dados
+    if (modFrete !== '9' && modFrete !== '') {
+        dadosTransportadora.style.display = 'block';
+    } else {
+        dadosTransportadora.style.display = 'none';
+    }
 }
 </script>
 {% endblock %}

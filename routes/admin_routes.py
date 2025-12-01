@@ -2521,6 +2521,7 @@ def create_cliente():
                 'inscricao_estadual': request.form.get('inscricao_estadual'),
                 'inscricao_municipal': request.form.get('inscricao_municipal'),
                 'regime_tributario_id': request.form.get('regime_tributario_id'),
+                'ambiente': int(request.form.get('ambiente', 1)),  # 1=Homologação, 2=Produção
                 'cnae': request.form.get('cnae'),
                 'cep': cep_limpo,  # Limpo
                 'logradouro': request.form.get('logradouro'),
@@ -2541,11 +2542,11 @@ def create_cliente():
                 result = db.execute(text("""
                     INSERT INTO clientes (
                         razao_social, nome_fantasia, cnpj, inscricao_estadual, inscricao_municipal,
-                        regime_tributario_id, cnae, cep, logradouro, numero, complemento, bairro,
+                        regime_tributario_id, ambiente, cnae, cep, logradouro, numero, complemento, bairro,
                         nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, ativo, data_cadastro, created_by_user_id
                     ) VALUES (
                         :razao_social, :nome_fantasia, :cnpj, :inscricao_estadual, :inscricao_municipal,
-                        :regime_tributario_id, :cnae, :cep, :logradouro, :numero, :complemento, :bairro,
+                        :regime_tributario_id, :ambiente, :cnae, :cep, :logradouro, :numero, :complemento, :bairro,
                         :nome_municipio, :codigo_municipio, :uf, :email_contato, :telefone_contato, :ativo, :data_cadastro, :created_by_user_id
                     ) RETURNING cliente_id
                 """), data)
@@ -2727,6 +2728,7 @@ def edit_cliente(cliente_id: int):
                     'inscricao_estadual': request.form.get('inscricao_estadual'),
                     'inscricao_municipal': request.form.get('inscricao_municipal'),
                     'regime_tributario_id': request.form.get('regime_tributario_id'),
+                    'ambiente': int(request.form.get('ambiente', 1)),  # 1=Homologação, 2=Produção
                     'cnae': request.form.get('cnae'),
                     'cep': cep_limpo,  # Limpo
                     'logradouro': request.form.get('logradouro'),
@@ -2750,6 +2752,7 @@ def edit_cliente(cliente_id: int):
                         inscricao_estadual = :inscricao_estadual,
                         inscricao_municipal = :inscricao_municipal,
                         regime_tributario_id = :regime_tributario_id,
+                        ambiente = :ambiente,
                         cnae = :cnae,
                         cep = :cep,
                         logradouro = :logradouro,
