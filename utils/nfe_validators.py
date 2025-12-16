@@ -84,19 +84,19 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     """
     erros = []
     
-    print(f"🔍 VALIDAÇÃO - CNPJ Emitente recebido: '{emitente_data.get('cnpj')}'")
-    print(f"🔍 VALIDAÇÃO - Tipo do CNPJ: {type(emitente_data.get('cnpj'))}")
+    print(f"[SEARCH] VALIDAÇÃO - CNPJ Emitente recebido: '{emitente_data.get('cnpj')}'")
+    print(f"[SEARCH] VALIDAÇÃO - Tipo do CNPJ: {type(emitente_data.get('cnpj'))}")
     
-    # ✅ VALIDAÇÕES DO EMITENTE
+    # [OK] VALIDAÇÕES DO EMITENTE
     cnpj_emitente = emitente_data.get('cnpj', '').strip()
-    print(f"🔍 VALIDAÇÃO - CNPJ após strip: '{cnpj_emitente}'")
+    print(f"[SEARCH] VALIDAÇÃO - CNPJ após strip: '{cnpj_emitente}'")
     
     if not cnpj_emitente:
         erros.append("CNPJ do emitente é obrigatório")
     elif not validar_cnpj(cnpj_emitente):
         erros.append(f"CNPJ do emitente é inválido: {cnpj_emitente}")
     else:
-        print(f"✅ CNPJ do emitente válido: {cnpj_emitente}")
+        print(f"[OK] CNPJ do emitente válido: {cnpj_emitente}")
     
     if not emitente_data.get('razao_social'):
         erros.append("Razão social do emitente é obrigatória")
@@ -110,12 +110,12 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     if not emitente_data.get('uf'):
         erros.append("UF do emitente é obrigatória")
     
-    # ✅ VALIDAÇÕES DO DESTINATÁRIO
+    # [OK] VALIDAÇÕES DO DESTINATÁRIO
     if not destinatario_data:
         erros.append("Destinatário é obrigatório")
     else:
         cpf_cnpj_dest = destinatario_data.get('cpf_cnpj', '').strip()
-        print(f"🔍 VALIDAÇÃO - CPF/CNPJ Destinatário: '{cpf_cnpj_dest}'")
+        print(f"[SEARCH] VALIDAÇÃO - CPF/CNPJ Destinatário: '{cpf_cnpj_dest}'")
         
         if not cpf_cnpj_dest:
             erros.append("CPF/CNPJ do destinatário é obrigatório")
@@ -126,12 +126,12 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
                 if not validar_cpf(cpf_cnpj_dest):
                     erros.append(f"CPF do destinatário é inválido: {cpf_cnpj_dest}")
                 else:
-                    print(f"✅ CPF do destinatário válido: {cpf_cnpj_dest}")
+                    print(f"[OK] CPF do destinatário válido: {cpf_cnpj_dest}")
             elif len(cpf_cnpj_limpo) == 14:
                 if not validar_cnpj(cpf_cnpj_dest):
                     erros.append(f"CNPJ do destinatário é inválido: {cpf_cnpj_dest}")
                 else:
-                    print(f"✅ CNPJ do destinatário válido: {cpf_cnpj_dest}")
+                    print(f"[OK] CNPJ do destinatário válido: {cpf_cnpj_dest}")
             else:
                 erros.append(f"CPF/CNPJ do destinatário deve ter 11 ou 14 dígitos: {cpf_cnpj_dest}")
         
@@ -144,7 +144,7 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
         if not destinatario_data.get('uf'):
             erros.append("UF do destinatário é obrigatória")
     
-    # ✅ VALIDAÇÕES DOS DADOS GERAIS
+    # [OK] VALIDAÇÕES DOS DADOS GERAIS
     if not form_data.get('natOp'):
         erros.append("Natureza da operação é obrigatória")
     
@@ -158,7 +158,7 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
         except ValueError:
             erros.append("Série deve ser um número válido")
     
-    # ✅ VALIDAÇÕES DOS ITENS
+    # [OK] VALIDAÇÕES DOS ITENS
     if not nfe_items:
         erros.append("Pelo menos um item deve ser informado")
     else:
@@ -199,13 +199,14 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
                 erros.append(f"{item_prefix}CFOP deve ter 4 dígitos")
             
             # Validar CST ICMS ou CSOSN (um dos dois é obrigatório)
-            if not item.get('cst_icms') and not item.get('csosn'):
+            # Aceitar ambos os formatos: csosn_icms (usado no XML) ou csosn (legado)
+            if not item.get('cst_icms') and not item.get('csosn_icms') and not item.get('csosn'):
                 erros.append(f"{item_prefix}CST ICMS ou CSOSN é obrigatório")
             
             if item.get('origem') is None or item.get('origem') == '':
                 erros.append(f"{item_prefix}Origem da mercadoria é obrigatória")
     
-    # ✅ VALIDAÇÃO DO PAGAMENTO
+    # [OK] VALIDAÇÃO DO PAGAMENTO
     if not form_data.get('formaPagamento'):
         erros.append("Forma de pagamento é obrigatória")
     
@@ -219,10 +220,10 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
         except ValueError:
             erros.append("Valor do pagamento deve ser um número válido")
     
-    print(f"🔍 VALIDAÇÃO FINAL - {len(erros)} erros encontrados")
+    print(f"[SEARCH] VALIDAÇÃO FINAL - {len(erros)} erros encontrados")
     if erros:
         for erro in erros:
-            print(f"❌ {erro}")
+            print(f"[X] {erro}")
     
     return erros
 
@@ -236,76 +237,76 @@ def validar_xml_nfe(xml_content):
         erros.append("XML não foi gerado")
         return False, erros
     
-    print(f"🔍 VALIDAÇÃO XML - Tamanho: {len(xml_content)} caracteres")
+    print(f"[SEARCH] VALIDAÇÃO XML - Tamanho: {len(xml_content)} caracteres")
     
     # Converter para minúsculas para validação case-insensitive
     xml_lower = xml_content.lower()
     
-    # ✅ VALIDAÇÕES BÁSICAS DO XML - CORRIGIDAS
+    # [OK] VALIDAÇÕES BÁSICAS DO XML - CORRIGIDAS
     if '<nfe>' not in xml_lower and '<nfe ' not in xml_lower:
         erros.append("XML não contém tag NFe")
     else:
-        print("✅ Tag NFe encontrada")
+        print("[OK] Tag NFe encontrada")
     
     if '<emit>' not in xml_lower:
         erros.append("XML não contém dados do emitente")
     else:
-        print("✅ Dados do emitente encontrados")
+        print("[OK] Dados do emitente encontrados")
     
     if '<dest>' not in xml_lower:
         erros.append("XML não contém dados do destinatário")
     else:
-        print("✅ Dados do destinatário encontrados")
+        print("[OK] Dados do destinatário encontrados")
     
-    # ✅ VALIDAÇÃO DE ITENS - CORRIGIDA
+    # [OK] VALIDAÇÃO DE ITENS - CORRIGIDA
     if '<det ' not in xml_lower and '<det>' not in xml_lower:
         erros.append("XML não contém itens da NFe")
-        print(f"❌ Tag <det> não encontrada no XML")
-        print(f"🔍 Buscando por 'det' no XML...")
+        print(f"[X] Tag <det> não encontrada no XML")
+        print(f"[SEARCH] Buscando por 'det' no XML...")
         # Debug: mostrar onde deveria estar
         if 'det' in xml_lower:
-            print("✅ Palavra 'det' encontrada em algum lugar")
+            print("[OK] Palavra 'det' encontrada em algum lugar")
         else:
-            print("❌ Palavra 'det' não encontrada em lugar nenhum")
+            print("[X] Palavra 'det' não encontrada em lugar nenhum")
     else:
-        print("✅ Itens da NFe encontrados")
+        print("[OK] Itens da NFe encontrados")
     
-    # ✅ VALIDAÇÕES ADICIONAIS
+    # [OK] VALIDAÇÕES ADICIONAIS
     if '<infnfe' not in xml_lower:
         erros.append("XML não contém informações da NFe (infNFe)")
     else:
-        print("✅ infNFe encontrado")
+        print("[OK] infNFe encontrado")
     
     if '<ide>' not in xml_lower:
         erros.append("XML não contém identificação da NFe")
     else:
-        print("✅ IDE encontrado")
+        print("[OK] IDE encontrado")
     
     # Verificar se tem assinatura (se já foi assinado)
     has_signature = '<signature>' in xml_lower or '<ds:signature>' in xml_lower
     if has_signature:
-        print("✅ Assinatura encontrada no XML")
+        print("[OK] Assinatura encontrada no XML")
     else:
         print("ℹ️ XML ainda não foi assinado")
     
-    # ✅ DEBUG: Mostrar estrutura do XML
-    print("🔍 ESTRUTURA XML DEBUG:")
+    # [OK] DEBUG: Mostrar estrutura do XML
+    print("[SEARCH] ESTRUTURA XML DEBUG:")
     linhas = xml_content.split('\n')[:20]  # Primeiras 20 linhas
     for i, linha in enumerate(linhas, 1):
         if 'det' in linha.lower():
             print(f"  {i:2d}: {linha.strip()} ⭐")  # Marcar linhas com 'det'
         elif any(tag in linha.lower() for tag in ['nfe', 'emit', 'dest', 'ide']):
-            print(f"  {i:2d}: {linha.strip()} ✅")
+            print(f"  {i:2d}: {linha.strip()} [OK]")
         else:
             print(f"  {i:2d}: {linha.strip()}")
     
     if erros:
-        print(f"❌ VALIDAÇÃO XML - {len(erros)} erros encontrados:")
+        print(f"[X] VALIDAÇÃO XML - {len(erros)} erros encontrados:")
         for erro in erros:
             print(f"   - {erro}")
         return False, erros
     
-    print(f"✅ VALIDAÇÃO XML - XML válido!")
+    print(f"[OK] VALIDAÇÃO XML - XML válido!")
     return True, []
 
 def limpar_cnpj_cpf(documento):

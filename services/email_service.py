@@ -16,10 +16,10 @@ class EmailService:
         self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
         self.smtp_user = os.getenv('SMTP_USER')
         self.smtp_password = os.getenv('SMTP_PASSWORD')
-        self.from_name = os.getenv('SMTP_FROM_NAME', 'Sistema NFe')
+        self.from_name = os.getenv('SMTP_FROM_NAME', 'EmiteMax')
         
         # Debug detalhado
-        print(f"🔧 EmailService Debug:")
+        print(f"[?] EmailService Debug:")
         print(f"   SMTP_SERVER: {self.smtp_server}")
         print(f"   SMTP_PORT: {self.smtp_port}")
         print(f"   SMTP_USER: {self.smtp_user}")
@@ -59,7 +59,7 @@ class EmailService:
                     'message': 'SMTP_PASSWORD não definido no arquivo .env'
                 }
             
-            print(f"📧 Preparando email:")
+            print(f"[?] Preparando email:")
             print(f"   De: {self.smtp_user} ({self.from_name})")
             print(f"   Para: {destinatario}")
             print(f"   Assunto: {assunto}")
@@ -77,7 +77,7 @@ class EmailService:
             
             # Anexos
             if anexos:
-                print(f"📎 Processando {len(anexos)} anexo(s)...")
+                print(f"[?] Processando {len(anexos)} anexo(s)...")
                 for i, anexo in enumerate(anexos):
                     try:
                         part = MIMEBase('application', 'octet-stream')
@@ -96,7 +96,7 @@ class EmailService:
                             'message': f'Erro ao processar anexo {anexo["nome"]}: {str(e)}'
                         }
             
-            print(f"📤 Conectando ao servidor SMTP {self.smtp_server}:{self.smtp_port}...")
+            print(f"[OUT] Conectando ao servidor SMTP {self.smtp_server}:{self.smtp_port}...")
             
             # Enviar com tratamento de erro específico
             try:
@@ -113,7 +113,7 @@ class EmailService:
                 server.sendmail(self.smtp_user, destinatario, texto)
                 server.quit()
                 
-                print(f"🎉 Email enviado com sucesso!")
+                print(f"[?] Email enviado com sucesso!")
                 
                 return {
                     'success': True,

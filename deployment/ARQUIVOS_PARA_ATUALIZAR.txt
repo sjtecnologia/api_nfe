@@ -1,0 +1,261 @@
+============================================================================
+LISTA DE ARQUIVOS PARA ATUALIZAR NO SERVIDOR WINDOWS
+Implementação: CRT=3 (Lucro Real/Presumido) com IBS/CBS
+Data: 11/12/2025
+============================================================================
+
+INSTRUÇÕES:
+1. Pare o serviço EmiteMax antes de copiar os arquivos
+2. Faça backup dos arquivos que serão substituídos
+3. Copie os arquivos via WinSCP, FTP ou diretamente no servidor
+4. Execute o script de atualização do banco de dados
+5. Reinicie o serviço EmiteMax
+6. Teste a funcionalidade
+
+============================================================================
+ARQUIVOS CRÍTICOS (OBRIGATÓRIOS)
+============================================================================
+
+1. NOVO ARQUIVO: services/ibs_cbs_service.py
+   Descrição: Serviço de cálculo de IBS/CBS e geração de XML
+   Status: ARQUIVO NOVO - criar a pasta services/ se não existir
+   Tamanho: ~300 linhas
+   Ação: COPIAR
+
+2. ATUALIZADO: database/models.py
+   Descrição: Adicionado import ForeignKeyConstraint + 2 novos modelos
+   Linhas modificadas:
+   - Linha 1: Import ForeignKeyConstraint
+   - Linhas 254-268: Campo 'crt' em RegimeTributario
+   - Linhas 270-320: Classes ClassificacaoIBSCBS e AutorizacaoXMLNFe
+   - Linhas 535-545: Campos IBS/CBS em NFeEmitidas
+   - Linha 607: Campo classificacao_ibs_cbs_id em Produto
+   Status: SUBSTITUIR ARQUIVO COMPLETO
+   Ação: SUBSTITUIR
+
+3. ATUALIZADO: routes/admin_routes.py
+   Descrição: Adicionados 2 novos endpoints de API
+   Linhas adicionadas no final (~linha 5527):
+   - GET /admin/api/classificacoes-ibs-cbs
+   - GET /admin/api/regime-tributario/<cliente_id>
+   Status: SUBSTITUIR ARQUIVO COMPLETO
+   Ação: SUBSTITUIR
+
+4. ATUALIZADO: templates/admin/nfes/emitir.html
+   Descrição: Adicionadas 3 novas seções HTML + JavaScript
+   Linhas adicionadas:
+   - Linhas 470-588: Seções IBS/CBS, ICMS60, Autorizações
+   - Linhas 1845-1960: Funções JavaScript de detecção de regime
+   Status: SUBSTITUIR ARQUIVO COMPLETO
+   Ação: SUBSTITUIR
+
+============================================================================
+SCRIPTS DE DEPLOYMENT (EXECUTAR NO SERVIDOR)
+============================================================================
+
+5. NOVO: deployment/atualizacao_crt3.sql
+   Descrição: Script SQL de atualização do banco de dados
+   Conteúdo:
+   - ALTER TABLE regimes_tributarios (campo crt)
+   - CREATE TABLE classificacoes_ibs_cbs
+   - CREATE TABLE autorizacoes_xml_nfe
+   - ALTER TABLE nfe_emitidas (4 novos campos)
+   - ALTER TABLE produtos (1 novo campo)
+   - INSERT de 3 classificações iniciais
+   - Verificações e estatísticas
+   Status: COPIAR E EXECUTAR
+   Ação: EXECUTAR VIA atualizar_banco_windows.bat
+
+6. NOVO: deployment/atualizar_banco_windows.bat
+   Descrição: Script batch para executar atualização do banco
+   Funcionalidade:
+   - Cria backup automático do banco
+   - Executa atualizacao_crt3.sql
+   - Verifica sucesso da operação
+   - Exibe mensagens de confirmação
+   Status: COPIAR E EXECUTAR
+   Ação: EXECUTAR CLICANDO 2x NO ARQUIVO
+
+============================================================================
+ARQUIVOS DE DOCUMENTAÇÃO (OPCIONAL - RECOMENDADO)
+============================================================================
+
+7. OPCIONAL: docs/IMPLEMENTACAO_CRT3_LUCRO_REAL_PRESUMIDO.md
+   Descrição: Documentação completa da implementação backend
+   Status: Arquivo de referência
+   Ação: COPIAR (opcional)
+
+8. OPCIONAL: docs/FRONTEND_CRT3_IMPLEMENTADO.md
+   Descrição: Documentação completa da implementação frontend
+   Status: Arquivo de referência
+   Ação: COPIAR (opcional)
+
+============================================================================
+ESTRUTURA DE PASTAS NO SERVIDOR
+============================================================================
+
+Raiz da aplicação (exemplo: C:\inetpub\wwwroot\api_nfe\)
+├── services/
+│   └── ibs_cbs_service.py .................... [NOVO]
+├── database/
+│   └── models.py ............................. [ATUALIZADO]
+├── routes/
+│   └── admin_routes.py ....................... [ATUALIZADO]
+├── templates/
+│   └── admin/
+│       └── nfes/
+│           └── emitir.html ................... [ATUALIZADO]
+├── deployment/
+│   ├── atualizacao_crt3.sql .................. [NOVO]
+│   └── atualizar_banco_windows.bat ........... [NOVO]
+└── docs/
+    ├── IMPLEMENTACAO_CRT3_LUCRO_REAL_PRESUMIDO.md [NOVO - OPCIONAL]
+    └── FRONTEND_CRT3_IMPLEMENTADO.md ......... [NOVO - OPCIONAL]
+
+============================================================================
+COMANDO DE TRANSFERÊNCIA VIA WinSCP (LINHA DE COMANDO)
+============================================================================
+
+Se você usar WinSCP via linha de comando, use este script:
+
+winscp.com /command ^
+    "open ftp://usuario:senha@192.168.0.52" ^
+    "put C:\local\services\ibs_cbs_service.py /caminho/servidor/services/" ^
+    "put C:\local\database\models.py /caminho/servidor/database/" ^
+    "put C:\local\routes\admin_routes.py /caminho/servidor/routes/" ^
+    "put C:\local\templates\admin\nfes\emitir.html /caminho/servidor/templates/admin/nfes/" ^
+    "put C:\local\deployment\*.* /caminho/servidor/deployment/" ^
+    "exit"
+
+OU copie manualmente via interface gráfica do WinSCP.
+
+============================================================================
+CHECKLIST DE ATUALIZAÇÃO
+============================================================================
+
+ANTES DE ATUALIZAR:
+[ ] Backup do banco de dados criado
+[ ] Serviço EmiteMax parado
+[ ] Backup dos 3 arquivos que serão substituídos:
+    [ ] database/models.py
+    [ ] routes/admin_routes.py
+    [ ] templates/admin/nfes/emitir.html
+
+DURANTE A ATUALIZAÇÃO:
+[ ] Criar pasta services/ (se não existir)
+[ ] Copiar services/ibs_cbs_service.py
+[ ] Substituir database/models.py
+[ ] Substituir routes/admin_routes.py
+[ ] Substituir templates/admin/nfes/emitir.html
+[ ] Copiar deployment/atualizacao_crt3.sql
+[ ] Copiar deployment/atualizar_banco_windows.bat
+
+EXECUTAR SCRIPT:
+[ ] Abrir pasta deployment/ no servidor
+[ ] Clicar 2x em atualizar_banco_windows.bat
+[ ] Digitar senha do PostgreSQL quando solicitado
+[ ] Aguardar mensagens de sucesso
+[ ] Verificar se backup foi criado
+
+APÓS ATUALIZAÇÃO:
+[ ] Reiniciar serviço EmiteMax
+[ ] Acessar sistema via navegador
+[ ] Abrir Console do navegador (F12)
+[ ] Ir para Emissão de NFe
+[ ] Selecionar cliente com Simples Nacional
+    [ ] Verificar se campos IBS/CBS NÃO aparecem
+[ ] Selecionar cliente com Lucro Real
+    [ ] Verificar se campos IBS/CBS APARECEM
+    [ ] Verificar se select de classificação carrega
+    [ ] Selecionar classificação
+    [ ] Verificar se alíquotas são preenchidas automaticamente
+
+VERIFICAÇÃO DO BANCO:
+[ ] Abrir pgAdmin ou psql
+[ ] Executar: SELECT * FROM classificacoes_ibs_cbs;
+    Deve retornar 3 registros
+[ ] Executar: SELECT id, crt FROM regimes_tributarios;
+    Deve mostrar campo crt com valores
+[ ] Executar: \d autorizacoes_xml_nfe
+    Deve mostrar nova tabela
+
+TESTE FINAL:
+[ ] Emitir NFe de teste com cliente Simples Nacional
+    [ ] Verificar se continua funcionando normalmente
+[ ] Emitir NFe de teste com cliente Lucro Real
+    [ ] Preencher classificação IBS/CBS
+    [ ] Verificar se formulário valida campos obrigatórios
+    [ ] Verificar console do navegador sem erros JavaScript
+
+============================================================================
+COMANDOS ÚTEIS - GERENCIAMENTO DO SERVIÇO
+============================================================================
+
+PARAR O SERVIÇO:
+net stop "EmiteMax API"
+
+INICIAR O SERVIÇO:
+net start "EmiteMax API"
+
+REINICIAR O SERVIÇO:
+net stop "EmiteMax API" && net start "EmiteMax API"
+
+STATUS DO SERVIÇO:
+sc query "EmiteMax API"
+
+============================================================================
+SOLUÇÃO DE PROBLEMAS
+============================================================================
+
+PROBLEMA: "psql não é reconhecido como comando"
+SOLUÇÃO: Ajustar caminho no atualizar_banco_windows.bat
+         Trocar "C:\Program Files\PostgreSQL\16\bin\psql.exe"
+         pelo caminho correto da instalação do PostgreSQL
+
+PROBLEMA: "Erro de permissão ao executar SQL"
+SOLUÇÃO: Executar cmd.exe como Administrador antes de rodar o .bat
+
+PROBLEMA: "Campo crt já existe"
+SOLUÇÃO: Normal! O script detecta e pula este passo automaticamente
+
+PROBLEMA: "Frontend não carrega classificações"
+SOLUÇÃO: 1. Verificar se API está acessível:
+            http://192.168.0.52:8080/admin/api/classificacoes-ibs-cbs
+         2. Abrir Console do navegador (F12) e verificar erros
+         3. Verificar se dados foram inseridos no banco:
+            SELECT * FROM classificacoes_ibs_cbs;
+
+PROBLEMA: "Campos não aparecem para Lucro Real"
+SOLUÇÃO: 1. Verificar campo crt em regimes_tributarios:
+            SELECT id, nome, crt FROM regimes_tributarios;
+         2. Regime Lucro Real deve ter crt = 3
+         3. Atualizar manualmente se necessário:
+            UPDATE regimes_tributarios SET crt = 3 WHERE id = 2;
+            UPDATE regimes_tributarios SET crt = 3 WHERE id = 3;
+
+PROBLEMA: "Erro 500 ao acessar emissão de NFe"
+SOLUÇÃO: 1. Verificar log do Flask no servidor
+         2. Verificar se models.py tem import ForeignKeyConstraint
+         3. Reiniciar serviço EmiteMax
+
+============================================================================
+CONTATO E SUPORTE
+============================================================================
+
+Em caso de problemas durante a atualização:
+1. Não force o processo - pare e analise o erro
+2. Mantenha os backups em local seguro
+3. Anote mensagens de erro completas
+4. Verifique logs do sistema:
+   - PostgreSQL: C:\Program Files\PostgreSQL\16\data\log\
+   - Flask: pasta logs/ do projeto
+
+Para reverter a atualização (se necessário):
+1. Restaurar backup do banco:
+   psql -U postgres -d sjtnfe < backup_sjtnfe_AAAAMMDD_HHMM.sql
+2. Restaurar arquivos do backup
+3. Reiniciar serviço
+
+============================================================================
+FIM DA LISTA DE ARQUIVOS
+============================================================================

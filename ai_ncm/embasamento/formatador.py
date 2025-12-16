@@ -126,7 +126,7 @@ class FormatadorResposta:
     
     def _gerar_cabecalho_html(self, dados: Dict) -> str:
         """Gera cabeçalho HTML"""
-        return '<h1>📋 Classificação NCM - Inteligência Artificial</h1>'
+        return '<h1>[LIST] Classificação NCM - Inteligência Artificial</h1>'
     
     def _gerar_classificacao_html(self, classificacao: Dict) -> str:
         """Gera seção de classificação principal"""
@@ -143,7 +143,7 @@ class FormatadorResposta:
             confianca_class = 'media'
         
         html = ['<div class="classificacao">']
-        html.append('<h2>🎯 Classificação Recomendada</h2>')
+        html.append('<h2>[?] Classificação Recomendada</h2>')
         html.append(f'<div class="ncm-code">{ncm}</div>')
         html.append(f'<p><strong>Descrição:</strong> {descricao}</p>')
         html.append(f'<p><strong>Confiança:</strong> <span class="confianca {confianca_class}">{confianca} - {nivel}</span></p>')
@@ -153,7 +153,7 @@ class FormatadorResposta:
     
     def _gerar_alternativas_html(self, alternativas: List[Dict]) -> str:
         """Gera seção de classificações alternativas"""
-        html = ['<h2>🔄 Classificações Alternativas</h2>']
+        html = ['<h2>[?] Classificações Alternativas</h2>']
         
         for alt in alternativas[:5]:  # Máximo 5 alternativas
             ncm = alt.get('ncm', 'N/A')
@@ -170,7 +170,7 @@ class FormatadorResposta:
     
     def _gerar_fundamentacao_html(self, fundamentacao: List[str]) -> str:
         """Gera seção de fundamentação técnica"""
-        html = ['<h2>🔍 Fundamentação Técnica</h2>']
+        html = ['<h2>[SEARCH] Fundamentação Técnica</h2>']
         html.append('<ul class="fundamentacao">')
         
         for item in fundamentacao:
@@ -201,7 +201,7 @@ class FormatadorResposta:
     
     def _gerar_observacoes_html(self, observacoes: List[str]) -> str:
         """Gera seção de observações"""
-        html = ['<h2>⚠️ Observações Importantes</h2>']
+        html = ['<h2>[!] Observações Importantes</h2>']
         
         for obs in observacoes:
             html.append(f'<div class="observacao">{obs}</div>')
@@ -210,7 +210,7 @@ class FormatadorResposta:
     
     def _gerar_proximos_passos_html(self, proximos_passos: List[str]) -> str:
         """Gera seção de próximos passos"""
-        html = ['<h2>🎯 Próximos Passos Recomendados</h2>']
+        html = ['<h2>[?] Próximos Passos Recomendados</h2>']
         
         for passo in proximos_passos:
             html.append(f'<div class="passo">{passo}</div>')
@@ -292,7 +292,7 @@ class FormatadorResposta:
             linhas.append('OBSERVAÇÕES IMPORTANTES:')
             linhas.append('-' * 80)
             for obs in observacoes:
-                linhas.append(f"⚠️  {obs}")
+                linhas.append(f"[!]  {obs}")
             linhas.append('')
         
         # Próximos Passos
@@ -344,8 +344,8 @@ if __name__ == '__main__':
             }
         ],
         'observacoes': [
-            '✅ Alta confiança na classificação. Recomenda-se uso direto.',
-            '📌 A classificação NCM é de responsabilidade do contribuinte.'
+            '[OK] Alta confiança na classificação. Recomenda-se uso direto.',
+            '[?] A classificação NCM é de responsabilidade do contribuinte.'
         ],
         'proximos_passos': [
             '2️⃣ Consultar tabela NCM completa no site da Receita Federal',

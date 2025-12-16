@@ -93,7 +93,7 @@ def emitir_nfe():
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
-            'regime_tributario_id': emitente_data.regime_tributario_id  # 🔥 CRÍTICO para buscar regras tributárias
+            'regime_tributario_id': emitente_data.regime_tributario_id  # [?] CRÍTICO para buscar regras tributárias
         }
         
         if request.method == 'POST':
@@ -105,14 +105,35 @@ def emitir_nfe():
                 'finNFe': request.form.get('finNFe', '1'),
                 'dataEmissao': request.form.get('dataEmissao'),
                 'serie': request.form.get('serie', '1'),
+                'numero_nfe': request.form.get('numero_nfe', '1'),  # ⭐ Capturar número da NFe da tela
                 'natOp': request.form.get('natOp'),
                 'infCpl': request.form.get('infCpl', ''),
                 'formaPagamento': request.form.get('formaPagamento'),
                 'valorPagamento': request.form.get('valorPagamento'),
-                'modFrete': request.form.get('modFrete', '9')
+                'modFrete': request.form.get('modFrete', '9'),
+                # Dados da Transportadora
+                'transportadoraNome': request.form.get('transportadoraNome', ''),
+                'transportadoraCnpjCpf': request.form.get('transportadoraCnpjCpf', ''),
+                'transportadoraIE': request.form.get('transportadoraIE', ''),
+                'transportadoraEndereco': request.form.get('transportadoraEndereco', ''),
+                'transportadoraMunicipio': request.form.get('transportadoraMunicipio', ''),
+                'transportadoraUF': request.form.get('transportadoraUF', ''),
+                # Dados do Veículo
+                'veiculoPlaca': request.form.get('veiculoPlaca', ''),
+                'veiculoUF': request.form.get('veiculoUF', ''),
+                # ANTT da transportadora
+                'transportadoraANTT': request.form.get('transportadoraANTT', ''),
+                # Dados dos Volumes
+                'volumeQuantidade': request.form.get('volumeQuantidade', ''),
+                'volumeEspecie': request.form.get('volumeEspecie', ''),
+                'volumeMarca': request.form.get('volumeMarca', ''),
+                'volumeNumeracao': request.form.get('volumeNumeracao', ''),
+                'volumePesoBruto': request.form.get('volumePesoBruto', ''),
+                'volumePesoLiquido': request.form.get('volumePesoLiquido', '')
             }
             
             print(f" Form data: {form_data_initial}")
+            print(f" Dados transporte - Modalidade: {form_data_initial['modFrete']}, Transportadora: {form_data_initial['transportadoraNome']}")
             
             # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
             action = request.form.get('action')
@@ -300,9 +321,37 @@ def emitir_nfe():
                         status_nfe = resultado_sefaz.get('status', 'REJEITADA') if resultado_sefaz.get('success', False) else 'REJEITADA'
                         print(f" Status NFe: {status_nfe}")
                         
+                        # Extrair data de autorização do resultado SEFAZ
+                        data_autorizacao_nfe = None
+                        if resultado_sefaz.get('data_autorizacao'):
+                            try:
+                                data_autorizacao_nfe = datetime.fromisoformat(resultado_sefaz['data_autorizacao'])
+                            except:
+                                data_autorizacao_nfe = datetime.now() if status_nfe == 'AUTORIZADA' else None
+                        elif status_nfe == 'AUTORIZADA':
+                            data_autorizacao_nfe = datetime.now()
+                        
+                        # Calcular valor total
+                        valor_total_nfe = sum(float(item.get('valor_total', 0)) for item in nfe_items)
+                        
+                        # Preparar data de emissão
+                        data_emissao_nfe = None
+                        if form_data_initial.get('dataEmissao'):
+                            try:
+                                data_emissao_nfe = datetime.fromisoformat(form_data_initial['dataEmissao'].replace('T', ' '))
+                            except:
+                                data_emissao_nfe = datetime.now()
+                        else:
+                            data_emissao_nfe = datetime.now()
+                        
                         nova_nfe = NFeEmitidas(
                             cliente_id=emitente_cliente_id,
+                            numero=int(form_data_initial.get('numero_nfe', '1')),
+                            serie=int(form_data_initial.get('serie', '1')),
+                            data_emissao=data_emissao_nfe,
+                            valor_total=valor_total_nfe,
                             tipo_nfe=form_data_initial.get('tpNF', '1'),
+                            modelo='55',  # 55=NFe, 65=NFCe
                             finalidade_emissao=int(form_data_initial.get('finNFe', '1')),
                             natureza_operacao=form_data_initial.get('natOp', ''),
                             destinatario_razao_social=destinatario_data['nome_razao_social'],
@@ -319,7 +368,7 @@ def emitir_nfe():
                             protocolo_sefaz=resultado_sefaz.get('protocolo'),
                             mensagem_sefaz=resultado_sefaz.get('message'),
                             data_criacao=datetime.now(),
-                            data_autorizacao=datetime.fromisoformat(resultado_sefaz['data_autorizacao']) if resultado_sefaz.get('data_autorizacao') else None,
+                            data_autorizacao=data_autorizacao_nfe,
                             created_by_user_id=current_user.id,
                             informacoes_adicionais=form_data_initial.get('infCpl')
                         )
@@ -363,38 +412,76 @@ def emitir_nfe():
                     
                     # 6. FEEDBACK PARA O USUÁRIO
                     print(" === FINALIZANDO ===")
+                    danfe_gerado_com_sucesso = False
+                    caminho_danfe = None
+                    
                     if status_nfe == 'AUTORIZADA':
                         msg = f'OK: NFe emitida com sucesso em {ambiente}! Protocolo: {resultado_sefaz.get("protocolo")}'
                         print(msg)
                         flash(msg, 'success')
-                        # Se o DANFE deve ser gerado automaticamente, faça isso aqui
-                        gerar_danfe_automatico = request.form.get('gerar_danfe_auto', 'false')
-                        if gerar_danfe_automatico == 'true':
-                            try:
-                                from services.danfe_service import generate_danfe
-                                # OK: CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
-                                pdf_path = generate_danfe(xml_assinado, nfe_id)
+                        
+                        # Gerar DANFE automaticamente sempre que NFe for autorizada
+                        try:
+                            print(" === GERANDO DANFE AUTOMATICAMENTE ===")
+                            from services.danfe_service import generate_danfe
+                            # OK: CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
+                            pdf_path = generate_danfe(xml_assinado, nfe_id, emitente_cliente_id)
+                            
+                            if pdf_path and os.path.exists(pdf_path):
+                                print(f"OK: DANFE gerado: {pdf_path}")
+                                # Adicionar URL do DANFE à sessão (opcional - para uso futuro)
                                 pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
-                                # Adicionar URL do DANFE à sessão para mostrar no template de lista
                                 if 'danfes_gerados' not in session:
                                     session['danfes_gerados'] = {}
-                                session['danfes_gerados'][nfe_id] = {
+                                # CORREÇÃO: Converter nfe_id para string para evitar erro de serialização JSON
+                                session['danfes_gerados'][str(nfe_id)] = {
                                     'url': pdf_url,
                                     'timestamp': datetime.now().timestamp()
                                 }
+                                session.modified = True
+                                flash('DANFE gerado com sucesso!', 'success')
                                 
-                                # Adicionar mensagem de sucesso
-                                flash(f'OK: DANFE gerado automaticamente! <a href="{pdf_url}" target="_blank">Visualizar</a>', 'success')
-                            except Exception as e:
-                                print(f"ERRO: Erro ao gerar DANFE automático: {e}")
-                                flash(f'AVISO: NFe emitida com sucesso, mas houve um erro ao gerar o DANFE: {str(e)}', 'warning')
+                                # Marcar que DANFE foi gerado para abrir o modal
+                                danfe_gerado_com_sucesso = True
+                                caminho_danfe = f'static/danfe/danfe_{nfe_id}.pdf'
+                            else:
+                                print(f"AVISO: DANFE não foi gerado (pdf_path: {pdf_path})")
+                                flash('NFe emitida, mas o DANFE não foi gerado.', 'warning')
+                        except Exception as e:
+                            print(f"ERRO: Erro ao gerar DANFE automático: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            # Não falhar a emissão por causa do DANFE
+                            flash(f'NFe emitida com sucesso! DANFE: {str(e)}', 'warning')
                     else:
                         msg = f'ERRO: NFe rejeitada: {resultado_sefaz.get("message")}'
                         print(msg)
                         flash(msg, 'danger')
                     
+                    # Commit da sessão antes do redirect
+                    try:
+                        db.commit()
+                    except:
+                        pass  # Já foi commitado antes
+                    
                     print(" Redirecionando para lista de NFes...")
-                    return redirect(url_for('nfe.list_nfes', cliente_id=emitente_cliente_id))
+                    try:
+                        # Se DANFE foi gerado, adicionar parâmetros para abrir modal
+                        if danfe_gerado_com_sucesso:
+                            # Converter cliente_id para int e garantir que nfe_id também é int
+                            return redirect(url_for('nfe.list_nfes', 
+                                                   cliente_id=int(emitente_cliente_id),
+                                                   danfe_gerado='true',
+                                                   nfe_id=int(nfe_id),
+                                                   danfe_path=caminho_danfe.replace('\\', '/')))
+                        else:
+                            return redirect(url_for('nfe.list_nfes', cliente_id=int(emitente_cliente_id)))
+                    except Exception as redirect_error:
+                        print(f"ERRO no redirect: {redirect_error}")
+                        import traceback
+                        traceback.print_exc()
+                        # Fallback: redirecionar para home
+                        return redirect(url_for('home.home'))
                     
                 except Exception as e:
                     db.rollback()
@@ -607,33 +694,44 @@ def list_nfes():
     db = next(get_db())
     
     try:
-        cliente_id = request.args.get('cliente_id')
+        print("\n=== LIST_NFES: Iniciando ===")
+        cliente_id_str = request.args.get('cliente_id')
+        print(f"[IN] cliente_id recebido: {cliente_id_str} (tipo: {type(cliente_id_str)})")
+        
+        cliente_id = None  # Inicializar
+        accessible_client_ids = []
         
         # OK: AJUSTE: Admin comum só vê NFes do cliente ativo
         # Super Admin vê todas as NFes quando cliente_id não é fornecido
-        if not cliente_id:
+        if not cliente_id_str:
+            print("❓ Nenhum cliente_id fornecido na URL")
             # Se não forneceu cliente_id, verificar se é Super Admin
             if hasattr(current_user, 'is_super_admin') and current_user.is_super_admin():
                 # Super Admin: buscar todos os clientes acessíveis
                 accessible_client_ids = get_accessible_client_ids(db)
-                print(f" Super Admin - Clientes acessíveis: {accessible_client_ids}")
+                print(f"[ADMIN] Super Admin - Clientes acessíveis: {accessible_client_ids}")
             else:
                 # Admin Comum: pegar apenas cliente ativo da sessão
-                # OK: CORREÇÃO: usar 'current_client_id' que é a chave correta na sessão
                 cliente_ativo_id = session.get('current_client_id')
-                print(f" Admin Comum - Cliente ativo na sessão: {cliente_ativo_id}")
-                print(f" Sessão completa: {dict(session)}")
+                print(f"[USER] Admin Comum - Cliente ativo na sessão: {cliente_ativo_id}")
                 
                 if not cliente_ativo_id:
+                    print("[!] Nenhum cliente ativo na sessão")
                     flash('Selecione um cliente para visualizar as NFes.', 'warning')
                     return redirect(url_for('home.home'))
                 accessible_client_ids = [cliente_ativo_id]
-                print(f"OK: Admin Comum - Filtrando NFes do cliente: {cliente_ativo_id}")
+                cliente_id = cliente_ativo_id
+                print(f"[OK] Admin Comum - Filtrando NFes do cliente: {cliente_id}")
         else:
             # Se forneceu cliente_id específico, usar ele
-            accessible_client_ids = [int(cliente_id)]
-            cliente_id = int(cliente_id)  # Garantir que é int
-            print(f" Cliente específico fornecido: {cliente_id}")
+            try:
+                cliente_id = int(cliente_id_str)
+                accessible_client_ids = [cliente_id]
+                print(f"[OK] Cliente específico fornecido: {cliente_id}")
+            except ValueError as ve:
+                print(f"[X] Erro ao converter cliente_id: {ve}")
+                flash('ID do cliente inválido.', 'danger')
+                return redirect(url_for('home.home'))
         
         # Verificar se tem acesso aos clientes
         if not accessible_client_ids:
@@ -829,7 +927,9 @@ def generate_danfe(nfe_id):
         from services.danfe_service import generate_danfe
         
         try:
-            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id)
+            # Buscar cliente_id da NFe
+            cliente_id_nfe = nfe_data.get('cliente_id')
+            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id, cliente_id_nfe)
             pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
             
             return jsonify({
@@ -889,7 +989,9 @@ def generate_danfe_after_issue():
         from services.danfe_service import generate_danfe
         
         try:
-            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id)
+            # Buscar cliente_id da NFe
+            cliente_id_nfe = nfe_data.get('cliente_id')
+            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id, cliente_id_nfe)
             pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
             
             return jsonify({
@@ -907,7 +1009,145 @@ def generate_danfe_after_issue():
         traceback.print_exc()
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
     finally:
-        db.close()        
+        db.close()
+
+
+@nfe_bp.route('/<int:nfe_id>/enviar-danfe', methods=['POST'])
+@login_required
+@permission_required('nfe.read')
+def enviar_danfe_email(nfe_id):
+    """Enviar DANFE por email"""
+    db = next(get_db())
+    try:
+        # Obter dados do request
+        data = request.json or {}
+        email_destinatario = data.get('email_destinatario')
+        
+        if not email_destinatario:
+            return jsonify({'success': False, 'message': 'Email do destinatário não informado'}), 400
+        
+        # Validar formato do email
+        import re
+        if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
+            return jsonify({'success': False, 'message': 'Email inválido'}), 400
+        
+        # Buscar NFe no banco
+        query = text("""
+            SELECT 
+                n.*,
+                c.razao_social as cliente_razao_social,
+                c.nome_fantasia as cliente_fantasia
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+        
+        # Converter para dict
+        nfe_data = dict(nfe._mapping)
+        
+        # Verificar se DANFE existe
+        danfe_path = os.path.join('static', 'danfe', f'danfe_{nfe_id}.pdf')
+        if not os.path.exists(danfe_path):
+            return jsonify({'success': False, 'message': 'DANFE não encontrado. Gere o DANFE primeiro.'}), 404
+        
+        # Preparar dados do email
+        chave_acesso = nfe_data.get('chave_acesso', 'N/A')
+        numero = nfe_data.get('numero', 'N/A')
+        cliente_nome = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_razao_social', 'N/A')
+        
+        assunto = f'NFe {numero} - DANFE - {cliente_nome}'
+        
+        corpo_html = f"""
+        <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background-color: #4CAF50; color: white; padding: 15px; text-align: center; }}
+                    .content {{ padding: 20px; background-color: #f9f9f9; }}
+                    .info {{ margin: 10px 0; padding: 10px; background-color: white; border-left: 4px solid #4CAF50; }}
+                    .footer {{ text-align: center; padding: 15px; color: #666; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2>Documento Auxiliar da Nota Fiscal Eletrônica</h2>
+                    </div>
+                    <div class="content">
+                        <p>Prezado(a),</p>
+                        <p>Segue em anexo o DANFE (Documento Auxiliar da Nota Fiscal Eletrônica).</p>
+                        
+                        <div class="info">
+                            <strong>Número NFe:</strong> {numero}<br>
+                            <strong>Emitente:</strong> {cliente_nome}<br>
+                            <strong>Chave de Acesso:</strong> {chave_acesso}
+                        </div>
+                        
+                        <p>Este documento deve acompanhar a mercadoria em trânsito.</p>
+                        <p>O arquivo XML da NFe pode ser consultado usando a chave de acesso acima.</p>
+                    </div>
+                    <div class="footer">
+                        <p>Este é um email automático. Por favor, não responda.</p>
+                        <p>Sistema de Gestão de NFe</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        # Ler arquivo PDF
+        try:
+            with open(danfe_path, 'rb') as f:
+                pdf_content = f.read()
+        except Exception as e:
+            print(f"Erro ao ler arquivo DANFE: {e}")
+            return jsonify({'success': False, 'message': f'Erro ao ler arquivo DANFE: {str(e)}'}), 500
+        
+        # Preparar anexo
+        anexos = [{
+            'nome': f'DANFE_{numero}.pdf',
+            'conteudo': pdf_content
+        }]
+        
+        # Enviar email usando o serviço
+        from services.email_service import EmailService
+        
+        try:
+            email_service = EmailService()
+            resultado = email_service.enviar_email(
+                destinatario=email_destinatario,
+                assunto=assunto,
+                corpo_html=corpo_html,
+                anexos=anexos
+            )
+            
+            if resultado['success']:
+                print(f"Email com DANFE enviado com sucesso para {email_destinatario}")
+                return jsonify({'success': True, 'message': f'DANFE enviado para {email_destinatario}'})
+            else:
+                print(f"Erro ao enviar email: {resultado['message']}")
+                return jsonify({'success': False, 'message': resultado['message']}), 500
+                
+        except Exception as e:
+            print(f"Erro ao enviar email: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'message': f'Erro ao enviar email: {str(e)}'}), 500
+        
+    except Exception as e:
+        print(f"Erro geral: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
+    finally:
+        db.close()
+
 
 # Substituir todo o método edit:
 
@@ -1203,6 +1443,7 @@ def edit(nfe_id):
             try:
                 # Processar dados do formulário
                 dados_nfe = {
+                    'numero_nfe': request.form.get('numero_nfe', '1'),
                     'dataEmissao': request.form.get('dataEmissao'),
                     'serie': request.form.get('serie', '1'),
                     'natOp': request.form.get('natOp'),
@@ -1521,7 +1762,7 @@ def reenviar_nfe(nfe_id):
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
-            'regime_tributario_id': emitente_data.regime_tributario_id  # 🔥 CRÍTICO para buscar regras tributárias
+            'regime_tributario_id': emitente_data.regime_tributario_id  # [?] CRÍTICO para buscar regras tributárias
         }
         # Buscar destinatário baseado nos dados do form_data
         
@@ -1732,7 +1973,7 @@ def emitir_rascunho(nfe_id):
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
-            'regime_tributario_id': emitente_data.regime_tributario_id  # 🔥 CRÍTICO para buscar regras tributárias
+            'regime_tributario_id': emitente_data.regime_tributario_id  # [?] CRÍTICO para buscar regras tributárias
         }
         
         # Buscar destinatário para o rascunho

@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if classificacao else 'Nova' }} Classificação IBS/CBS{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-receipt"></i> 
+                {{ 'Editar' if classificacao else 'Nova' }} Classificação IBS/CBS
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_home') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin.list_classificacoes_ibs_cbs') }}">Classificações IBS/CBS</a></li>
+                    <li class="breadcrumb-item active">{{ 'Editar' if classificacao else 'Nova' }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Dados da Classificação</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.salvar_classificacao_ibs_cbs') }}">
+                        {% if classificacao %}
+                            <input type="hidden" name="classificacao_id" value="{{ classificacao.classificacao_id }}">
+                        {% endif %}
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="codigo" class="form-label">Código *</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="codigo" 
+                                       name="codigo" 
+                                       value="{{ classificacao.codigo if classificacao else '' }}"
+                                       placeholder="Ex: 000001"
+                                       maxlength="20"
+                                       required>
+                                <small class="text-muted">Código único da classificação</small>
+                            </div>
+                            <div class="col-md-8">
+                                <label for="descricao" class="form-label">Descrição *</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="descricao" 
+                                       name="descricao" 
+                                       value="{{ classificacao.descricao if classificacao else '' }}"
+                                       placeholder="Ex: Medicamentos de referência"
+                                       maxlength="500"
+                                       required>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <strong>Alíquotas Tributárias</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="aliquota_ibs_uf" class="form-label">
+                                            IBS UF (%) *
+                                            <i class="fas fa-info-circle text-info" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Imposto sobre Bens e Serviços - Estadual"></i>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="aliquota_ibs_uf" 
+                                                   name="aliquota_ibs_uf" 
+                                                   value="{{ '%.2f'|format(classificacao.aliquota_ibs_uf) if classificacao else '0.00' }}"
+                                                   step="0.01"
+                                                   min="0"
+                                                   max="100"
+                                                   required>
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label for="aliquota_ibs_mun" class="form-label">
+                                            IBS Municipal (%) *
+                                            <i class="fas fa-info-circle text-info" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Imposto sobre Bens e Serviços - Municipal"></i>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="aliquota_ibs_mun" 
+                                                   name="aliquota_ibs_mun" 
+                                                   value="{{ '%.2f'|format(classificacao.aliquota_ibs_mun) if classificacao else '0.00' }}"
+                                                   step="0.01"
+                                                   min="0"
+                                                   max="100"
+                                                   required>
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4 mb-3">
+                                        <label for="aliquota_cbs" class="form-label">
+                                            CBS (%) *
+                                            <i class="fas fa-info-circle text-info" 
+                                               data-bs-toggle="tooltip" 
+                                               title="Contribuição sobre Bens e Serviços (Federal)"></i>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="aliquota_cbs" 
+                                                   name="aliquota_cbs" 
+                                                   value="{{ '%.2f'|format(classificacao.aliquota_cbs) if classificacao else '0.00' }}"
+                                                   step="0.01"
+                                                   min="0"
+                                                   max="100"
+                                                   required>
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-info mb-0">
+                                    <i class="fas fa-calculator"></i>
+                                    <strong>Total:</strong> 
+                                    <span id="total-aliquota">0.00</span>%
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" 
+                                       type="checkbox" 
+                                       id="ativo" 
+                                       name="ativo" 
+                                       value="1"
+                                       {{ 'checked' if not classificacao or classificacao.ativo else '' }}>
+                                <label class="form-check-label" for="ativo">
+                                    Classificação Ativa
+                                </label>
+                            </div>
+                            <small class="text-muted">Classificações inativas não aparecem nos formulários de emissão</small>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin.list_classificacoes_ibs_cbs') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar Classificação
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Card de Ajuda -->
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-question-circle"></i> Ajuda
+                </div>
+                <div class="card-body">
+                    <h6>O que são as Classificações IBS/CBS?</h6>
+                    <p class="small">
+                        São categorias tributárias da <strong>Reforma Tributária (LC 214/2025)</strong> 
+                        que definem alíquotas específicas para produtos/serviços.
+                    </p>
+
+                    <h6 class="mt-3">Quando usar?</h6>
+                    <p class="small">
+                        Aplicam-se apenas a empresas com <strong>CRT=3</strong> (Lucro Real ou Presumido).
+                        Empresas do Simples Nacional não utilizam estas classificações.
+                    </p>
+
+                    <h6 class="mt-3">Exemplos:</h6>
+                    <ul class="small mb-0">
+                        <li><strong>000001</strong> - Medicamentos (redução de 60%)</li>
+                        <li><strong>000002</strong> - Dispositivos médicos (redução de 60%)</li>
+                        <li><strong>000003</strong> - Produtos agropecuários in natura</li>
+                    </ul>
+                </div>
+            </div>
+
+            {% if classificacao %}
+            <!-- Card de Informações -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> Informações
+                </div>
+                <div class="card-body">
+                    <p class="small mb-1">
+                        <strong>Criado em:</strong><br>
+                        {{ classificacao.criado_em.strftime('%d/%m/%Y %H:%M') if classificacao.criado_em else 'N/A' }}
+                    </p>
+                    {% if classificacao.atualizado_em %}
+                    <p class="small mb-0">
+                        <strong>Última atualização:</strong><br>
+                        {{ classificacao.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Calcular total das alíquotas
+function calcularTotal() {
+    const ibsUf = parseFloat(document.getElementById('aliquota_ibs_uf').value) || 0;
+    const ibsMun = parseFloat(document.getElementById('aliquota_ibs_mun').value) || 0;
+    const cbs = parseFloat(document.getElementById('aliquota_cbs').value) || 0;
+    
+    const total = ibsUf + ibsMun + cbs;
+    document.getElementById('total-aliquota').textContent = total.toFixed(2);
+}
+
+// Adicionar eventos
+document.getElementById('aliquota_ibs_uf').addEventListener('input', calcularTotal);
+document.getElementById('aliquota_ibs_mun').addEventListener('input', calcularTotal);
+document.getElementById('aliquota_cbs').addEventListener('input', calcularTotal);
+
+// Calcular ao carregar
+calcularTotal();
+
+// Ativar tooltips
+var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+  return new bootstrap.Tooltip(tooltipTriggerEl)
+});
+</script>
+{% endblock %}

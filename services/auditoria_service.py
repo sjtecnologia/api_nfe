@@ -82,11 +82,11 @@ class AuditoriaService:
             })
             
             db.commit()
-            print(f"✅ Auditoria registrada: {acao} em {tabela_afetada} por user {user_id}")
+            print(f"[OK] Auditoria registrada: {acao} em {tabela_afetada} por user {user_id}")
             return True
             
         except Exception as e:
-            print(f"❌ Erro ao registrar auditoria: {e}")
+            print(f"[X] Erro ao registrar auditoria: {e}")
             traceback.print_exc()
             if db:
                 db.rollback()
@@ -207,7 +207,7 @@ class AuditoriaService:
             return logs, total
             
         except Exception as e:
-            print(f"❌ Erro ao obter logs de auditoria: {e}")
+            print(f"[X] Erro ao obter logs de auditoria: {e}")
             traceback.print_exc()
             return [], 0
         finally:
@@ -287,7 +287,7 @@ class AuditoriaService:
             }
             
         except Exception as e:
-            print(f"❌ Erro ao obter estatísticas: {e}")
+            print(f"[X] Erro ao obter estatísticas: {e}")
             traceback.print_exc()
             return {
                 'total_acoes': 0,
@@ -326,11 +326,11 @@ class AuditoriaService:
             
             # Type-safe rowcount access
             deletados = getattr(result, 'rowcount', 0)
-            print(f"✅ {deletados} registros de auditoria removidos (mais de {dias} dias)")
+            print(f"[OK] {deletados} registros de auditoria removidos (mais de {dias} dias)")
             return deletados
             
         except Exception as e:
-            print(f"❌ Erro ao limpar logs antigos: {e}")
+            print(f"[X] Erro ao limpar logs antigos: {e}")
             traceback.print_exc()
             if db:
                 db.rollback()

@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
 from sqlalchemy.orm import joinedload
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from database.connection import get_db
 from database.models import (
     Cfop, Ncm, Produto, Cliente, CertificadoDigital, NFeEmitidas,
@@ -59,88 +59,114 @@ def get_produtos_cliente(cliente_id):
 @login_required
 def buscar_regra_tributacao():
     """Busca regra de tributação baseada nos critérios fornecidos"""
-    db = next(get_db())
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({"error": "Dados JSON não fornecidos."}), 400
-    
-    cliente_id = data.get('cliente_id')
-    regime_tributario_id = data.get('regime_tributario_id')
-    cfop_codigo = data.get('cfop_codigo')
-    ncm_codigo = data.get('ncm_codigo')
-    uf_origem = data.get('uf_origem')
-    uf_destino = data.get('uf_destino')
-    tipo_item = data.get('tipo_item')
-    
-    # Validar acesso ao cliente
-    accessible_client_ids = get_accessible_client_ids(db)
-    if cliente_id and int(cliente_id) not in accessible_client_ids:
-        return jsonify({"error": "Acesso negado para este cliente."}), 403
-    
-    query = db.query(RegraTributacao).options(
+    try:
+        db = next(get_db())
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "Dados JSON não fornecidos."}), 400
+        
+        cliente_id = data.get('cliente_id')
+        regime_tributario_id = data.get('regime_tributario_id')
+        cfop_codigo = data.get('cfop_codigo')
+        ncm_codigo = data.get('ncm_codigo')
+        uf_origem = data.get('uf_origem')
+        uf_destino = data.get('uf_destino')
+        tipo_item = data.get('tipo_item')
+        
+        # Normalizar tipo_item para o formato do banco (primeira letra maiúscula)
+        # Aceita: "PRODUTO", "produto", "Produto" → converte para "Produto"
+        if tipo_item:
+            tipo_item = tipo_item.capitalize()  # "PRODUTO" → "Produto", "produto" → "Produto"
+        
+        # Validar acesso ao cliente
+        accessible_client_ids = get_accessible_client_ids(db)
+        if cliente_id and int(cliente_id) not in accessible_client_ids:
+            return jsonify({"error": "Acesso negado para este cliente."}), 403
+        
+        query = db.query(RegraTributacao).options(
         joinedload(RegraTributacao.regime_tributario),
         joinedload(RegraTributacao.cfop),
         joinedload(RegraTributacao.ncm),
         joinedload(RegraTributacao.cst_icms_obj),
         joinedload(RegraTributacao.csosn_icms_obj),
         joinedload(RegraTributacao.motivo_desoneracao)
-    ).filter(RegraTributacao.ativo == True)
-    
-    # Filtros obrigatórios
-    if cliente_id:
-        query = query.filter(or_(RegraTributacao.cliente_id == cliente_id, RegraTributacao.cliente_id.is_(None)))
-    else:
-        query = query.filter(RegraTributacao.cliente_id.is_(None))
-    
-    if regime_tributario_id:
-        query = query.filter(RegraTributacao.regime_tributario_id == regime_tributario_id)
-    
-    # Filtros condicionais
-    if cfop_codigo:
-        cfop_subquery = db.query(Cfop.cfop_id).filter(Cfop.cfop == cfop_codigo)
-        cfop_ids = [c.cfop_id for c in cfop_subquery.all()]
-        print(f"🔍 CFOP '{cfop_codigo}' → IDs encontrados: {cfop_ids}")
-        query = query.filter(or_(RegraTributacao.cfop_id.in_(cfop_subquery), RegraTributacao.cfop_id.is_(None)))
-    
-    if ncm_codigo:
-        ncm_subquery = db.query(Ncm.ncm_id).filter(Ncm.codigo == ncm_codigo)
-        ncm_ids = [n.ncm_id for n in ncm_subquery.all()]
-        print(f"🔍 NCM '{ncm_codigo}' → IDs encontrados: {ncm_ids}")
-        query = query.filter(or_(RegraTributacao.ncm_id.in_(ncm_subquery), RegraTributacao.ncm_id.is_(None)))
+        ).filter(RegraTributacao.ativo == True)
         
-    if uf_origem:
-        query = query.filter(or_(RegraTributacao.uf_origem == uf_origem, RegraTributacao.uf_origem.is_(None)))
-    if uf_destino:
-        query = query.filter(or_(RegraTributacao.uf_destino == uf_destino, RegraTributacao.uf_destino.is_(None)))
-    if tipo_item:
-        query = query.filter(or_(RegraTributacao.tipo_item == tipo_item, RegraTributacao.tipo_item.is_(None)))
-    
-    # Ordenar por prioridade
-    query = query.order_by(
-        RegraTributacao.cliente_id.desc(),
-        RegraTributacao.prioridade.desc()
-    )
-    
-    regra_encontrada = query.first()
-    if regra_encontrada:
-        regra_dict = regra_encontrada.to_dict()
-        print(f"✅ Regra encontrada ID {regra_encontrada.regra_tributacao_id}:")
-        print(f"   Descrição: {regra_dict.get('descricao_regra')}")
-        print(f"   ICMS: {regra_dict.get('aliquota_icms')}% | CSOSN: {regra_dict.get('csosn_icms')} | CST: {regra_dict.get('cst_icms')}")
-        print(f"   PIS: {regra_dict.get('aliquota_pis')}% | CST: {regra_dict.get('cst_pis')}")
-        print(f"   COFINS: {regra_dict.get('aliquota_cofins')}% | CST: {regra_dict.get('cst_cofins')}")
-        print(f"   IPI: {regra_dict.get('aliquota_ipi')}% | CST: {regra_dict.get('cst_ipi')}")
+        # Filtros obrigatórios
+        if cliente_id:
+            query = query.filter(or_(RegraTributacao.cliente_id == cliente_id, RegraTributacao.cliente_id.is_(None)))
+        else:
+            query = query.filter(RegraTributacao.cliente_id.is_(None))
         
-        return jsonify({'sucesso': True, 'regra': regra_dict}), 200
-    else:
-        print(f"⚠️ Nenhuma regra encontrada para:")
-        print(f"   Cliente: {cliente_id}, Regime: {regime_tributario_id}")
-        print(f"   NCM: {ncm_codigo}, CFOP: {cfop_codigo}")
-        print(f"   UF Origem: {uf_origem}, UF Destino: {uf_destino}")
-        print(f"   Tipo: {tipo_item}")
+        if regime_tributario_id:
+            query = query.filter(RegraTributacao.regime_tributario_id == regime_tributario_id)
         
-        return jsonify({"sucesso": False, "message": "Nenhuma regra de tributação encontrada para os critérios fornecidos."}), 404
+        # Filtros condicionais
+        if cfop_codigo:
+            cfop_subquery = db.query(Cfop.cfop_id).filter(Cfop.cfop == cfop_codigo)
+            cfop_ids = [c.cfop_id for c in cfop_subquery.all()]
+            print(f"[SEARCH] CFOP '{cfop_codigo}' → IDs encontrados: {cfop_ids}")
+            query = query.filter(or_(RegraTributacao.cfop_id.in_(cfop_subquery), RegraTributacao.cfop_id.is_(None)))
+        
+        if ncm_codigo:
+            ncm_subquery = db.query(Ncm.ncm_id).filter(Ncm.codigo == ncm_codigo)
+            ncm_ids = [n.ncm_id for n in ncm_subquery.all()]
+            print(f"[SEARCH] NCM '{ncm_codigo}' → IDs encontrados: {ncm_ids}")
+            query = query.filter(or_(RegraTributacao.ncm_id.in_(ncm_subquery), RegraTributacao.ncm_id.is_(None)))
+            
+        if uf_origem:
+            query = query.filter(or_(RegraTributacao.uf_origem == uf_origem, RegraTributacao.uf_origem.is_(None)))
+        if uf_destino:
+            query = query.filter(or_(RegraTributacao.uf_destino == uf_destino, RegraTributacao.uf_destino.is_(None)))
+        if tipo_item:
+            # tipo_item já foi normalizado (capitalize) no início da função
+            query = query.filter(or_(RegraTributacao.tipo_item == tipo_item, RegraTributacao.tipo_item.is_(None)))
+        
+        # Ordenar por prioridade
+        query = query.order_by(
+            RegraTributacao.cliente_id.desc(),
+            RegraTributacao.prioridade.desc()
+        )
+        
+        regra_encontrada = query.first()
+        if regra_encontrada:
+            regra_dict = regra_encontrada.to_dict()
+            print(f"[OK] Regra encontrada ID {regra_encontrada.regra_tributacao_id}:")
+            print(f"   Descrição: {regra_dict.get('descricao_regra')}")
+            print(f"   ICMS: {regra_dict.get('aliquota_icms')}% | CSOSN: {regra_dict.get('csosn_icms')} | CST: {regra_dict.get('cst_icms')}")
+            print(f"   PIS: {regra_dict.get('aliquota_pis')}% | CST: {regra_dict.get('cst_pis')}")
+            print(f"   COFINS: {regra_dict.get('aliquota_cofins')}% | CST: {regra_dict.get('cst_cofins')}")
+            print(f"   IPI: {regra_dict.get('aliquota_ipi')}% | CST: {regra_dict.get('cst_ipi')}")
+            
+            # Normalizar campos None para valores padrão (evitar problemas no frontend)
+            if regra_dict.get('descricao_regra') is None:
+                regra_dict['descricao_regra'] = 'Regra tributária automática'
+            if regra_dict.get('aliquota_icms') is None:
+                regra_dict['aliquota_icms'] = 0.0
+            if regra_dict.get('aliquota_pis') is None:
+                regra_dict['aliquota_pis'] = 0.0
+            if regra_dict.get('aliquota_cofins') is None:
+                regra_dict['aliquota_cofins'] = 0.0
+            if regra_dict.get('aliquota_ipi') is None:
+                regra_dict['aliquota_ipi'] = 0.0
+            # CST pode ser None quando não aplicável (não forçamos valor)
+            
+            return jsonify({'sucesso': True, 'regra': regra_dict}), 200
+        else:
+            print(f"[!] Nenhuma regra encontrada para:")
+            print(f"   Cliente: {cliente_id}, Regime: {regime_tributario_id}")
+            print(f"   NCM: {ncm_codigo}, CFOP: {cfop_codigo}")
+            print(f"   UF Origem: {uf_origem}, UF Destino: {uf_destino}")
+            print(f"   Tipo: {tipo_item}")
+            
+            return jsonify({"sucesso": False, "message": "Nenhuma regra de tributação encontrada para os critérios fornecidos."}), 404
+    
+    except Exception as e:
+        print(f"[X] ERRO ao buscar regra tributária: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Erro ao buscar regra tributária: {str(e)}"}), 500
 
 @api_bp.route('/clientes', methods=['GET'])
 @login_required
@@ -162,3 +188,56 @@ def get_clientes():
         })
     
     return jsonify(cliente_list), 200
+
+
+@api_bp.route('/nfe/proximo-numero', methods=['GET'])
+@login_required
+def get_proximo_numero_nfe():
+    """Busca o próximo número disponível de NFe para um cliente"""
+    try:
+        cliente_id = request.args.get('cliente_id', type=int)
+        modelo = request.args.get('modelo', '55')
+        serie = request.args.get('serie', 1, type=int)
+        
+        if not cliente_id:
+            return jsonify({"success": False, "error": "cliente_id obrigatório"}), 400
+        
+        db = next(get_db())
+        accessible_client_ids = get_accessible_client_ids(db)
+        
+        if cliente_id not in accessible_client_ids:
+            return jsonify({"success": False, "error": "Acesso negado"}), 403
+        
+        # Tentar usar a função do banco de dados
+        try:
+            result = db.execute(
+                text("SELECT get_proximo_numero_nfe(:cliente_id, :modelo, :serie)"),
+                {"cliente_id": cliente_id, "modelo": modelo, "serie": serie}
+            ).scalar()
+            proximo_numero = result if result else 1
+        except Exception as e:
+            # Fallback: buscar MAX + 1
+            print(f"⚠️ Função get_proximo_numero_nfe não encontrada, usando fallback: {e}")
+            result = db.execute(
+                text("""
+                    SELECT COALESCE(MAX(numero), 0) + 1 
+                    FROM nfe_emitidas 
+                    WHERE cliente_id = :cliente_id 
+                      AND modelo = :modelo 
+                      AND serie = :serie
+                """),
+                {"cliente_id": cliente_id, "modelo": modelo, "serie": serie}
+            ).scalar()
+            proximo_numero = result if result else 1
+        
+        return jsonify({
+            "success": True,
+            "proximo_numero": proximo_numero,
+            "cliente_id": cliente_id,
+            "modelo": modelo,
+            "serie": serie
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erro ao buscar próximo número: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500

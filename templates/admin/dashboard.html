@@ -93,7 +93,7 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total NF-e (R$)</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "{:,.2f}".format(kpis.valor_total) }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "{:,.2f}".format(kpis.valor_total).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
                             <div class="text-xs text-muted mt-1">Vendas NF-e</div>
                         </div>
                         <div class="col-auto">
@@ -176,7 +176,7 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-uppercase mb-1" style="color: #28a745;">Total NFC-e (R$)</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "{:,.2f}".format(kpis.valor_total_nfce) }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "{:,.2f}".format(kpis.valor_total_nfce).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div>
                             <div class="text-xs text-muted mt-1">Vendas NFC-e</div>
                         </div>
                         <div class="col-auto">
@@ -273,6 +273,11 @@
 <script>
 let charts = {};
 
+// Função para formatar valores em Real Brasileiro
+function formatarMoeda(valor) {
+    return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // Configuração global do Chart.js para labels escuros
 Chart.defaults.color = '#333333';
 Chart.defaults.font.size = 12;
@@ -338,7 +343,7 @@ async function loadDashboardData() {
                                 const valor = data.nfes_por_mes.valores[context.dataIndex];
                                 return [
                                     'Quantidade: ' + quantidade + ' NF-e',
-                                    'Valor Total: R$ ' + valor.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+                                    'Valor Total: R$ ' + formatarMoeda(valor)
                                 ];
                             }
                         }

@@ -26,7 +26,7 @@ class XMLSignatureService:
         Assina XML da NFe com certificado digital A1
         """
         try:
-            print("🔐 === INICIANDO ASSINATURA REAL ===")
+            print("[AUTH] === INICIANDO ASSINATURA REAL ===")
             
             # 1. Buscar certificado
             certificado = get_active_certificate_for_client(db_session, cliente_id)
@@ -34,7 +34,7 @@ class XMLSignatureService:
                 raise Exception("Certificado não encontrado")
             
             if certificado.get('modo_simulado'):
-                print("⚠️ Certificado em modo simulado - não é possível assinar realmente")
+                print("[!] Certificado em modo simulado - não é possível assinar realmente")
                 return self._simulate_signature(xml_content)
             
             # 2. Carregar certificado PKCS#12
@@ -56,7 +56,7 @@ class XMLSignatureService:
             if not inf_nfe_id:
                 raise Exception("Atributo Id não encontrado no infNFe")
             
-            print(f"✅ Elemento infNFe encontrado: {inf_nfe_id}")
+            print(f"[OK] Elemento infNFe encontrado: {inf_nfe_id}")
             
             # 5. Criar assinatura
             signature_xml = self._create_signature_element(
@@ -75,12 +75,12 @@ class XMLSignatureService:
             signed_xml = etree.tostring(xml_tree, encoding='unicode', pretty_print=True)
             signed_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + signed_xml
             
-            print(f"✅ XML assinado com sucesso: {len(signed_xml)} caracteres")
+            print(f"[OK] XML assinado com sucesso: {len(signed_xml)} caracteres")
             return signed_xml
             
         except Exception as e:
-            print(f"❌ Erro na assinatura: {e}")
-            print("🔄 Usando assinatura simulada como fallback")
+            print(f"[X] Erro na assinatura: {e}")
+            print("[?] Usando assinatura simulada como fallback")
             return self._simulate_signature(xml_content)
     
     def _load_certificate(self, certificado_data):
@@ -88,7 +88,7 @@ class XMLSignatureService:
         Carrega certificado PKCS#12 dos dados do banco
         """
         try:
-            print("🔐 Carregando certificado real...")
+            print("[AUTH] Carregando certificado real...")
             
             # Decodificar dados do certificado
             cert_content = base64.b64decode(certificado_data['arquivo_certificado'])
@@ -106,18 +106,18 @@ class XMLSignatureService:
             if not private_key or not certificate:
                 raise Exception("Falha ao carregar chave privada ou certificado")
             
-            print(f"✅ Certificado carregado: {certificate.subject}")
+            print(f"[OK] Certificado carregado: {certificate.subject}")
             return private_key, certificate
             
         except Exception as e:
-            print(f"❌ Erro ao carregar certificado: {e}")
+            print(f"[X] Erro ao carregar certificado: {e}")
             raise
     
     def _create_signature_element(self, xml_tree, inf_nfe, inf_nfe_id, private_key, certificate):
         """
         Cria elemento de assinatura XMLDSig
         """
-        print("🔏 Criando assinatura XMLDSig...")
+        print("[?] Criando assinatura XMLDSig...")
         
         # 1. Canonicalizar infNFe
         canonicalized_infnfe = self._canonicalize_element(inf_nfe)
@@ -127,7 +127,7 @@ class XMLSignatureService:
             hashlib.sha1(canonicalized_infnfe).digest()
         ).decode('utf-8')
         
-        print(f"🔍 Digest SHA-1: {digest_value[:50]}...")
+        print(f"[SEARCH] Digest SHA-1: {digest_value[:50]}...")
         
         # 3. Criar SignedInfo
         signed_info = self._create_signed_info(inf_nfe_id, digest_value)
@@ -143,7 +143,7 @@ class XMLSignatureService:
             signed_info, signature_value, certificate
         )
         
-        print("✅ Elemento Signature criado")
+        print("[OK] Elemento Signature criado")
         return signature_element
     
     def _canonicalize_element(self, element):
@@ -233,7 +233,7 @@ class XMLSignatureService:
         """
         Fallback: assinatura simulada
         """
-        print("🔄 Usando assinatura simulada")
+        print("[?] Usando assinatura simulada")
         
         signature_xml = """
     <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">

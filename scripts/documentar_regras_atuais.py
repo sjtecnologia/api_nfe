@@ -40,7 +40,7 @@ def exportar_regras_tributarias():
     
     db = next(get_db())
     
-    print("📊 Consultando regras tributárias...")
+    print("[DATA] Consultando regras tributárias...")
     
     # Buscar todas as regras (ativas e inativas para histórico completo)
     regras = db.query(RegraTributacao).options(
@@ -198,7 +198,7 @@ def exportar_regras_tributarias():
         f.write(f"**Status:** Pré-Migração LC 214/2025\n\n")
         f.write("---\n\n")
         
-        f.write("## 📊 Estatísticas Gerais\n\n")
+        f.write("## [DATA] Estatísticas Gerais\n\n")
         f.write(f"- **Total de Regras:** {len(regras)}\n")
         f.write(f"- **Regras Ativas:** {len(regras_ativas)}\n")
         f.write(f"- **Regras Inativas:** {len(regras) - len(regras_ativas)}\n\n")
@@ -208,7 +208,7 @@ def exportar_regras_tributarias():
             f.write(f"- **{regime}:** {count} regras\n")
         f.write("\n---\n\n")
         
-        f.write("## 📋 Regras Ativas Detalhadas\n\n")
+        f.write("## [LIST] Regras Ativas Detalhadas\n\n")
         
         for regra in sorted(regras_ativas, key=lambda r: (
             r.regime_tributario.nome if r.regime_tributario else '',
@@ -295,10 +295,10 @@ def exportar_regras_tributarias():
     
     print()
     print("=" * 60)
-    print("  ✅ DOCUMENTAÇÃO CONCLUÍDA COM SUCESSO!")
+    print("  [OK] DOCUMENTAÇÃO CONCLUÍDA COM SUCESSO!")
     print("=" * 60)
     print()
-    print(f"📁 Arquivos gerados em: {doc_dir}")
+    print(f"[?] Arquivos gerados em: {doc_dir}")
     print()
     print("Arquivos criados:")
     print(f"  1. {csv_file.name} (planilha)")
@@ -314,7 +314,7 @@ if __name__ == '__main__':
     try:
         exportar_regras_tributarias()
     except Exception as e:
-        print(f"\n❌ Erro ao exportar regras: {e}")
+        print(f"\n[X] Erro ao exportar regras: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

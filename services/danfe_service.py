@@ -151,8 +151,8 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
         print("\n" + "=" * 80)
         print("DENTRO DE generate_danfe_nfelib")
         print("=" * 80)
-        logger.info("🚀 Tentando gerar DANFE oficial usando nfelib")
-        print("🚀 Tentando gerar DANFE oficial usando nfelib")
+        logger.info("[START] Tentando gerar DANFE oficial usando nfelib")
+        print("[START] Tentando gerar DANFE oficial usando nfelib")
         
         # Garantir que xml_content é string
         xml_str = xml_content.decode('utf-8') if isinstance(xml_content, bytes) else xml_content
@@ -162,13 +162,13 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
             is_nfce = "<mod>65</mod>" in xml_str
             
             if is_nfce:
-                logger.info("📱 Detectada NFCe (modelo 65)")
+                logger.info("[?] Detectada NFCe (modelo 65)")
                 # Para NFCe, usar binding específico se disponível
                 from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
                 
                 try:
                     nfe_proc = NfeProc.from_xml(xml_str)
-                    logger.info("✅ NFCe carregada com sucesso")
+                    logger.info("[OK] NFCe carregada com sucesso")
                     
                     # Gerar PDF usando nfelib com engine padrão
                     pdf_bytes = nfe_proc.to_pdf()
@@ -177,78 +177,95 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
                     with open(output_pdf_path, 'wb') as f:
                         f.write(pdf_bytes)
                     
-                    logger.info(f"✅ DANFE NFCe gerado com sucesso: {output_pdf_path}")
+                    logger.info(f"[OK] DANFE NFCe gerado com sucesso: {output_pdf_path}")
                     return True
                     
                 except Exception as e:
-                    logger.warning(f"❌ Erro específico com NFCe: {str(e)}")
+                    logger.warning(f"[X] Erro específico com NFCe: {str(e)}")
                     # Continuar com processamento normal de NFe
             
             # Processar como NFe normal
-            logger.info("📄 Processando como NFe")
-            print("📄 Processando como NFe")
+            logger.info("[?] Processando como NFe")
+            print("[?] Processando como NFe")
             
             # Importar bindings corretos baseado na versão
             NfeProc = None
             try:
                 # Tentar versão 4.0 primeiro (mais comum)
-                print("🔄 Tentando importar bindings v4.0...")
+                print("[?] Tentando importar bindings v4.0...")
                 from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
-                logger.info("📚 Usando bindings v4.0")
-                print("✅ Bindings v4.0 importados com sucesso")
+                logger.info("[?] Usando bindings v4.0")
+                print("[OK] Bindings v4.0 importados com sucesso")
             except ImportError as e:
-                print(f"❌ Falha ao importar v4.0: {str(e)}")
+                print(f"[X] Falha ao importar v4.0: {str(e)}")
                 try:
                     # Fallback para versão 3.1 (corrigindo o path)
-                    print("🔄 Tentando importar bindings v3.1...")
+                    print("[?] Tentando importar bindings v3.1...")
                     from nfelib.nfe.bindings.v3_1.proc_nfe_v3_10 import NfeProc  # type: ignore
-                    logger.info("📚 Usando bindings v3.1")
-                    print("✅ Bindings v3.1 importados com sucesso")
+                    logger.info("[?] Usando bindings v3.1")
+                    print("[OK] Bindings v3.1 importados com sucesso")
                 except ImportError as e2:
-                    print(f"❌ Falha ao importar v3.1: {str(e2)}")
-                    logger.error("❌ Não foi possível importar bindings da nfelib")
-                    print("❌ Não foi possível importar bindings da nfelib")
+                    print(f"[X] Falha ao importar v3.1: {str(e2)}")
+                    logger.error("[X] Não foi possível importar bindings da nfelib")
+                    print("[X] Não foi possível importar bindings da nfelib")
                     return False
             
             if NfeProc is None:
-                logger.error("❌ Não foi possível definir classe NfeProc")
+                logger.error("[X] Não foi possível definir classe NfeProc")
                 return False
             
             # Carregar NFe do XML
             try:
-                print("🔄 Tentando carregar NFe do XML...")
-                print(f"📏 Tamanho do XML: {len(xml_str)} caracteres")
-                print(f"📝 Primeiros 200 chars: {xml_str[:200]}")
+                print("[?] Tentando carregar NFe do XML...")
+                print(f"[?] Tamanho do XML: {len(xml_str)} caracteres")
+                print(f"[LOG] Primeiros 200 chars: {xml_str[:200]}")
                 
                 nfe_proc = NfeProc.from_xml(xml_str)
-                logger.info("✅ NFe carregada do XML com sucesso")
-                print("✅ NFe carregada do XML com sucesso")
+                logger.info("[OK] NFe carregada do XML com sucesso")
+                print("[OK] NFe carregada do XML com sucesso")
                 
                 # Extrair informações básicas para log
                 try:
                     nfe_num = nfe_proc.NFe.infNFe.ide.nNF
                     serie = nfe_proc.NFe.infNFe.ide.serie
                     emitente = nfe_proc.NFe.infNFe.emit.xNome
-                    logger.info(f"📋 NFe #{nfe_num}, Série {serie}, Emitente: {emitente}")
-                    print(f"📋 NFe #{nfe_num}, Série {serie}, Emitente: {emitente}")
+                    logger.info(f"[LIST] NFe #{nfe_num}, Série {serie}, Emitente: {emitente}")
+                    print(f"[LIST] NFe #{nfe_num}, Série {serie}, Emitente: {emitente}")
                 except Exception as e:
-                    logger.info("📋 NFe carregada (detalhes não disponíveis)")
-                    print(f"⚠️ Não foi possível extrair detalhes: {e}")
+                    logger.info("[LIST] NFe carregada (detalhes não disponíveis)")
+                    print(f"[!] Não foi possível extrair detalhes: {e}")
                 
             except Exception as e:
-                logger.error(f"❌ Erro ao carregar NFe do XML: {str(e)}")
-                print(f"❌ ERRO ao carregar NFe do XML: {str(e)}")
-                print(f"❌ Traceback: {traceback.format_exc()}")
+                logger.error(f"[X] Erro ao carregar NFe do XML: {str(e)}")
+                print(f"[X] ERRO ao carregar NFe do XML: {str(e)}")
+                print(f"[X] Traceback: {traceback.format_exc()}")
                 return False
             
             # Gerar PDF
             try:
-                logger.info("🔄 Gerando PDF...")
-                print("🔄 Gerando PDF...")
+                logger.info("[?] Gerando PDF...")
+                print("[?] Gerando PDF...")
+                
+                # Configurar logo se fornecida
+                config = None
+                if logo_path and os.path.exists(logo_path):
+                    try:
+                        from brazilfiscalreport.danfe import DanfeConfig
+                        config = DanfeConfig(logo=logo_path)
+                        logger.info(f"[OK] Logo configurada: {logo_path}")
+                        print(f"[OK] Logo configurada: {logo_path}")
+                    except ImportError:
+                        logger.warning(f"[!] DanfeConfig não disponível (BrazilFiscalReport não instalado)")
+                        print(f"[!] DanfeConfig não disponível - logo não será incluída")
+                        config = None
+                    except Exception as e:
+                        logger.warning(f"[!] Erro ao configurar logo: {e}")
+                        print(f"[!] Erro ao configurar logo: {e}")
+                        config = None
                 
                 # Tentar diferentes engines em ordem de preferência
                 pdf_engines = [
-                    None,  # Engine padrão
+                    "brazilfiscalreport",  # Engine padrão (corrigido o nome)
                     "BrazilFiscalReport",
                     "erpbrasil.edoc.pdf"
                 ]
@@ -258,34 +275,28 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
                 
                 for engine in pdf_engines:
                     try:
-                        if engine:
-                            logger.info(f"🔄 Tentando engine: {engine}")
-                            print(f"🔄 Tentando engine: {engine}")
-                            pdf_bytes = nfe_proc.to_pdf(engine=engine)
-                            used_engine = engine
-                        else:
-                            logger.info("🔄 Tentando engine padrão")
-                            print("🔄 Tentando engine padrão (None)...")
-                            pdf_bytes = nfe_proc.to_pdf()
-                            used_engine = "padrão"
+                        logger.info(f"[?] Tentando engine: {engine}")
+                        print(f"[?] Tentando engine: {engine}")
+                        pdf_bytes = nfe_proc.to_pdf(engine=engine, config=config)
+                        used_engine = engine
                         
                         if pdf_bytes:
-                            logger.info(f"✅ PDF gerado com engine {used_engine}")
-                            print(f"✅ PDF gerado com engine {used_engine}, tamanho: {len(pdf_bytes)} bytes")
+                            logger.info(f"[OK] PDF gerado com engine {used_engine}")
+                            print(f"[OK] PDF gerado com engine {used_engine}, tamanho: {len(pdf_bytes)} bytes")
                             break
                             
                     except ImportError as e:
-                        logger.warning(f"❌ Engine {engine} não disponível: {str(e)}")
-                        print(f"❌ Engine {engine} não disponível: {str(e)}")
+                        logger.warning(f"[X] Engine {engine} não disponível: {str(e)}")
+                        print(f"[X] Engine {engine} não disponível: {str(e)}")
                         continue
                     except Exception as e:
-                        logger.warning(f"❌ Erro com engine {engine}: {str(e)}")
-                        print(f"❌ Erro com engine {engine}: {str(e)}")
+                        logger.warning(f"[X] Erro com engine {engine}: {str(e)}")
+                        print(f"[X] Erro com engine {engine}: {str(e)}")
                         print(f"   Traceback: {traceback.format_exc()}")
                         continue
                 
                 if not pdf_bytes:
-                    logger.error("❌ Nenhuma engine de PDF funcionou")
+                    logger.error("[X] Nenhuma engine de PDF funcionou")
                     return False
                 
                 # Salvar o arquivo
@@ -294,28 +305,28 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
                 
                 # Verificar se o arquivo foi criado
                 if os.path.exists(output_pdf_path) and os.path.getsize(output_pdf_path) > 0:
-                    logger.info(f"✅ DANFE nfelib gerado com sucesso: {output_pdf_path}")
-                    logger.info(f"📊 Tamanho do arquivo: {os.path.getsize(output_pdf_path)} bytes")
+                    logger.info(f"[OK] DANFE nfelib gerado com sucesso: {output_pdf_path}")
+                    logger.info(f"[DATA] Tamanho do arquivo: {os.path.getsize(output_pdf_path)} bytes")
                     return True
                 else:
-                    logger.error("❌ Arquivo PDF não foi criado corretamente")
+                    logger.error("[X] Arquivo PDF não foi criado corretamente")
                     return False
                     
             except Exception as e:
-                logger.error(f"❌ Erro ao gerar PDF: {str(e)}")
+                logger.error(f"[X] Erro ao gerar PDF: {str(e)}")
                 traceback.print_exc()
                 return False
             
         except ImportError as e:
-            logger.error(f"❌ Erro ao importar nfelib: {str(e)}")
+            logger.error(f"[X] Erro ao importar nfelib: {str(e)}")
             return False
         except Exception as e:
-            logger.error(f"❌ Erro geral com nfelib: {str(e)}")
+            logger.error(f"[X] Erro geral com nfelib: {str(e)}")
             traceback.print_exc()
             return False
             
     except Exception as e:
-        logger.error(f"❌ Erro crítico ao usar nfelib: {str(e)}")
+        logger.error(f"[X] Erro crítico ao usar nfelib: {str(e)}")
         traceback.print_exc()
         return False
 
@@ -324,7 +335,7 @@ def generate_danfe_reportlab_enhanced(xml_content: Union[str, bytes], output_pdf
     Gera um DANFE aprimorado usando ReportLab como fallback
     """
     try:
-        logger.info("🔄 Gerando DANFE usando ReportLab (versão aprimorada)")
+        logger.info("[?] Gerando DANFE usando ReportLab (versão aprimorada)")
         
         # Tentar instalar ReportLab se não estiver disponível
         if not check_module_exists('reportlab'):
@@ -565,18 +576,18 @@ def generate_danfe_reportlab_enhanced(xml_content: Union[str, bytes], output_pdf
         c.save()
         
         if os.path.exists(output_pdf_path):
-            logger.info(f"✅ DANFE aprimorado gerado com ReportLab: {output_pdf_path}")
+            logger.info(f"[OK] DANFE aprimorado gerado com ReportLab: {output_pdf_path}")
             return True
         else:
-            logger.error("❌ Erro ao salvar PDF com ReportLab")
+            logger.error("[X] Erro ao salvar PDF com ReportLab")
             return False
         
     except Exception as e:
-        logger.error(f"❌ Erro ao gerar PDF aprimorado: {str(e)}")
+        logger.error(f"[X] Erro ao gerar PDF aprimorado: {str(e)}")
         traceback.print_exc()
         return False
 
-def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> str:
+def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str], cliente_id: Optional[int] = None) -> str:
     """
     Gera o DANFE a partir do XML da NFe usando diferentes abordagens,
     priorizando a biblioteca nfelib.
@@ -584,6 +595,7 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> s
     Args:
         xml_content: Conteúdo XML da NFe
         nfe_id: ID da NFe para nomear o arquivo
+        cliente_id: ID do cliente (opcional, para buscar logo personalizada)
         
     Returns:
         str: Caminho do arquivo PDF gerado
@@ -597,14 +609,68 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> s
         output_pdf_path = os.path.join(danfe_dir, f'danfe_{nfe_id}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
         permanent_path = os.path.join(danfe_dir, f'danfe_{nfe_id}.pdf')
         
-        # Procurar logo da empresa (opcional)
+        # Buscar logo do cliente (prioridade) ou logo padrão
         logo_path = None
-        for logo_file in ['logo.png', 'logo.jpg', 'logo_empresa.png', 'logo.jpeg', 'logo.gif']:
-            possible_logo = os.path.join('static', 'img', logo_file)
-            if os.path.exists(possible_logo):
-                logo_path = possible_logo
-                logger.info(f"✅ Logo encontrado: {logo_path}")
-                break
+        
+        # 1. Tentar buscar logo do cliente no banco de dados
+        if cliente_id:
+            try:
+                from database.connection import SessionLocal
+                from sqlalchemy import text
+                db = SessionLocal()
+                
+                # Verificar se a coluna logo_path existe antes de consultar
+                check_column = db.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'clientes' 
+                    AND column_name = 'logo_path'
+                """)).fetchone()
+                
+                if check_column:
+                    result = db.execute(text("SELECT logo_path FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
+                    if result and result[0]:
+                        # result[0] já contém caminho relativo como 'logos/cliente_123.png'
+                        cliente_logo = os.path.join('static', result[0])
+                        # Converter para caminho absoluto
+                        cliente_logo_abs = os.path.abspath(cliente_logo)
+                        logger.info(f"[SEARCH] Verificando logo: relativo={cliente_logo}, absoluto={cliente_logo_abs}")
+                        print(f"[SEARCH] Verificando logo: relativo={cliente_logo}, absoluto={cliente_logo_abs}")
+                        if os.path.exists(cliente_logo_abs):
+                            logo_path = cliente_logo_abs
+                            logger.info(f"[OK] Logo do cliente encontrada: {logo_path}")
+                            print(f"[OK] Logo do cliente encontrada: {logo_path}")
+                        else:
+                            logger.warning(f"[!] Logo não existe no caminho: {cliente_logo_abs}")
+                            print(f"[!] Logo não existe no caminho: {cliente_logo_abs}")
+                    else:
+                        logger.info(f"ℹ️ Cliente {cliente_id} não tem logo cadastrada")
+                        print(f"ℹ️ Cliente {cliente_id} não tem logo cadastrada")
+                else:
+                    logger.warning(f"[!] Coluna logo_path não existe na tabela clientes - migration não foi executada")
+                    print(f"[!] ATENÇÃO: Execute a migration SQL para adicionar logo_path!")
+                    
+                db.close()
+            except Exception as e:
+                logger.warning(f"[!] Erro ao buscar logo do cliente: {e}")
+                print(f"[!] Erro ao buscar logo do cliente: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # 2. Fallback para logo padrão se não encontrou logo do cliente
+        if not logo_path:
+            for logo_file in ['logo.png', 'logo.jpg', 'logo_empresa.png', 'logo.jpeg', 'logo.gif']:
+                possible_logo = os.path.join('static', 'img', logo_file)
+                possible_logo_abs = os.path.abspath(possible_logo)
+                if os.path.exists(possible_logo_abs):
+                    logo_path = possible_logo_abs
+                    logger.info(f"[OK] Logo padrão encontrada: {logo_path}")
+                    print(f"[OK] Logo padrão encontrada: {logo_path}")
+                    break
+            
+            if not logo_path:
+                logger.warning("[!] Nenhuma logo encontrada (nem do cliente, nem padrão)")
+                print("[!] Nenhuma logo encontrada (nem do cliente, nem padrão)")
         
         # Flag para controlar se o DANFE foi gerado
         danfe_generated = False
@@ -620,42 +686,42 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> s
                 print("=" * 80)
                 
                 if not check_module_exists('nfelib'):
-                    print("❌ nfelib não encontrado, tentando instalar...")
-                    logger.info("📦 nfelib não encontrado, tentando instalar...")
+                    print("[X] nfelib não encontrado, tentando instalar...")
+                    logger.info("[?] nfelib não encontrado, tentando instalar...")
                     if install_package('nfelib'):
-                        print("✅ nfelib instalado com sucesso")
-                        logger.info("✅ nfelib instalado com sucesso")
+                        print("[OK] nfelib instalado com sucesso")
+                        logger.info("[OK] nfelib instalado com sucesso")
                     else:
-                        print("❌ Falha ao instalar nfelib")
-                        logger.error("❌ Falha ao instalar nfelib")
+                        print("[X] Falha ao instalar nfelib")
+                        logger.error("[X] Falha ao instalar nfelib")
                 else:
-                    print("✅ nfelib está disponível")
+                    print("[OK] nfelib está disponível")
                 
                 # Tentar usar nfelib se disponível
                 if check_module_exists('nfelib'):
-                    print("🚀 Chamando generate_danfe_nfelib...")
+                    print("[START] Chamando generate_danfe_nfelib...")
                     resultado = generate_danfe_nfelib(xml_content, output_pdf_path, logo_path)
-                    print(f"📊 Resultado generate_danfe_nfelib: {resultado}")
+                    print(f"[DATA] Resultado generate_danfe_nfelib: {resultado}")
                     
                     if resultado:
                         danfe_generated = True
-                        print("🎉 DANFE oficial gerado com sucesso usando nfelib")
-                        logger.info("🎉 DANFE oficial gerado com sucesso usando nfelib")
+                        print("[?] DANFE oficial gerado com sucesso usando nfelib")
+                        logger.info("[?] DANFE oficial gerado com sucesso usando nfelib")
                     else:
-                        print("❌ generate_danfe_nfelib retornou False")
-                        logger.warning("❌ generate_danfe_nfelib retornou False")
+                        print("[X] generate_danfe_nfelib retornou False")
+                        logger.warning("[X] generate_danfe_nfelib retornou False")
                 else:
-                    print("⚠️ nfelib não está disponível")
-                    logger.warning("⚠️ nfelib não está disponível")
+                    print("[!] nfelib não está disponível")
+                    logger.warning("[!] nfelib não está disponível")
                     
             except Exception as e:
-                logger.error(f"❌ Erro ao usar nfelib: {str(e)}")
+                logger.error(f"[X] Erro ao usar nfelib: {str(e)}")
                 traceback.print_exc()
         
         # MÉTODO 2: API externa se configurada
         if not danfe_generated and check_module_exists('requests'):
             try:
-                logger.info("🌐 Tentando gerar DANFE usando API externa")
+                logger.info("[?] Tentando gerar DANFE usando API externa")
                 import requests
                 
                 api_url = os.environ.get('DANFE_API_URL')
@@ -678,27 +744,27 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> s
                         with open(output_pdf_path, 'wb') as f:
                             f.write(response.content)
                         danfe_generated = True
-                        logger.info(f"✅ DANFE gerado com sucesso via API externa")
+                        logger.info(f"[OK] DANFE gerado com sucesso via API externa")
                     else:
-                        logger.warning(f"❌ API retornou status {response.status_code}: {response.text}")
+                        logger.warning(f"[X] API retornou status {response.status_code}: {response.text}")
                 else:
                     logger.debug("ℹ️ Variáveis de ambiente da API não configuradas")
             except Exception as e:
-                logger.error(f"❌ Erro ao usar API externa: {str(e)}")
+                logger.error(f"[X] Erro ao usar API externa: {str(e)}")
         
         # MÉTODO 3: ReportLab aprimorado (fallback confiável)
         if not danfe_generated:
             try:
                 if generate_danfe_reportlab_enhanced(xml_content, output_pdf_path, logo_path):
                     danfe_generated = True
-                    logger.info("✅ DANFE aprimorado gerado com ReportLab")
+                    logger.info("[OK] DANFE aprimorado gerado com ReportLab")
             except Exception as e:
-                logger.error(f"❌ Erro ao usar ReportLab: {str(e)}")
+                logger.error(f"[X] Erro ao usar ReportLab: {str(e)}")
                 traceback.print_exc()
         
         # MÉTODO 4: Último recurso - arquivo de texto
         if not danfe_generated:
-            logger.warning("⚠️ Todas as tentativas de PDF falharam, criando arquivo de texto")
+            logger.warning("[!] Todas as tentativas de PDF falharam, criando arquivo de texto")
             txt_path = output_pdf_path.replace('.pdf', '.txt')
             
             try:
@@ -723,22 +789,22 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> s
                     f.write("=========================================\n")
                     
                 output_pdf_path = txt_path
-                logger.info(f"📄 Arquivo de texto gerado: {txt_path}")
+                logger.info(f"[?] Arquivo de texto gerado: {txt_path}")
             except Exception as e:
-                logger.error(f"❌ Erro ao criar arquivo de texto: {str(e)}")
+                logger.error(f"[X] Erro ao criar arquivo de texto: {str(e)}")
         
         # Se o DANFE foi gerado, criar um link permanente
         if os.path.exists(output_pdf_path):
             try:
                 shutil.copy2(output_pdf_path, permanent_path)
-                logger.info(f"✅ DANFE permanente salvo em: {permanent_path}")
+                logger.info(f"[OK] DANFE permanente salvo em: {permanent_path}")
             except Exception as e:
-                logger.error(f"❌ Erro ao criar link permanente: {str(e)}")
+                logger.error(f"[X] Erro ao criar link permanente: {str(e)}")
         
         return output_pdf_path
         
     except Exception as e:
-        logger.error(f"❌ Erro crítico na geração do DANFE: {str(e)}")
+        logger.error(f"[X] Erro crítico na geração do DANFE: {str(e)}")
         traceback.print_exc()
         
         # Criar arquivo de erro como último recurso
@@ -758,9 +824,9 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str]) -> s
 
 def test_service() -> None:
     """Testa se o serviço está configurado corretamente"""
-    print("🧪 Testando serviço de geração de DANFE...")
-    print(f"🐍 Python version: {sys.version}")
-    print("\n📚 Verificando bibliotecas disponíveis:")
+    print("[?] Testando serviço de geração de DANFE...")
+    print(f"[?] Python version: {sys.version}")
+    print("\n[?] Verificando bibliotecas disponíveis:")
     
     # Bibliotecas prioritárias para DANFE
     priority_libs = [
@@ -776,48 +842,48 @@ def test_service() -> None:
         ("requests", "API externa"),
     ]
     
-    print("\n🎯 Bibliotecas para DANFE:")
+    print("\n[?] Bibliotecas para DANFE:")
     for lib, desc in priority_libs:
-        status = "✅ Disponível" if check_module_exists(lib) else "❌ Não disponível"
+        status = "[OK] Disponível" if check_module_exists(lib) else "[X] Não disponível"
         version = get_library_version(lib) if check_module_exists(lib) else ""
         version_str = f" (v{version})" if version and version != "Não instalado" else ""
         print(f"  - {lib}: {status}{version_str} - {desc}")
     
-    print("\n🛠️ Bibliotecas de apoio:")
+    print("\n[?]️ Bibliotecas de apoio:")
     for lib, desc in support_libs:
-        status = "✅ Disponível" if check_module_exists(lib) else "❌ Não disponível"
+        status = "[OK] Disponível" if check_module_exists(lib) else "[X] Não disponível"
         version = get_library_version(lib) if check_module_exists(lib) else ""
         version_str = f" (v{version})" if version and version != "Não instalado" else ""
         print(f"  - {lib}: {status}{version_str} - {desc}")
     
-    print(f"\n🖥️ Sistema: {os.name}")
+    print(f"\n[?]️ Sistema: {os.name}")
     if check_module_exists('platform'):
         import platform
-        print(f"🏗️ Plataforma: {platform.system()} {platform.release()}")
+        print(f"[BUILD] Plataforma: {platform.system()} {platform.release()}")
     
-    print(f"\n📁 Diretório de saída: {os.path.abspath(os.path.join('static', 'danfe'))}")
+    print(f"\n[?] Diretório de saída: {os.path.abspath(os.path.join('static', 'danfe'))}")
     
     # Verificar logos
     logo_dir = os.path.join('static', 'img')
     if os.path.exists(logo_dir):
         logos = [f for f in os.listdir(logo_dir) if f.lower().startswith('logo')]
         if logos:
-            print(f"🎨 Logos encontrados: {', '.join(logos)}")
+            print(f"[?] Logos encontrados: {', '.join(logos)}")
         else:
-            print("🎨 Nenhum logo encontrado em static/img/")
+            print("[?] Nenhum logo encontrado em static/img/")
     else:
-        print("🎨 Diretório de imagens não encontrado")
+        print("[?] Diretório de imagens não encontrado")
     
-    print("\n✅ Teste concluído!")
+    print("\n[OK] Teste concluído!")
     
     # Recomendações
     if not check_module_exists('nfelib'):
-        print("\n💡 RECOMENDAÇÃO PRINCIPAL:")
+        print("\n[?] RECOMENDAÇÃO PRINCIPAL:")
         print("   pip install nfelib")
         print("   pip install BrazilFiscalReport  # Para geração de PDF")
     
     if not check_module_exists('lxml'):
-        print("\n💡 RECOMENDAÇÃO ADICIONAL:")
+        print("\n[?] RECOMENDAÇÃO ADICIONAL:")
         print("   pip install lxml  # Para melhor parse de XML")
 
 # Executar teste quando o script for rodado diretamente

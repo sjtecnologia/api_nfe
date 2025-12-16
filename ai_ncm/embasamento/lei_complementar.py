@@ -33,7 +33,7 @@ class BuscadorLeiComplementar:
             with open(self.caminho_dados, 'r', encoding='utf-8') as f:
                 return json.load(f)
         else:
-            print(f"⚠️  Arquivo não encontrado: {self.caminho_dados}")
+            print(f"[!]  Arquivo não encontrado: {self.caminho_dados}")
             return {}
     
     def buscar_artigo(self, numero_artigo: str) -> Optional[Dict]:
@@ -273,14 +273,14 @@ if __name__ == '__main__':
     buscador = BuscadorLeiComplementar()
     
     print("\n" + "="*60)
-    print("📊 ESTATÍSTICAS DA LEI COMPLEMENTAR 214/2025")
+    print("[DATA] ESTATÍSTICAS DA LEI COMPLEMENTAR 214/2025")
     print("="*60)
     stats = buscador.obter_estatisticas()
     for chave, valor in stats.items():
         print(f"{chave}: {valor}")
     
     print("\n" + "="*60)
-    print("📋 ARTIGO 4º - INCIDÊNCIA")
+    print("[LIST] ARTIGO 4º - INCIDÊNCIA")
     print("="*60)
     artigo_4 = buscador.buscar_artigo('4º')
     if artigo_4:
@@ -288,7 +288,7 @@ if __name__ == '__main__':
         print(f"{artigo_4['conteudo'][:300]}...")
     
     print("\n" + "="*60)
-    print("🔍 REFERÊNCIAS A NCM NA LEI")
+    print("[SEARCH] REFERÊNCIAS A NCM NA LEI")
     print("="*60)
     refs_ncm = buscador.buscar_referencias_ncm()
     print(f"Total de referências encontradas: {len(refs_ncm)}")
@@ -298,7 +298,7 @@ if __name__ == '__main__':
         print(f"Contexto: {refs_ncm[0]['contexto'][:150]}...")
     
     print("\n" + "="*60)
-    print("💰 BUSCA DE ALÍQUOTAS - IBS")
+    print("[?] BUSCA DE ALÍQUOTAS - IBS")
     print("="*60)
     aliq_ibs = buscador.buscar_aliquotas('IBS')
     print(f"Menções encontradas: {len(aliq_ibs)}")
@@ -308,7 +308,7 @@ if __name__ == '__main__':
         print(f"Percentual: {aliq_ibs[0].get('percentual', 'N/A')}")
     
     print("\n" + "="*60)
-    print("🔍 BUSCA POR PALAVRA-CHAVE: 'tributação'")
+    print("[SEARCH] BUSCA POR PALAVRA-CHAVE: 'tributação'")
     print("="*60)
     resultados = buscador.buscar_por_palavra_chave('tributação', max_resultados=3)
     print(f"Artigos encontrados: {len(resultados)}")

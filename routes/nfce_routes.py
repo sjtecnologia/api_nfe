@@ -338,7 +338,7 @@ def emitir_nfce():
                     db.commit()
                     
                     # Mensagem de sucesso com informações detalhadas
-                    flash(f'✅ NFC-e #{resultado["numero"]} emitida com sucesso em AMBIENTE DE HOMOLOGAÇÃO!', 'success')
+                    flash(f'[OK] NFC-e #{resultado["numero"]} emitida com sucesso em AMBIENTE DE HOMOLOGAÇÃO!', 'success')
                     flash(f'Chave de Acesso: {chave_acesso}', 'info')
                     flash(f'Protocolo: {resultado["protocolo"]}', 'info')
                     

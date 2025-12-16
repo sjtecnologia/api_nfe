@@ -425,11 +425,11 @@ if __name__ == '__main__':
     erros = validar_dados_nfce(dados_teste)
     
     if erros:
-        print('❌ Erros encontrados:')
+        print('[X] Erros encontrados:')
         for erro in erros:
             print(f'  - {erro}')
     else:
-        print('✅ Dados válidos!')
+        print('[OK] Dados válidos!')
     
     # Teste de validadores individuais
     print(f'\nCPF 12345678901: {validar_cpf("12345678901")}')

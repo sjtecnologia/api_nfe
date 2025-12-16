@@ -81,11 +81,11 @@ def editar_produto(produto_id):
             # Exibe form de edição
             row = db.execute(text("SELECT * FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
             produto = dict(row._mapping) if row else None
-            print(f"🔍 Produto encontrado: {produto is not None}")
+            print(f"[SEARCH] Produto encontrado: {produto is not None}")
             if produto:
-                print(f"🔍 Produto ID: {produto.get('produto_id')}, Descrição: {produto.get('descricao')}")
+                print(f"[SEARCH] Produto ID: {produto.get('produto_id')}, Descrição: {produto.get('descricao')}")
                 for key, value in produto.items():
-                    print(f"🔍 {key}: {value}")
+                    print(f"[SEARCH] {key}: {value}")
             if produto and 'cliente_id' in produto and produto['cliente_id']:
                 cliente_id = produto['cliente_id']
             else:
@@ -94,27 +94,27 @@ def editar_produto(produto_id):
                 cliente_id = int(cliente_id) if cliente_id is not None else None
             except (TypeError, ValueError):
                 cliente_id = None
-            print("🔍 Buscando NCMs...")
+            print("[SEARCH] Buscando NCMs...")
             ncm_list = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo")).fetchall()
-            print(f"🔍 NCMs encontrados: {len(ncm_list)}")
+            print(f"[SEARCH] NCMs encontrados: {len(ncm_list)}")
             
-            print("🔍 Buscando CFOPs...")
+            print("[SEARCH] Buscando CFOPs...")
             cfop_list = db.execute(text("SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop")).fetchall()
-            print(f"🔍 CFOPs encontrados: {len(cfop_list)}")
+            print(f"[SEARCH] CFOPs encontrados: {len(cfop_list)}")
             
-            print("🔍 Buscando CSTs...")
+            print("[SEARCH] Buscando CSTs...")
             cst_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms ORDER BY codigo")).fetchall()
-            print(f"🔍 CSTs encontrados: {len(cst_list)}")
+            print(f"[SEARCH] CSTs encontrados: {len(cst_list)}")
             
-            print("🔍 Buscando CSOSNs...")
+            print("[SEARCH] Buscando CSOSNs...")
             csosn_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms ORDER BY codigo")).fetchall()
-            print(f"🔍 CSOSNs encontrados: {len(csosn_list)}")
+            print(f"[SEARCH] CSOSNs encontrados: {len(csosn_list)}")
             
-            print("🔍 Buscando Origens de Mercadoria...")
+            print("[SEARCH] Buscando Origens de Mercadoria...")
             origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria ORDER BY codigo")).fetchall()
-            print(f"🔍 Origens encontradas: {len(origens_list)}")
+            print(f"[SEARCH] Origens encontradas: {len(origens_list)}")
             
-            print("🔍 Tentando renderizar template...")
+            print("[SEARCH] Tentando renderizar template...")
             try:
                 return render_template(
                     'admin/produtos/form.html',
@@ -127,12 +127,12 @@ def editar_produto(produto_id):
                     origens_mercadoria=[dict(o._mapping) for o in origens_list]
                 )
             except Exception as template_error:
-                print(f"❌ Erro ao renderizar template: {template_error}")
+                print(f"[X] Erro ao renderizar template: {template_error}")
                 raise template_error
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro na função editar_produto: {e}")
-        print(f"❌ Tipo do erro: {type(e)}")
+        print(f"[X] Erro na função editar_produto: {e}")
+        print(f"[X] Tipo do erro: {type(e)}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao editar produto: {e}', 'danger')
@@ -271,7 +271,7 @@ def duplicar_produto(produto_id: int):
             return redirect(request.referrer or url_for('admin.list_produtos'))
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao duplicar produto: {e}")
+        print(f"[X] Erro ao duplicar produto: {e}")
         flash('Erro ao duplicar produto', 'error')
         return redirect(request.referrer or url_for('admin.list_produtos'))
     finally:
@@ -344,7 +344,7 @@ def _locate_get_db():
         if hasattr(root_db, 'get_db'):
             return root_db.get_db
     except ImportError as e:
-        print(f"❌ Não conseguiu importar db do diretório raiz: {e}")
+        print(f"[X] Não conseguiu importar db do diretório raiz: {e}")
         pass
     
     # Tenta outros módulos candidatos
@@ -352,7 +352,7 @@ def _locate_get_db():
         try:
             mod = importlib.import_module(mod_name)
             if hasattr(mod, 'get_db'):
-                print(f"✅ Encontrou get_db em {mod_name}")
+                print(f"[OK] Encontrou get_db em {mod_name}")
                 return getattr(mod, 'get_db')
         except ImportError:
             continue
@@ -369,8 +369,8 @@ def _locate_get_db():
     def _fallback():
         engine = current_app.config.get('SQLALCHEMY_ENGINE')
         if engine is None:
-            print("❌ SQLALCHEMY_ENGINE não encontrado em current_app.config")
-            print("❌ Estrutura de diretórios:")
+            print("[X] SQLALCHEMY_ENGINE não encontrado em current_app.config")
+            print("[X] Estrutura de diretórios:")
             print(f"   BASE_DIR: {BASE_DIR}")
             print(f"   sys.path inclui: {BASE_DIR in sys.path}")
             raise RuntimeError("get_db não encontrado. Ajuste caminhos ou verifique se módulo db.py existe.")
@@ -613,9 +613,9 @@ def upload_siscomex_json():
             result = ncm_service.process_siscomex_json(content)
             
             if result['success']:
-                flash(f"✅ {result['message']}", 'success')
+                flash(f"[OK] {result['message']}", 'success')
             else:
-                flash(f"⚠️ {result['message']}", 'warning')
+                flash(f"[!] {result['message']}", 'warning')
                 
         except UnicodeDecodeError:
             flash('Erro de codificação do arquivo. Certifique-se que está em UTF-8.', 'error')
@@ -739,7 +739,7 @@ def delete_ncm(ncm_id):
             
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_ncm: {e}")
+        print(f"[X] Erro delete_ncm: {e}")
         flash(f'Erro ao excluir NCM: {str(e)}', 'error')
     finally:
         db.close()
@@ -771,7 +771,7 @@ def list_cst():
         csts = [dict(row._mapping) for row in rows]
         return render_template('admin/cst/list.html', csts=csts)
     except Exception as e:
-        print(f"❌ Erro list_cst: {e}")
+        print(f"[X] Erro list_cst: {e}")
         flash('Erro ao carregar CSTs', 'error')
         return render_template('admin/cst/list.html', csts=[])
     finally:
@@ -823,7 +823,7 @@ def delete_cst(cst_id):
         flash('CST excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_cst: {e}")
+        print(f"[X] Erro delete_cst: {e}")
         flash('Erro ao excluir CST', 'error')
     finally:
         db.close()
@@ -902,7 +902,7 @@ def save_cfop():
         return redirect(url_for('admin.list_cfops'))
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro save_cfop: {e}")
+        print(f"[X] Erro save_cfop: {e}")
         flash('Erro ao salvar CFOP', 'error')
         return redirect(url_for('admin.list_cfops'))
     finally:
@@ -923,7 +923,7 @@ def edit_cfop(cfop_id):
         ])
         return render_template('admin/cfops/form.html', cfop=cfop)
     except Exception as e:
-        print(f"❌ Erro edit_cfop: {e}")
+        print(f"[X] Erro edit_cfop: {e}")
         flash('Erro ao carregar CFOP', 'error')
         return redirect(url_for('admin.list_cfops'))
     finally:
@@ -939,7 +939,7 @@ def delete_cfop(cfop_id):
         flash('CFOP excluído', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_cfop: {e}")
+        print(f"[X] Erro delete_cfop: {e}")
         flash('Erro ao excluir CFOP', 'error')
     finally:
         db.close()
@@ -1191,7 +1191,7 @@ def delete_usuario(usuario_id):
         flash('Usuário excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_usuario: {e}")
+        print(f"[X] Erro delete_usuario: {e}")
         flash('Erro ao excluir usuário', 'error')
     finally:
         db.close()
@@ -1246,7 +1246,7 @@ def visualizar_cliente(cliente_id: int):
             destinatarios=destinatarios
         )
     except Exception as e:
-        print(f"❌ Erro visualizar_cliente: {e}")
+        print(f"[X] Erro visualizar_cliente: {e}")
         flash('Erro ao carregar detalhes do cliente', 'error')
         return redirect(url_for('admin.list_clientes'))
     finally:
@@ -1321,7 +1321,7 @@ def delete_csosn(csosn_id):
         flash('CSOSN excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_csosn: {e}")
+        print(f"[X] Erro delete_csosn: {e}")
         flash('Erro ao excluir CSOSN', 'error')
     finally:
         db.close()
@@ -1345,7 +1345,7 @@ def list_regimes_tributarios():
         ]) for r in rows]
         return render_template('admin/regimes_tributarios/list.html', regimes=regimes)
     except Exception as e:
-        print(f"❌ Erro list_regimes_tributarios: {e}")
+        print(f"[X] Erro list_regimes_tributarios: {e}")
         flash('Erro ao carregar regimes tributários', 'error')
         return render_template('admin/regimes_tributarios/list.html', regimes=[])
     finally:
@@ -1414,7 +1414,7 @@ def delete_regime_tributario(regime_tributario_id: int):
         flash('Regime tributário excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_regime_tributario: {e}")
+        print(f"[X] Erro delete_regime_tributario: {e}")
         flash('Erro ao excluir regime tributário', 'error')
     finally:
         db.close()
@@ -1519,7 +1519,7 @@ def delete_role(role_id):
         flash('Role excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_role: {e}")
+        print(f"[X] Erro delete_role: {e}")
         flash('Erro ao excluir role', 'error')
     finally:
         db.close()
@@ -1593,7 +1593,7 @@ def delete_permission(permission_id):
         flash('Permissão excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_permission: {e}")
+        print(f"[X] Erro delete_permission: {e}")
         flash('Erro ao excluir permissão', 'error')
     finally:
         db.close()
@@ -1797,10 +1797,8 @@ def dashboard():
     """
     Dashboard principal com analytics, gráficos e KPIs do sistema.
     """
-    print(f"[DEBUG] Dashboard acessado por: {current_user.username}, Super Admin: {current_user.is_super_admin()}")
     db = _get_db()
     try:
-        print("[DEBUG] Iniciando cálculo de KPIs...")
         from datetime import datetime, timedelta
         
         # Processar filtros de período
@@ -1846,46 +1844,56 @@ def dashboard():
             where_and = "AND data_criacao BETWEEN :data_inicio AND :data_fim"
             params = {'data_inicio': data_inicio, 'data_fim': data_fim}
         
-        # 1. Total de NFes emitidas (modelo 55)
+        # 1. Total de NFes emitidas (modelo = 55 ou NULL/vazio = NFe padrão)
         kpis['total_nfes'] = db.execute(text(f"""
             SELECT COUNT(*) FROM nfe_emitidas 
-            WHERE tipo_nfe = '55' {where_and}
+            WHERE (modelo IS NULL OR modelo = '' OR modelo = '55') {where_and}
         """), params).scalar() or 0
         
-        # 1b. Total de NFC-es emitidas (modelo 65)
+        # 1b. Total de NFC-es emitidas (modelo = 65)
         kpis['total_nfces'] = db.execute(text(f"""
             SELECT COUNT(*) FROM nfe_emitidas 
-            WHERE tipo_nfe = '65' {where_and}
+            WHERE modelo = '65' {where_and}
         """), params).scalar() or 0
         
-        # 2. Valor total de NFes (modelo 55, extraindo do JSON)
+        # 2. Valor total de NFes (modelo = 55, extraindo do JSON ou campo valor_total)
         kpis['valor_total'] = db.execute(text(f"""
-            SELECT COALESCE(SUM(
-                (json_nfe->'form_data'->>'valorPagamento')::numeric
-            ), 0) FROM nfe_emitidas
-            WHERE json_nfe IS NOT NULL 
-                AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
-                AND tipo_nfe = '55'
-                {where_and}
+            SELECT COALESCE(
+                SUM(COALESCE(
+                    valor_total,
+                    (json_nfe->'form_data'->>'valorPagamento')::numeric,
+                    (json_nfe->'totais'->>'valor_total')::numeric,
+                    0
+                )), 0
+            ) FROM nfe_emitidas
+            WHERE (modelo IS NULL OR modelo = '' OR modelo = '55') {where_and}
         """), params).scalar() or 0
         
-        # 2b. Valor total de NFC-es (modelo 65)
+        # 2b. Valor total de NFC-es (modelo = 65)
+        # JSON está como string dentro de JSONB, precisa fazer parse: (json_nfe #>> '{}')::jsonb
         kpis['valor_total_nfce'] = db.execute(text(f"""
-            SELECT COALESCE(SUM(
-                (json_nfe->'form_data'->>'valorPagamento')::numeric
-            ), 0) FROM nfe_emitidas
-            WHERE json_nfe IS NOT NULL 
-                AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
-                AND tipo_nfe = '65'
-                {where_and}
+            SELECT COALESCE(
+                SUM(COALESCE(
+                    valor_total,
+                    ((json_nfe #>> '{{}}')::jsonb->>'valor_pago')::numeric,
+                    ((json_nfe #>> '{{}}')::jsonb->'totais'->>'valor_total')::numeric,
+                    (json_nfe->>'valor_pago')::numeric,
+                    (json_nfe->'totais'->>'valor_total')::numeric,
+                    0
+                )), 0
+            ) FROM nfe_emitidas
+            WHERE modelo = '65' {where_and}
         """), params).scalar() or 0
         
-        # 3. Taxa de sucesso (autorizadas vs total)
+        # Debug: verificar dados da NFCe (removido após confirmar funcionamento)
+        
+        # 3. Taxa de sucesso (autorizadas vs total) - apenas NFe modelo = 55
         total = kpis['total_nfes']
         autorizadas = db.execute(text(f"""
             SELECT COUNT(*) FROM nfe_emitidas 
-            WHERE (status = 'Autorizada' OR status = 'Autorizado' OR status ILIKE '%autoriza%')
-                {where_and}
+            WHERE (modelo IS NULL OR modelo = '' OR modelo = '55')
+                AND (status = 'Autorizada' OR status = 'Autorizado' OR status ILIKE '%autoriza%')
+                {where_and.replace('AND', 'AND', 1) if where_and else ''}
         """), params).scalar() or 0
         kpis['taxa_sucesso'] = round((autorizadas / total * 100) if total > 0 else 0, 1)
         
@@ -2062,7 +2070,7 @@ def relatorio_certificados_vencimento():
                              data_relatorio=datetime.now().strftime('%d/%m/%Y %H:%M'))
         
     except Exception as e:
-        print(f"❌ Erro relatório certificados: {e}")
+        print(f"[X] Erro relatório certificados: {e}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar relatório de certificados: {str(e)}', 'danger')
@@ -2074,8 +2082,12 @@ def dashboard_api_data():
     """
     API JSON para dados do dashboard (gráficos e métricas).
     """
-    db = _get_db()
+    db = None
     try:
+        print("[DEBUG] Iniciando dashboard_api_data...")
+        db = _get_db()
+        print("[DEBUG] Conexão DB obtida")
+        
         from datetime import datetime, timedelta
         from calendar import month_name
         
@@ -2084,14 +2096,19 @@ def dashboard_api_data():
         data_inicio_str = request.args.get('data_inicio')
         data_fim_str = request.args.get('data_fim')
         
+        print(f"[DEBUG] Período: {periodo}, data_inicio: {data_inicio_str}, data_fim: {data_fim_str}")
+        
         # Calcular datas de filtro
         hoje = datetime.now()
         data_inicio = None
         data_fim = None
         
         if data_inicio_str and data_fim_str:
-            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
-            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+            try:
+                data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+                data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
+            except Exception as e:
+                print(f"[WARN] Erro ao parsear datas: {e}")
         elif periodo == 'hoje':
             data_inicio = hoje.replace(hour=0, minute=0, second=0, microsecond=0)
             data_fim = hoje.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -2108,7 +2125,15 @@ def dashboard_api_data():
             data_inicio = hoje.replace(month=1, day=1)
             data_fim = hoje
         
-        data = {}
+        print(f"[DEBUG] Datas calculadas: {data_inicio} até {data_fim}")
+        
+        # Inicializar data com estrutura padrão vazia
+        data = {
+            'nfes_por_mes': {'labels': [], 'totais': [], 'valores': []},
+            'top_produtos': {'labels': [], 'valores': []},
+            'status_nfes': {'labels': [], 'valores': []},
+            'top_clientes': {'labels': [], 'valores': []}
+        }
         
         # Criar cláusula WHERE baseada no período
         where_clause = ""
@@ -2119,44 +2144,59 @@ def dashboard_api_data():
             where_and = "AND data_criacao BETWEEN :data_inicio AND :data_fim"
             params = {'data_inicio': data_inicio, 'data_fim': data_fim}
         
+        print("[DEBUG] Buscando NFes por mês...")
         # Gráfico 1: NFes por mês (filtrado pelo período)
-        if data_inicio and data_fim:
-            # Se filtrado, usar o intervalo específico
-            nfes_por_mes = db.execute(text("""
-                SELECT 
-                    TO_CHAR(data_criacao, 'YYYY-MM') as mes,
-                    COUNT(*) as total,
-                    COALESCE(SUM(
-                        (json_nfe->'form_data'->>'valorPagamento')::numeric
-                    ), 0) as valor
-                FROM nfe_emitidas
-                WHERE data_criacao BETWEEN :data_inicio AND :data_fim
-                    AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
-                GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
-                ORDER BY mes
-            """), params).fetchall()
-        else:
-            # Sem filtro, mostrar últimos 12 meses
-            nfes_por_mes = db.execute(text("""
-                SELECT 
-                    TO_CHAR(data_criacao, 'YYYY-MM') as mes,
-                    COUNT(*) as total,
-                    COALESCE(SUM(
-                        (json_nfe->'form_data'->>'valorPagamento')::numeric
-                    ), 0) as valor
-                FROM nfe_emitidas
-                WHERE data_criacao >= CURRENT_DATE - INTERVAL '12 months'
-                    AND json_nfe->'form_data'->>'valorPagamento' IS NOT NULL
-                GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
-                ORDER BY mes
-            """)).fetchall()
+        try:
+            if data_inicio and data_fim:
+                # Se filtrado, usar o intervalo específico
+                nfes_por_mes = db.execute(text("""
+                    SELECT 
+                        TO_CHAR(data_criacao, 'YYYY-MM') as mes,
+                        COUNT(*) as total,
+                        COALESCE(SUM(
+                            COALESCE(
+                                valor_total,
+                                (json_nfe->'form_data'->>'valorPagamento')::numeric,
+                                0
+                            )
+                        ), 0) as valor
+                    FROM nfe_emitidas
+                    WHERE data_criacao BETWEEN :data_inicio AND :data_fim
+                    GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
+                    ORDER BY mes
+                """), params).fetchall()
+            else:
+                # Sem filtro, mostrar últimos 12 meses
+                nfes_por_mes = db.execute(text("""
+                    SELECT 
+                        TO_CHAR(data_criacao, 'YYYY-MM') as mes,
+                        COUNT(*) as total,
+                        COALESCE(SUM(
+                            COALESCE(
+                                valor_total,
+                                (json_nfe->'form_data'->>'valorPagamento')::numeric,
+                                0
+                            )
+                        ), 0) as valor
+                    FROM nfe_emitidas
+                    WHERE data_criacao >= CURRENT_DATE - INTERVAL '12 months'
+                    GROUP BY TO_CHAR(data_criacao, 'YYYY-MM')
+                    ORDER BY mes
+                """)).fetchall()
+            
+            data['nfes_por_mes'] = {
+                'labels': [row[0] for row in nfes_por_mes],
+                'totais': [int(row[1]) for row in nfes_por_mes],
+                'valores': [float(row[2]) for row in nfes_por_mes]
+            }
+            print(f"[DEBUG] NFes por mês: {len(nfes_por_mes)} registros")
+        except Exception as e:
+            print(f"[ERROR] Erro ao buscar NFes por mês: {e}")
+            import traceback
+            traceback.print_exc()
+            db.rollback()  # Rollback para não quebrar próximas queries
         
-        data['nfes_por_mes'] = {
-            'labels': [row[0] for row in nfes_por_mes],
-            'totais': [int(row[1]) for row in nfes_por_mes],
-            'valores': [float(row[2]) for row in nfes_por_mes]
-        }
-        
+        print("[DEBUG] Buscando top produtos...")
         # Gráfico 2: Top 5 produtos mais emitidos em NFes (filtrado pelo período)
         try:
             if data_inicio and data_fim:
@@ -2167,6 +2207,8 @@ def dashboard_api_data():
                     FROM nfe_emitidas n
                     CROSS JOIN LATERAL jsonb_array_elements(n.json_nfe->'items') AS item
                     WHERE n.data_criacao BETWEEN :data_inicio AND :data_fim
+                        AND n.json_nfe IS NOT NULL
+                        AND jsonb_typeof(n.json_nfe->'items') = 'array'
                         AND item->>'descricao' IS NOT NULL
                     GROUP BY item->>'descricao'
                     ORDER BY total_usos DESC
@@ -2180,84 +2222,115 @@ def dashboard_api_data():
                     FROM nfe_emitidas n
                     CROSS JOIN LATERAL jsonb_array_elements(n.json_nfe->'items') AS item
                     WHERE n.data_criacao >= CURRENT_DATE - INTERVAL '12 months'
+                        AND n.json_nfe IS NOT NULL
+                        AND jsonb_typeof(n.json_nfe->'items') = 'array'
                         AND item->>'descricao' IS NOT NULL
                     GROUP BY item->>'descricao'
                     ORDER BY total_usos DESC
                     LIMIT 5
                 """)).fetchall()
         except Exception as e:
+            print(f"[WARN] Erro ao buscar top produtos: {e}")
+            db.rollback()  # Rollback para não quebrar próximas queries
             top_produtos = []
         
         data['top_produtos'] = {
             'labels': [row[0][:30] if row[0] else 'Sem descrição' for row in top_produtos] if top_produtos else [],
             'valores': [int(row[1]) for row in top_produtos] if top_produtos else []
         }
+        print(f"[DEBUG] Top produtos: {len(top_produtos) if top_produtos else 0} registros")
+        print(f"[DEBUG] Top produtos data: {data['top_produtos']}")
         
-        # Gráfico 3: Status das NFes (filtrado pelo período)
-        if data_inicio and data_fim:
-            status_nfes = db.execute(text("""
-                SELECT 
-                    COALESCE(status, 'Sem Status') as status,
-                    COUNT(*) as total
-                FROM nfe_emitidas
-                WHERE data_criacao BETWEEN :data_inicio AND :data_fim
-                GROUP BY status
-                ORDER BY total DESC
-            """), params).fetchall()
-        else:
-            status_nfes = db.execute(text("""
-                SELECT 
-                    COALESCE(status, 'Sem Status') as status,
-                    COUNT(*) as total
-                FROM nfe_emitidas
-                GROUP BY status
-                ORDER BY total DESC
-            """)).fetchall()
+        print("[DEBUG] Buscando status NFes...")
+        # Gráfico 3: Status das NFes (filtrado pelo período, usando UPPER para agrupar)
+        try:
+            if data_inicio and data_fim:
+                status_nfes = db.execute(text("""
+                    SELECT 
+                        UPPER(COALESCE(status, 'SEM STATUS')) as status,
+                        COUNT(*) as total
+                    FROM nfe_emitidas
+                    WHERE data_criacao BETWEEN :data_inicio AND :data_fim
+                    GROUP BY UPPER(COALESCE(status, 'SEM STATUS'))
+                    ORDER BY total DESC
+                """), params).fetchall()
+            else:
+                status_nfes = db.execute(text("""
+                    SELECT 
+                        UPPER(COALESCE(status, 'SEM STATUS')) as status,
+                        COUNT(*) as total
+                    FROM nfe_emitidas
+                    GROUP BY UPPER(COALESCE(status, 'SEM STATUS'))
+                    ORDER BY total DESC
+                """)).fetchall()
+            
+            data['status_nfes'] = {
+                'labels': [row[0] for row in status_nfes],
+                'valores': [int(row[1]) for row in status_nfes]
+            }
+            print(f"[DEBUG] Status NFes: {len(status_nfes)} registros")
+            print(f"[DEBUG] Status NFes data: {data['status_nfes']}")
+        except Exception as e:
+            print(f"[ERROR] Erro ao buscar status NFes: {e}")
+            import traceback
+            traceback.print_exc()
+            db.rollback()  # Rollback para não quebrar próximas queries
         
-        data['status_nfes'] = {
-            'labels': [row[0] for row in status_nfes],
-            'valores': [int(row[1]) for row in status_nfes]
-        }
-        
+        print("[DEBUG] Buscando top clientes...")
         # Gráfico 4: Clientes mais ativos (top 5, filtrado pelo período)
-        if data_inicio and data_fim:
-            top_clientes = db.execute(text("""
-                SELECT 
-                    c.razao_social,
-                    COUNT(n.nfe_emitida_id) as total_nfes
-                FROM clientes c
-                LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
-                WHERE c.ativo = TRUE 
-                    AND n.data_criacao BETWEEN :data_inicio AND :data_fim
-                GROUP BY c.razao_social
-                HAVING COUNT(n.nfe_emitida_id) > 0
-                ORDER BY total_nfes DESC
-                LIMIT 5
-            """), params).fetchall()
-        else:
-            top_clientes = db.execute(text("""
-                SELECT 
-                    c.razao_social,
-                    COUNT(n.nfe_emitida_id) as total_nfes
-                FROM clientes c
-                LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
-                WHERE c.ativo = TRUE
-                GROUP BY c.razao_social
-                HAVING COUNT(n.nfe_emitida_id) > 0
-                ORDER BY total_nfes DESC
-                LIMIT 5
-            """)).fetchall()
+        try:
+            if data_inicio and data_fim:
+                top_clientes = db.execute(text("""
+                    SELECT 
+                        c.razao_social,
+                        COUNT(n.nfe_emitida_id) as total_nfes
+                    FROM clientes c
+                    LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
+                    WHERE c.ativo = TRUE 
+                        AND n.data_criacao BETWEEN :data_inicio AND :data_fim
+                    GROUP BY c.razao_social
+                    HAVING COUNT(n.nfe_emitida_id) > 0
+                    ORDER BY total_nfes DESC
+                    LIMIT 5
+                """), params).fetchall()
+            else:
+                top_clientes = db.execute(text("""
+                    SELECT 
+                        c.razao_social,
+                        COUNT(n.nfe_emitida_id) as total_nfes
+                    FROM clientes c
+                    LEFT JOIN nfe_emitidas n ON c.cliente_id = n.cliente_id
+                    WHERE c.ativo = TRUE
+                    GROUP BY c.razao_social
+                    HAVING COUNT(n.nfe_emitida_id) > 0
+                    ORDER BY total_nfes DESC
+                    LIMIT 5
+                """)).fetchall()
+            
+            data['top_clientes'] = {
+                'labels': [row[0][:30] for row in top_clientes],
+                'valores': [int(row[1]) for row in top_clientes]
+            }
+            print(f"[DEBUG] Top clientes: {len(top_clientes)} registros")
+            print(f"[DEBUG] Top clientes data: {data['top_clientes']}")
+        except Exception as e:
+            print(f"[ERROR] Erro ao buscar top clientes: {e}")
+            import traceback
+            traceback.print_exc()
+            db.rollback()  # Rollback para não quebrar próximas queries
         
-        data['top_clientes'] = {
-            'labels': [row[0][:30] for row in top_clientes],
-            'valores': [int(row[1]) for row in top_clientes]
-        }
-        
+        print(f"[DEBUG] Retornando JSON com {len(data)} chaves")
+        print(f"[DEBUG] Data keys: {list(data.keys())}")
         return jsonify(data)
         
     except Exception as e:
-        print(f"❌ Erro dashboard API: {e}")
+        print(f"[X] Erro dashboard API: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    finally:
+        if db:
+            db.close()
 
 @admin_bp.route('/motivos-desoneracao')
 @login_required
@@ -2273,7 +2346,7 @@ def list_motivos_desoneracao():
         motivos = [dict(row._mapping) for row in rows]
         return render_template('admin/motivos_desoneracao/list.html', motivos=motivos)
     except Exception as e:
-        print(f"❌ Erro list_motivos_desoneracao: {e}")
+        print(f"[X] Erro list_motivos_desoneracao: {e}")
         flash('Erro ao carregar motivos de desoneração', 'error')
         return render_template('admin/motivos_desoneracao/list.html', motivos=[])
     finally:
@@ -2342,7 +2415,7 @@ def delete_motivo_desoneracao(motivo_id: int):
         flash('Motivo de desoneração excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_motivo_desoneracao: {e}")
+        print(f"[X] Erro delete_motivo_desoneracao: {e}")
         flash('Erro ao excluir motivo de desoneração', 'error')
     finally:
         db.close()
@@ -2429,7 +2502,7 @@ def delete_origem_mercadoria(origem_id):
         flash('Origem de Mercadoria excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_origem_mercadoria: {e}")
+        print(f"[X] Erro delete_origem_mercadoria: {e}")
         flash('Erro ao excluir Origem de Mercadoria', 'error')
     finally:
         db.close()
@@ -2479,7 +2552,7 @@ def list_clientes():
         is_super_admin = current_user.is_super_admin()
         return render_template('admin/clientes/list.html', clientes=clientes, is_super_admin=is_super_admin)
     except Exception as e:
-        print(f"❌ Erro list_clientes: {e}")
+        print(f"[X] Erro list_clientes: {e}")
         flash('Erro ao carregar clientes', 'error')
         return render_template('admin/clientes/list.html', clientes=[], is_super_admin=False)
     finally:
@@ -2513,6 +2586,29 @@ def create_cliente():
             cnpj_raw = request.form.get('cnpj', '')
             cnpj_limpo = ''.join(filter(str.isdigit, cnpj_raw))
             
+            # Processar upload da logo (se enviada)
+            logo_path = None
+            logo_file = request.files.get('logo_file')
+            if logo_file and logo_file.filename:
+                from werkzeug.utils import secure_filename
+                import os
+                
+                # Gerar nome seguro e único
+                filename = secure_filename(logo_file.filename)
+                ext = os.path.splitext(filename)[1].lower()
+                if ext not in ['.png', '.jpg', '.jpeg', '.gif']:
+                    flash('Formato de logo inválido. Use PNG, JPG ou GIF.', 'warning')
+                else:
+                    # Criar diretório se não existir
+                    logos_dir = os.path.join('static', 'logos')
+                    os.makedirs(logos_dir, exist_ok=True)
+                    
+                    # Nome único: cliente_{timestamp}{ext}
+                    unique_filename = f"cliente_{int(datetime.now().timestamp())}{ext}"
+                    logo_full_path = os.path.join(logos_dir, unique_filename)
+                    logo_file.save(logo_full_path)
+                    logo_path = f"logos/{unique_filename}"  # Caminho relativo
+            
             # Dados do cliente
             data = {
                 'razao_social': request.form.get('razao_social'),
@@ -2533,6 +2629,7 @@ def create_cliente():
                 'uf': request.form.get('uf'),
                 'email_contato': request.form.get('email_contato'),
                 'telefone_contato': request.form.get('telefone_contato'),
+                'logo_path': logo_path,  # Novo campo
                 'ativo': request.form.get('ativo') == 'on',
                 'data_cadastro': datetime.now(),
                 'created_by_user_id': current_user.id
@@ -2543,11 +2640,11 @@ def create_cliente():
                     INSERT INTO clientes (
                         razao_social, nome_fantasia, cnpj, inscricao_estadual, inscricao_municipal,
                         regime_tributario_id, ambiente, cnae, cep, logradouro, numero, complemento, bairro,
-                        nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, ativo, data_cadastro, created_by_user_id
+                        nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, logo_path, ativo, data_cadastro, created_by_user_id
                     ) VALUES (
                         :razao_social, :nome_fantasia, :cnpj, :inscricao_estadual, :inscricao_municipal,
                         :regime_tributario_id, :ambiente, :cnae, :cep, :logradouro, :numero, :complemento, :bairro,
-                        :nome_municipio, :codigo_municipio, :uf, :email_contato, :telefone_contato, :ativo, :data_cadastro, :created_by_user_id
+                        :nome_municipio, :codigo_municipio, :uf, :email_contato, :telefone_contato, :logo_path, :ativo, :data_cadastro, :created_by_user_id
                     ) RETURNING cliente_id
                 """), data)
                 row = result.fetchone()
@@ -2592,7 +2689,7 @@ def create_cliente():
                         validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
                         validade_fim = getattr(cert_obj, "not_valid_before_utc", None)
                     except Exception as e:
-                        print(f"❌ Erro ao extrair dados do certificado: {e}")
+                        print(f"[X] Erro ao extrair dados do certificado: {e}")
                         fingerprint = None
                         validade_inicio = None
                         validade_fim = None
@@ -2625,7 +2722,7 @@ def create_cliente():
                 return redirect(url_for('admin.list_clientes'))
             except Exception as e:
                 db.rollback()
-                print(f"❌ Erro ao salvar cliente/certificado: {e}")
+                print(f"[X] Erro ao salvar cliente/certificado: {e}")
                 flash('Erro ao salvar cliente ou certificado', 'danger')
                 form_data = data
                 return render_template(
@@ -2663,7 +2760,7 @@ def create_cliente():
             regimes_tributarios=regimes_tributarios
         )
     except Exception as e:
-        print(f"❌ Erro create_cliente: {e}")
+        print(f"[X] Erro create_cliente: {e}")
         flash('Erro ao carregar formulário de cliente', 'error')
         return redirect(url_for('admin.list_clientes'))
     finally:
@@ -2721,6 +2818,38 @@ def edit_cliente(cliente_id: int):
                 cnpj_raw = request.form.get('cnpj', '')
                 cnpj_limpo = ''.join(filter(str.isdigit, cnpj_raw))
                 
+                # Processar upload da logo (se enviada)
+                logo_path = cliente.get('logo_path')  # Manter logo existente
+                logo_file = request.files.get('logo_file')
+                if logo_file and logo_file.filename:
+                    from werkzeug.utils import secure_filename
+                    import os
+                    
+                    # Gerar nome seguro e único
+                    filename = secure_filename(logo_file.filename)
+                    ext = os.path.splitext(filename)[1].lower()
+                    if ext not in ['.png', '.jpg', '.jpeg', '.gif']:
+                        flash('Formato de logo inválido. Use PNG, JPG ou GIF.', 'warning')
+                    else:
+                        # Remover logo antiga se existir
+                        if logo_path:
+                            old_logo_full = os.path.join('static', logo_path)
+                            if os.path.exists(old_logo_full):
+                                try:
+                                    os.remove(old_logo_full)
+                                except:
+                                    pass
+                        
+                        # Criar diretório se não existir
+                        logos_dir = os.path.join('static', 'logos')
+                        os.makedirs(logos_dir, exist_ok=True)
+                        
+                        # Nome único: cliente_{cliente_id}_{timestamp}{ext}
+                        unique_filename = f"cliente_{cliente_id}_{int(datetime.now().timestamp())}{ext}"
+                        logo_full_path = os.path.join(logos_dir, unique_filename)
+                        logo_file.save(logo_full_path)
+                        logo_path = f"logos/{unique_filename}"  # Caminho relativo
+                
                 data = {
                     'razao_social': request.form.get('razao_social'),
                     'nome_fantasia': request.form.get('nome_fantasia'),
@@ -2740,6 +2869,7 @@ def edit_cliente(cliente_id: int):
                     'uf': request.form.get('uf'),
                     'email_contato': request.form.get('email_contato'),
                     'telefone_contato': request.form.get('telefone_contato'),
+                    'logo_path': logo_path,  # Novo campo
                     'ativo': request.form.get('ativo') == 'on',
                     'cliente_id': cliente_id
                 }
@@ -2764,6 +2894,7 @@ def edit_cliente(cliente_id: int):
                         uf = :uf,
                         email_contato = :email_contato,
                         telefone_contato = :telefone_contato,
+                        logo_path = :logo_path,
                         ativo = :ativo
                     WHERE cliente_id = :cliente_id
                 """), data)
@@ -2773,15 +2904,15 @@ def edit_cliente(cliente_id: int):
                 return redirect(url_for('admin.list_clientes'))
             except Exception as e:
                 db.rollback()
-                print(f"❌ Erro ao atualizar cliente: {e}")
+                print(f"[X] Erro ao atualizar cliente: {e}")
                 flash('Erro ao atualizar cliente', 'danger')
                 # Continua para renderizar o formulário com os dados atuais
 
         form_data = _cliente_to_form_data(cliente)
         certificados_result = db.execute(text("""
-            SELECT * FROM certificados_digitais WHERE cliente_id = :cid
+            SELECT * FROM certificados_digitais WHERE cliente_id = :cid ORDER BY certificado_digital_id DESC
         """), {'cid': cliente_id}).fetchall()
-        certificados_existentes = certificados_result if certificados_result else []
+        certificados_existentes = [dict(row._mapping) for row in certificados_result] if certificados_result else []
         
         
         # Consultar produtos cadastrados para o cliente
@@ -2818,9 +2949,6 @@ def edit_cliente(cliente_id: int):
         if regimes_rows:
             regimes_tributarios = [dict(r._mapping) for r in regimes_rows if r]
 
-
-        certificados_existentes = [dict(row._mapping) for row in certificados_existentes if row]
-       
         return render_template(
             'admin/clientes/form.html',
             cliente=cliente,
@@ -2834,7 +2962,7 @@ def edit_cliente(cliente_id: int):
         )
     except Exception as e:
         import traceback
-        print(f"❌ Erro edit_cliente: {e}")
+        print(f"[X] Erro edit_cliente: {e}")
         traceback.print_exc()
         flash('Erro ao carregar cliente', 'error')
         return redirect(url_for('admin.list_clientes'))
@@ -2852,7 +2980,7 @@ def delete_cliente(cliente_id: int):
         flash('Cliente excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_cliente: {e}")
+        print(f"[X] Erro delete_cliente: {e}")
         flash('Erro ao excluir cliente', 'error')
     finally:
         db.close()
@@ -2871,7 +2999,8 @@ def create_certificado(cliente_id: int):
             'admin/certificados/form_content.html',
             certificado=None,
             cliente_id=cliente_id,
-            modal=True
+            modal=True,
+            form_data={}
         )
     
     # Senão, retorna página completa
@@ -2879,7 +3008,8 @@ def create_certificado(cliente_id: int):
         'admin/certificados/form.html',
         certificado=None,
         cliente_id=cliente_id,
-        modal=False
+        modal=False,
+        form_data={}
     )
 
 @admin_bp.route('/certificados/<int:certificado_digital_id>/edit/<int:cliente_id>', methods=['GET'])
@@ -2898,10 +3028,11 @@ def edit_certificado(certificado_digital_id: int, cliente_id: int):
         return render_template(
             'admin/certificados/form.html',
             certificado=certificado,
-            cliente_id=cliente_id
+            cliente_id=cliente_id,
+            form_data=certificado
         )
     except Exception as e:
-        print(f"❌ Erro edit_certificado: {e}")
+        print(f"[X] Erro edit_certificado: {e}")
         flash('Erro ao carregar certificado', 'error')
         return redirect(url_for('admin.list_certificados'))
     finally:
@@ -2912,18 +3043,30 @@ def edit_certificado(certificado_digital_id: int, cliente_id: int):
 @permission_required('certificados.delete')
 def delete_certificado(certificado_digital_id: int):
     db = _get_db()
+    cliente_id = None
     try:
+        # Buscar cliente_id antes de excluir
+        row = db.execute(text("SELECT cliente_id FROM certificados_digitais WHERE certificado_digital_id = :cid"),
+                         {'cid': certificado_digital_id}).fetchone()
+        if row:
+            cliente_id = row[0]
+        
         db.execute(text("DELETE FROM certificados_digitais WHERE certificado_digital_id = :cid"),
                    {'cid': certificado_digital_id})
         db.commit()
         flash('Certificado excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_certificado: {e}")
+        print(f"[X] Erro delete_certificado: {e}")
         flash('Erro ao excluir certificado', 'error')
     finally:
         db.close()
-    return redirect(url_for('admin.list_certificados'))
+    
+    # Redirecionar para a página do cliente, não para lista geral
+    if cliente_id:
+        return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#certificados')
+    else:
+        return redirect(url_for('admin.list_certificados'))
 
 @admin_bp.route('/regras-tributacao/nova/<int:cliente_id>')
 @login_required
@@ -2988,7 +3131,7 @@ def edit_regra_tributacao(regra_tributacao_id: int):
                              cfops=cfops, 
                              ncms=ncms)
     except Exception as e:
-        print(f"❌ Erro edit_regra_tributacao: {e}")
+        print(f"[X] Erro edit_regra_tributacao: {e}")
         flash('Erro ao carregar regra', 'error')
         return redirect(url_for('admin.list_regras_tributacao'))
     finally:
@@ -3006,7 +3149,7 @@ def delete_regra_tributacao(regra_tributacao_id: int):
         flash('Regra excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_regra_tributacao: {e}")
+        print(f"[X] Erro delete_regra_tributacao: {e}")
         flash('Erro ao excluir regra', 'error')
     finally:
         db.close()
@@ -3041,7 +3184,7 @@ def admin_destinatarios_nfe_add(cliente_id: int):
                     'SE': '28', 'TO': '17'
                 }
                 codigo_uf = uf_map.get(uf, '99')
-                print(f"⚠️ codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
+                print(f"[!] codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
             
             data = {
                 'cliente_id': cliente_id,
@@ -3081,7 +3224,7 @@ def admin_destinatarios_nfe_add(cliente_id: int):
             return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         except Exception as e:
             db.rollback()
-            print(f"❌ Erro admin_destinatarios_nfe_add: {e}")
+            print(f"[X] Erro admin_destinatarios_nfe_add: {e}")
             flash('Erro ao adicionar destinatário', 'error')
             return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         finally:
@@ -3148,7 +3291,7 @@ def list_produtos():
         ]) for r in rows]
         return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id)
     except Exception as e:
-        print(f"❌ Erro list_produtos: {e}")
+        print(f"[X] Erro list_produtos: {e}")
         flash('Erro ao carregar produtos', 'error')
         return render_template('admin/produtos/list.html', produtos=[])
     finally:
@@ -3290,10 +3433,10 @@ def importar_produtos():
         # Commit se houver sucessos
         if sucessos > 0:
             db.commit()
-            flash(f'✅ Importação concluída: {sucessos} produto(s) importado(s)', 'success')
+            flash(f'[OK] Importação concluída: {sucessos} produto(s) importado(s)', 'success')
         
         if erros:
-            flash(f'⚠️ {len(erros)} erro(s) encontrado(s)', 'warning')
+            flash(f'[!] {len(erros)} erro(s) encontrado(s)', 'warning')
         
         return render_template('admin/produtos/importar_resultado.html',
                              sucessos=sucessos,
@@ -3303,7 +3446,7 @@ def importar_produtos():
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro importar_produtos: {e}")
+        print(f"[X] Erro importar_produtos: {e}")
         flash(f'Erro ao importar produtos: {str(e)}', 'error')
         return redirect(url_for('admin.importar_produtos'))
     finally:
@@ -3401,7 +3544,7 @@ def create_produto():
             cliente_id=cliente_id
         )
     except Exception as e:
-        print(f"❌ Erro create_produto: {e}")
+        print(f"[X] Erro create_produto: {e}")
         flash('Erro ao carregar formulário de produto', 'error')
         return redirect(url_for('admin.list_produtos'))
     finally:
@@ -3449,7 +3592,7 @@ def store_produto():
         return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro store_produto: {e}")
+        print(f"[X] Erro store_produto: {e}")
         flash('Erro ao criar produto', 'error')
         return redirect(url_for('admin.create_produto'))
     finally:
@@ -3471,7 +3614,7 @@ def alterar_status_produto():
         return jsonify({'success': True})
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro alterar_status_produto: {e}")
+        print(f"[X] Erro alterar_status_produto: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -3487,7 +3630,7 @@ def delete_produto(produto_id: int):
         flash('Produto excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro delete_produto: {e}")
+        print(f"[X] Erro delete_produto: {e}")
         flash('Erro ao excluir produto', 'error')
     finally:
         db.close()
@@ -3517,7 +3660,7 @@ def list_destinatarios(cliente_id: int):
         cliente_nome = cliente_row[0] if cliente_row else f"ID {cliente_id}"
         return render_template('admin/destinatarios/list.html', destinatarios=destinatarios, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
-        print(f"❌ Erro list_destinatarios: {e}")
+        print(f"[X] Erro list_destinatarios: {e}")
         flash('Erro ao carregar destinatários', 'error')
         # Buscar nome do cliente para erro também
         cliente_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
@@ -3556,7 +3699,7 @@ def salvar_destinatario():
                 'SE': '28', 'TO': '17'
             }
             codigo_uf = uf_map.get(uf, '99')
-            print(f"⚠️ codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
+            print(f"[!] codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
         
         data = {
             'cliente_id': request.form.get('cliente_id'),
@@ -3600,7 +3743,7 @@ def salvar_destinatario():
         return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro salvar_destinatario: {e}")
+        print(f"[X] Erro salvar_destinatario: {e}")
         flash('Erro ao salvar destinatário', 'error')
         cliente_id = request.form.get('cliente_id')
         return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
@@ -3674,7 +3817,7 @@ def list_certificados():
         ]) for r in rows]
         return render_template('admin/certificados/list.html', certificados=certificados, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
-        print(f"❌ Erro list_certificados: {e}")
+        print(f"[X] Erro list_certificados: {e}")
         flash('Erro ao carregar certificados', 'error')
         return render_template('admin/certificados/list.html', certificados=[], cliente_id=cliente_id, cliente_nome=cliente_nome)
     finally:
@@ -3755,7 +3898,7 @@ def salvar_certificado():
             validade_fim = getattr(cert_obj, "not_valid_after_utc", None)
             
         except Exception as e:
-            print(f"⚠️ Aviso ao extrair dados do certificado: {e}")
+            print(f"[!] Aviso ao extrair dados do certificado: {e}")
             # Continua mesmo sem extrair os dados (melhor do que falhar)
         
         # Converter conteúdo para base64
@@ -3798,7 +3941,7 @@ def salvar_certificado():
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro salvar_certificado: {e}")
+        print(f"[X] Erro salvar_certificado: {e}")
         import traceback
         traceback.print_exc()
         
@@ -3838,7 +3981,7 @@ def toggle_certificado_status(certificado_id: int):
         return jsonify({'success': True, 'ativo': not ativo_atual})
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro toggle_certificado_status: {e}")
+        print(f"[X] Erro toggle_certificado_status: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -3879,7 +4022,7 @@ def list_regras_tributacao():
         regras = [dict(r._mapping) for r in rows]
         return render_template('admin/regras_tributacao/list.html', regras=regras, cliente_id=cliente_id)
     except Exception as e:
-        print(f"❌ Erro list_regras_tributacao: {e}")
+        print(f"[X] Erro list_regras_tributacao: {e}")
         flash('Erro ao carregar regras', 'error')
         return render_template('admin/regras_tributacao/list.html', regras=[])
     finally:
@@ -3939,14 +4082,32 @@ def salvar_regra_tributacao():
                 return None
         
         # Montar dados
+        regime_id = get_or_none('regime_tributario_id', int) or 1
+        cfop_id = get_or_none('cfop_id', int)
+        ncm_id = get_or_none('ncm_id', int)
+        uf_origem = get_or_none('uf_origem', str)
+        uf_destino = get_or_none('uf_destino', str)
+        tipo_item = get_or_none('tipo_item', str)
+        
+        # Descrição da regra (obrigatória agora)
+        descricao = get_or_none('descricao_regra', str)
+        if not descricao:
+            # Gerar descrição automática se não fornecida (compatibilidade com regras antigas)
+            regime_map = {1: 'Simples Nacional', 2: 'Lucro Presumido', 3: 'Lucro Real'}
+            descricao = f"Regra {regime_map.get(regime_id, 'Tributária')}"
+            if cfop_id or ncm_id:
+                descricao += " - Específica"
+            else:
+                descricao += " - Geral"
+        
         data = {
             'cliente_id': cliente_id,
-            'regime_tributario_id': get_or_none('regime_tributario_id', int) or 1,  # Default: Simples Nacional
-            'cfop_id': get_or_none('cfop_id', int),
-            'ncm_id': get_or_none('ncm_id', int),
-            'uf_origem': get_or_none('uf_origem', str),
-            'uf_destino': get_or_none('uf_destino', str),
-            'tipo_item': get_or_none('tipo_item', str),
+            'regime_tributario_id': regime_id,
+            'cfop_id': cfop_id,
+            'ncm_id': ncm_id,
+            'uf_origem': uf_origem,
+            'uf_destino': uf_destino,
+            'tipo_item': tipo_item,
             'prioridade': get_or_none('prioridade', int) or 100,
             'cst_icms': get_or_none('cst_icms', str),
             'csosn_icms': get_or_none('csosn_icms', str),
@@ -3960,7 +4121,7 @@ def salvar_regra_tributacao():
             'aliquota_cofins': get_or_none('aliquota_cofins', float),
             'cst_ipi': get_or_none('cst_ipi', str),
             'aliquota_ipi': get_or_none('aliquota_ipi', float),
-            'descricao_regra': get_or_none('descricao_regra', str),
+            'descricao_regra': descricao,
             'ativo': True
         }
         
@@ -4016,7 +4177,7 @@ def salvar_regra_tributacao():
         return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro salvar_regra_tributacao: {e}")
+        print(f"[X] Erro salvar_regra_tributacao: {e}")
         flash('Erro ao salvar regra de tributação', 'error')
         return redirect(url_for('admin.nova_regra_tributacao'))
     finally:
@@ -4034,7 +4195,7 @@ def excluir_regra_tributacao(regra_id: int):
         flash('Regra excluída', 'success')
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro excluir_regra_tributacao: {e}")
+        print(f"[X] Erro excluir_regra_tributacao: {e}")
         flash('Erro ao excluir regra', 'error')
     finally:
         db.close()
@@ -4078,7 +4239,7 @@ def perfil():
             usuario_clientes=usuario_clientes
         )
     except Exception as e:
-        print(f"❌ Erro perfil: {e}")
+        print(f"[X] Erro perfil: {e}")
         flash('Erro ao carregar perfil', 'error')
         return render_template('admin/perfil.html', usuario=None, usuario_roles=[], usuario_clientes=[])
     finally:
@@ -4106,8 +4267,8 @@ def buscar_cep(cep: str):
             }), 400
         
         # Consulta API ViaCEP
-        print(f"🔍 Buscando CEP: {cep_limpo}")
-        print(f"🌐 Tentando conectar em: https://viacep.com.br/ws/{cep_limpo}/json/")
+        print(f"[SEARCH] Buscando CEP: {cep_limpo}")
+        print(f"[?] Tentando conectar em: https://viacep.com.br/ws/{cep_limpo}/json/")
         
         try:
             response = requests.get(
@@ -4116,7 +4277,7 @@ def buscar_cep(cep: str):
                 headers={'User-Agent': 'Mozilla/5.0'}  # Alguns servidores exigem User-Agent
             )
         except requests.exceptions.ConnectionError as e:
-            print(f"❌ Erro de conexão específico: {e}")
+            print(f"[X] Erro de conexão específico: {e}")
             
             # Modo fallback: tentar usar CEPs de teste
             try:
@@ -4124,7 +4285,7 @@ def buscar_cep(cep: str):
                 dados_teste = get_cep_teste(cep_limpo)
                 
                 if dados_teste:
-                    print(f"⚠️ MODO OFFLINE: Usando CEP de teste para {cep_limpo}")
+                    print(f"[!] MODO OFFLINE: Usando CEP de teste para {cep_limpo}")
                     # Continua o fluxo normal com dados de teste
                     dados = dados_teste
                 else:
@@ -4142,7 +4303,7 @@ def buscar_cep(cep: str):
         else:
             # Conexão bem-sucedida com ViaCEP
             if response.status_code != 200:
-                print(f"⚠️ Status HTTP: {response.status_code}")
+                print(f"[!] Status HTTP: {response.status_code}")
                 return jsonify({
                     'success': False,
                     'error': f'Erro ao consultar CEP (HTTP {response.status_code}). Tente novamente.'
@@ -4198,7 +4359,7 @@ def buscar_cep(cep: str):
                     # Se não encontrar, usar dados do ViaCEP mesmo
                     codigo_municipio = dados.get('ibge', '')
                     nome_municipio = dados.get('localidade', '')
-                    print(f"⚠️ Município não encontrado no BD: {nome_municipio}/{dados.get('uf')}")
+                    print(f"[!] Município não encontrado no BD: {nome_municipio}/{dados.get('uf')}")
             
             # Buscar código UF
             codigo_uf = None
@@ -4208,7 +4369,7 @@ def buscar_cep(cep: str):
                 if uf_row:
                     codigo_uf = uf_row[0]
             except Exception as e_uf:
-                print(f"⚠️ Erro ao buscar código UF no BD: {e_uf}")
+                print(f"[!] Erro ao buscar código UF no BD: {e_uf}")
             
             # Fallback: Mapeamento manual de UF para código IBGE
             if not codigo_uf:
@@ -4225,7 +4386,7 @@ def buscar_cep(cep: str):
                     print(f"ℹ️ Usando código UF do mapeamento: {dados.get('uf')} = {codigo_uf}")
             
         except Exception as e:
-            print(f"⚠️ Erro ao buscar município no BD: {e}")
+            print(f"[!] Erro ao buscar município no BD: {e}")
             codigo_municipio = dados.get('ibge', '')
             nome_municipio = dados.get('localidade', '')
             # Fallback final para código UF
@@ -4241,11 +4402,11 @@ def buscar_cep(cep: str):
         finally:
             db.close()
         
-        print(f"✅ CEP encontrado: {dados.get('logradouro')}, {nome_municipio}/{dados.get('uf')}")
+        print(f"[OK] CEP encontrado: {dados.get('logradouro')}, {nome_municipio}/{dados.get('uf')}")
         
         # Garantir que codigo_uf não seja None (campo obrigatório no banco)
         if not codigo_uf:
-            print(f"⚠️ AVISO: codigo_uf não encontrado para UF={dados.get('uf')}. Usando código padrão '99'")
+            print(f"[!] AVISO: codigo_uf não encontrado para UF={dados.get('uf')}. Usando código padrão '99'")
             codigo_uf = '99'  # Código genérico de fallback
         
         # Retornar dados formatados
@@ -4271,8 +4432,8 @@ def buscar_cep(cep: str):
         }), 504
         
     except requests.RequestException as e:
-        print(f"❌ Erro de conexão ao buscar CEP: {e}")
-        print(f"❌ Tipo de erro: {type(e).__name__}")
+        print(f"[X] Erro de conexão ao buscar CEP: {e}")
+        print(f"[X] Tipo de erro: {type(e).__name__}")
         
         # Mensagem detalhada baseada no tipo de erro
         error_msg = 'Erro de conexão com o serviço de CEP.'
@@ -4292,7 +4453,7 @@ def buscar_cep(cep: str):
         }), 503
         
     except Exception as e:
-        print(f"❌ Erro inesperado ao buscar CEP: {e}")
+        print(f"[X] Erro inesperado ao buscar CEP: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -4321,7 +4482,7 @@ def api_sugestao_tributaria():
     
     # Recebe dados do formulário via JSON
     dados = request.get_json()
-    print(f"[IA] 🎯 Nova solicitação de sugestão: {dados.get('descricao', 'N/A')}")
+    print(f"[IA] [?] Nova solicitação de sugestão: {dados.get('descricao', 'N/A')}")
     
     # Validação básica
     if not dados.get('descricao'):
@@ -4345,10 +4506,10 @@ def api_sugestao_tributaria():
                 cliente = dict(cliente_row._mapping)
                 dados['uf_origem'] = cliente.get('uf')
                 dados['regime_tributario'] = cliente.get('regime_nome')
-                print(f"[IA] 📍 Contexto cliente: UF={cliente.get('uf')}, Regime={cliente.get('regime_nome')}")
+                print(f"[IA] [TRACE] Contexto cliente: UF={cliente.get('uf')}, Regime={cliente.get('regime_nome')}")
         
         # Chama API IA Unificada (porta 9000)
-        print(f"[IA] 🤖 Chamando API IA Unificada...")
+        print(f"[IA] [?] Chamando API IA Unificada...")
         api_response = req_lib.post(
             'http://localhost:9000/api/sugestao',
             json={
@@ -4364,17 +4525,17 @@ def api_sugestao_tributaria():
         )
         
         if api_response.status_code != 200:
-            print(f"[IA] ❌ Erro na API: {api_response.status_code}")
+            print(f"[IA] [X] Erro na API: {api_response.status_code}")
             return jsonify({'erro': 'Erro ao consultar API de IA'}), 500
         
         resultado_api = api_response.json()
         
         if not resultado_api.get('success'):
-            print(f"[IA] ❌ API retornou erro: {resultado_api.get('erro')}")
+            print(f"[IA] [X] API retornou erro: {resultado_api.get('erro')}")
             return jsonify(resultado_api), 500
         
         classificacao = resultado_api.get('classificacao', {})
-        print(f"[IA] ✅ Classificação recebida: NCM={classificacao.get('ncm')}")
+        print(f"[IA] [OK] Classificação recebida: NCM={classificacao.get('ncm')}")
         
         # Converte códigos para IDs do banco de dados
         resultado_final = {
@@ -4397,9 +4558,9 @@ def api_sugestao_tributaria():
                 ncm = dict(ncm_row._mapping)
                 resultado_final['ids']['ncm_id'] = ncm['ncm_id']
                 resultado_final['ncm_descricao'] = ncm['descricao']
-                print(f"[IA] ✅ NCM encontrado: {ncm['codigo']} (ID: {ncm['ncm_id']})")
+                print(f"[IA] [OK] NCM encontrado: {ncm['codigo']} (ID: {ncm['ncm_id']})")
             else:
-                print(f"[IA] ⚠️ NCM {ncm_codigo} não encontrado no banco")
+                print(f"[IA] [!] NCM {ncm_codigo} não encontrado no banco")
         
         # Busca CFOP_ID pelo código
         if classificacao.get('cfop'):
@@ -4416,9 +4577,9 @@ def api_sugestao_tributaria():
                 cfop = dict(cfop_row._mapping)
                 resultado_final['ids']['cfop_id'] = cfop['cfop_id']
                 resultado_final['cfop_descricao'] = cfop['descricao']
-                print(f"[IA] ✅ CFOP encontrado: {cfop['cfop']} (ID: {cfop['cfop_id']})")
+                print(f"[IA] [OK] CFOP encontrado: {cfop['cfop']} (ID: {cfop['cfop_id']})")
             else:
-                print(f"[IA] ⚠️ CFOP {cfop_codigo} não encontrado no banco")
+                print(f"[IA] [!] CFOP {cfop_codigo} não encontrado no banco")
         
         # Busca CST_ID pelo código (se aplicável)
         if classificacao.get('cst'):
@@ -4434,7 +4595,7 @@ def api_sugestao_tributaria():
                 cst = dict(cst_row._mapping)
                 resultado_final['ids']['cst_id'] = cst['cst_id']
                 resultado_final['cst_descricao'] = cst['descricao']
-                print(f"[IA] ✅ CST encontrado: {cst['codigo']} (ID: {cst['cst_id']})")
+                print(f"[IA] [OK] CST encontrado: {cst['codigo']} (ID: {cst['cst_id']})")
         
         # Busca CSOSN_ID pelo código (se aplicável)
         if classificacao.get('csosn'):
@@ -4450,27 +4611,27 @@ def api_sugestao_tributaria():
                 csosn = dict(csosn_row._mapping)
                 resultado_final['ids']['csosn_id'] = csosn['csosn_id']
                 resultado_final['csosn_descricao'] = csosn['descricao']
-                print(f"[IA] ✅ CSOSN encontrado: {csosn['codigo']} (ID: {csosn['csosn_id']})")
+                print(f"[IA] [OK] CSOSN encontrado: {csosn['codigo']} (ID: {csosn['csosn_id']})")
         
         # CEST é campo texto livre (não tem tabela de IDs)
         if classificacao.get('cest'):
             resultado_final['ids']['cest'] = classificacao['cest']
-            print(f"[IA] ✅ CEST recebido: {classificacao['cest']}")
+            print(f"[IA] [OK] CEST recebido: {classificacao['cest']}")
         else:
             print(f"[IA] ℹ️  CEST não informado (opcional)")
         
-        print(f"[IA] 🎉 Resultado final preparado com IDs do banco")
+        print(f"[IA] [?] Resultado final preparado com IDs do banco")
         return jsonify(resultado_final)
         
     except req_lib.exceptions.RequestException as e:
-        print(f"[IA] ❌ Erro ao conectar com API IA: {e}")
+        print(f"[IA] [X] Erro ao conectar com API IA: {e}")
         return jsonify({
             'erro': 'API de IA não está disponível. Certifique-se de que está rodando na porta 9000.',
             'detalhes': str(e)
         }), 503
         
     except Exception as e:
-        print(f"[IA] ❌ Erro inesperado: {e}")
+        print(f"[IA] [X] Erro inesperado: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'erro': f'Erro no processamento: {str(e)}'}), 500
@@ -4515,7 +4676,7 @@ def api_cliente_info(cliente_id):
         })
         
     except Exception as e:
-        print(f"❌ Erro ao buscar dados do cliente: {e}")
+        print(f"[X] Erro ao buscar dados do cliente: {e}")
         return jsonify({'erro': 'Erro interno do servidor'}), 500
     finally:
         db.close()
@@ -4625,7 +4786,7 @@ def list_auditoria():
                              })
     
     except Exception as e:
-        print(f"❌ Erro ao listar auditoria: {e}")
+        print(f"[X] Erro ao listar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao carregar logs de auditoria', 'danger')
@@ -4648,7 +4809,7 @@ def estatisticas_auditoria():
                              dias=dias)
     
     except Exception as e:
-        print(f"❌ Erro ao obter estatísticas: {e}")
+        print(f"[X] Erro ao obter estatísticas: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao carregar estatísticas', 'danger')
@@ -4794,7 +4955,7 @@ def export_auditoria():
             return redirect(url_for('admin.list_auditoria'))
     
     except Exception as e:
-        print(f"❌ Erro ao exportar auditoria: {e}")
+        print(f"[X] Erro ao exportar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao exportar logs', 'danger')
@@ -4851,7 +5012,7 @@ def view_auditoria(auditoria_id):
         return render_template('admin/auditoria/view.html', log=log)
     
     except Exception as e:
-        print(f"❌ Erro ao visualizar auditoria: {e}")
+        print(f"[X] Erro ao visualizar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao carregar detalhes do log', 'danger')
@@ -4876,7 +5037,7 @@ def limpar_auditoria():
         
         deletados = AuditoriaService.limpar_logs_antigos(dias=dias)
         
-        flash(f'✅ {deletados} registros de auditoria removidos (mais de {dias} dias)', 'success')
+        flash(f'[OK] {deletados} registros de auditoria removidos (mais de {dias} dias)', 'success')
         
         # Registra a ação de limpeza
         AuditoriaService.registrar_acao(
@@ -4889,7 +5050,7 @@ def limpar_auditoria():
         return redirect(url_for('admin.list_auditoria'))
     
     except Exception as e:
-        print(f"❌ Erro ao limpar auditoria: {e}")
+        print(f"[X] Erro ao limpar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao limpar logs antigos', 'danger')
@@ -4914,60 +5075,82 @@ def _require_super_admin():
 @admin_bp.route('/faturamento')
 @login_required
 def list_faturamento():
-    """Lista configurações de faturamento de todos os clientes"""
+    """Lista assinaturas e faturamento de todos os clientes"""
     redirect_response = _require_super_admin()
     if redirect_response:
         return redirect_response
     
     db = _get_db()
     try:
-        # Busca configurações de faturamento com dados do cliente
+        print("[INFO] Iniciando consulta de faturamento...")
+        
+        # Busca clientes com suas assinaturas ativas
         rows = db.execute(text("""
             SELECT 
                 c.cliente_id,
                 c.razao_social,
                 c.cnpj,
                 c.ativo as cliente_ativo,
-                cfg.config_faturamento_id,
-                cfg.valor_por_nfe,
-                cfg.forma_pagamento,
-                cfg.dia_vencimento,
-                cfg.periodicidade,
-                cfg.ativo as config_ativa,
-                cfg.inicio_vigencia,
-                cfg.observacoes,
-                -- Estatísticas do mês atual
-                (SELECT COUNT(*) FROM nfe_emitidas 
-                 WHERE cliente_id = c.cliente_id 
-                 AND EXTRACT(MONTH FROM data_criacao) = EXTRACT(MONTH FROM CURRENT_DATE)
-                 AND EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
-                ) as nfes_mes_atual
+                a.assinatura_id,
+                a.status as assinatura_status,
+                a.data_inicio,
+                a.periodo_ref_inicio,
+                a.periodo_ref_fim,
+                a.nfes_consumidas,
+                a.dia_vencimento,
+                p.plano_id,
+                p.nome as plano_nome,
+                p.tipo_plano,
+                p.quantidade_nfes,
+                p.valor_mensal,
+                p.valor_por_nfe,
+                COALESCE((
+                    SELECT COUNT(*) FROM nfe_emitidas 
+                    WHERE cliente_id = c.cliente_id 
+                    AND data_criacao >= COALESCE(a.periodo_ref_inicio, CURRENT_DATE)
+                    AND data_criacao <= COALESCE(a.periodo_ref_fim, CURRENT_DATE)
+                ), 0) as nfes_periodo
             FROM clientes c
-            LEFT JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            LEFT JOIN assinaturas_cliente a ON c.cliente_id = a.cliente_id 
+                AND a.status = 'ATIVA'
+            LEFT JOIN planos_nfe p ON a.plano_id = p.plano_id
             WHERE c.ativo = TRUE
             ORDER BY c.razao_social
         """)).fetchall()
         
+        print(f"[INFO] Encontrados {len(rows)} clientes")
+        
         clientes = []
         for row in rows:
             cliente = dict(row._mapping)
-            # Calcular valor estimado do mês
-            if cliente['valor_por_nfe'] and cliente['nfes_mes_atual']:
-                cliente['valor_estimado_mes'] = float(cliente['valor_por_nfe']) * cliente['nfes_mes_atual']
+            
+            # Calcular valor do período
+            if cliente.get('plano_id'):
+                if cliente.get('tipo_plano') == 'AVULSO':
+                    # Cobrança por NFe emitida
+                    valor_nfe = float(cliente.get('valor_por_nfe') or 0)
+                    nfes = int(cliente.get('nfes_periodo') or 0)
+                    cliente['valor_periodo'] = valor_nfe * nfes
+                else:
+                    # Plano mensal
+                    cliente['valor_periodo'] = float(cliente.get('valor_mensal') or 0)
             else:
-                cliente['valor_estimado_mes'] = 0.0
+                cliente['valor_periodo'] = 0.0
+            
             clientes.append(cliente)
         
+        print(f"[INFO] Processados {len(clientes)} clientes para exibição")
         return render_template('admin/faturamento/list.html', clientes=clientes)
     
     except Exception as e:
-        print(f"❌ Erro ao listar faturamento: {e}")
+        print(f"[X] Erro ao listar faturamento: {e}")
         import traceback
         traceback.print_exc()
-        flash('Erro ao carregar configurações de faturamento', 'danger')
+        flash(f'Erro ao carregar configurações de faturamento: {str(e)}', 'danger')
         return render_template('admin/faturamento/list.html', clientes=[])
     finally:
-        db.close()
+        if db:
+            db.close()
 
 
 @admin_bp.route('/faturamento/cliente/<int:cliente_id>/editar', methods=['GET', 'POST'])
@@ -5015,7 +5198,7 @@ def edit_faturamento_cliente(cliente_id):
                     'ativo': ativo,
                     'observacoes': observacoes
                 })
-                flash('✅ Configuração de faturamento atualizada!', 'success')
+                flash('[OK] Configuração de faturamento atualizada!', 'success')
             else:
                 # Insere
                 db.execute(text("""
@@ -5034,7 +5217,7 @@ def edit_faturamento_cliente(cliente_id):
                     'observacoes': observacoes,
                     'user_id': current_user.id
                 })
-                flash('✅ Configuração de faturamento criada!', 'success')
+                flash('[OK] Configuração de faturamento criada!', 'success')
             
             db.commit()
             return redirect(url_for('admin.list_faturamento'))
@@ -5077,7 +5260,7 @@ def edit_faturamento_cliente(cliente_id):
     
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao editar faturamento: {e}")
+        print(f"[X] Erro ao editar faturamento: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao processar configuração de faturamento', 'danger')
@@ -5085,6 +5268,204 @@ def edit_faturamento_cliente(cliente_id):
     finally:
         db.close()
 
+
+# ============================================================================
+# ROTAS - CLASSIFICAÇÕES IBS/CBS (CRUD Completo)
+# ============================================================================
+
+@admin_bp.route('/classificacoes-ibs-cbs', methods=['GET'])
+@login_required
+def list_classificacoes_ibs_cbs():
+    """Lista todas as classificações IBS/CBS com filtros"""
+    from database.connection import SessionLocal
+    from database.models import ClassificacaoIBSCBS
+    
+    db = SessionLocal()
+    try:
+        # Filtros
+        codigo = request.args.get('codigo', '').strip()
+        descricao = request.args.get('descricao', '').strip()
+        ativo = request.args.get('ativo', '').strip()
+        
+        query = db.query(ClassificacaoIBSCBS)
+        
+        if codigo:
+            query = query.filter(ClassificacaoIBSCBS.codigo.ilike(f'%{codigo}%'))
+        
+        if descricao:
+            query = query.filter(ClassificacaoIBSCBS.descricao.ilike(f'%{descricao}%'))
+        
+        if ativo in ['0', '1']:
+            query = query.filter(ClassificacaoIBSCBS.ativo == (ativo == '1'))
+        
+        classificacoes = query.order_by(ClassificacaoIBSCBS.codigo).all()
+        
+        return render_template('admin/classificacoes_ibs_cbs/list.html', 
+                             classificacoes=classificacoes)
+    
+    except Exception as e:
+        flash(f'Erro ao listar classificações: {e}', 'danger')
+        return redirect(url_for('admin.admin_home'))
+    finally:
+        db.close()
+
+
+@admin_bp.route('/classificacoes-ibs-cbs/nova', methods=['GET'])
+@login_required
+def criar_classificacao_ibs_cbs():
+    """Exibe formulário para criar nova classificação"""
+    return render_template('admin/classificacoes_ibs_cbs/form.html', 
+                         classificacao=None)
+
+
+@admin_bp.route('/classificacoes-ibs-cbs/<int:classificacao_id>/editar', methods=['GET'])
+@login_required
+def editar_classificacao_ibs_cbs(classificacao_id):
+    """Exibe formulário para editar classificação existente"""
+    from database.connection import SessionLocal
+    from database.models import ClassificacaoIBSCBS
+    
+    db = SessionLocal()
+    try:
+        classificacao = db.query(ClassificacaoIBSCBS).filter_by(
+            classificacao_id=classificacao_id
+        ).first()
+        
+        if not classificacao:
+            flash('Classificação não encontrada', 'danger')
+            return redirect(url_for('admin.list_classificacoes_ibs_cbs'))
+        
+        return render_template('admin/classificacoes_ibs_cbs/form.html', 
+                             classificacao=classificacao)
+    
+    except Exception as e:
+        flash(f'Erro ao carregar classificação: {e}', 'danger')
+        return redirect(url_for('admin.list_classificacoes_ibs_cbs'))
+    finally:
+        db.close()
+
+
+@admin_bp.route('/classificacoes-ibs-cbs/salvar', methods=['POST'])
+@login_required
+def salvar_classificacao_ibs_cbs():
+    """Salva (cria ou atualiza) classificação IBS/CBS"""
+    from database.connection import SessionLocal
+    from database.models import ClassificacaoIBSCBS
+    
+    db = SessionLocal()
+    try:
+        classificacao_id = request.form.get('classificacao_id', type=int)
+        
+        # Validações
+        codigo = request.form.get('codigo', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+        
+        if not codigo or not descricao:
+            flash('Código e descrição são obrigatórios', 'danger')
+            return redirect(request.referrer or url_for('admin.list_classificacoes_ibs_cbs'))
+        
+        try:
+            aliquota_ibs_uf = float(request.form.get('aliquota_ibs_uf', 0))
+            aliquota_ibs_mun = float(request.form.get('aliquota_ibs_mun', 0))
+            aliquota_cbs = float(request.form.get('aliquota_cbs', 0))
+        except ValueError:
+            flash('Alíquotas devem ser números válidos', 'danger')
+            return redirect(request.referrer or url_for('admin.list_classificacoes_ibs_cbs'))
+        
+        ativo = request.form.get('ativo') == '1'
+        
+        if classificacao_id:
+            # Atualizar existente
+            classificacao = db.query(ClassificacaoIBSCBS).filter_by(
+                classificacao_id=classificacao_id
+            ).first()
+            
+            if not classificacao:
+                flash('Classificação não encontrada', 'danger')
+                return redirect(url_for('admin.list_classificacoes_ibs_cbs'))
+            
+            classificacao.codigo = codigo
+            classificacao.descricao = descricao
+            classificacao.aliquota_ibs_uf = aliquota_ibs_uf
+            classificacao.aliquota_ibs_mun = aliquota_ibs_mun
+            classificacao.aliquota_cbs = aliquota_cbs
+            classificacao.ativo = ativo
+            classificacao.atualizado_em = datetime.now()
+            
+            mensagem = 'Classificação atualizada com sucesso!'
+        else:
+            # Criar nova
+            # Verificar se código já existe
+            existe = db.query(ClassificacaoIBSCBS).filter_by(codigo=codigo).first()
+            if existe:
+                flash(f'Já existe uma classificação com o código {codigo}', 'danger')
+                return redirect(request.referrer or url_for('admin.criar_classificacao_ibs_cbs'))
+            
+            classificacao = ClassificacaoIBSCBS(
+                codigo=codigo,
+                descricao=descricao,
+                aliquota_ibs_uf=aliquota_ibs_uf,
+                aliquota_ibs_mun=aliquota_ibs_mun,
+                aliquota_cbs=aliquota_cbs,
+                ativo=ativo,
+                criado_em=datetime.now()
+            )
+            db.add(classificacao)
+            
+            mensagem = 'Classificação criada com sucesso!'
+        
+        db.commit()
+        flash(mensagem, 'success')
+        return redirect(url_for('admin.list_classificacoes_ibs_cbs'))
+    
+    except Exception as e:
+        db.rollback()
+        flash(f'Erro ao salvar classificação: {e}', 'danger')
+        return redirect(request.referrer or url_for('admin.list_classificacoes_ibs_cbs'))
+    finally:
+        db.close()
+
+
+@admin_bp.route('/classificacoes-ibs-cbs/<int:classificacao_id>/toggle', methods=['POST'])
+@login_required
+def toggle_classificacao_ibs_cbs(classificacao_id):
+    """Alterna status ativo/inativo de uma classificação"""
+    from database.connection import SessionLocal
+    from database.models import ClassificacaoIBSCBS
+    
+    db = SessionLocal()
+    try:
+        classificacao = db.query(ClassificacaoIBSCBS).filter_by(
+            classificacao_id=classificacao_id
+        ).first()
+        
+        if not classificacao:
+            return jsonify({'success': False, 'error': 'Classificação não encontrada'}), 404
+        
+        data = request.get_json()
+        novo_status = data.get('ativo', not classificacao.ativo)
+        
+        classificacao.ativo = novo_status
+        classificacao.atualizado_em = datetime.now()
+        
+        db.commit()
+        
+        return jsonify({
+            'success': True, 
+            'ativo': classificacao.ativo,
+            'message': f'Classificação {"ativada" if classificacao.ativo else "desativada"} com sucesso'
+        })
+    
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+# ============================================================================
+# FATURAMENTO
+# ============================================================================
 
 @admin_bp.route('/faturamento/relatorio-gerencial')
 @login_required
@@ -5174,7 +5555,7 @@ def relatorio_gerencial():
                              distribuicao_pagamento=pagamentos)
     
     except Exception as e:
-        print(f"❌ Erro no relatório gerencial: {e}")
+        print(f"[X] Erro no relatório gerencial: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao gerar relatório gerencial', 'danger')
@@ -5227,17 +5608,21 @@ def gerar_extrato_cliente(cliente_id):
         mes_ref = int(mes_ref)
         ano_ref = int(ano_ref)
         
-        # Dados do cliente e configuração
+        # Dados do cliente e assinatura ativa
         cliente_row = db.execute(text("""
             SELECT 
                 c.cliente_id, c.razao_social, c.cnpj, c.nome_fantasia,
                 c.logradouro, c.numero, c.complemento, c.bairro,
                 c.nome_municipio, c.uf, c.cep,
                 c.email_contato, c.telefone_contato,
-                cfg.valor_por_nfe, cfg.forma_pagamento, cfg.dia_vencimento,
-                cfg.periodicidade
+                a.assinatura_id, a.status as assinatura_status,
+                a.dia_vencimento, a.nfes_consumidas,
+                a.periodo_ref_inicio, a.periodo_ref_fim,
+                p.plano_id, p.nome as plano_nome, p.tipo_plano,
+                p.quantidade_nfes, p.valor_mensal, p.valor_por_nfe
             FROM clientes c
-            LEFT JOIN cliente_configuracao_faturamento cfg ON c.cliente_id = cfg.cliente_id
+            LEFT JOIN assinaturas_cliente a ON c.cliente_id = a.cliente_id AND a.status = 'ATIVA'
+            LEFT JOIN planos_nfe p ON a.plano_id = p.plano_id
             WHERE c.cliente_id = :cliente_id
         """), {'cliente_id': cliente_id}).fetchone()
         
@@ -5246,6 +5631,10 @@ def gerar_extrato_cliente(cliente_id):
             return redirect(url_for('admin.list_faturamento'))
         
         cliente = dict(cliente_row._mapping)
+        
+        if not cliente.get('assinatura_id'):
+            flash('Cliente não possui assinatura ativa', 'warning')
+            return redirect(url_for('admin.list_faturamento'))
         
         # NFes emitidas no período
         nfes = db.execute(text("""
@@ -5266,10 +5655,31 @@ def gerar_extrato_cliente(cliente_id):
         
         nfes_list = [dict(row._mapping) for row in nfes]
         
-        # Cálculos
+        # Cálculos baseados no plano
         quantidade_nfes = len(nfes_list)
-        valor_unitario = float(cliente['valor_por_nfe']) if cliente['valor_por_nfe'] else 0.0
-        valor_total = quantidade_nfes * valor_unitario
+        limite_plano = int(cliente['quantidade_nfes'] or 0)
+        
+        # Calcular excedentes
+        if cliente['tipo_plano'] == 'MENSAL' and limite_plano > 0:
+            nfes_excedentes = max(0, quantidade_nfes - limite_plano)
+            nfes_incluidas = min(quantidade_nfes, limite_plano)
+        else:
+            nfes_excedentes = 0
+            nfes_incluidas = quantidade_nfes
+        
+        # Valores
+        if cliente['tipo_plano'] == 'AVULSO':
+            valor_plano = 0.0
+            valor_unitario = float(cliente['valor_por_nfe'] or 0)
+            valor_nfes = quantidade_nfes * valor_unitario
+            valor_excedentes = 0.0
+        else:  # MENSAL
+            valor_plano = float(cliente['valor_mensal'] or 0)
+            valor_unitario = float(cliente['valor_por_nfe'] or 0)
+            valor_nfes = 0.0
+            valor_excedentes = nfes_excedentes * valor_unitario
+        
+        valor_total = valor_plano + valor_nfes + valor_excedentes
         
         # Data de vencimento
         from calendar import monthrange
@@ -5285,7 +5695,13 @@ def gerar_extrato_cliente(cliente_id):
             'mes_referencia': mes_ref,
             'ano_referencia': ano_ref,
             'quantidade_nfes': quantidade_nfes,
+            'nfes_incluidas': nfes_incluidas,
+            'nfes_excedentes': nfes_excedentes,
+            'limite_plano': limite_plano,
+            'valor_plano': valor_plano,
             'valor_unitario': valor_unitario,
+            'valor_nfes': valor_nfes,
+            'valor_excedentes': valor_excedentes,
             'valor_total': valor_total,
             'data_vencimento': data_vencimento,
             'nfes': nfes_list
@@ -5300,10 +5716,86 @@ def gerar_extrato_cliente(cliente_id):
                              data_hoje=data_hoje)
     
     except Exception as e:
-        print(f"❌ Erro ao gerar extrato: {e}")
+        print(f"[X] Erro ao gerar extrato: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao gerar extrato do cliente', 'danger')
         return redirect(url_for('admin.list_faturamento'))
+    finally:
+        db.close()
+
+# ============================================================================
+# ROTAS API - CLASSIFICAÇÕES IBS/CBS (Reforma Tributária)
+# ============================================================================
+
+@admin_bp.route('/api/classificacoes-ibs-cbs', methods=['GET'])
+@login_required
+def api_classificacoes_ibs_cbs():
+    """
+    API para listar classificações IBS/CBS ativas
+    Usado em formulários de emissão quando cliente é CRT=3
+    """
+    from database.connection import SessionLocal
+    from database.models import ClassificacaoIBSCBS
+    
+    db = SessionLocal()
+    try:
+        classificacoes = db.query(ClassificacaoIBSCBS).filter_by(ativo=True).all()
+        
+        resultado = []
+        for c in classificacoes:
+            resultado.append({
+                'id': c.classificacao_id,
+                'codigo': c.codigo,
+                'descricao': c.descricao,
+                'aliquota_ibs_uf': float(c.aliquota_ibs_uf),
+                'aliquota_ibs_mun': float(c.aliquota_ibs_mun),
+                'aliquota_cbs': float(c.aliquota_cbs)
+            })
+        
+        return jsonify({'success': True, 'data': resultado})
+    
+    except Exception as e:
+        print(f"[X] Erro ao buscar classificações IBS/CBS: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@admin_bp.route('/api/regime-tributario/<int:cliente_id>', methods=['GET'])
+@login_required
+def api_regime_tributario_cliente(cliente_id):
+    """
+    API para obter CRT do regime tributário do cliente
+    Retorna se o cliente é CRT=1 (Simples) ou CRT=3 (Lucro Real/Presumido)
+    """
+    from database.connection import SessionLocal
+    from database.models import Cliente
+    
+    db = SessionLocal()
+    try:
+        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        
+        if not cliente:
+            return jsonify({'success': False, 'error': 'Cliente não encontrado'}), 404
+        
+        # Pega o CRT do regime tributário
+        crt = cliente.regime_tributario.crt if cliente.regime_tributario else 1
+        regime_nome = cliente.regime_tributario.nome if cliente.regime_tributario else 'Simples Nacional'
+        
+        return jsonify({
+            'success': True,
+            'crt': crt,
+            'regime_nome': regime_nome,
+            'requer_ibs_cbs': crt == 3  # True se for Lucro Real/Presumido
+        })
+    
+    except Exception as e:
+        print(f"[X] Erro ao buscar regime tributário: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()

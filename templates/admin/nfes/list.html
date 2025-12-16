@@ -197,12 +197,71 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de Ações Pós-DANFE -->
+<div class="modal fade" id="modalAcoesDanfe" tabindex="-1" role="dialog" aria-labelledby="modalAcoesDanfeLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalAcoesDanfeLabel">
+                    <i class="fas fa-check-circle"></i> DANFE Gerado com Sucesso!
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="lead mb-4">O que deseja fazer com o DANFE?</p>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-primary btn-lg w-100 shadow-sm" onclick="imprimirDanfe()" style="height: 120px;">
+                            <i class="fas fa-print fa-3x mb-2"></i>
+                            <br>
+                            <strong>Imprimir</strong>
+                        </button>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-info btn-lg w-100 shadow-sm" onclick="enviarEmailDanfe()" style="height: 120px;">
+                            <i class="fas fa-envelope fa-3x mb-2"></i>
+                            <br>
+                            <strong>Enviar por Email</strong>
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <button type="button" class="btn btn-secondary btn-sm w-100" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Fechar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 {{ super() }}
 <script>
+// Variáveis globais para o modal DANFE
+let nfeIdAtual = null;
+let danfeCaminhoAtual = null;
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Verificar se há parâmetros de DANFE gerado na URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const danfeGerado = urlParams.get('danfe_gerado');
+    const nfeId = urlParams.get('nfe_id');
+    const danfePath = urlParams.get('danfe_path');
+    
+    if (danfeGerado === 'true' && nfeId && danfePath) {
+        console.log('[DEBUG] DANFE gerado detectado, abrindo modal...');
+        mostrarModalAcoesDanfe(nfeId, danfePath);
+        
+        // Limpar URL sem recarregar a página
+        const cleanUrl = window.location.pathname + (urlParams.get('cliente_id') ? '?cliente_id=' + urlParams.get('cliente_id') : '');
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+    
     document.querySelectorAll('.btn-gerar-danfe').forEach(function(button) {
         button.addEventListener('click', function() {
             const nfeId = this.getAttribute('data-nfe-id');
@@ -243,6 +302,102 @@ function gerarDANFE(nfeId, buttonEl) {
         console.error('[DEBUG] Erro ao gerar DANFE:', error); // Print debug
         alert('Erro ao gerar DANFE. Tente novamente mais tarde.');
     });
+}
+
+// Função para mostrar modal de ações pós-DANFE
+function mostrarModalAcoesDanfe(nfeId, danfeCaminho) {
+    nfeIdAtual = nfeId;
+    danfeCaminhoAtual = danfeCaminho;
+    const modal = new bootstrap.Modal(document.getElementById('modalAcoesDanfe'));
+    modal.show();
+}
+
+// Função para imprimir DANFE
+function imprimirDanfe() {
+    if (!danfeCaminhoAtual) {
+        alert('Erro: Caminho do DANFE não encontrado');
+        return;
+    }
+    
+    // Abrir DANFE em nova janela para impressão
+    const danfeUrl = danfeCaminhoAtual.startsWith('http') 
+        ? danfeCaminhoAtual 
+        : `${window.location.origin}/${danfeCaminhoAtual}`;
+    
+    const printWindow = window.open(danfeUrl, '_blank');
+    
+    if (printWindow) {
+        // Aguardar carregamento e imprimir automaticamente
+        printWindow.onload = function() {
+            setTimeout(function() {
+                printWindow.print();
+            }, 500);
+        };
+        
+        // Fechar modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalAcoesDanfe'));
+        if (modal) modal.hide();
+        
+        // Mostrar mensagem de sucesso
+        alert('DANFE aberto para impressão!');
+    } else {
+        alert('Não foi possível abrir o DANFE. Verifique se o bloqueador de pop-ups está desabilitado.');
+    }
+}
+
+// Função para enviar DANFE por email
+async function enviarEmailDanfe() {
+    if (!nfeIdAtual) {
+        alert('Erro: ID da NFe não encontrado');
+        return;
+    }
+    
+    // Solicitar email do destinatário
+    const emailDestinatario = prompt('Digite o email do destinatário:');
+    
+    if (!emailDestinatario || !emailDestinatario.includes('@')) {
+        alert('Email inválido!');
+        return;
+    }
+    
+    // Validar formato do email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailDestinatario)) {
+        alert('Por favor, informe um email válido');
+        return;
+    }
+    
+    try {
+        // Usar a rota compartilhar (mesma do xml_preview.html)
+        const response = await fetch(`/admin/nfe/compartilhar/${nfeIdAtual}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: emailDestinatario,
+                include_danfe: true,
+                include_xml: false
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalAcoesDanfe'));
+            if (modal) modal.hide();
+            
+            // Mostrar mensagem de sucesso
+            alert(`DANFE enviado com sucesso para ${emailDestinatario}!`);
+        } else {
+            alert(`Erro ao enviar email: ${result.message || 'Erro desconhecido'}`);
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar email:', error);
+        alert(`Erro ao enviar email: ${error.message}`);
+    }
 }
 </script>
 {% endblock %}

@@ -32,7 +32,7 @@ def _get_encryption_key():
 def _encrypt_password(password):
     """Criptografa a senha do certificado"""
     try:
-        print(f"🔐 _encrypt_password: Iniciando criptografia de senha com {len(password)} caracteres")
+        print(f"[AUTH] _encrypt_password: Iniciando criptografia de senha com {len(password)} caracteres")
         
         if not password or len(password) == 0:
             raise Exception("Senha vazia ou nula")
@@ -46,7 +46,7 @@ def _encrypt_password(password):
         else:
             password_str = str(password)
         
-        print(f"🔐 _encrypt_password: Senha preparada para criptografia: {len(password_str)} chars")
+        print(f"[AUTH] _encrypt_password: Senha preparada para criptografia: {len(password_str)} chars")
         
         # Criptografar
         encrypted_bytes = f.encrypt(password_str.encode('utf-8'))
@@ -54,13 +54,13 @@ def _encrypt_password(password):
         # Codificar em base64 para armazenar no banco
         encrypted_b64 = base64.b64encode(encrypted_bytes).decode('utf-8')
         
-        print(f"✅ _encrypt_password: Senha criptografada - {len(encrypted_b64)} caracteres")
-        print(f"✅ _encrypt_password: Resultado: {encrypted_b64[:50]}...")
+        print(f"[OK] _encrypt_password: Senha criptografada - {len(encrypted_b64)} caracteres")
+        print(f"[OK] _encrypt_password: Resultado: {encrypted_b64[:50]}...")
         
         return encrypted_b64
         
     except Exception as e:
-        print(f"❌ _encrypt_password: ERRO CRÍTICO: {e}")
+        print(f"[X] _encrypt_password: ERRO CRÍTICO: {e}")
         import traceback
         traceback.print_exc()
         raise Exception(f"Falha crítica na criptografia da senha: {e}")
@@ -68,62 +68,62 @@ def _encrypt_password(password):
 def _decrypt_password(encrypted_password):
     """Descriptografa a senha do certificado"""
     try:
-        print(f"🔓 _decrypt_password: Iniciando descriptografia de {len(encrypted_password)} caracteres")
-        print(f"🔓 _decrypt_password: Dados: {encrypted_password[:50]}...")
+        print(f"[UNLOCK] _decrypt_password: Iniciando descriptografia de {len(encrypted_password)} caracteres")
+        print(f"[UNLOCK] _decrypt_password: Dados: {encrypted_password[:50]}...")
         
-        # ✅ USAR MESMA LÓGICA DO TESTE QUE FUNCIONOU
+        # [OK] USAR MESMA LÓGICA DO TESTE QUE FUNCIONOU
         key = _get_encryption_key()
         f = Fernet(key)
         
         # Decodificar base64
         encrypted_bytes = base64.b64decode(encrypted_password.encode('utf-8'))
-        print(f"🔓 _decrypt_password: Base64 decodificado: {len(encrypted_bytes)} bytes")
+        print(f"[UNLOCK] _decrypt_password: Base64 decodificado: {len(encrypted_bytes)} bytes")
         
         # Descriptografar com Fernet
         decrypted_bytes = f.decrypt(encrypted_bytes)
         decrypted_str = decrypted_bytes.decode('utf-8')
         
-        print(f"✅ _decrypt_password: Fernet SUCCESS! Senha descriptografada: {len(decrypted_str)} chars")
+        print(f"[OK] _decrypt_password: Fernet SUCCESS! Senha descriptografada: {len(decrypted_str)} chars")
         return decrypted_str
         
     except Exception as e:
-        print(f"❌ _decrypt_password: Erro Fernet: {e}")
-        print(f"❌ _decrypt_password: Tentando fallback...")
+        print(f"[X] _decrypt_password: Erro Fernet: {e}")
+        print(f"[X] _decrypt_password: Tentando fallback...")
         return _decrypt_password_fallback(encrypted_password)
 
 def _decrypt_password_fallback(encrypted_password):
     """Fallback para senhas antigas ou em texto plano"""
     try:
-        print(f"🔄 _decrypt_password_fallback: Tentando fallback para {len(encrypted_password)} chars")
+        print(f"[?] _decrypt_password_fallback: Tentando fallback para {len(encrypted_password)} chars")
         
         # Tentar base64 simples (método antigo)
         try:
             decoded = base64.b64decode(encrypted_password.encode('utf-8')).decode('utf-8')
-            print(f"✅ _decrypt_password_fallback: Base64 simples funcionou")
+            print(f"[OK] _decrypt_password_fallback: Base64 simples funcionou")
             return decoded
         except Exception as b64_e:
-            print(f"❌ _decrypt_password_fallback: Base64 falhou: {b64_e}")
+            print(f"[X] _decrypt_password_fallback: Base64 falhou: {b64_e}")
         
         # Se não é base64, pode ser texto plano (senhas muito antigas)
-        print(f"⚠️ _decrypt_password_fallback: Assumindo texto plano")
+        print(f"[!] _decrypt_password_fallback: Assumindo texto plano")
         return encrypted_password
         
     except Exception as e:
-        print(f"❌ _decrypt_password_fallback: Todos os fallbacks falharam: {e}")
+        print(f"[X] _decrypt_password_fallback: Todos os fallbacks falharam: {e}")
         return encrypted_password
 
 def process_certificate_upload(db_session, cliente_id, request_form, request_files):
     """Processa o upload de certificado digital"""
-    print(f"🔍 process_certificate_upload: Iniciando para cliente {cliente_id}")
+    print(f"[SEARCH] process_certificate_upload: Iniciando para cliente {cliente_id}")
     
-    # ✅ CORRIGIR NOMES DOS CAMPOS
+    # [OK] CORRIGIR NOMES DOS CAMPOS
     cert_file = request_files.get('arquivo_certificado')  # ← CORRIGIDO!
     
     if cert_file and cert_file.filename != '':
         try:
-            print(f"📁 process_certificate_upload: Arquivo recebido: {cert_file.filename}")
+            print(f"[?] process_certificate_upload: Arquivo recebido: {cert_file.filename}")
             
-            # ✅ LER COMO BINÁRIO
+            # [OK] LER COMO BINÁRIO
             file_content = cert_file.read()
             cert_password = request_form.get('senha_certificado')  # ← CORRIGIDO!
             
@@ -131,65 +131,65 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
                 flash('Senha do certificado é obrigatória ao fazer upload de um arquivo.', 'danger')
                 return False, None
             
-            print(f"📊 process_certificate_upload: Arquivo lido - {len(file_content)} bytes")
-            print(f"📊 process_certificate_upload: Primeiros 10 bytes: {file_content[:10].hex()}")
-            print(f"📊 process_certificate_upload: Senha recebida - {len(cert_password)} caracteres")
-            print(f"📊 process_certificate_upload: Senha (mascarada): {'*' * len(cert_password)}")
+            print(f"[DATA] process_certificate_upload: Arquivo lido - {len(file_content)} bytes")
+            print(f"[DATA] process_certificate_upload: Primeiros 10 bytes: {file_content[:10].hex()}")
+            print(f"[DATA] process_certificate_upload: Senha recebida - {len(cert_password)} caracteres")
+            print(f"[DATA] process_certificate_upload: Senha (mascarada): {'*' * len(cert_password)}")
             
-            # ✅ VALIDAR FORMATO PKCS#12 ANTES DE SALVAR
-            print(f"🧪 process_certificate_upload: Validando PKCS#12...")
+            # [OK] VALIDAR FORMATO PKCS#12 ANTES DE SALVAR
+            print(f"[?] process_certificate_upload: Validando PKCS#12...")
             try:
                 private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
                     file_content,
                     cert_password.encode('utf-8')
                 )
-                print("✅ process_certificate_upload: Certificado PKCS#12 validado com sucesso")
+                print("[OK] process_certificate_upload: Certificado PKCS#12 validado com sucesso")
             except Exception as val_err:
-                print(f"❌ process_certificate_upload: Erro na validação PKCS#12: {val_err}")
+                print(f"[X] process_certificate_upload: Erro na validação PKCS#12: {val_err}")
                 flash(f'Erro ao validar certificado: {val_err}', 'danger')
                 return False, None
             
-            # ✅ CODIFICAR ARQUIVO EM BASE64
+            # [OK] CODIFICAR ARQUIVO EM BASE64
             encoded_content = base64.b64encode(file_content).decode('utf-8')
-            print(f"📊 process_certificate_upload: Arquivo codificado em Base64 - {len(encoded_content)} chars")
+            print(f"[DATA] process_certificate_upload: Arquivo codificado em Base64 - {len(encoded_content)} chars")
             
-            # 🔐 CRIPTOGRAFAR SENHA - CRÍTICO!
-            print(f"🔐 process_certificate_upload: === INICIANDO CRIPTOGRAFIA DE SENHA ===")
-            print(f"🔐 process_certificate_upload: Senha original: '{cert_password}' (tipo: {type(cert_password)})")
-            print(f"🔐 process_certificate_upload: Tamanho: {len(cert_password)} caracteres")
+            # [AUTH] CRIPTOGRAFAR SENHA - CRÍTICO!
+            print(f"[AUTH] process_certificate_upload: === INICIANDO CRIPTOGRAFIA DE SENHA ===")
+            print(f"[AUTH] process_certificate_upload: Senha original: '{cert_password}' (tipo: {type(cert_password)})")
+            print(f"[AUTH] process_certificate_upload: Tamanho: {len(cert_password)} caracteres")
             
             try:
                 encrypted_password = _encrypt_password(cert_password)
-                print(f"✅ process_certificate_upload: CRIPTOGRAFIA EXECUTADA!")
-                print(f"✅ process_certificate_upload: Resultado: {len(encrypted_password)} chars")
-                print(f"✅ process_certificate_upload: Primeiros 50 chars: {encrypted_password[:50]}")
+                print(f"[OK] process_certificate_upload: CRIPTOGRAFIA EXECUTADA!")
+                print(f"[OK] process_certificate_upload: Resultado: {len(encrypted_password)} chars")
+                print(f"[OK] process_certificate_upload: Primeiros 50 chars: {encrypted_password[:50]}")
                 
-                # ✅ TESTE IMEDIATO DE ROUND-TRIP
-                print(f"🧪 process_certificate_upload: Testando descriptografia imediata...")
+                # [OK] TESTE IMEDIATO DE ROUND-TRIP
+                print(f"[?] process_certificate_upload: Testando descriptografia imediata...")
                 test_decrypt = _decrypt_password(encrypted_password)
-                print(f"🧪 process_certificate_upload: Descriptografia testada: '{test_decrypt}'")
-                print(f"🧪 process_certificate_upload: Original == Descriptografada? {test_decrypt == cert_password}")
+                print(f"[?] process_certificate_upload: Descriptografia testada: '{test_decrypt}'")
+                print(f"[?] process_certificate_upload: Original == Descriptografada? {test_decrypt == cert_password}")
                 
                 if test_decrypt != cert_password:
                     raise Exception(f"FALHA CRÍTICA: Round-trip falhou! Original: '{cert_password}', Descriptografada: '{test_decrypt}'")
                 
-                print(f"✅ process_certificate_upload: Teste de round-trip passou!")
+                print(f"[OK] process_certificate_upload: Teste de round-trip passou!")
                     
             except Exception as crypto_error:
-                print(f"❌ process_certificate_upload: ERRO CRÍTICO NA CRIPTOGRAFIA: {crypto_error}")
+                print(f"[X] process_certificate_upload: ERRO CRÍTICO NA CRIPTOGRAFIA: {crypto_error}")
                 import traceback
                 traceback.print_exc()
                 flash(f'Erro crítico na criptografia da senha: {crypto_error}', 'danger')
                 return False, None
             
-            # ✅ EXTRAIR INFORMAÇÕES DO CERTIFICADO
-            print(f"📋 process_certificate_upload: Extraindo informações do certificado...")
+            # [OK] EXTRAIR INFORMAÇÕES DO CERTIFICADO
+            print(f"[LIST] process_certificate_upload: Extraindo informações do certificado...")
             # pkcs12.load_key_and_certificates may return None for the main certificate;
             # try to use an additional certificate as fallback
             cert_obj = cert_x509_obj
             if cert_obj is None and additional_certificates:
                 cert_obj = additional_certificates[0]
-                print("⚠️ process_certificate_upload: Certificado principal era None, usando certificado adicional como fallback")
+                print("[!] process_certificate_upload: Certificado principal era None, usando certificado adicional como fallback")
             if cert_obj is None:
                 raise Exception("Certificado X.509 não encontrado dentro do PKCS#12")
             
@@ -206,28 +206,28 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
                 validade_inicio_final = validade_inicio.replace(tzinfo=None) if validade_inicio else None
                 validade_fim_final = validade_fim.replace(tzinfo=None) if validade_fim else None
             except Exception as date_err:
-                print(f"❌ process_certificate_upload: Erro ao obter datas de validade: {date_err}")
+                print(f"[X] process_certificate_upload: Erro ao obter datas de validade: {date_err}")
                 validade_inicio_final = None
                 validade_fim_final = None
             
-            print(f"📋 process_certificate_upload: Fingerprint: {fingerprint}")
-            print(f"📋 process_certificate_upload: Válido de {validade_inicio_final} até {validade_fim_final}")
+            print(f"[LIST] process_certificate_upload: Fingerprint: {fingerprint}")
+            print(f"[LIST] process_certificate_upload: Válido de {validade_inicio_final} até {validade_fim_final}")
             
-            # ✅ DESATIVAR CERTIFICADOS ANTIGOS
-            print(f"🔄 process_certificate_upload: Desativando certificados antigos...")
+            # [OK] DESATIVAR CERTIFICADOS ANTIGOS
+            print(f"[?] process_certificate_upload: Desativando certificados antigos...")
             old_certs_updated = db_session.query(CertificadoDigital).filter_by(
                 cliente_id=cliente_id,
                 ativo=True
             ).update({'ativo': False})
-            print(f"🔄 process_certificate_upload: {old_certs_updated} certificados antigos desativados")
+            print(f"[?] process_certificate_upload: {old_certs_updated} certificados antigos desativados")
             
-            # ✅ CRIAR OBJETO DO CERTIFICADO
-            print(f"💾 process_certificate_upload: Criando objeto certificado...")
+            # [OK] CRIAR OBJETO DO CERTIFICADO
+            print(f"[SAVE] process_certificate_upload: Criando objeto certificado...")
             cert_obj = CertificadoDigital(
                 cliente_id=cliente_id,
                 fingerprint=fingerprint,
-                conteudo_certificado=encoded_content,  # ✅ BASE64 LIMPO
-                senha_certificado=encrypted_password,   # 🔐 SENHA CRIPTOGRAFADA
+                conteudo_certificado=encoded_content,  # [OK] BASE64 LIMPO
+                senha_certificado=encrypted_password,   # [AUTH] SENHA CRIPTOGRAFADA
                 validade_inicio=validade_inicio_final,
                 validade_fim=validade_fim_final,
                 ativo=True,
@@ -236,49 +236,49 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
                 created_by_user_id=current_user.id if current_user.is_authenticated else None
             )
             
-            print(f"💾 process_certificate_upload: Objeto criado - senha no objeto: {cert_obj.senha_certificado[:50]}...")
+            print(f"[SAVE] process_certificate_upload: Objeto criado - senha no objeto: {cert_obj.senha_certificado[:50]}...")
             
-            # ✅ SALVAR NO BANCO
-            print(f"💾 process_certificate_upload: Salvando no banco...")
+            # [OK] SALVAR NO BANCO
+            print(f"[SAVE] process_certificate_upload: Salvando no banco...")
             db_session.add(cert_obj)
             db_session.commit()
             
-            print(f"✅ process_certificate_upload: Certificado salvo com ID: {cert_obj.certificado_digital_id}")
+            print(f"[OK] process_certificate_upload: Certificado salvo com ID: {cert_obj.certificado_digital_id}")
             
-            # ✅ VERIFICAÇÃO PÓS-SALVAMENTO
-            print(f"🔍 process_certificate_upload: Verificando dados salvos...")
+            # [OK] VERIFICAÇÃO PÓS-SALVAMENTO
+            print(f"[SEARCH] process_certificate_upload: Verificando dados salvos...")
             cert_verificacao = db_session.query(CertificadoDigital).filter_by(
                 certificado_digital_id=cert_obj.certificado_digital_id
             ).first()
             
             if cert_verificacao:
                 saved_password = cert_verificacao.senha_certificado
-                print(f"🔍 process_certificate_upload: Senha salva no banco: {len(saved_password)} chars")
-                print(f"🔍 process_certificate_upload: Primeiros 50 chars: {saved_password[:50]}")
+                print(f"[SEARCH] process_certificate_upload: Senha salva no banco: {len(saved_password)} chars")
+                print(f"[SEARCH] process_certificate_upload: Primeiros 50 chars: {saved_password[:50]}")
                 
                 if saved_password.startswith('gAAAAA'):
-                    print("✅ process_certificate_upload: SENHA SALVA CRIPTOGRAFADA! ✅")
+                    print("[OK] process_certificate_upload: SENHA SALVA CRIPTOGRAFADA! [OK]")
                 elif saved_password == cert_password:
-                    print("❌ process_certificate_upload: SENHA SALVA EM TEXTO PLANO! ❌")
+                    print("[X] process_certificate_upload: SENHA SALVA EM TEXTO PLANO! [X]")
                 else:
-                    print("⚠️ process_certificate_upload: Senha em formato desconhecido")
+                    print("[!] process_certificate_upload: Senha em formato desconhecido")
                 
                 # Teste final de descriptografia
                 try:
                     final_test = _decrypt_password(saved_password)
                     if final_test == cert_password:
-                        print("🎉 process_certificate_upload: TESTE FINAL PASSOU! Criptografia funcionando 100%")
+                        print("[?] process_certificate_upload: TESTE FINAL PASSOU! Criptografia funcionando 100%")
                     else:
-                        print("❌ process_certificate_upload: TESTE FINAL FALHOU!")
+                        print("[X] process_certificate_upload: TESTE FINAL FALHOU!")
                 except Exception as final_e:
-                    print(f"❌ process_certificate_upload: ERRO NO TESTE FINAL: {final_e}")
+                    print(f"[X] process_certificate_upload: ERRO NO TESTE FINAL: {final_e}")
             
-            print("✅ process_certificate_upload: Upload concluído com sucesso!")
+            print("[OK] process_certificate_upload: Upload concluído com sucesso!")
             flash('Certificado enviado e validado com sucesso!', 'success')
             return True, cert_obj
             
         except Exception as e:
-            print(f"❌ process_certificate_upload: Erro inesperado: {e}")
+            print(f"[X] process_certificate_upload: Erro inesperado: {e}")
             import traceback
             traceback.print_exc()
             db_session.rollback()
@@ -295,7 +295,7 @@ def get_active_certificate_for_client(db, cliente_id):
     Busca certificado digital ativo para o cliente
     """
     try:
-        print(f"🔐 get_active_certificate_for_client: Buscando certificado para cliente {cliente_id}")
+        print(f"[AUTH] get_active_certificate_for_client: Buscando certificado para cliente {cliente_id}")
         
         # Buscar certificado ativo
         certificado = db.query(CertificadoDigital).filter_by(
@@ -304,12 +304,12 @@ def get_active_certificate_for_client(db, cliente_id):
         ).first()
         
         if not certificado:
-            print(f"❌ get_active_certificate_for_client: Nenhum certificado ativo encontrado")
+            print(f"[X] get_active_certificate_for_client: Nenhum certificado ativo encontrado")
             return None
         
-        print(f"✅ get_active_certificate_for_client: Certificado encontrado: ID {certificado.certificado_digital_id}")
+        print(f"[OK] get_active_certificate_for_client: Certificado encontrado: ID {certificado.certificado_digital_id}")
         
-        # ✅ CONVERTER PARA DICIONÁRIO
+        # [OK] CONVERTER PARA DICIONÁRIO
         certificado_dict = {
             'certificado_id': certificado.certificado_digital_id,
             'cliente_id': certificado.cliente_id,
@@ -325,17 +325,17 @@ def get_active_certificate_for_client(db, cliente_id):
             'nome_arquivo_original': certificado.nome_arquivo_original
         }
         
-        print(f"✅ get_active_certificate_for_client: Certificado convertido: {certificado_dict.get('nome_arquivo_original', 'Sem nome')}")
+        print(f"[OK] get_active_certificate_for_client: Certificado convertido: {certificado_dict.get('nome_arquivo_original', 'Sem nome')}")
         
-        # ✅ VERIFICAR SE CERTIFICADO ESTÁ COMPLETO
+        # [OK] VERIFICAR SE CERTIFICADO ESTÁ COMPLETO
         if not certificado_dict['arquivo_certificado'] or not certificado_dict['senha_certificado']:
-            print("⚠️ get_active_certificate_for_client: Certificado incompleto - modo simulado")
+            print("[!] get_active_certificate_for_client: Certificado incompleto - modo simulado")
             certificado_dict['modo_simulado'] = False
             return certificado_dict
         
-        # ✅ TENTAR CARREGAR CERTIFICADO REAL
+        # [OK] TENTAR CARREGAR CERTIFICADO REAL
         try:
-            print("🔍 get_active_certificate_for_client: Tentando carregar certificado real...")
+            print("[SEARCH] get_active_certificate_for_client: Tentando carregar certificado real...")
             
             # Decodificar arquivo do certificado
             cert_data = _decode_certificate_data(certificado_dict['arquivo_certificado'])
@@ -347,7 +347,7 @@ def get_active_certificate_for_client(db, cliente_id):
             if not senha_descriptografada:
                 raise Exception("Falha ao descriptografar senha")
             
-            print(f"🔍 get_active_certificate_for_client: Dados decodificados - cert: {len(cert_data)} bytes, senha: {len(senha_descriptografada)} chars")
+            print(f"[SEARCH] get_active_certificate_for_client: Dados decodificados - cert: {len(cert_data)} bytes, senha: {len(senha_descriptografada)} chars")
             
             # Tentar validar PKCS#12
             private_key, certificate, additional_certificates = _validate_pkcs12_simple(cert_data, senha_descriptografada)
@@ -359,26 +359,26 @@ def get_active_certificate_for_client(db, cliente_id):
                     'additional_certificates': additional_certificates,
                     'modo_simulado': False
                 })
-                print(f"✅ get_active_certificate_for_client: Certificado real carregado com sucesso")
+                print(f"[OK] get_active_certificate_for_client: Certificado real carregado com sucesso")
                 return certificado_dict
             else:
                 raise Exception("Falha na validação PKCS#12")
         
         except Exception as e:
-            print(f"⚠️ get_active_certificate_for_client: Erro ao carregar certificado real: {e}")
+            print(f"[!] get_active_certificate_for_client: Erro ao carregar certificado real: {e}")
         
-        # ✅ FALLBACK: MODO SIMULADO
-        print("🔄 get_active_certificate_for_client: Usando modo simulado")
+        # [OK] FALLBACK: MODO SIMULADO
+        print("[?] get_active_certificate_for_client: Usando modo simulado")
         
         
         return certificado_dict
         
     except Exception as e:
-        print(f"❌ get_active_certificate_for_client: Erro crítico: {e}")
+        print(f"[X] get_active_certificate_for_client: Erro crítico: {e}")
         import traceback
         traceback.print_exc()
         
-        # ✅ FALLBACK COMPLETO
+        # [OK] FALLBACK COMPLETO
         return {
             'certificado_id': 'SIMULADO',
             'cliente_id': cliente_id,
@@ -393,7 +393,7 @@ def _decode_certificate_data(cert_data_encoded):
     if not cert_data_encoded:
         return None
     
-    print(f"🔍 _decode_certificate_data: Decodificando {len(cert_data_encoded)} caracteres")
+    print(f"[SEARCH] _decode_certificate_data: Decodificando {len(cert_data_encoded)} caracteres")
     
     methods = [
         ('base64', lambda x: base64.b64decode(x)),
@@ -404,17 +404,17 @@ def _decode_certificate_data(cert_data_encoded):
     for method_name, decode_func in methods:
         try:
             result = decode_func(cert_data_encoded)
-            print(f"✅ _decode_certificate_data: Sucesso com método '{method_name}' - {len(result)} bytes")
+            print(f"[OK] _decode_certificate_data: Sucesso com método '{method_name}' - {len(result)} bytes")
             return result
         except Exception as e:
-            print(f"❌ _decode_certificate_data: Método '{method_name}' falhou: {e}")
+            print(f"[X] _decode_certificate_data: Método '{method_name}' falhou: {e}")
     
     return None
 
 def _validate_pkcs12_simple(cert_data, password):
     """Valida certificado PKCS#12 de forma simples"""
     try:
-        print(f"🧪 _validate_pkcs12_simple: Validando com senha de {len(password)} chars")
+        print(f"[?] _validate_pkcs12_simple: Validando com senha de {len(password)} chars")
         
         private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
             cert_data, 
@@ -422,20 +422,20 @@ def _validate_pkcs12_simple(cert_data, password):
         )
         
         if private_key and certificate:
-            print(f"✅ _validate_pkcs12_simple: PKCS#12 válido! Subject: {certificate.subject}")
+            print(f"[OK] _validate_pkcs12_simple: PKCS#12 válido! Subject: {certificate.subject}")
             return private_key, certificate, additional_certificates
         else:
-            print(f"❌ _validate_pkcs12_simple: PKCS#12 carregado mas incompleto")
+            print(f"[X] _validate_pkcs12_simple: PKCS#12 carregado mas incompleto")
             return None, None, None
             
     except Exception as e:
-        print(f"❌ _validate_pkcs12_simple: Erro na validação: {e}")
+        print(f"[X] _validate_pkcs12_simple: Erro na validação: {e}")
         return None, None, None
 
-# ✅ MANTER FUNÇÃO ANTIGA PARA COMPATIBILIDADE
+# [OK] MANTER FUNÇÃO ANTIGA PARA COMPATIBILIDADE
 def _validate_pkcs12(cert_data, password_data):
     """Valida certificado PKCS#12 com múltiplas variantes de senha (compatibilidade)"""
-    print("🔄 _validate_pkcs12: Usando método de compatibilidade...")
+    print("[?] _validate_pkcs12: Usando método de compatibilidade...")
     
     # Converter para string se necessário
     if isinstance(password_data, bytes):

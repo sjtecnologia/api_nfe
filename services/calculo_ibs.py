@@ -276,10 +276,10 @@ class CalculadoraIBS:
                 return aliquota
             
         except Exception as e:
-            print(f"⚠️ Erro ao buscar alíquota IBS: {e}")
+            print(f"[!] Erro ao buscar alíquota IBS: {e}")
         
         # Fallback: alíquota padrão
-        print(f"⚠️ Usando alíquota IBS padrão para {codigo_municipio}")
+        print(f"[!] Usando alíquota IBS padrão para {codigo_municipio}")
         return self.ALIQUOTA_IBS_PADRAO
     
     def _buscar_beneficio_fiscal(
@@ -326,7 +326,7 @@ class CalculadoraIBS:
                 }
         
         except Exception as e:
-            print(f"⚠️ Erro ao buscar benefício fiscal: {e}")
+            print(f"[!] Erro ao buscar benefício fiscal: {e}")
         
         return None
     

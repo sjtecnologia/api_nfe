@@ -2736,7 +2736,7 @@ def get_active_certificate_for_client(db, cliente_id):
             cert.senha_certificado = decoded_password
         
         if not validation_success:
-            print(f"⚠️ AVISO: Nenhuma variante de senha funcionou para validar PKCS#12")
+            print(f"[!] AVISO: Nenhuma variante de senha funcionou para validar PKCS#12")
             print("Continuando mesmo assim para permitir modo simulado...")
             print("DICA: Verifique se o arquivo .p12/.pfx original está correto e se a senha está correta")
         else:

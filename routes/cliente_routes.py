@@ -26,30 +26,49 @@ def dashboard(cliente_id):
     db = next(get_db())
     
     try:
+        print(f"\n{'='*80}")
+        print(f"[?] DASHBOARD: Acessando dashboard do cliente {cliente_id}")
+        print(f"[USER] Usuário: {current_user.username}")
+        print(f"{'='*80}")
+        
         # Verificar se o usuário tem acesso a este cliente
         accessible_clients = get_accessible_client_ids(db)
+        print(f"[LIST] Clientes acessíveis: {accessible_clients}")
+        
         if cliente_id not in accessible_clients:
+            print(f"[X] Acesso negado ao cliente {cliente_id}")
             flash('Você não tem permissão para acessar este cliente.', 'danger')
             return redirect(url_for('home.home'))
         
-        print(f"✅ Acesso permitido ao cliente {cliente_id} para usuário {current_user.username}")
-        print(f"🎯 DASHBOARD: Entrando no dashboard do cliente {cliente_id}")
+        print(f"[OK] Acesso permitido ao cliente {cliente_id} para usuário {current_user.username}")
+        print(f"[?] DASHBOARD: Entrando no dashboard do cliente {cliente_id}")
         
         # Buscar dados do cliente
+        print("[LOG] Buscando dados do cliente...")
         cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
         if not cliente:
+            print(f"[X] Cliente {cliente_id} não encontrado no banco")
             flash('Cliente não encontrado.', 'danger')
             return redirect(url_for('home.home'))
         
-        print(f"✅ Cliente: {cliente.razao_social}")
+        print(f"[OK] Cliente: {cliente.razao_social}")
         
         # Estatísticas
+        print("[DATA] Calculando estatísticas...")
         total_produtos = db.query(func.count(Produto.produto_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        print(f"  Produtos: {total_produtos}")
+        
         total_destinatarios = db.query(func.count(DestinatarioNFe.destinatario_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        print(f"  Destinatários: {total_destinatarios}")
+        
         total_regras = db.query(func.count(RegraTributacao.regra_tributacao_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        print(f"  Regras: {total_regras}")
+        
         total_certificados = db.query(func.count(CertificadoDigital.certificado_digital_id)).filter_by(cliente_id=cliente_id).scalar() or 0
+        print(f"  Certificados: {total_certificados}")
         
         # Contagem de NFes - Usar SQL Nativo para garantir resultados corretos
+        print("[DATA] Contando NFes...")
         # CORRIGIDO: Usar formato MAIÚSCULO para os status para garantir compatibilidade
         query_nfes_total = text("""
             SELECT COUNT(*) as total
@@ -74,14 +93,17 @@ def dashboard(cliente_id):
         
         total_nfes_row = db.execute(query_nfes_total, {"cliente_id": cliente_id}).fetchone()
         total_nfes = total_nfes_row[0] if total_nfes_row is not None else 0
+        print(f"  Total NFes: {total_nfes}")
 
         nfes_ano_row = db.execute(query_nfes_ano, {"cliente_id": cliente_id}).fetchone()
         nfes_ano = nfes_ano_row[0] if nfes_ano_row is not None else 0
+        print(f"  NFes no ano: {nfes_ano}")
 
         nfes_mes_row = db.execute(query_nfes_mes, {"cliente_id": cliente_id}).fetchone()
         nfes_mes = nfes_mes_row[0] if nfes_mes_row is not None else 0
+        print(f"  NFes no mês: {nfes_mes}")
         
-        print(f"📊 Contagens: {total_produtos}P, {total_destinatarios}D, {total_regras}R, {total_certificados}C, {total_nfes}N")
+        print(f"[DATA] Contagens: {total_produtos}P, {total_destinatarios}D, {total_regras}R, {total_certificados}C, {total_nfes}N")
         
         # Estatísticas agrupadas
         stats = {
@@ -116,43 +138,66 @@ def dashboard(cliente_id):
         ultimas_nfes_result = db.execute(query_ultimas_nfes, {"cliente_id": cliente_id})
         ultimas_nfes = []
         
+        print(f"[DATA] Processando últimas NFes...")
         for row in ultimas_nfes_result:
-            nfe_dict = dict(row._mapping)
-            
-            # CORRIGIDO: Extrair valor da NFe/NFCe do JSON
             try:
-                import json
-                json_data = json.loads(nfe_dict['json_nfe']) if isinstance(nfe_dict['json_nfe'], str) else nfe_dict['json_nfe']
+                nfe_dict = dict(row._mapping)
+                print(f"  NFe ID {nfe_dict.get('nfe_emitida_id')}: Status={nfe_dict.get('status')}, Data={nfe_dict.get('data_criacao')}")
                 
-                # Tentar extrair o valor total de diferentes formas possíveis na estrutura JSON
-                valor_total = None
-                if isinstance(json_data, dict):
-                    # 1. NFCe: Verificar em totais -> valor_total
-                    if 'totais' in json_data and isinstance(json_data['totais'], dict):
-                        valor_total = json_data['totais'].get('valor_total')
+                # CORRIGIDO: Extrair valor da NFe/NFCe do JSON
+                try:
+                    import json
                     
-                    # 2. NFe: Verificar várias possíveis localizações do valor total
-                    elif 'total' in json_data and isinstance(json_data['total'], dict):
-                        if 'ICMSTot' in json_data['total'] and isinstance(json_data['total']['ICMSTot'], dict):
-                            valor_total = json_data['total']['ICMSTot'].get('vNF')
-                    
-                    # 3. Verificar na estrutura form_data -> valorPagamento
-                    elif 'form_data' in json_data and isinstance(json_data['form_data'], dict):
-                        valor_total = json_data['form_data'].get('valorPagamento')
-                
-                if valor_total is not None:
-                    try:
-                        nfe_dict['valor_total'] = float(valor_total)
-                    except (ValueError, TypeError):
+                    # Se json_nfe for None, definir valor padrão
+                    if nfe_dict.get('json_nfe') is None:
+                        print(f"    [!] json_nfe é None")
                         nfe_dict['valor_total'] = 0.0
-                else:
-                    nfe_dict['valor_total'] = 0.0
+                        ultimas_nfes.append(nfe_dict)
+                        continue
                     
+                    json_data = json.loads(nfe_dict['json_nfe']) if isinstance(nfe_dict['json_nfe'], str) else nfe_dict['json_nfe']
+                    
+                    # Tentar extrair o valor total de diferentes formas possíveis na estrutura JSON
+                    valor_total = None
+                    if isinstance(json_data, dict):
+                        # 1. NFCe: Verificar em totais -> valor_total
+                        if 'totais' in json_data and isinstance(json_data['totais'], dict):
+                            valor_total = json_data['totais'].get('valor_total')
+                        
+                        # 2. NFe: Verificar várias possíveis localizações do valor total
+                        elif 'total' in json_data and isinstance(json_data['total'], dict):
+                            if 'ICMSTot' in json_data['total'] and isinstance(json_data['total']['ICMSTot'], dict):
+                                valor_total = json_data['total']['ICMSTot'].get('vNF')
+                        
+                        # 3. Verificar na estrutura form_data -> valorPagamento
+                        elif 'form_data' in json_data and isinstance(json_data['form_data'], dict):
+                            valor_total = json_data['form_data'].get('valorPagamento')
+                    
+                    if valor_total is not None:
+                        try:
+                            nfe_dict['valor_total'] = float(valor_total)
+                            print(f"    [OK] Valor total: R$ {nfe_dict['valor_total']:.2f}")
+                        except (ValueError, TypeError):
+                            print(f"    [!] Erro ao converter valor: {valor_total}")
+                            nfe_dict['valor_total'] = 0.0
+                    else:
+                        print(f"    [!] Valor total não encontrado no JSON")
+                        nfe_dict['valor_total'] = 0.0
+                        
+                except Exception as e:
+                    print(f"    [X] Erro ao processar JSON da NFe {nfe_dict.get('nfe_emitida_id')}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    nfe_dict['valor_total'] = 0.0
+                
+                ultimas_nfes.append(nfe_dict)
+                
             except Exception as e:
-                print(f"⚠️ Erro ao processar JSON da NFe {nfe_dict['nfe_emitida_id']}: {e}")
-                nfe_dict['valor_total'] = 0.0
-            
-            ultimas_nfes.append(nfe_dict)
+                print(f"  [X] Erro ao processar linha da NFe: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continuar com a próxima NFe
+                continue
         
         # CORRIGIDO: NFes por mês - últimos 6 meses
         hoje = datetime.now()
@@ -193,7 +238,7 @@ def dashboard(cliente_id):
                     'quantidade': 0
                 })
         
-        print(f"✅ DASHBOARD: Dados carregados - {total_produtos} produtos, {total_destinatarios} destinatários, {len(ultimas_nfes)} NFes recentes")
+        print(f"[OK] DASHBOARD: Dados carregados - {total_produtos} produtos, {total_destinatarios} destinatários, {len(ultimas_nfes)} NFes recentes")
         
         return render_template('cliente/dashboard.html', 
                              cliente=cliente, 
@@ -203,7 +248,7 @@ def dashboard(cliente_id):
                              
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro no dashboard: {str(e)}")
+        print(f"[X] Erro no dashboard: {str(e)}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
@@ -374,7 +419,7 @@ def api_nfes_por_mes(cliente_id):
         return jsonify(nfes_por_mes)
         
     except Exception as e:
-        print(f"❌ Erro api_nfes_por_mes: {e}")
+        print(f"[X] Erro api_nfes_por_mes: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500

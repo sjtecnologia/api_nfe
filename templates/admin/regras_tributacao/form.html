@@ -65,6 +65,27 @@
                                 Informações Básicas
                             </h5>
                             
+                            <!-- Descrição da Regra -->
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label for="descricao_regra">
+                                            <i class="fas fa-file-alt"></i>
+                                            Descrição da Regra *
+                                        </label>
+                                        <input type="text" class="form-control" id="descricao_regra" 
+                                               name="descricao_regra" maxlength="200"
+                                               value="{{ regra.descricao_regra if regra else '' }}" 
+                                               placeholder="Ex: Venda de bebidas dentro do estado - Simples Nacional"
+                                               required>
+                                        <small class="form-text text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            Digite uma descrição clara para identificar esta regra (máx. 200 caracteres)
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="row">
                                 <div class="col-md-4">
                                     <div class="form-group">

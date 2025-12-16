@@ -10,6 +10,9 @@
             Faturamento e Cobrança
         </h1>
         <div>
+            <a href="{{ url_for('planos.list_assinaturas') }}" class="btn btn-primary me-2">
+                <i class="fas fa-box-open"></i> Gerenciar Assinaturas
+            </a>
             <a href="{{ url_for('admin.relatorio_gerencial') }}" class="btn btn-info">
                 <i class="fas fa-chart-bar"></i> Relatório Gerencial
             </a>
@@ -40,24 +43,24 @@
         <div class="col-md-3">
             <div class="card text-white bg-success">
                 <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-check-circle"></i> Configurados</h5>
-                    <h2 class="mb-0">{{ clientes|selectattr('config_ativa')|list|length }}</h2>
+                    <h5 class="card-title"><i class="fas fa-check-circle"></i> Com Assinatura</h5>
+                    <h2 class="mb-0">{{ clientes|selectattr('assinatura_id')|list|length }}</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card text-white bg-warning">
                 <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-exclamation-triangle"></i> Pendentes Config</h5>
-                    <h2 class="mb-0">{{ clientes|rejectattr('config_faturamento_id')|list|length }}</h2>
+                    <h5 class="card-title"><i class="fas fa-exclamation-triangle"></i> Sem Assinatura</h5>
+                    <h2 class="mb-0">{{ clientes|rejectattr('assinatura_id')|list|length }}</h2>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card text-white bg-info">
                 <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-file-invoice"></i> NFes Este Mês</h5>
-                    <h2 class="mb-0">{{ clientes|sum(attribute='nfes_mes_atual') }}</h2>
+                    <h5 class="card-title"><i class="fas fa-dollar-sign"></i> Faturamento Total</h5>
+                    <h2 class="mb-0">R$ {{ "%.2f"|format(clientes|sum(attribute='valor_periodo')) }}</h2>
                 </div>
             </div>
         </div>
@@ -66,7 +69,7 @@
     <!-- Tabela de Clientes -->
     <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
-            <i class="fas fa-list"></i> Configurações de Faturamento por Cliente
+            <i class="fas fa-list"></i> Faturamento por Cliente
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -75,11 +78,11 @@
                         <tr>
                             <th>Cliente</th>
                             <th>CNPJ</th>
-                            <th class="text-center">Valor/NFe</th>
-                            <th class="text-center">Forma Pagamento</th>
-                            <th class="text-center">Dia Vencimento</th>
-                            <th class="text-center">NFes Mês</th>
-                            <th class="text-center">Valor Estimado</th>
+                            <th class="text-center">Plano Atual</th>
+                            <th class="text-center">Tipo</th>
+                            <th class="text-center">Período</th>
+                            <th class="text-center">NFes Consumidas</th>
+                            <th class="text-center">Valor Período</th>
                             <th class="text-center">Status</th>
                             <th class="text-center">Ações</th>
                         </tr>
@@ -89,83 +92,115 @@
                         <tr>
                             <td>
                                 <strong>{{ cliente.razao_social }}</strong>
-                                {% if not cliente.config_faturamento_id %}
+                                {% if not cliente.assinatura_id %}
                                 <span class="badge bg-warning text-dark ms-2">
-                                    <i class="fas fa-exclamation-triangle"></i> Não Configurado
+                                    <i class="fas fa-exclamation-triangle"></i> Sem Assinatura
                                 </span>
                                 {% endif %}
                             </td>
                             <td>{{ cliente.cnpj or '-' }}</td>
                             <td class="text-center">
-                                {% if cliente.valor_por_nfe %}
-                                    <span class="badge bg-success">R$ {{ "%.2f"|format(cliente.valor_por_nfe) }}</span>
+                                {% if cliente.plano_nome %}
+                                    <strong>{{ cliente.plano_nome }}</strong>
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if cliente.forma_pagamento %}
-                                    {% if cliente.forma_pagamento == 'boleto' %}
-                                        <span class="badge bg-secondary"><i class="fas fa-barcode"></i> Boleto</span>
-                                    {% elif cliente.forma_pagamento == 'pix' %}
-                                        <span class="badge bg-info"><i class="fas fa-qrcode"></i> PIX</span>
-                                    {% elif cliente.forma_pagamento == 'cartao_credito' %}
-                                        <span class="badge bg-primary"><i class="fas fa-credit-card"></i> Cartão</span>
-                                    {% elif cliente.forma_pagamento == 'debito_automatico' %}
-                                        <span class="badge bg-success"><i class="fas fa-sync"></i> Débito Auto</span>
+                                {% if cliente.tipo_plano %}
+                                    {% if cliente.tipo_plano == 'AVULSO' %}
+                                        <span class="badge bg-info">Avulso</span>
+                                    {% elif cliente.tipo_plano == 'MENSAL' %}
+                                        <span class="badge bg-primary">Mensal</span>
                                     {% else %}
-                                        <span class="badge bg-dark"><i class="fas fa-money-bill"></i> {{ cliente.forma_pagamento|title }}</span>
+                                        <span class="badge bg-secondary">{{ cliente.tipo_plano }}</span>
                                     {% endif %}
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if cliente.dia_vencimento %}
-                                    Dia {{ cliente.dia_vencimento }}
+                                {% if cliente.periodo_ref_inicio and cliente.periodo_ref_fim %}
+                                    <small>
+                                        {{ cliente.periodo_ref_inicio.strftime('%d/%m/%y') }} a 
+                                        {{ cliente.periodo_ref_fim.strftime('%d/%m/%y') }}
+                                    </small>
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <span class="badge bg-info">{{ cliente.nfes_mes_atual or 0 }}</span>
+                                {% if cliente.assinatura_id %}
+                                    <strong>{{ cliente.nfes_consumidas or 0 }}</strong>
+                                    {% if cliente.quantidade_nfes %}
+                                        / {{ cliente.quantidade_nfes }}
+                                        {% set percentual = (cliente.nfes_consumidas or 0) / cliente.quantidade_nfes * 100 %}
+                                        <div class="progress mt-1" style="height: 5px;">
+                                            <div class="progress-bar 
+                                                {% if percentual >= 90 %}bg-danger
+                                                {% elif percentual >= 70 %}bg-warning
+                                                {% else %}bg-success{% endif %}" 
+                                                role="progressbar" 
+                                                style="width: {{ percentual }}%">
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                    <small class="text-muted">{{ cliente.nfes_periodo or 0 }} no período</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if cliente.valor_estimado_mes > 0 %}
-                                    <strong class="text-success">R$ {{ "%.2f"|format(cliente.valor_estimado_mes) }}</strong>
+                                {% if cliente.assinatura_id %}
+                                    <strong class="text-success">R$ {{ "%.2f"|format(cliente.valor_periodo) }}</strong>
+                                    {% if cliente.tipo_plano == 'AVULSO' %}
+                                        <br><small class="text-muted">(R$ {{ "%.2f"|format(cliente.valor_por_nfe) }}/NFe)</small>
+                                    {% elif cliente.tipo_plano == 'MENSAL' %}
+                                        <br><small class="text-muted">/mês</small>
+                                    {% endif %}
                                 {% else %}
                                     <span class="text-muted">R$ 0,00</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                {% if cliente.config_ativa %}
-                                    <span class="badge bg-success"><i class="fas fa-check"></i> Ativo</span>
-                                {% elif cliente.config_faturamento_id %}
-                                    <span class="badge bg-secondary"><i class="fas fa-pause"></i> Inativo</span>
+                                {% if cliente.assinatura_status == 'ATIVA' %}
+                                    <span class="badge bg-success">Ativa</span>
+                                {% elif cliente.assinatura_status == 'SUSPENSA' %}
+                                    <span class="badge bg-warning">Suspensa</span>
+                                {% elif cliente.assinatura_status == 'CANCELADA' %}
+                                    <span class="badge bg-danger">Cancelada</span>
                                 {% else %}
-                                    <span class="badge bg-warning text-dark"><i class="fas fa-cog"></i> Pendente</span>
+                                    <span class="badge bg-secondary">Sem Assinatura</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <div class="btn-group btn-group-sm">
-                                    <a href="{{ url_for('admin.edit_faturamento_cliente', cliente_id=cliente.cliente_id) }}" 
-                                       class="btn btn-outline-primary" 
-                                       title="Editar Configuração">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <a href="{{ url_for('admin.gerar_extrato_cliente', cliente_id=cliente.cliente_id) }}" 
-                                       class="btn btn-outline-info" 
-                                       title="Gerar Extrato">
-                                        <i class="fas fa-file-invoice-dollar"></i>
-                                    </a>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    {% if cliente.assinatura_id %}
+                                        <a href="{{ url_for('planos.editar_assinatura', assinatura_id=cliente.assinatura_id) }}" 
+                                           class="btn btn-outline-primary" 
+                                           title="Editar Assinatura">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="{{ url_for('admin.gerar_extrato_cliente', cliente_id=cliente.cliente_id) }}" 
+                                           class="btn btn-outline-info" 
+                                           title="Ver Extrato">
+                                            <i class="fas fa-file-invoice"></i>
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('planos.criar_assinatura') }}?cliente_id={{ cliente.cliente_id }}" 
+                                           class="btn btn-outline-success" 
+                                           title="Criar Assinatura">
+                                            <i class="fas fa-plus"></i> Nova
+                                        </a>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
                             <td colspan="9" class="text-center text-muted py-4">
-                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
-                                Nenhum cliente cadastrado
+                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                <p>Nenhum cliente encontrado</p>
                             </td>
                         </tr>
                         {% endfor %}

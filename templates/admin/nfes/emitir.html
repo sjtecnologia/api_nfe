@@ -82,7 +82,15 @@ input[readonly] {
                         <div class="form-group">
                             <label for="serie">Série *</label>
                             <input type="number" class="form-control" name="serie" id="serie" 
-                                   value="1" min="1" max="999" required>
+                                   value="1" min="1" max="999" required onchange="buscarProximoNumero()">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="numero_nfe">Número da NFe *</label>
+                            <input type="number" class="form-control" name="numero_nfe" id="numero_nfe" 
+                                   value="1" min="1" required onchange="confirmarAlteracaoNumero()">
+                            <!-- <small class="form-text text-muted">⚠️ Alteração requer confirmação. Número sugerido aparecerá automaticamente.</small> -->
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -354,11 +362,18 @@ input[readonly] {
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="form-group">
                                 <label for="transportadoraIE">Inscrição Estadual</label>
                                 <input type="text" class="form-control" name="transportadoraIE" id="transportadoraIE" 
                                        maxlength="14" placeholder="IE da transportadora">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="transportadoraANTT">RNTC (ANTT)</label>
+                                <input type="text" class="form-control" name="transportadoraANTT" id="transportadoraANTT" 
+                                       maxlength="20" placeholder="Registro ANTT">
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -413,11 +428,25 @@ input[readonly] {
                                        min="0" placeholder="0">
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="form-group">
                                 <label for="volumeEspecie">Espécie</label>
                                 <input type="text" class="form-control" name="volumeEspecie" id="volumeEspecie" 
                                        maxlength="60" placeholder="Ex: Caixa, Pacote">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="volumeMarca">Marca</label>
+                                <input type="text" class="form-control" name="volumeMarca" id="volumeMarca" 
+                                       maxlength="60" placeholder="Marca dos volumes">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label for="volumeNumeracao">Numeração</label>
+                                <input type="text" class="form-control" name="volumeNumeracao" id="volumeNumeracao" 
+                                       maxlength="60" placeholder="Nº dos volumes">
                             </div>
                         </div>
                         <div class="col-md-3">
@@ -433,6 +462,92 @@ input[readonly] {
                                 <input type="number" step="0.001" class="form-control" name="volumePesoLiquido" id="volumePesoLiquido" 
                                        min="0" placeholder="0.000">
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ IBS/CBS - REFORMA TRIBUTÁRIA (Visível apenas para CRT=3) -->
+        <div id="secao-ibs-cbs" class="card mt-3" style="display: none;">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-balance-scale"></i> IBS/CBS - Reforma Tributária</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Regime Tributário:</strong> <span id="regime-nome"></span><br>
+                    Classificação IBS/CBS é <strong>obrigatória</strong> para este tipo de regime.
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="select-classificacao-ibs">Classificação Tributária IBS/CBS *</label>
+                            <select id="select-classificacao-ibs" name="classificacao_ibs_cbs_id" class="form-control">
+                                <option value="">Carregando...</option>
+                            </select>
+                            <small class="text-muted">Selecione a classificação tributária aplicável aos produtos</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>% IBS UF</label>
+                            <input type="number" name="aliquota_ibs_uf" step="0.01" value="0.10" class="form-control" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>% IBS Municipal</label>
+                            <input type="number" name="aliquota_ibs_mun" step="0.01" value="0.00" class="form-control" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label>% CBS</label>
+                            <input type="number" name="aliquota_cbs" step="0.01" value="0.90" class="form-control" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ ICMS SUBSTITUIÇÃO TRIBUTÁRIA (Visível apenas para CRT=3) -->
+        <div id="secao-icms60" class="card mt-3" style="display: none;">
+            <div class="card-header bg-warning">
+                <h5><i class="fas fa-file-invoice-dollar"></i> ICMS Substituição Tributária (ST)</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i> 
+                    Preencha apenas se houver <strong>ICMS ST retido anteriormente</strong> por substituição tributária.
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="vBCSTRet">BC ICMS ST Retido</label>
+                            <input type="number" name="vBCSTRet" id="vBCSTRet" step="0.01" class="form-control" placeholder="0,00">
+                            <small class="text-muted">Base de cálculo do ICMS ST</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="pST">% Substituição</label>
+                            <input type="number" name="pST" id="pST" step="0.01" class="form-control" placeholder="0,00">
+                            <small class="text-muted">Percentual da ST</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="vICMSSubstituto">ICMS Substituto</label>
+                            <input type="number" name="vICMSSubstituto" id="vICMSSubstituto" step="0.01" class="form-control" placeholder="0,00">
+                            <small class="text-muted">Valor do ICMS substituto</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="vICMSSTRet">ICMS ST Retido</label>
+                            <input type="number" name="vICMSSTRet" id="vICMSSTRet" step="0.01" class="form-control" placeholder="0,00">
+                            <small class="text-muted">Valor do ICMS ST retido</small>
                         </div>
                     </div>
                 </div>
@@ -460,7 +575,7 @@ input[readonly] {
                 </div>
                 <div class="card-body">
                     <div class="custom-control custom-switch">
-                        <input type="checkbox" class="custom-control-input" id="gerarDanfeAuto" name="gerar_danfe_auto" value="true">
+                        <input type="checkbox" class="custom-control-input" id="gerarDanfeAuto" name="gerar_danfe_auto" value="true" checked>
                         <label class="custom-control-label" for="gerarDanfeAuto">Gerar DANFE automaticamente após emissão</label>
                         <small class="form-text text-muted">Se marcado, o sistema gerará o DANFE PDF automaticamente após a emissão bem-sucedida da NFe</small>
                     </div>
@@ -508,6 +623,48 @@ input[readonly] {
                 </div>
                 <div id="ncmResults" style="max-height: 400px; overflow-y: auto;">
                     <!-- Resultados da busca NCM -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Ações Pós-DANFE -->
+<div class="modal fade" id="modalAcoesDanfe" tabindex="-1" role="dialog" aria-labelledby="modalAcoesDanfeLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalAcoesDanfeLabel">
+                    <i class="fas fa-check-circle"></i> DANFE Gerado com Sucesso!
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="lead mb-4">O que deseja fazer com o DANFE?</p>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-primary btn-lg btn-block shadow-sm" onclick="imprimirDanfe()" style="height: 120px;">
+                            <i class="fas fa-print fa-3x mb-2"></i>
+                            <br>
+                            <strong>Imprimir</strong>
+                        </button>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-info btn-lg btn-block shadow-sm" onclick="enviarEmailDanfe()" style="height: 120px;">
+                            <i class="fas fa-envelope fa-3x mb-2"></i>
+                            <br>
+                            <strong>Enviar por Email</strong>
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <button type="button" class="btn btn-secondary btn-sm btn-block" data-dismiss="modal">
+                            <i class="fas fa-times"></i> Fechar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -576,6 +733,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     document.getElementById('dataEmissao').value = now.toISOString().slice(0, 16);
+    
+    // Buscar próximo número da NFe ao carregar página
+    buscarProximoNumero();
+    
+    // Atualizar número quando modelo mudar
+    document.getElementById('modelo').addEventListener('change', buscarProximoNumero);
 });
 
 function initSelect2() {
@@ -739,7 +902,7 @@ function adicionarItem() {
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>NCM *</label>
-                        <select name="ncm_${itemCounter}" class="form-control js-select2-ncm" required>
+                        <select name="ncm_${itemCounter}" class="form-control js-select2-ncm" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o NCM...</option>
                             {% for ncm in all_ncms %}
                             <option value="{{ ncm.codigo }}">{{ ncm.codigo }} - {{ ncm.descricao }}</option>
@@ -750,7 +913,7 @@ function adicionarItem() {
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>CFOP *</label>
-                        <select name="cfop_${itemCounter}" class="form-control js-select2-cfop" required>
+                        <select name="cfop_${itemCounter}" class="form-control js-select2-cfop" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o CFOP...</option>
                             {% for cfop in all_cfops %}
                             <option value="{{ cfop.cfop }}">{{ cfop.cfop }} - {{ cfop.descricao }}</option>
@@ -761,7 +924,7 @@ function adicionarItem() {
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Origem *</label>
-                        <select name="origem_${itemCounter}" class="form-control" required>
+                        <select name="origem_${itemCounter}" class="form-control" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="0" selected>0 - Nacional</option>
                             <option value="1">1 - Estrangeira - Importação direta</option>
                             <option value="2">2 - Estrangeira - Adquirida no mercado interno</option>
@@ -778,7 +941,7 @@ function adicionarItem() {
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>CSOSN *</label>
-                        <select name="csosn_${itemCounter}" class="form-control js-select2-csosn" required>
+                        <select name="csosn_${itemCounter}" class="form-control js-select2-csosn" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o CSOSN...</option>
                             {% for csosn in all_csosns %}
                             <option value="{{ csosn.codigo }}">{{ csosn.codigo }} - {{ csosn.descricao }}</option>
@@ -790,7 +953,7 @@ function adicionarItem() {
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>CST ICMS *</label>
-                        <select name="cst_icms_${itemCounter}" class="form-control js-select2-cst" required>
+                        <select name="cst_icms_${itemCounter}" class="form-control js-select2-cst" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o CST...</option>
                             {% for cst in all_csts %}
                             <option value="{{ cst.codigo }}">{{ cst.codigo }} - {{ cst.descricao }}</option>
@@ -807,7 +970,7 @@ function adicionarItem() {
                     <div class="form-group">
                         <label>Alíquota ICMS (%)</label>
                         <input type="number" step="0.01" name="aliquota_icms_${itemCounter}" 
-                               class="form-control" value="18.00" min="0" max="50" onchange="calcularTotal(${itemCounter})">
+                               class="form-control" value="0.00" min="0" max="50" onchange="calcularTotal(${itemCounter})">
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -1132,8 +1295,41 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         
         console.log('📥 Status da resposta:', response.status, response.statusText);
         
+        // Verificar se a resposta é JSON válido
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('❌ Resposta não é JSON:', text.substring(0, 200));
+            throw new Error('Servidor retornou resposta inválida (não JSON). Status: ' + response.status);
+        }
+        
         const result = await response.json();
         console.log('📥 Resposta da API:', result);
+        console.log('   🔍 Status Code:', response.status);
+        console.log('   🔍 result.sucesso:', result.sucesso);
+        console.log('   🔍 result.regra existe?', result.regra ? 'SIM' : 'NÃO');
+        
+        // Tratar erro 404 (nenhuma regra encontrada)
+        if (response.status === 404 || !result.sucesso) {
+            console.log('⚠️ Nenhuma regra tributária encontrada');
+            console.log('   Motivo:', result.message || 'Desconhecido');
+            console.log('   Payload enviado:', payload);
+            
+            // Mostrar alerta amarelo
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-warning alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <strong>⚠️ Nenhuma regra tributária encontrada</strong><br>
+                <small>Preencha manualmente os campos tributários para este produto.</small>
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            `;
+            const container = document.getElementById('itensContainer');
+            if (container && container.parentElement) {
+                container.parentElement.insertBefore(alertDiv, container);
+            }
+            setTimeout(() => alertDiv.remove(), 5000);
+            return; // Sair da função
+        }
         
         if (result.sucesso && result.regra) {
             console.log('✅ Regra tributária encontrada:', result.regra);
@@ -1280,32 +1476,6 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             
             // Recalcular totais
             calcularTotal(itemId);
-            
-        } else {
-            console.log('⚠️ Nenhuma regra tributária encontrada para este produto');
-            console.log('📋 Critérios de busca:', {
-                cliente_id: clienteId,
-                ncm_codigo: ncmCodigo,
-                cfop_codigo: cfopCodigo,
-                regime: regimeTributario,
-                tipo_item: 'PRODUTO'
-            });
-            
-            // Mostrar alerta amarelo informando que não há regra
-            const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-warning alert-dismissible fade show';
-            alertDiv.innerHTML = `
-                <strong>⚠️ Nenhuma regra tributária encontrada</strong><br>
-                <small>Preencha manualmente os campos tributários para este produto.</small>
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-            `;
-            const container = document.getElementById('itensContainer');
-            if (container && container.parentElement) {
-                container.parentElement.insertBefore(alertDiv, container);
-            }
-            
-            // Remover alerta após 5 segundos
-            setTimeout(() => alertDiv.remove(), 5000);
         }
         
     } catch (error) {
@@ -1337,13 +1507,20 @@ function calcularTotal(itemId) {
     
     document.querySelector(`input[name="valor_total_${itemId}"]`).value = total.toFixed(2);
     
-    // Calcular ICMS
+    // Calcular ICMS - APENAS se houver alíquota diferente de zero
     const aliquotaIcms = parseFloat(document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value) || 0;
-    const bcIcms = total;
-    const valorIcms = bcIcms * (aliquotaIcms / 100);
     
-    document.querySelector(`input[name="bc_icms_${itemId}"]`).value = bcIcms.toFixed(2);
-    document.querySelector(`input[name="valor_icms_${itemId}"]`).value = valorIcms.toFixed(2);
+    if (aliquotaIcms > 0) {
+        // Há tributação - calcular base de cálculo e valor do ICMS
+        const bcIcms = total;
+        const valorIcms = bcIcms * (aliquotaIcms / 100);
+        document.querySelector(`input[name="bc_icms_${itemId}"]`).value = bcIcms.toFixed(2);
+        document.querySelector(`input[name="valor_icms_${itemId}"]`).value = valorIcms.toFixed(2);
+    } else {
+        // Sem tributação - zerar base de cálculo e valor do ICMS
+        document.querySelector(`input[name="bc_icms_${itemId}"]`).value = '0.00';
+        document.querySelector(`input[name="valor_icms_${itemId}"]`).value = '0.00';
+    }
     
     // Atualizar JSON do item
     atualizarItemJSON(itemId);
@@ -1369,16 +1546,22 @@ function atualizarItemJSON(itemId) {
         valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`).value
     };
     
-    // CST ou CSOSN dependendo do regime
+    // ⭐ CORREÇÃO: Capturar SEMPRE os valores que estão na tela (editados pelo usuário)
+    // CST ou CSOSN dependendo do regime - capturar ambos se existirem
     const csosnSelect = document.querySelector(`select[name="csosn_${itemId}"]`);
     const cstSelect = document.querySelector(`select[name="cst_icms_${itemId}"]`);
     
-    if (csosnSelect) {
-        itemData.csosn = csosnSelect.value;
-    } else if (cstSelect) {
-        itemData.cst_icms = cstSelect.value;
+    if (csosnSelect && csosnSelect.value) {
+        itemData.csosn_icms = csosnSelect.value;  // Campo usado no XML
+        console.log(`✅ Item ${itemId} - CSOSN capturado da tela: ${csosnSelect.value}`);
     }
     
+    if (cstSelect && cstSelect.value) {
+        itemData.cst_icms = cstSelect.value;  // Campo usado no XML
+        console.log(`✅ Item ${itemId} - CST capturado da tela: ${cstSelect.value}`);
+    }
+    
+    console.log(`📝 Item ${itemId} - JSON atualizado:`, itemData);
     document.getElementById(`item_json_${itemId}`).value = JSON.stringify(itemData);
 }
 
@@ -1413,12 +1596,80 @@ function calcularTotalGeral() {
     totalGeral = total;
 }
 
+// Variável global para armazenar o número sugerido
+let numeroSugerido = 0;
+let numeroAlteradoManualmente = false;
+
+// Buscar próximo número da NFe disponível
+function buscarProximoNumero() {
+    const clienteId = {{ emitente_data.cliente_id }};
+    const modelo = document.getElementById('modelo').value;
+    const serie = document.getElementById('serie').value;
+    
+    console.log('🔍 Buscando próximo número:', { clienteId, modelo, serie });
+    
+    fetch(`/api/nfe/proximo-numero?cliente_id=${clienteId}&modelo=${modelo}&serie=${serie}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                numeroSugerido = data.proximo_numero;
+                document.getElementById('numero_nfe').value = numeroSugerido;
+                numeroAlteradoManualmente = false;
+                console.log('✅ Próximo número:', data.proximo_numero);
+            } else {
+                console.error('❌ Erro ao buscar número:', data.error);
+                // Manter valor atual em caso de erro
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erro na requisição:', error);
+            // Manter valor atual em caso de erro
+        });
+}
+
+// Confirmar alteração manual do número da NFe
+function confirmarAlteracaoNumero() {
+    const campoNumero = document.getElementById('numero_nfe');
+    const numeroAtual = parseInt(campoNumero.value);
+    
+    // Se o número mudou do sugerido e não foi confirmado ainda
+    if (numeroAtual !== numeroSugerido && !numeroAlteradoManualmente) {
+        const confirma = confirm(
+            `⚠️ ATENÇÃO!\n\n` +
+            `Número sugerido: ${numeroSugerido}\n` +
+            `Número digitado: ${numeroAtual}\n\n` +
+            `Você está alterando manualmente o número da NFe.\n` +
+            `Isso deve ser feito apenas em casos especiais:\n` +
+            `• Primeira NFe do sistema (começar em número maior)\n` +
+            `• Contingência (nota emitida fora do sistema)\n\n` +
+            `Deseja realmente usar o número ${numeroAtual}?`
+        );
+        
+        if (confirma) {
+            numeroAlteradoManualmente = true;
+            console.log(`✅ Usuário confirmou alteração para número ${numeroAtual}`);
+        } else {
+            // Restaurar número sugerido
+            campoNumero.value = numeroSugerido;
+            numeroAlteradoManualmente = false;
+            console.log(`↩️ Número restaurado para ${numeroSugerido}`);
+        }
+    }
+}
+
 // Validar formulário
 function validarFormulario() {
     const itens = document.querySelectorAll('[id^="item-"]');
     
     if (itens.length === 0) {
         alert('Adicione pelo menos um item à NFe');
+        return false;
+    }
+    
+    // Validar número da NFe
+    const numeroNfe = parseInt(document.getElementById('numero_nfe').value);
+    if (!numeroNfe || numeroNfe < 1) {
+        alert('Número da NFe deve ser maior que zero.');
         return false;
     }
     
@@ -1471,5 +1722,220 @@ function toggleDadosTransportadora() {
         dadosTransportadora.style.display = 'none';
     }
 }
+
+// ========================================
+// FUNÇÕES PARA MODAL PÓS-DANFE
+// ========================================
+
+// Variável global para armazenar ID da NFe e caminho do DANFE
+let nfeIdAtual = null;
+let danfeCaminhoAtual = null;
+
+// Detectar quando DANFE foi gerado (chamado após sucesso)
+function mostrarModalAcoesDanfe(nfeId, danfeCaminho) {
+    nfeIdAtual = nfeId;
+    danfeCaminhoAtual = danfeCaminho;
+    $('#modalAcoesDanfe').modal('show');
+}
+
+// Função para imprimir DANFE
+function imprimirDanfe() {
+    if (!danfeCaminhoAtual) {
+        alert('Erro: Caminho do DANFE não encontrado');
+        return;
+    }
+    
+    // Abrir DANFE em nova janela para impressão
+    const danfeUrl = danfeCaminhoAtual.startsWith('http') 
+        ? danfeCaminhoAtual 
+        : `${window.location.origin}/${danfeCaminhoAtual}`;
+    
+    const printWindow = window.open(danfeUrl, '_blank');
+    
+    if (printWindow) {
+        // Aguardar carregamento e imprimir automaticamente
+        printWindow.onload = function() {
+            setTimeout(function() {
+                printWindow.print();
+            }, 500);
+        };
+        
+        // Fechar modal
+        $('#modalAcoesDanfe').modal('hide');
+        
+        // Mostrar mensagem de sucesso
+        alert('DANFE aberto para impressão!');
+    } else {
+        alert('Não foi possível abrir o DANFE. Verifique se o bloqueador de pop-ups está desabilitado.');
+    }
+}
+
+// Função para enviar DANFE por email
+async function enviarEmailDanfe() {
+    if (!nfeIdAtual) {
+        alert('Erro: ID da NFe não encontrado');
+        return;
+    }
+    
+    // Solicitar email do destinatário
+    const emailDestinatario = prompt('Digite o email do destinatário:');
+    
+    if (!emailDestinatario || !emailDestinatario.includes('@')) {
+        alert('Email inválido!');
+        return;
+    }
+    
+    try {
+        // Mostrar loading
+        const btnEmail = event.target;
+        const textoOriginal = btnEmail.innerHTML;
+        btnEmail.disabled = true;
+        btnEmail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        
+        // Fazer requisição para enviar email
+        const response = await fetch(`/admin/nfes/${nfeIdAtual}/enviar-danfe`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email_destinatario: emailDestinatario
+            })
+        });
+        
+        const result = await response.json();
+        
+        // Restaurar botão
+        btnEmail.disabled = false;
+        btnEmail.innerHTML = textoOriginal;
+        
+        if (response.ok && result.success) {
+            // Fechar modal
+            $('#modalAcoesDanfe').modal('hide');
+            
+            // Mostrar mensagem de sucesso
+            alert(`DANFE enviado com sucesso para ${emailDestinatario}!`);
+        } else {
+            alert(`Erro ao enviar email: ${result.message || 'Erro desconhecido'}`);
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar email:', error);
+        alert(`Erro ao enviar email: ${error.message}`);
+    }
+}
+
+// ============================================================================
+// FUNÇÕES IBS/CBS - REFORMA TRIBUTÁRIA
+// ============================================================================
+
+// Verificar regime tributário do emitente e mostrar/ocultar campos IBS/CBS
+async function verificarRegimeTributario() {
+    const clienteId = {{ emitente_data.cliente_id }};
+    
+    try {
+        const response = await fetch(`/admin/api/regime-tributario/${clienteId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const requerIBS = data.requer_ibs_cbs;
+            console.log(`🔍 Regime Tributário: ${data.regime_nome} (CRT=${data.crt})`);
+            console.log(`📋 Requer IBS/CBS: ${requerIBS ? 'SIM' : 'NÃO'}`);
+            
+            // Mostrar/ocultar seções
+            document.getElementById('secao-ibs-cbs').style.display = requerIBS ? 'block' : 'none';
+            document.getElementById('secao-icms60').style.display = requerIBS ? 'block' : 'none';
+            
+            // Atualizar nome do regime
+            const regimeNomeSpan = document.getElementById('regime-nome');
+            if (regimeNomeSpan) {
+                regimeNomeSpan.textContent = data.regime_nome;
+            }
+            
+            // Se mostrar, carregar classificações IBS/CBS
+            if (requerIBS) {
+                await carregarClassificacoesIBS();
+                // Tornar campo obrigatório
+                document.getElementById('select-classificacao-ibs').required = true;
+            }
+        }
+    } catch (error) {
+        console.error('❌ Erro ao verificar regime tributário:', error);
+    }
+}
+
+// Carregar classificações IBS/CBS
+async function carregarClassificacoesIBS() {
+    try {
+        const response = await fetch('/admin/api/classificacoes-ibs-cbs');
+        const data = await response.json();
+        
+        if (data.success) {
+            const select = document.getElementById('select-classificacao-ibs');
+            select.innerHTML = '<option value="">Selecione uma classificação...</option>';
+            
+            data.data.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = `${c.codigo} - ${c.descricao}`;
+                option.dataset.aliquotaIbsUf = c.aliquota_ibs_uf;
+                option.dataset.aliquotaIbsMun = c.aliquota_ibs_mun;
+                option.dataset.aliquotaCbs = c.aliquota_cbs;
+                select.appendChild(option);
+            });
+            
+            console.log(`✅ ${data.data.length} classificações IBS/CBS carregadas`);
+        }
+    } catch (error) {
+        console.error('❌ Erro ao carregar classificações IBS/CBS:', error);
+        const select = document.getElementById('select-classificacao-ibs');
+        select.innerHTML = '<option value="">Erro ao carregar classificações</option>';
+    }
+}
+
+// Auto-preencher alíquotas ao selecionar classificação
+document.addEventListener('DOMContentLoaded', function() {
+    const selectClassificacao = document.getElementById('select-classificacao-ibs');
+    
+    if (selectClassificacao) {
+        selectClassificacao.addEventListener('change', function() {
+            const option = this.options[this.selectedIndex];
+            
+            if (option.value) {
+                document.querySelector('input[name="aliquota_ibs_uf"]').value = option.dataset.aliquotaIbsUf;
+                document.querySelector('input[name="aliquota_ibs_mun"]').value = option.dataset.aliquotaIbsMun;
+                document.querySelector('input[name="aliquota_cbs"]').value = option.dataset.aliquotaCbs;
+                
+                console.log(`✅ Alíquotas atualizadas: IBS UF=${option.dataset.aliquotaIbsUf}%, CBS=${option.dataset.aliquotaCbs}%`);
+            }
+        });
+    }
+});
+
+// Executar verificação ao carregar página
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Verificando regime tributário do emitente...');
+    verificarRegimeTributario();
+});
+
+// ============================================================================
+// FIM FUNÇÕES IBS/CBS
+// ============================================================================
+
+// Verificar se há flash message indicando DANFE gerado
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar se há parâmetros na URL indicando sucesso
+    const urlParams = new URLSearchParams(window.location.search);
+    const danfeGerado = urlParams.get('danfe_gerado');
+    const nfeId = urlParams.get('nfe_id');
+    const danfeCaminho = urlParams.get('danfe_path');
+    
+    if (danfeGerado === 'true' && nfeId && danfeCaminho) {
+        // Mostrar modal automaticamente
+        setTimeout(function() {
+            mostrarModalAcoesDanfe(nfeId, danfeCaminho);
+        }, 500);
+    }
+});
 </script>
 {% endblock %}

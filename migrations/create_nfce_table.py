@@ -117,7 +117,7 @@ def upgrade():
         """))
         
         conn.commit()
-        print("✅ Tabela nfce_emitidas criada com sucesso!")
+        print("[OK] Tabela nfce_emitidas criada com sucesso!")
 
 def downgrade():
     """Remover tabela nfce_emitidas"""
@@ -125,9 +125,9 @@ def downgrade():
     with engine.connect() as conn:
         conn.execute(text("DROP TABLE IF EXISTS nfce_emitidas CASCADE;"))
         conn.commit()
-        print("✅ Tabela nfce_emitidas removida!")
+        print("[OK] Tabela nfce_emitidas removida!")
 
 if __name__ == "__main__":
-    print("🔄 Executando migration: create_nfce_table")
+    print("[?] Executando migration: create_nfce_table")
     upgrade()
-    print("✅ Migration concluída!")
+    print("[OK] Migration concluída!")

@@ -27,7 +27,7 @@ def admin_required():
             try:
                 db = next(get_db())
                 
-                # ✅ CORRIGIDO: current_user.id (não user_id)
+                # [OK] CORRIGIDO: current_user.id (não user_id)
                 user_roles = db.execute(text("""
                     SELECT r.name
                     FROM user_roles ur
@@ -37,19 +37,62 @@ def admin_required():
                 """), {"user_id": current_user.id}).fetchall()
                 
                 if not user_roles:
-                    print(f"❌ Usuário {current_user.username} (ID:{current_user.id}) sem role admin/super_admin")
+                    print(f"[X] Usuário {current_user.username} (ID:{current_user.id}) sem role admin/super_admin")
                     flash('Acesso negado. Você não tem permissão de administrador.', 'danger')
                     return redirect(url_for('auth.login'))
                 
                 role_names = [role.name for role in user_roles]
-                print(f"✅ Acesso admin autorizado para {current_user.username} com roles: {role_names}")
+                print(f"[OK] Acesso admin autorizado para {current_user.username} com roles: {role_names}")
                 return f(*args, **kwargs)
                 
             except Exception as e:
-                print(f"❌ Erro na verificação admin: {e}")
+                print(f"[X] Erro na verificação admin: {e}")
                 import traceback
                 traceback.print_exc()
-                flash('Erro na verificação de permissões.', 'error')
+                flash(f'Erro na verificação de permissões: {str(e)}', 'error')
+                return redirect(url_for('auth.login'))
+            finally:
+                if db is not None:
+                    db.close()
+                    
+        return decorated_function
+    return decorator
+
+def super_admin_required():
+    """Decorator para verificar se o usuário é SUPER ADMIN (apenas)"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash('Acesso não autorizado. Faça login.', 'danger')
+                return redirect(url_for('auth.login'))
+            
+            db = None
+            try:
+                db = next(get_db())
+                
+                # Verificar se tem role Super_Admin
+                user_roles = db.execute(text("""
+                    SELECT r.name
+                    FROM user_roles ur
+                    JOIN roles r ON ur.role_id = r.id
+                    WHERE ur.user_id = :user_id
+                    AND r.name = 'Super_Admin'
+                """), {"user_id": current_user.id}).fetchall()
+                
+                if not user_roles:
+                    print(f"[X] Acesso negado: Usuário {current_user.username} (ID:{current_user.id}) não é Super Admin")
+                    flash('Acesso negado. Esta funcionalidade é exclusiva para Super Administradores.', 'danger')
+                    return redirect(url_for('admin.dashboard'))
+                
+                print(f"[OK] Acesso Super Admin autorizado para {current_user.username}")
+                return f(*args, **kwargs)
+                
+            except Exception as e:
+                print(f"[X] Erro na verificação super admin: {e}")
+                import traceback
+                traceback.print_exc()
+                flash(f'Erro na verificação de permissões: {str(e)}', 'error')
                 return redirect(url_for('auth.login'))
             finally:
                 if db is not None:
@@ -77,7 +120,7 @@ def client_access_required():
             try:
                 db = next(get_db())
                 
-                # ✅ CORRIGIDO: current_user.id (não user_id)
+                # [OK] CORRIGIDO: current_user.id (não user_id)
                 super_admin_check = db.execute(text("""
                     SELECT 1 FROM user_roles ur
                     JOIN roles r ON ur.role_id = r.id
@@ -85,25 +128,25 @@ def client_access_required():
                 """), {"user_id": current_user.id}).first()
                 
                 if super_admin_check:
-                    print(f"✅ Acesso SUPER_ADMIN autorizado para cliente {cliente_id}")
+                    print(f"[OK] Acesso SUPER_ADMIN autorizado para cliente {cliente_id}")
                     return f(*args, **kwargs)
                 
-                # ✅ CORRIGIDO: usar client_id e current_user.id
+                # [OK] CORRIGIDO: usar client_id e current_user.id
                 client_access = db.execute(text("""
                     SELECT 1 FROM user_clients 
                     WHERE user_id = :user_id AND client_id = :cliente_id
                 """), {"user_id": current_user.id, "cliente_id": cliente_id}).first()
                 
                 if not client_access:
-                    print(f"❌ Usuário {current_user.username} (ID:{current_user.id}) sem acesso ao cliente {cliente_id}")
+                    print(f"[X] Usuário {current_user.username} (ID:{current_user.id}) sem acesso ao cliente {cliente_id}")
                     flash('Acesso negado. Você não tem permissão para este cliente.', 'danger')
                     return redirect(url_for('auth.login'))
                 
-                print(f"✅ Acesso permitido ao cliente {cliente_id} para usuário {current_user.username}")
+                print(f"[OK] Acesso permitido ao cliente {cliente_id} para usuário {current_user.username}")
                 return f(*args, **kwargs)
                 
             except Exception as e:
-                print(f"❌ Erro na verificação de acesso: {e}")
+                print(f"[X] Erro na verificação de acesso: {e}")
                 import traceback
                 traceback.print_exc()
                 flash('Erro na verificação de permissões.', 'error')

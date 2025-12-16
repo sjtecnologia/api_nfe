@@ -1,0 +1,256 @@
+lxml carregado com sucesso
+nfelib carregado com sucesso
+SefazService carregado com sucesso
+OK: Serviços locais carregados com sucesso
+
+=== ROTAS REGISTRADAS ===
+GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
+GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
+GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
+GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
+GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
+OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
+GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
+GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
+GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
+GET, HEAD, OPTIONS   /admin/nfe/view/<int:nfe_id>                       -> nfe.view
+OPTIONS, POST        /admin/nfe/generate-danfe/<int:nfe_id>             -> nfe.generate_danfe
+OPTIONS, POST        /admin/nfe/generate-danfe-after-issue              -> nfe.generate_danfe_after_issue
+OPTIONS, POST        /admin/nfe/<int:nfe_id>/enviar-danfe               -> nfe.enviar_danfe_email
+GET, HEAD, OPTIONS, POST /admin/nfe/edit/<int:nfe_id>                       -> nfe.edit
+GET, HEAD, OPTIONS   /admin/nfe/download/<int:nfe_id>                   -> nfe.download
+OPTIONS, POST        /admin/nfe/reenviar/<int:nfe_id>                   -> nfe.reenviar_nfe
+OPTIONS, POST        /admin/nfe/emitir-rascunho/<int:nfe_id>            -> nfe.emitir_rascunho
+OPTIONS, POST        /admin/nfe/compartilhar/<int:nfe_id>               -> nfe.compartilhar_nfe
+GET, HEAD, OPTIONS, POST /admin/nfce/emitir                                 -> nfce.emitir_nfce
+GET, HEAD, OPTIONS   /admin/nfce/list                                   -> nfce.listar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/consultar/<int:nfce_id>                -> nfce.consultar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/download-xml/<int:nfce_id>             -> nfce.download_xml_nfce
+OPTIONS, POST        /admin/nfce/cancelar/<int:nfce_id>                 -> nfce.cancelar_nfce_route
+GET, HEAD, OPTIONS   /admin/nfce/danfce/<int:nfce_id>                   -> nfce.danfce
+GET, HEAD, OPTIONS, POST /admin/produtos/<int:produto_id>/editar            -> admin.editar_produto
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-csv                             -> admin.upload_ncm_csv
+GET, HEAD, OPTIONS, POST /admin/ncms/editar/<int:ncm_id>                    -> admin.edit_ncm
+OPTIONS, POST        /admin/produtos/<int:produto_id>/duplicar          -> admin.duplicar_produto
+GET, HEAD, OPTIONS   /admin/                                            -> admin.admin_home
+GET, HEAD, OPTIONS   /admin/nfes                                        -> admin.list_nfes
+GET, HEAD, OPTIONS   /admin/ncms                                        -> admin.list_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-siscomex                        -> admin.upload_siscomex_json
+GET, HEAD, OPTIONS   /admin/api/ncms/search                             -> admin.api_search_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/novo                                   -> admin.create_ncm
+OPTIONS, POST        /admin/ncms/excluir/<int:ncm_id>                   -> admin.delete_ncm
+GET, HEAD, OPTIONS   /admin/cst                                         -> admin.list_cst
+GET, HEAD, OPTIONS   /admin/cst/novo                                    -> admin.create_cst
+GET, HEAD, OPTIONS, POST /admin/cst/editar/<int:cst_id>                     -> admin.edit_cst
+OPTIONS, POST        /admin/cst/excluir/<int:cst_id>                    -> admin.delete_cst
+GET, HEAD, OPTIONS   /admin/cst/pis-cofins                              -> admin.list_cst_pis_cofins
+GET, HEAD, OPTIONS   /admin/cfops                                       -> admin.list_cfops
+GET, HEAD, OPTIONS   /admin/cfops/novo                                  -> admin.create_cfop
+OPTIONS, POST        /admin/cfops/salvar                                -> admin.save_cfop
+GET, HEAD, OPTIONS   /admin/cfops/editar/<int:cfop_id>                  -> admin.edit_cfop
+OPTIONS, POST        /admin/cfops/excluir/<int:cfop_id>                 -> admin.delete_cfop
+GET, HEAD, OPTIONS   /admin/usuarios                                    -> admin.list_usuarios
+GET, HEAD, OPTIONS, POST /admin/usuarios/novo                               -> admin.create_usuario
+GET, HEAD, OPTIONS, POST /admin/usuarios/editar/<int:usuario_id>            -> admin.edit_usuario
+OPTIONS, POST        /admin/usuarios/excluir/<int:usuario_id>           -> admin.delete_usuario
+GET, HEAD, OPTIONS   /admin/clientes/<int:cliente_id>/visualizar        -> admin.visualizar_cliente
+GET, HEAD, OPTIONS   /admin/csosn                                       -> admin.list_csosn
+GET, HEAD, OPTIONS   /admin/csosn/novo                                  -> admin.create_csosn
+GET, HEAD, OPTIONS, POST /admin/csosn/editar/<int:csosn_id>                 -> admin.edit_csosn
+OPTIONS, POST        /admin/csosn/excluir/<int:csosn_id>                -> admin.delete_csosn
+GET, HEAD, OPTIONS   /admin/regimes-tributarios                         -> admin.list_regimes_tributarios
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/novo                    -> admin.novo_regime_tributario
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/<int:regime_tributario_id>/editar -> admin.novo_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/salvar                  -> admin.salvar_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/<int:regime_tributario_id>/delete -> admin.delete_regime_tributario
+GET, HEAD, OPTIONS   /admin/roles                                       -> admin.list_roles
+GET, HEAD, OPTIONS, POST /admin/roles/novo                                  -> admin.create_role
+GET, HEAD, OPTIONS, POST /admin/roles/editar/<int:role_id>                  -> admin.edit_role
+OPTIONS, POST        /admin/roles/excluir/<int:role_id>                 -> admin.delete_role
+GET, HEAD, OPTIONS   /admin/permissions                                 -> admin.list_permissions
+GET, HEAD, OPTIONS   /admin/permissions/novo                            -> admin.create_permission
+GET, HEAD, OPTIONS, POST /admin/permissions/editar/<int:permission_id>      -> admin.edit_permission
+OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin.delete_permission
+GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
+GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
+GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
+GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
+OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
+GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
+OPTIONS, POST        /admin/backups/delete/<filename>                   -> admin.delete_backup
+GET, HEAD, OPTIONS   /admin/backup                                      -> admin.backup
+GET, HEAD, OPTIONS   /admin/dashboard                                   -> admin.dashboard
+GET, HEAD, OPTIONS   /admin/certificados/vencimento                     -> admin.relatorio_certificados_vencimento
+GET, HEAD, OPTIONS   /admin/dashboard/api/data                          -> admin.dashboard_api_data
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao                         -> admin.list_motivos_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/novo                    -> admin.novo_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/<int:motivo_id>/editar  -> admin.novo_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/<int:motivo_id>/delete  -> admin.delete_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/origens-mercadoria                          -> admin.list_origens_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/novo                     -> admin.create_origem_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/editar/<int:origem_id>   -> admin.edit_origem_mercadoria
+OPTIONS, POST        /admin/origens-mercadoria/excluir/<int:origem_id>  -> admin.delete_origem_mercadoria
+GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes
+GET, HEAD, OPTIONS, POST /admin/clientes/novo                               -> admin.create_cliente
+GET, HEAD, OPTIONS, POST /admin/clientes/<int:cliente_id>/edit              -> admin.edit_cliente
+OPTIONS, POST        /admin/clientes/<int:cliente_id>/delete            -> admin.delete_cliente
+GET, HEAD, OPTIONS   /admin/certificados/novo/<int:cliente_id>          -> admin.create_certificado
+GET, HEAD, OPTIONS   /admin/certificados/<int:certificado_digital_id>/edit/<int:cliente_id> -> admin.edit_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_digital_id>/delete -> admin.delete_certificado
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova/<int:cliente_id>     -> admin.create_regra_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/<int:regra_tributacao_id>/edit -> admin.edit_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -> admin.delete_regra_tributacao
+GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
+OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
+GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
+GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
+OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
+OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
+OPTIONS, POST        /admin/produtos/<int:produto_id>/delete            -> admin.delete_produto
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:cliente_id>              -> admin.list_destinatarios
+OPTIONS, POST        /admin/destinatarios/salvar                        -> admin.salvar_destinatario
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:destinatario_id>/edit    -> admin.edit_destinatario
+GET, HEAD, OPTIONS   /admin/certificados                                -> admin.list_certificados
+OPTIONS, POST        /admin/certificados/salvar                         -> admin.salvar_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_id>/toggle-status -> admin.toggle_certificado_status
+GET, HEAD, OPTIONS   /admin/regras-tributacao                           -> admin.list_regras_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova                      -> admin.nova_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/salvar                    -> admin.salvar_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/excluir/<int:regra_id>    -> admin.excluir_regra_tributacao
+GET, HEAD, OPTIONS   /admin/perfil                                      -> admin.perfil
+GET, HEAD, OPTIONS   /admin/api/buscar-cep/<cep>                        -> admin.buscar_cep
+GET, HEAD, OPTIONS   /admin/health                                      -> admin.admin_health
+OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin.api_sugestao_tributaria
+GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
+GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
+GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
+GET, HEAD, OPTIONS   /admin/faturamento                                 -> admin.list_faturamento
+GET, HEAD, OPTIONS, POST /admin/faturamento/cliente/<int:cliente_id>/editar -> admin.edit_faturamento_cliente
+GET, HEAD, OPTIONS   /admin/faturamento/relatorio-gerencial             -> admin.relatorio_gerencial
+GET, HEAD, OPTIONS, POST /admin/faturamento/extrato/<int:cliente_id>        -> admin.gerar_extrato_cliente
+GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
+GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
+GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
+GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /                                                  -> home.home
+GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
+GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
+GET, HEAD, OPTIONS   /api/llm/ncms/export                               -> llm_api.export_ncms_for_training
+GET, HEAD, OPTIONS   /api/llm/ncms/search                               -> llm_api.search_ncms_for_llm
+GET, HEAD, OPTIONS   /api/llm/ncms/hierarquia/<codigo>                  -> llm_api.get_hierarquia_ncm
+GET, HEAD, OPTIONS   /api/llm/ncms/stats                                -> llm_api.get_ncm_statistics
+GET, HEAD, OPTIONS   /                                                  -> home
+GET, HEAD, OPTIONS   /health                                            -> health_check
+=== FIM DAS ROTAS ===
+
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.0.97:8080
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+lxml carregado com sucesso
+nfelib carregado com sucesso
+SefazService carregado com sucesso
+OK: Serviços locais carregados com sucesso
+
+=== ROTAS REGISTRADAS ===
+GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
+GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
+GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
+GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
+GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
+OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
+GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
+GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
+GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
+GET, HEAD, OPTIONS   /admin/nfe/view/<int:nfe_id>                       -> nfe.view
+OPTIONS, POST        /admin/nfe/generate-danfe/<int:nfe_id>             -> nfe.generate_danfe
+OPTIONS, POST        /admin/nfe/generate-danfe-after-issue              -> nfe.generate_danfe_after_issue
+OPTIONS, POST        /admin/nfe/<int:nfe_id>/enviar-danfe               -> nfe.enviar_danfe_email
+GET, HEAD, OPTIONS, POST /admin/nfe/edit/<int:nfe_id>                       -> nfe.edit
+GET, HEAD, OPTIONS   /admin/nfe/download/<int:nfe_id>                   -> nfe.download
+OPTIONS, POST        /admin/nfe/reenviar/<int:nfe_id>                   -> nfe.reenviar_nfe
+OPTIONS, POST        /admin/nfe/emitir-rascunho/<int:nfe_id>            -> nfe.emitir_rascunho
+OPTIONS, POST        /admin/nfe/compartilhar/<int:nfe_id>               -> nfe.compartilhar_nfe
+GET, HEAD, OPTIONS, POST /admin/nfce/emitir                                 -> nfce.emitir_nfce
+GET, HEAD, OPTIONS   /admin/nfce/list                                   -> nfce.listar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/consultar/<int:nfce_id>                -> nfce.consultar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/download-xml/<int:nfce_id>             -> nfce.download_xml_nfce
+OPTIONS, POST        /admin/nfce/cancelar/<int:nfce_id>                 -> nfce.cancelar_nfce_route
+GET, HEAD, OPTIONS   /admin/nfce/danfce/<int:nfce_id>                   -> nfce.danfce
+GET, HEAD, OPTIONS, POST /admin/produtos/<int:produto_id>/editar            -> admin.editar_produto
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-csv                             -> admin.upload_ncm_csv
+GET, HEAD, OPTIONS, POST /admin/ncms/editar/<int:ncm_id>                    -> admin.edit_ncm
+OPTIONS, POST        /admin/produtos/<int:produto_id>/duplicar          -> admin.duplicar_produto
+GET, HEAD, OPTIONS   /admin/                                            -> admin.admin_home
+GET, HEAD, OPTIONS   /admin/nfes                                        -> admin.list_nfes
+GET, HEAD, OPTIONS   /admin/ncms                                        -> admin.list_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-siscomex                        -> admin.upload_siscomex_json
+GET, HEAD, OPTIONS   /admin/api/ncms/search                             -> admin.api_search_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/novo                                   -> admin.create_ncm
+OPTIONS, POST        /admin/ncms/excluir/<int:ncm_id>                   -> admin.delete_ncm
+GET, HEAD, OPTIONS   /admin/cst                                         -> admin.list_cst
+GET, HEAD, OPTIONS   /admin/cst/novo                                    -> admin.create_cst
+GET, HEAD, OPTIONS, POST /admin/cst/editar/<int:cst_id>                     -> admin.edit_cst
+OPTIONS, POST        /admin/cst/excluir/<int:cst_id>                    -> admin.delete_cst
+GET, HEAD, OPTIONS   /admin/cst/pis-cofins                              -> admin.list_cst_pis_cofins
+GET, HEAD, OPTIONS   /admin/cfops                                       -> admin.list_cfops
+GET, HEAD, OPTIONS   /admin/cfops/novo                                  -> admin.create_cfop
+OPTIONS, POST        /admin/cfops/salvar                                -> admin.save_cfop
+GET, HEAD, OPTIONS   /admin/cfops/editar/<int:cfop_id>                  -> admin.edit_cfop
+OPTIONS, POST        /admin/cfops/excluir/<int:cfop_id>                 -> admin.delete_cfop
+GET, HEAD, OPTIONS   /admin/usuarios                                    -> admin.list_usuarios
+GET, HEAD, OPTIONS, POST /admin/usuarios/novo                               -> admin.create_usuario
+GET, HEAD, OPTIONS, POST /admin/usuarios/editar/<int:usuario_id>            -> admin.edit_usuario
+OPTIONS, POST        /admin/usuarios/excluir/<int:usuario_id>           -> admin.delete_usuario
+GET, HEAD, OPTIONS   /admin/clientes/<int:cliente_id>/visualizar        -> admin.visualizar_cliente
+GET, HEAD, OPTIONS   /admin/csosn                                       -> admin.list_csosn
+GET, HEAD, OPTIONS   /admin/csosn/novo                                  -> admin.create_csosn
+GET, HEAD, OPTIONS, POST /admin/csosn/editar/<int:csosn_id>                 -> admin.edit_csosn
+OPTIONS, POST        /admin/csosn/excluir/<int:csosn_id>                -> admin.delete_csosn
+GET, HEAD, OPTIONS   /admin/regimes-tributarios                         -> admin.list_regimes_tributarios
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/novo                    -> admin.novo_regime_tributario
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/<int:regime_tributario_id>/editar -> admin.novo_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/salvar                  -> admin.salvar_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/<int:regime_tributario_id>/delete -> admin.delete_regime_tributario
+GET, HEAD, OPTIONS   /admin/roles                                       -> admin.list_roles
+GET, HEAD, OPTIONS, POST /admin/roles/novo                                  -> admin.create_role
+GET, HEAD, OPTIONS, POST /admin/roles/editar/<int:role_id>                  -> admin.edit_role
+OPTIONS, POST        /admin/roles/excluir/<int:role_id>                 -> admin.delete_role
+GET, HEAD, OPTIONS   /admin/permissions                                 -> admin.list_permissions
+GET, HEAD, OPTIONS   /admin/permissions/novo                            -> admin.create_permission
+GET, HEAD, OPTIONS, POST /admin/permissions/editar/<int:permission_id>      -> admin.edit_permission
+OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin.delete_permission
+GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
+GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
+GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
+GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
+OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
+GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
+OPTIONS, POST        /admin/backups/delete/<filename>                   -> admin.delete_backup
+GET, HEAD, OPTIONS   /admin/backup                                      -> admin.backup
+GET, HEAD, OPTIONS   /admin/dashboard                                   -> admin.dashboard
+GET, HEAD, OPTIONS   /admin/certificados/vencimento                     -> admin.relatorio_certificados_vencimento
+GET, HEAD, OPTIONS   /admin/dashboard/api/data                          -> admin.dashboard_api_data
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao                         -> admin.list_motivos_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/novo                    -> admin.novo_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/<int:motivo_id>/editar  -> admin.novo_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao * Debugger is active!
+ * Debugger PIN: 827-659-244

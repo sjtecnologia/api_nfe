@@ -36,9 +36,9 @@ def inicializar_componentes():
             buscador_legal = BuscadorLeiComplementar()
             gerador_justificativa = GeradorJustificativa()
             formatador = FormatadorResposta()
-            print("✅ Componentes da IA NCM inicializados com sucesso")
+            print("[OK] Componentes da IA NCM inicializados com sucesso")
         except Exception as e:
-            print(f"❌ Erro ao inicializar componentes da IA: {e}")
+            print(f"[X] Erro ao inicializar componentes da IA: {e}")
             raise
 
 
@@ -477,7 +477,7 @@ def registrar_rotas_ncm_ia(app):
         app: Instância do Flask app
     """
     app.register_blueprint(ncm_ia_bp)
-    print("✅ Rotas da IA NCM registradas: /api/ncm/*")
+    print("[OK] Rotas da IA NCM registradas: /api/ncm/*")
 
 
 # Para teste standalone
@@ -487,8 +487,8 @@ if __name__ == '__main__':
     app = Flask(__name__)
     registrar_rotas_ncm_ia(app)
     
-    print("\n🚀 Servidor de teste iniciado")
-    print("📌 Rotas disponíveis:")
+    print("\n[START] Servidor de teste iniciado")
+    print("[?] Rotas disponíveis:")
     print("   POST /api/ncm/sugerir - Sugerir NCM")
     print("   GET  /api/ncm/validar/<ncm> - Validar NCM")
     print("   GET  /api/ncm/embasamento/<ncm> - Obter embasamento")

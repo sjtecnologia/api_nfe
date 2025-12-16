@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Login - NfeSjtec{% endblock %}
+{% block title %}Login - EmiteMax{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -15,18 +15,18 @@
                 <!-- ✅ HEADER COM LOGO E BRANDING -->
                 <div class="card-header text-center py-4" style="background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%); border: none;">
                     <div class="logo-container mb-3">
-                        <div class="logo-circle mx-auto" style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
-                            <i class="fas fa-file-invoice" style="font-size: 2.5rem; color: white; text-shadow: 0 2px 10px rgba(0,0,0,0.3);"></i>
-                        </div>
+                        <img src="{{ url_for('static', filename='img/emitemax-logo.png') }}" 
+                             alt="EmiteMax" 
+                             style="width: 120px; height: auto; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
                     </div>
                     <h2 class="text-white mb-1" style="font-weight: 600; text-shadow: 0 2px 10px rgba(0,0,0,0.3);">
-                        NfeSjtec
+                        EmiteMax
                     </h2>
                     <p class="text-white mb-0" style="opacity: 0.9; font-size: 0.95rem;">
-                        Sistema de Nota Fiscal Eletrônica
+                        Sistema de Emissão de Notas Fiscais
                     </p>
                     <small class="text-white" style="opacity: 0.7;">
-                        SJ Tecnologia - v2.0
+                        v2.0
                     </small>
                 </div>
                 

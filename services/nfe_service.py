@@ -363,7 +363,7 @@ class NFeService:
             emitente_query = text("""
                 SELECT razao_social, nome_fantasia, cnpj, inscricao_estadual,
                        logradouro, numero, bairro, cep, nome_municipio, 
-                       codigo_municipio, uf
+                       codigo_municipio, uf, regime_tributario_id
                 FROM clientes 
                 WHERE ativo = true 
                 LIMIT 1
@@ -382,7 +382,7 @@ class NFeService:
                 else:
                     emitente_cols = ['razao_social', 'nome_fantasia', 'cnpj', 'inscricao_estadual',
                                    'logradouro', 'numero', 'bairro', 'cep', 'nome_municipio', 
-                                   'codigo_municipio', 'uf']
+                                   'codigo_municipio', 'uf', 'regime_tributario_id']
                     emitente_data = {col: emitente_result[i] for i, col in enumerate(emitente_cols)}
             except Exception as e:
                 print(f"AVISO: Erro conversão emitente: {e}")
@@ -515,24 +515,65 @@ class NFeService:
     def _criar_nova_nfe(self, resultado: Dict[str, Any], dados_nfe: Dict[str, Any], itens: list, cliente_id: int, emitente_data: Dict[str, Any], destinatario_data: Dict[str, Any]) -> Dict[str, Any]:
         """Cria nova NFe no banco"""
         try:
+            print(f"\n{'='*80}")
+            print(f"🆕 CRIANDO NOVA NFe NO BANCO")
+            print(f"{'='*80}")
+            print(f"📋 dados_nfe recebidos: {dados_nfe}")
+            print(f"📦 Total de itens: {len(itens)}")
+            print(f"{'='*80}\n")
+            
             if not self.db:
                 return {'success': False, 'message': 'Conexão de banco não disponível'}
                 
             from sqlalchemy import text
             
+            # Obter série, modelo e número da NFe (fornecido pelo usuário)
+            serie = int(dados_nfe.get('serie', 1))
+            modelo = '55'  # 55=NFe
+            numero_nfe = int(dados_nfe.get('numero_nfe', 1))
+            
+            print(f"🔢 VALORES EXTRAÍDOS:")
+            print(f"   - Série: {serie}")
+            print(f"   - Modelo: {modelo}")
+            print(f"   - Número NFe: {numero_nfe}")
+            print(f"   - Data Emissão: {dados_nfe.get('dataEmissao')}")
+            
+            # Validar se o número já existe
+            try:
+                existe = self.db.execute(
+                    text("""
+                        SELECT COUNT(*) 
+                        FROM nfe_emitidas 
+                        WHERE cliente_id = :cliente_id 
+                          AND modelo = :modelo 
+                          AND serie = :serie 
+                          AND numero = :numero
+                    """),
+                    {"cliente_id": cliente_id, "modelo": modelo, "serie": serie, "numero": numero_nfe}
+                ).scalar()
+                
+                if existe > 0:
+                    return {
+                        'success': False, 
+                        'message': f'Número {numero_nfe} da série {serie} já existe! Escolha outro número.'
+                    }
+            except Exception as e:
+                print(f"⚠️ Erro ao validar número existente: {e}")
+            
             # Calcular valores
             valor_total = sum(float(item.get('valor_total', 0)) for item in itens)
+            print(f"📊 Dados para INSERT: numero={numero_nfe}, serie={serie}, valor_total={valor_total}")
             
             # Inserir nova NFe
             insert_query = text("""
                 INSERT INTO nfe_emitidas (
-                    cliente_id, numero_nfe, serie, chave_acesso, protocolo_sefaz,
+                    cliente_id, numero, serie, modelo, chave_acesso, protocolo_sefaz,
                     data_emissao, data_autorizacao, status, valor_total,
                     natureza_operacao, tipo_nfe, finalidade_emissao,
                     destinatario_razao_social, destinatario_cnpj_cpf,
                     informacoes_adicionais, mensagem_sefaz, json_nfe
                 ) VALUES (
-                    :cliente_id, :numero_nfe, :serie, :chave_acesso, :protocolo_sefaz,
+                    :cliente_id, :numero, :serie, :modelo, :chave_acesso, :protocolo_sefaz,
                     :data_emissao, :data_autorizacao, :status, :valor_total,
                     :natureza_operacao, :tipo_nfe, :finalidade_emissao,
                     :destinatario_razao_social, :destinatario_cnpj_cpf,
@@ -550,6 +591,9 @@ class NFeService:
             else:
                 dt = datetime.now()
             
+            print(f"📅 Data emissão: {dt}")
+            print(f"🔢 Número NFe: {numero_nfe}, Série: {serie}, Modelo: {modelo}")
+            
             json_nfe = {
                 'form_data': dados_nfe,
                 'items': itens,
@@ -559,8 +603,9 @@ class NFeService:
             
             nfe_result = self.db.execute(insert_query, {
                 'cliente_id': cliente_id,
-                'numero_nfe': 1,  # Seria incrementado em produção
-                'serie': dados_nfe.get('serie', '1'),
+                'numero': numero_nfe,  # Número obtido pela função get_proximo_numero_nfe
+                'serie': serie,
+                'modelo': modelo,  # 55=NFe
                 'chave_acesso': resultado.get('chave_acesso'),
                 'protocolo_sefaz': resultado.get('protocolo'),
                 'data_emissao': dt,
@@ -958,11 +1003,17 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         import uuid
         
         # OK: PROCESSAR DADOS BÁSICOS DA NFE
-        serie = form_data.get('serie', '1')
-        numero_nfe = 1  # Será determinado pelo banco
+        serie = int(form_data.get('serie', '1'))
+        modelo = '55'  # 55=NFe, 65=NFCe
         tp_nf = form_data.get('tpNF', '1')  # 1=Saída
         fin_nfe = form_data.get('finNFe', '1')  # 1=Normal
         nat_op = form_data.get('natOp', 'Venda de Mercadorias')
+        
+        # Obter número da NFe fornecido pelo usuário
+        from sqlalchemy import text
+        numero_nfe = int(form_data.get('numero_nfe', 1))
+        print(f" [✓] Número da NFe fornecido: {numero_nfe} (série {serie})")
+        # Nota: Validação de número duplicado é feita em _criar_nova_nfe()
         
         # Data de emissão
         data_emissao_str = form_data.get('dataEmissao')
@@ -1096,7 +1147,12 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         
         etree.SubElement(emit, "IE").text = emitente_data.get('inscricao_estadual', '')
         etree.SubElement(emit, "CNAE").text = "6201500"  # Desenvolvimento de programas de computador sob encomenda
-        etree.SubElement(emit, "CRT").text = "3"  # 3=Regime Normal
+        
+        # CRT - Código de Regime Tributário
+        # 1=Simples Nacional, 2=Simples Nacional - excesso, 3=Regime Normal
+        regime_tributario_id = emitente_data.get('regime_tributario_id', 3)
+        crt = "1" if regime_tributario_id == 1 else "3"  # 1=Simples Nacional, 3=Regime Normal
+        etree.SubElement(emit, "CRT").text = crt
         
         # dest
         dest = etree.SubElement(inf_nfe, "dest")
@@ -1158,27 +1214,51 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             
             # ICMS
             icms = etree.SubElement(imposto, "ICMS")
-            cst_icms = item.get('cst_icms', '00')
             
-            if cst_icms in ['00', '10', '20']:
-                icms_tributado = etree.SubElement(icms, f"ICMS{cst_icms}")
-                etree.SubElement(icms_tributado, "orig").text = str(item.get('origem', '0'))
-                etree.SubElement(icms_tributado, "CST").text = cst_icms
+            # Verificar se é Simples Nacional (CRT = 1)
+            is_simples_nacional = (crt == "1")
+            
+            if is_simples_nacional:
+                # SIMPLES NACIONAL - Usar CSOSN
+                csosn = item.get('csosn_icms', '102')  # 102=Tributada pelo Simples Nacional sem permissão de crédito
+                icms_sn = etree.SubElement(icms, f"ICMSSN{csosn}")
+                etree.SubElement(icms_sn, "orig").text = str(item.get('origem', '0'))
+                etree.SubElement(icms_sn, "CSOSN").text = csosn
                 
-                if cst_icms == '00':  # Tributada integralmente
-                    bc_icms = float(item.get('bc_icms', valor_total))
-                    aliq_icms = float(item.get('aliquota_icms', 18))
-                    valor_icms = float(item.get('valor_icms', bc_icms * aliq_icms / 100))
-                    
-                    etree.SubElement(icms_tributado, "modBC").text = "0"  # 0=Margem Valor Agregado (%)
-                    etree.SubElement(icms_tributado, "vBC").text = f"{bc_icms:.2f}"
-                    etree.SubElement(icms_tributado, "pICMS").text = f"{aliq_icms:.2f}"
-                    etree.SubElement(icms_tributado, "vICMS").text = f"{valor_icms:.2f}"
+                # CSOSN 102, 103, 300, 400 = Sem cálculo de ICMS
+                # CSOSN 101, 201, 202, 203, 500, 900 = Com cálculo de ICMS
+                if csosn in ['101', '201', '202', '203', '500', '900']:
+                    # Tributado - calcular ICMS
+                    aliq_icms = float(item.get('aliquota_icms', 0))
+                    if aliq_icms > 0:
+                        bc_icms = float(item.get('bc_icms', valor_total))
+                        valor_icms = bc_icms * aliq_icms / 100
+                        etree.SubElement(icms_sn, "pCredSN").text = f"{aliq_icms:.2f}"
+                        etree.SubElement(icms_sn, "vCredICMSSN").text = f"{valor_icms:.2f}"
             else:
-                # CST não tributado
-                icms_nt = etree.SubElement(icms, "ICMS40")
-                etree.SubElement(icms_nt, "orig").text = str(item.get('origem', '0'))
-                etree.SubElement(icms_nt, "CST").text = "40"  # Isenta
+                # REGIME NORMAL - Usar CST
+                cst_icms = item.get('cst_icms', '00')
+                
+                if cst_icms in ['00', '10', '20']:
+                    # Tributado
+                    icms_tributado = etree.SubElement(icms, f"ICMS{cst_icms}")
+                    etree.SubElement(icms_tributado, "orig").text = str(item.get('origem', '0'))
+                    etree.SubElement(icms_tributado, "CST").text = cst_icms
+                    
+                    aliq_icms = float(item.get('aliquota_icms', 0))
+                    if aliq_icms > 0 and cst_icms == '00':  # Tributada integralmente
+                        bc_icms = float(item.get('bc_icms', valor_total))
+                        valor_icms = bc_icms * aliq_icms / 100
+                        
+                        etree.SubElement(icms_tributado, "modBC").text = "0"  # 0=Margem Valor Agregado (%)
+                        etree.SubElement(icms_tributado, "vBC").text = f"{bc_icms:.2f}"
+                        etree.SubElement(icms_tributado, "pICMS").text = f"{aliq_icms:.2f}"
+                        etree.SubElement(icms_tributado, "vICMS").text = f"{valor_icms:.2f}"
+                else:
+                    # CST não tributado (40, 41, 50, 51, 60)
+                    icms_nt = etree.SubElement(icms, "ICMS40")
+                    etree.SubElement(icms_nt, "orig").text = str(item.get('origem', '0'))
+                    etree.SubElement(icms_nt, "CST").text = cst_icms or "41"  # 41=Não tributada
             
             # PIS
             pis = etree.SubElement(imposto, "PIS")
@@ -1197,7 +1277,9 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         
         # ICMSTot
         icms_tot = etree.SubElement(total, "ICMSTot")
-        etree.SubElement(icms_tot, "vBC").text = f"{total_produtos:.2f}"
+        # vBC deve ser 0 se não houver ICMS calculado
+        vBC = total_produtos if total_icms > 0 else 0.00
+        etree.SubElement(icms_tot, "vBC").text = f"{vBC:.2f}"
         etree.SubElement(icms_tot, "vICMS").text = f"{total_icms:.2f}"
         etree.SubElement(icms_tot, "vICMSDeson").text = "0.00"
         etree.SubElement(icms_tot, "vFCP").text = "0.00"
@@ -1219,7 +1301,104 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         
         # transp
         transp = etree.SubElement(inf_nfe, "transp")
-        etree.SubElement(transp, "modFrete").text = str(form_data.get('modFrete', '9'))  # 9=Sem Ocorrência de Transporte
+        mod_frete = str(form_data.get('modFrete', '9'))
+        etree.SubElement(transp, "modFrete").text = mod_frete
+        
+        # Adicionar dados da transportadora se modalidade != 9 (Sem transporte)
+        if mod_frete != '9':
+            transportadora_nome = form_data.get('transportadoraNome', '').strip()
+            transportadora_cnpj = form_data.get('transportadoraCnpjCpf', '').strip()
+            
+            if transportadora_nome or transportadora_cnpj:
+                transporta = etree.SubElement(transp, "transporta")
+                
+                # CNPJ ou CPF da transportadora
+                if transportadora_cnpj:
+                    cnpj_limpo = ''.join(filter(str.isdigit, transportadora_cnpj))
+                    if len(cnpj_limpo) == 14:  # CNPJ
+                        etree.SubElement(transporta, "CNPJ").text = cnpj_limpo
+                    elif len(cnpj_limpo) == 11:  # CPF
+                        etree.SubElement(transporta, "CPF").text = cnpj_limpo
+                
+                # Nome/Razão Social
+                if transportadora_nome:
+                    etree.SubElement(transporta, "xNome").text = transportadora_nome[:60]
+                
+                # Inscrição Estadual (opcional)
+                transportadora_ie = form_data.get('transportadoraIE', '').strip()
+                if transportadora_ie:
+                    etree.SubElement(transporta, "IE").text = transportadora_ie
+                
+                # Endereço
+                transportadora_endereco = form_data.get('transportadoraEndereco', '').strip()
+                if transportadora_endereco:
+                    etree.SubElement(transporta, "xEnder").text = transportadora_endereco[:60]
+                
+                # Município
+                transportadora_municipio = form_data.get('transportadoraMunicipio', '').strip()
+                if transportadora_municipio:
+                    etree.SubElement(transporta, "xMun").text = transportadora_municipio[:60]
+                
+                # UF
+                transportadora_uf = form_data.get('transportadoraUF', '').strip()
+                if transportadora_uf:
+                    etree.SubElement(transporta, "UF").text = transportadora_uf
+            
+            # RNTC (ANTT) - Registro Nacional de Transportador de Carga
+            # TEMPORARIAMENTE DESABILITADO: nfelib 2.2.0 não reconhece o campo <RNTC>
+            # Causava erro: "Unknown property Transp:RNTC" impedindo geração de DANFE oficial
+            # TODO: Reativar quando nfelib for atualizada ou usar campo infAdic
+            # transportadora_antt = form_data.get('transportadoraANTT', '').strip()
+            # if transportadora_antt:
+            #     etree.SubElement(transp, "RNTC").text = transportadora_antt[:20]
+            
+            # Dados do veículo
+            veiculo_placa = form_data.get('veiculoPlaca', '').strip()
+            veiculo_uf = form_data.get('veiculoUF', '').strip()
+            
+            if veiculo_placa:
+                vei_transp = etree.SubElement(transp, "veicTransp")
+                etree.SubElement(vei_transp, "placa").text = veiculo_placa.replace('-', '').upper()[:7]
+                if veiculo_uf:
+                    etree.SubElement(vei_transp, "UF").text = veiculo_uf
+            
+            # Dados dos volumes
+            volume_qtd = form_data.get('volumeQuantidade', '').strip()
+            volume_especie = form_data.get('volumeEspecie', '').strip()
+            volume_marca = form_data.get('volumeMarca', '').strip()
+            volume_numeracao = form_data.get('volumeNumeracao', '').strip()
+            volume_peso_bruto = form_data.get('volumePesoBruto', '').strip()
+            volume_peso_liquido = form_data.get('volumePesoLiquido', '').strip()
+            
+            if volume_qtd or volume_especie or volume_marca or volume_numeracao or volume_peso_bruto or volume_peso_liquido:
+                vol = etree.SubElement(transp, "vol")
+                
+                if volume_qtd:
+                    try:
+                        etree.SubElement(vol, "qVol").text = str(int(float(volume_qtd)))
+                    except (ValueError, TypeError):
+                        pass
+                
+                if volume_especie:
+                    etree.SubElement(vol, "esp").text = volume_especie[:60]
+                
+                if volume_marca:
+                    etree.SubElement(vol, "marca").text = volume_marca[:60]
+                
+                if volume_numeracao:
+                    etree.SubElement(vol, "nVol").text = volume_numeracao[:60]
+                
+                if volume_peso_bruto:
+                    try:
+                        etree.SubElement(vol, "pesoB").text = f"{float(volume_peso_bruto):.3f}"
+                    except (ValueError, TypeError):
+                        pass
+                
+                if volume_peso_liquido:
+                    try:
+                        etree.SubElement(vol, "pesoL").text = f"{float(volume_peso_liquido):.3f}"
+                    except (ValueError, TypeError):
+                        pass
         
         # pag
         pag = etree.SubElement(inf_nfe, "pag")
@@ -1230,6 +1409,16 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         # infAdic
         inf_adic = etree.SubElement(inf_nfe, "infAdic")
         inf_compl = form_data.get('infCpl', '')
+        
+        # Adicionar RNTC/ANTT nas informações adicionais (workaround para nfelib 2.2.0)
+        transportadora_antt = form_data.get('transportadoraANTT', '').strip()
+        if transportadora_antt:
+            antt_info = f"RNTC/ANTT da Transportadora: {transportadora_antt}"
+            if inf_compl:
+                inf_compl = f"{inf_compl}. {antt_info}"
+            else:
+                inf_compl = antt_info
+        
         if inf_compl:
             etree.SubElement(inf_adic, "infCpl").text = str(inf_compl)
         

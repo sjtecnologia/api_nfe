@@ -17,7 +17,7 @@ def home():
         # Se tem apenas 1 cliente, redirecionar diretamente
         if len(current_user.clients) == 1:
             cliente_id = current_user.clients[0]['cliente_id']
-            print(f"🔄 Redirecionando usuário {current_user.username} para cliente {cliente_id}")
+            print(f"[?] Redirecionando usuário {current_user.username} para cliente {cliente_id}")
             return redirect(url_for('cliente.dashboard', cliente_id=cliente_id))
         
         # Se tem múltiplos clientes, mostrar seleção

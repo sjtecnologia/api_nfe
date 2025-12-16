@@ -18,10 +18,10 @@ class User(UserMixin):
 
     def is_admin(self):
         """Verifica se o usuário é administrador da plataforma"""
-        admin_roles = ['admin']
-        return any(role.get('name', '').lower() == 'admin' for role in self.roles)
+        return any(role.get('name', '') in ['Admin', 'Super_Admin'] for role in self.roles)
     def is_super_admin(self):
-        return any(role.get('name', '').lower() == 'super_admin' for role in self.roles)
+        """Verifica se o usuário tem role Super_Admin"""
+        return any(role.get('name', '') == 'Super_Admin' for role in self.roles)
 
     def get_accessible_clients(self):
         """Retorna lista de clientes que o usuário pode acessar"""
@@ -99,7 +99,7 @@ class User(UserMixin):
                 clients=clients
             )
         except Exception as e:
-            print(f"❌ Erro ao carregar usuário {user_id}: {e}")
+            print(f"[X] Erro ao carregar usuário {user_id}: {e}")
             return None
         finally:
             if db is not None:
@@ -117,7 +117,7 @@ class User(UserMixin):
                 WHERE u.username = :username AND u._is_active = true
             """), {"username": username}).first()
             if user_data and check_password_hash(user_data.password_hash, password):
-                print(f"✅ Usuário autenticado: {username}")
+                print(f"[OK] Usuário autenticado: {username}")
 
                 # Buscar roles do usuário
                 roles_data = db.execute(text("""
@@ -146,10 +146,10 @@ class User(UserMixin):
                     clients=clients
                 )
             else:
-                print(f"❌ Falha na autenticação: {username}")
+                print(f"[X] Falha na autenticação: {username}")
                 return None
         except Exception as e:
-            print(f"❌ Erro na autenticação: {e}")
+            print(f"[X] Erro na autenticação: {e}")
             return None
         finally:
             if db is not None:

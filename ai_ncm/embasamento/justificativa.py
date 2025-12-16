@@ -179,29 +179,29 @@ class GeradorJustificativa:
         
         if confianca >= 0.9:
             observacoes.append(
-                "✅ Alta confiança na classificação. Recomenda-se uso direto."
+                "[OK] Alta confiança na classificação. Recomenda-se uso direto."
             )
         elif confianca >= 0.75:
             observacoes.append(
-                "⚠️  Boa confiança na classificação. Recomenda-se validação com contador."
+                "[!]  Boa confiança na classificação. Recomenda-se validação com contador."
             )
         elif confianca >= 0.5:
             observacoes.append(
-                "⚠️  Confiança média. **Validação obrigatória** com contador ou consultor fiscal."
+                "[!]  Confiança média. **Validação obrigatória** com contador ou consultor fiscal."
             )
         else:
             observacoes.append(
-                "❌ Baixa confiança na classificação. **Consulta à RFB recomendada**."
+                "[X] Baixa confiança na classificação. **Consulta à RFB recomendada**."
             )
         
         # Observação geral
         observacoes.append(
-            "📌 A classificação NCM é de responsabilidade do contribuinte. "
+            "[?] A classificação NCM é de responsabilidade do contribuinte. "
             "Em caso de dúvida, consulte a Receita Federal ou um despachante aduaneiro."
         )
         
         observacoes.append(
-            "📌 Esta sugestão foi gerada por inteligência artificial com base na "
+            "[?] Esta sugestão foi gerada por inteligência artificial com base na "
             "Lei Complementar 214/2025 e na tabela NCM vigente."
         )
         
@@ -249,14 +249,14 @@ class GeradorJustificativa:
         
         # Cabeçalho
         classificacao = justificativa.get('classificacao', {})
-        output.append("# 📋 JUSTIFICATIVA DE CLASSIFICAÇÃO NCM\n")
+        output.append("# [LIST] JUSTIFICATIVA DE CLASSIFICAÇÃO NCM\n")
         output.append(f"**NCM:** {classificacao.get('ncm', 'N/A')}")
         output.append(f"**Descrição:** {classificacao.get('descricao_oficial', 'N/A')}")
         output.append(f"**Confiança:** {classificacao.get('confianca', 'N/A')} ({classificacao.get('nivel_confianca', 'N/A')})")
         output.append("")
         
         # Fundamentação Técnica
-        output.append("## 🔍 Fundamentação Técnica\n")
+        output.append("## [SEARCH] Fundamentação Técnica\n")
         for item in justificativa.get('fundamentacao_tecnica', []):
             output.append(item)
         output.append("")
@@ -269,13 +269,13 @@ class GeradorJustificativa:
             output.append(f"*{artigo.get('relevancia', '')}*\n")
         
         # Observações
-        output.append("## ⚠️  Observações Importantes\n")
+        output.append("## [!]  Observações Importantes\n")
         for obs in justificativa.get('observacoes', []):
             output.append(obs)
         output.append("")
         
         # Próximos Passos
-        output.append("## 🎯 Próximos Passos Recomendados\n")
+        output.append("## [?] Próximos Passos Recomendados\n")
         for passo in justificativa.get('proximos_passos', []):
             output.append(passo)
         output.append("")

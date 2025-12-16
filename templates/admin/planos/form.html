@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if plano else 'Novo' }} Plano{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-box-open"></i> 
+                {{ 'Editar Plano' if plano else 'Novo Plano' }}
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('planos.list_planos') }}">Planos</a></li>
+                    <li class="breadcrumb-item active">{{ 'Editar' if plano else 'Novo' }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('planos.editar_plano', plano_id=plano.plano_id) if plano else url_for('planos.criar_plano') }}">
+                        
+                        <!-- Nome e Descrição -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Nome do Plano <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="nome" 
+                                       value="{{ plano.nome if plano else '' }}" required>
+                                <small class="text-muted">Ex: Pacote Básico, Intermediário, etc.</small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Tipo de Plano <span class="text-danger">*</span></label>
+                                <select class="form-select" name="tipo_plano" id="tipo_plano" required onchange="updateFormFields()">
+                                    <option value="AVULSO" {{ 'selected' if plano and plano.tipo_plano == 'AVULSO' else '' }}>
+                                        Avulso (Por NFe)
+                                    </option>
+                                    <option value="PACOTE" {{ 'selected' if plano and plano.tipo_plano == 'PACOTE' else '' }}>
+                                        Pacote (Mensal)
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Descrição</label>
+                            <textarea class="form-control" name="descricao" rows="2">{{ plano.descricao if plano else '' }}</textarea>
+                        </div>
+
+                        <hr>
+
+                        <!-- Valores -->
+                        <div class="row">
+                            <div class="col-md-4 mb-3" id="campo_quantidade">
+                                <label class="form-label">Quantidade de NFes</label>
+                                <input type="number" class="form-control" name="quantidade_nfes" 
+                                       value="{{ plano.quantidade_nfes if plano and plano.quantidade_nfes else '' }}"
+                                       min="1" placeholder="Deixe vazio para ilimitado">
+                                <small class="text-muted">Vazio = Ilimitado</small>
+                            </div>
+
+                            <div class="col-md-4 mb-3" id="campo_valor_mensal">
+                                <label class="form-label">Valor Mensal <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="text" class="form-control" name="valor_mensal" 
+                                           value="{{ '%.2f'|format(plano.valor_mensal|float) if plano else '0.00' }}"
+                                           required>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Valor por NFe</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">R$</span>
+                                    <input type="text" class="form-control" name="valor_por_nfe" 
+                                           value="{{ '%.2f'|format(plano.valor_por_nfe|float) if plano else '0.00' }}">
+                                </div>
+                                <small class="text-muted">Para avulso ou excedente</small>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Configurações -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Ordem de Exibição</label>
+                                <input type="number" class="form-control" name="ordem_exibicao" 
+                                       value="{{ plano.ordem_exibicao if plano else 0 }}" min="0">
+                                <small class="text-muted">Menor número aparece primeiro</small>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check form-switch mt-4">
+                                    <input class="form-check-input" type="checkbox" name="ativo" id="ativo"
+                                           {{ 'checked' if not plano or plano.ativo else '' }}>
+                                    <label class="form-check-label" for="ativo">
+                                        Plano Ativo
+                                    </label>
+                                </div>
+                                <small class="text-muted">Apenas planos ativos podem ser contratados</small>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('planos.list_planos') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {{ 'Atualizar' if plano else 'Criar' }} Plano
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel de Ajuda -->
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> Ajuda
+                </div>
+                <div class="card-body">
+                    <h6>Tipo de Plano:</h6>
+                    <ul class="small">
+                        <li><strong>Avulso:</strong> Cliente paga por cada NFe emitida</li>
+                        <li><strong>Pacote:</strong> Valor fixo mensal com limite de NFes</li>
+                    </ul>
+
+                    <h6 class="mt-3">Quantidade de NFes:</h6>
+                    <ul class="small">
+                        <li>Para pacotes: defina o limite mensal</li>
+                        <li>Deixe vazio para NFes ilimitadas</li>
+                        <li>Não se aplica a planos avulsos</li>
+                    </ul>
+
+                    <h6 class="mt-3">Valores:</h6>
+                    <ul class="small">
+                        <li><strong>Valor Mensal:</strong> Valor fixo cobrado por mês</li>
+                        <li><strong>Valor por NFe:</strong> Usado em planos avulsos ou para cobrar excedente em pacotes</li>
+                    </ul>
+                </div>
+            </div>
+
+            {% if plano %}
+            <div class="card mt-3 border-info">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-chart-bar"></i> Estatísticas
+                </div>
+                <div class="card-body">
+                    <p class="mb-1">
+                        <strong>Criado em:</strong><br>
+                        {{ plano.created_at.strftime('%d/%m/%Y %H:%M') if plano.created_at else 'N/A' }}
+                    </p>
+                    <p class="mb-0">
+                        <strong>Última atualização:</strong><br>
+                        {{ plano.updated_at.strftime('%d/%m/%Y %H:%M') if plano.updated_at else 'N/A' }}
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function updateFormFields() {
+    const tipoPLano = document.getElementById('tipo_plano').value;
+    const campoQuantidade = document.getElementById('campo_quantidade');
+    const campoValorMensal = document.getElementById('campo_valor_mensal');
+    
+    if (tipoPLano === 'AVULSO') {
+        campoQuantidade.style.display = 'none';
+        campoValorMensal.querySelector('label').innerHTML = 'Valor Base (opcional)';
+    } else {
+        campoQuantidade.style.display = 'block';
+        campoValorMensal.querySelector('label').innerHTML = 'Valor Mensal <span class="text-danger">*</span>';
+    }
+}
+
+// Executar ao carregar a página
+document.addEventListener('DOMContentLoaded', updateFormFields);
+</script>
+{% endblock %}

@@ -81,7 +81,7 @@ class NCMService:
     
     def fetch_ncm_from_receita(self) -> List[Dict]:
         """Busca NCMs diretamente da Receita Federal com múltiplas fontes"""
-        logger.info("🔄 Buscando NCMs da Receita Federal...")
+        logger.info("[?] Buscando NCMs da Receita Federal...")
         
         ncms = []
         
@@ -180,11 +180,11 @@ class NCMService:
                 if codigo and descricao and len(codigo) == 8 and codigo.isdigit():
                     valid_ncms.append(ncm)
             
-            logger.info(f"✅ Encontrados {len(valid_ncms)} NCMs válidos da Receita Federal")
+            logger.info(f"[OK] Encontrados {len(valid_ncms)} NCMs válidos da Receita Federal")
             return valid_ncms
         
         # Se não conseguiu de nenhuma fonte oficial
-        logger.warning("⚠️ Não foi possível buscar da Receita Federal")
+        logger.warning("[!] Não foi possível buscar da Receita Federal")
         return []
     
     def sync_ncm_to_database(self, ncms: List[Dict], force: bool = False) -> Tuple[int, int]:
@@ -192,7 +192,7 @@ class NCMService:
         if not ncms:
             return 0, 0
             
-        logger.info(f"💾 Sincronizando {len(ncms)} NCMs para o banco...")
+        logger.info(f"[SAVE] Sincronizando {len(ncms)} NCMs para o banco...")
         
         db = next(get_db())
         inserted = 0
@@ -240,11 +240,11 @@ class NCMService:
                     inserted += 1
             
             db.commit()
-            logger.info(f"✅ Sincronização concluída: {inserted} inseridos, {updated} atualizados")
+            logger.info(f"[OK] Sincronização concluída: {inserted} inseridos, {updated} atualizados")
             
         except Exception as e:
             db.rollback()
-            logger.error(f"❌ Erro na sincronização: {e}")
+            logger.error(f"[X] Erro na sincronização: {e}")
             raise
         finally:
             db.close()
@@ -285,7 +285,7 @@ class NCMService:
     
     def search_ncm_online(self, query: str, limit: int = 10) -> List[Dict]:
         """Busca NCMs diretamente online (fallback)"""
-        logger.info(f"🌐 Buscando NCM online: {query}")
+        logger.info(f"[?] Buscando NCM online: {query}")
         
         # URLs para busca online
         search_apis = [
@@ -330,14 +330,14 @@ class NCMService:
                                 })
                     
                     if results:
-                        logger.info(f"✅ {len(results)} NCMs encontrados online via {api['name']}")
+                        logger.info(f"[OK] {len(results)} NCMs encontrados online via {api['name']}")
                         return results[:limit]
                         
             except Exception as e:
                 logger.warning(f"Falha na busca online via {api['name']}: {e}")
                 continue
         
-        logger.warning("❌ Nenhuma fonte online disponível")
+        logger.warning("[X] Nenhuma fonte online disponível")
         return []
     
     def search_ncm_hybrid(self, query: str, limit: int = 50) -> List[Dict]:
@@ -348,12 +348,12 @@ class NCMService:
         
         # 2. Se encontrou resultados suficientes, retorna
         if len(results) >= min(limit, 10):
-            logger.info(f"📍 {len(results)} NCMs encontrados localmente")
+            logger.info(f"[TRACE] {len(results)} NCMs encontrados localmente")
             return results
         
         # 3. Se poucos resultados, complementa com busca online
         if len(results) < 5:
-            logger.info("🌐 Complementando com busca online...")
+            logger.info("[?] Complementando com busca online...")
             online_results = self.search_ncm_online(query, limit - len(results))
             
             # Mescla resultados evitando duplicatas
@@ -366,7 +366,7 @@ class NCMService:
     
     def full_sync(self, force: bool = False) -> Dict:
         """Executa sincronização completa"""
-        logger.info("🚀 Iniciando sincronização completa de NCMs...")
+        logger.info("[START] Iniciando sincronização completa de NCMs...")
         
         # Garante dados iniciais se banco estiver vazio
         # self.populate_initial_ncm_data()
@@ -388,7 +388,7 @@ class NCMService:
                 # Se não conseguiu sincronizar mas já tem dados locais, considera sucesso parcial
                 local_count = self.get_local_ncm_count()
                 if local_count > 0:
-                    logger.info(f"📂 Mantendo {local_count} NCMs locais (APIs externas indisponíveis)")
+                    logger.info(f"[?] Mantendo {local_count} NCMs locais (APIs externas indisponíveis)")
                     return {
                         'success': True,
                         'message': f'APIs da Receita Federal temporariamente indisponíveis. Mantendo {local_count} NCMs locais.',
@@ -407,7 +407,7 @@ class NCMService:
             # Sincroniza com banco
             inserted, updated = self.sync_ncm_to_database(ncms, force)
             
-            logger.info(f"🎉 Sincronização bem-sucedida!")
+            logger.info(f"[?] Sincronização bem-sucedida!")
             return {
                 'success': True,
                 'message': f'Sincronização concluída com sucesso! {inserted} NCMs inseridos, {updated} atualizados',
@@ -419,7 +419,7 @@ class NCMService:
             }
             
         except Exception as e:
-            logger.error(f"❌ Erro na sincronização completa: {e}")
+            logger.error(f"[X] Erro na sincronização completa: {e}")
             
             # Verifica se ainda tem dados locais utilizáveis
             local_count = self.get_local_ncm_count()
@@ -445,7 +445,7 @@ class NCMService:
     #     if self.get_local_ncm_count() > 0:
     #         return True
         
-    #     logger.info("📦 Populando dados iniciais de NCM...")
+    #     logger.info("[?] Populando dados iniciais de NCM...")
         
     #     # Dados básicos de NCM mais comuns organizados por categoria
     #     initial_ncms = [
@@ -525,11 +525,11 @@ class NCMService:
     #         db.commit()
     #         db.close()
             
-    #         logger.info(f"✅ {len(initial_ncms)} NCMs iniciais populados")
+    #         logger.info(f"[OK] {len(initial_ncms)} NCMs iniciais populados")
     #         return True
             
     #     except Exception as e:
-    #         logger.error(f"❌ Erro ao popular dados iniciais: {e}")
+    #         logger.error(f"[X] Erro ao popular dados iniciais: {e}")
     #         return False
     
     def process_siscomex_json(self, json_content: str) -> Dict:
@@ -542,7 +542,7 @@ class NCMService:
         Returns:
             Dict com resultado do processamento
         """
-        logger.info("📂 Processando arquivo JSON do Siscomex...")
+        logger.info("[?] Processando arquivo JSON do Siscomex...")
         
         try:
             # Parse do JSON
@@ -556,7 +556,7 @@ class NCMService:
             
             # Estrutura específica do JSON do Siscomex (formato oficial)
             if isinstance(data, dict) and 'Nomenclaturas' in data:
-                logger.info(f"📋 Processando estrutura oficial do Siscomex com {len(data['Nomenclaturas'])} nomenclaturas")
+                logger.info(f"[LIST] Processando estrutura oficial do Siscomex com {len(data['Nomenclaturas'])} nomenclaturas")
                 
                 # Processa cada nomenclatura da lista oficial
                 for item in data['Nomenclaturas']:
@@ -566,7 +566,7 @@ class NCMService:
                         
             elif isinstance(data, list):
                 # Array direto de NCMs (formato antigo/alternativo)
-                logger.info(f"📋 Processando formato de array com {len(data)} itens")
+                logger.info(f"[LIST] Processando formato de array com {len(data)} itens")
                 for item in data:
                     ncm = self._extract_ncm_from_siscomex_item(item)
                     if ncm:
@@ -583,7 +583,7 @@ class NCMService:
                 for key in possible_keys:
                     if key in data and isinstance(data[key], list):
                         ncm_list = data[key]
-                        logger.info(f"📋 Encontrada chave '{key}' com {len(ncm_list)} itens")
+                        logger.info(f"[LIST] Encontrada chave '{key}' com {len(ncm_list)} itens")
                         break
                 
                 if ncm_list:
@@ -639,7 +639,7 @@ class NCMService:
                 else:
                     stats['invalidos'] += 1
             
-            logger.info(f"📊 Processamento completo: {stats['total']} válidos ({stats['sinteticos']} sintéticos, {stats['analiticos']} analíticos), {stats['invalidos']} inválidos")
+            logger.info(f"[DATA] Processamento completo: {stats['total']} válidos ({stats['sinteticos']} sintéticos, {stats['analiticos']} analíticos), {stats['invalidos']} inválidos")
             
             if not valid_ncms:
                 return {
@@ -650,7 +650,7 @@ class NCMService:
             # Sincroniza com banco
             inserted, updated = self.sync_ncm_to_database(valid_ncms, force=True)
             
-            logger.info(f"✅ Processamento JSON concluído: {inserted} inseridos, {updated} atualizados")
+            logger.info(f"[OK] Processamento JSON concluído: {inserted} inseridos, {updated} atualizados")
             
             return {
                 'success': True,
@@ -667,7 +667,7 @@ class NCMService:
                 'message': f'Erro ao fazer parse do JSON: {str(e)}. Verifique se o arquivo está em formato JSON válido.'
             }
         except Exception as e:
-            logger.error(f"❌ Erro ao processar JSON do Siscomex: {e}")
+            logger.error(f"[X] Erro ao processar JSON do Siscomex: {e}")
             return {
                 'success': False,
                 'message': f'Erro no processamento: {str(e)}'

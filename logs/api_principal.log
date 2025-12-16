@@ -1,0 +1,1736 @@
+lxml carregado com sucesso
+nfelib carregado com sucesso
+SefazService carregado com sucesso
+OK: Serviços locais carregados com sucesso
+
+=== ROTAS REGISTRADAS ===
+GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
+GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
+GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
+GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
+GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
+OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
+GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS   /api/nfe/proximo-numero                            -> api.get_proximo_numero_nfe
+GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
+GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
+GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
+GET, HEAD, OPTIONS   /admin/nfe/view/<int:nfe_id>                       -> nfe.view
+OPTIONS, POST        /admin/nfe/generate-danfe/<int:nfe_id>             -> nfe.generate_danfe
+OPTIONS, POST        /admin/nfe/generate-danfe-after-issue              -> nfe.generate_danfe_after_issue
+OPTIONS, POST        /admin/nfe/<int:nfe_id>/enviar-danfe               -> nfe.enviar_danfe_email
+GET, HEAD, OPTIONS, POST /admin/nfe/edit/<int:nfe_id>                       -> nfe.edit
+GET, HEAD, OPTIONS   /admin/nfe/download/<int:nfe_id>                   -> nfe.download
+OPTIONS, POST        /admin/nfe/reenviar/<int:nfe_id>                   -> nfe.reenviar_nfe
+OPTIONS, POST        /admin/nfe/emitir-rascunho/<int:nfe_id>            -> nfe.emitir_rascunho
+OPTIONS, POST        /admin/nfe/compartilhar/<int:nfe_id>               -> nfe.compartilhar_nfe
+GET, HEAD, OPTIONS, POST /admin/nfce/emitir                                 -> nfce.emitir_nfce
+GET, HEAD, OPTIONS   /admin/nfce/list                                   -> nfce.listar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/consultar/<int:nfce_id>                -> nfce.consultar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/download-xml/<int:nfce_id>             -> nfce.download_xml_nfce
+OPTIONS, POST        /admin/nfce/cancelar/<int:nfce_id>                 -> nfce.cancelar_nfce_route
+GET, HEAD, OPTIONS   /admin/nfce/danfce/<int:nfce_id>                   -> nfce.danfce
+GET, HEAD, OPTIONS, POST /admin/produtos/<int:produto_id>/editar            -> admin.editar_produto
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-csv                             -> admin.upload_ncm_csv
+GET, HEAD, OPTIONS, POST /admin/ncms/editar/<int:ncm_id>                    -> admin.edit_ncm
+OPTIONS, POST        /admin/produtos/<int:produto_id>/duplicar          -> admin.duplicar_produto
+GET, HEAD, OPTIONS   /admin/                                            -> admin.admin_home
+GET, HEAD, OPTIONS   /admin/nfes                                        -> admin.list_nfes
+GET, HEAD, OPTIONS   /admin/ncms                                        -> admin.list_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-siscomex                        -> admin.upload_siscomex_json
+GET, HEAD, OPTIONS   /admin/api/ncms/search                             -> admin.api_search_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/novo                                   -> admin.create_ncm
+OPTIONS, POST        /admin/ncms/excluir/<int:ncm_id>                   -> admin.delete_ncm
+GET, HEAD, OPTIONS   /admin/cst                                         -> admin.list_cst
+GET, HEAD, OPTIONS   /admin/cst/novo                                    -> admin.create_cst
+GET, HEAD, OPTIONS, POST /admin/cst/editar/<int:cst_id>                     -> admin.edit_cst
+OPTIONS, POST        /admin/cst/excluir/<int:cst_id>                    -> admin.delete_cst
+GET, HEAD, OPTIONS   /admin/cst/pis-cofins                              -> admin.list_cst_pis_cofins
+GET, HEAD, OPTIONS   /admin/cfops                                       -> admin.list_cfops
+GET, HEAD, OPTIONS   /admin/cfops/novo                                  -> admin.create_cfop
+OPTIONS, POST        /admin/cfops/salvar                                -> admin.save_cfop
+GET, HEAD, OPTIONS   /admin/cfops/editar/<int:cfop_id>                  -> admin.edit_cfop
+OPTIONS, POST        /admin/cfops/excluir/<int:cfop_id>                 -> admin.delete_cfop
+GET, HEAD, OPTIONS   /admin/usuarios                                    -> admin.list_usuarios
+GET, HEAD, OPTIONS, POST /admin/usuarios/novo                               -> admin.create_usuario
+GET, HEAD, OPTIONS, POST /admin/usuarios/editar/<int:usuario_id>            -> admin.edit_usuario
+OPTIONS, POST        /admin/usuarios/excluir/<int:usuario_id>           -> admin.delete_usuario
+GET, HEAD, OPTIONS   /admin/clientes/<int:cliente_id>/visualizar        -> admin.visualizar_cliente
+GET, HEAD, OPTIONS   /admin/csosn                                       -> admin.list_csosn
+GET, HEAD, OPTIONS   /admin/csosn/novo                                  -> admin.create_csosn
+GET, HEAD, OPTIONS, POST /admin/csosn/editar/<int:csosn_id>                 -> admin.edit_csosn
+OPTIONS, POST        /admin/csosn/excluir/<int:csosn_id>                -> admin.delete_csosn
+GET, HEAD, OPTIONS   /admin/regimes-tributarios                         -> admin.list_regimes_tributarios
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/novo                    -> admin.novo_regime_tributario
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/<int:regime_tributario_id>/editar -> admin.novo_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/salvar                  -> admin.salvar_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/<int:regime_tributario_id>/delete -> admin.delete_regime_tributario
+GET, HEAD, OPTIONS   /admin/roles                                       -> admin.list_roles
+GET, HEAD, OPTIONS, POST /admin/roles/novo                                  -> admin.create_role
+GET, HEAD, OPTIONS, POST /admin/roles/editar/<int:role_id>                  -> admin.edit_role
+OPTIONS, POST        /admin/roles/excluir/<int:role_id>                 -> admin.delete_role
+GET, HEAD, OPTIONS   /admin/permissions                                 -> admin.list_permissions
+GET, HEAD, OPTIONS   /admin/permissions/novo                            -> admin.create_permission
+GET, HEAD, OPTIONS, POST /admin/permissions/editar/<int:permission_id>      -> admin.edit_permission
+OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin.delete_permission
+GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
+GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
+GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
+GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
+OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
+GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
+OPTIONS, POST        /admin/backups/delete/<filename>                   -> admin.delete_backup
+GET, HEAD, OPTIONS   /admin/backup                                      -> admin.backup
+GET, HEAD, OPTIONS   /admin/dashboard                                   -> admin.dashboard
+GET, HEAD, OPTIONS   /admin/certificados/vencimento                     -> admin.relatorio_certificados_vencimento
+GET, HEAD, OPTIONS   /admin/dashboard/api/data                          -> admin.dashboard_api_data
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao                         -> admin.list_motivos_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/novo                    -> admin.novo_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/<int:motivo_id>/editar  -> admin.novo_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/<int:motivo_id>/delete  -> admin.delete_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/origens-mercadoria                          -> admin.list_origens_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/novo                     -> admin.create_origem_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/editar/<int:origem_id>   -> admin.edit_origem_mercadoria
+OPTIONS, POST        /admin/origens-mercadoria/excluir/<int:origem_id>  -> admin.delete_origem_mercadoria
+GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes
+GET, HEAD, OPTIONS, POST /admin/clientes/novo                               -> admin.create_cliente
+GET, HEAD, OPTIONS, POST /admin/clientes/<int:cliente_id>/edit              -> admin.edit_cliente
+OPTIONS, POST        /admin/clientes/<int:cliente_id>/delete            -> admin.delete_cliente
+GET, HEAD, OPTIONS   /admin/certificados/novo/<int:cliente_id>          -> admin.create_certificado
+GET, HEAD, OPTIONS   /admin/certificados/<int:certificado_digital_id>/edit/<int:cliente_id> -> admin.edit_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_digital_id>/delete -> admin.delete_certificado
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova/<int:cliente_id>     -> admin.create_regra_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/<int:regra_tributacao_id>/edit -> admin.edit_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -> admin.delete_regra_tributacao
+GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
+OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
+GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
+GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
+OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
+OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
+OPTIONS, POST        /admin/produtos/<int:produto_id>/delete            -> admin.delete_produto
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:cliente_id>              -> admin.list_destinatarios
+OPTIONS, POST        /admin/destinatarios/salvar                        -> admin.salvar_destinatario
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:destinatario_id>/edit    -> admin.edit_destinatario
+GET, HEAD, OPTIONS   /admin/certificados                                -> admin.list_certificados
+OPTIONS, POST        /admin/certificados/salvar                         -> admin.salvar_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_id>/toggle-status -> admin.toggle_certificado_status
+GET, HEAD, OPTIONS   /admin/regras-tributacao                           -> admin.list_regras_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova                      -> admin.nova_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/salvar                    -> admin.salvar_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/excluir/<int:regra_id>    -> admin.excluir_regra_tributacao
+GET, HEAD, OPTIONS   /admin/perfil                                      -> admin.perfil
+GET, HEAD, OPTIONS   /admin/api/buscar-cep/<cep>                        -> admin.buscar_cep
+GET, HEAD, OPTIONS   /admin/health                                      -> admin.admin_health
+OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin.api_sugestao_tributaria
+GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
+GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
+GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
+GET, HEAD, OPTIONS   /admin/faturamento                                 -> admin.list_faturamento
+GET, HEAD, OPTIONS, POST /admin/faturamento/cliente/<int:cliente_id>/editar -> admin.edit_faturamento_cliente
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs                      -> admin.list_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/nova                 -> admin.criar_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/<int:classificacao_id>/editar -> admin.editar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/salvar               -> admin.salvar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/<int:classificacao_id>/toggle -> admin.toggle_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/faturamento/relatorio-gerencial             -> admin.relatorio_gerencial
+GET, HEAD, OPTIONS, POST /admin/faturamento/extrato/<int:cliente_id>        -> admin.gerar_extrato_cliente
+GET, HEAD, OPTIONS   /admin/api/classificacoes-ibs-cbs                  -> admin.api_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/api/regime-tributario/<int:cliente_id>      -> admin.api_regime_tributario_cliente
+GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
+GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
+GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
+GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /admin/planos/                                     -> planos.list_planos
+GET, HEAD, OPTIONS, POST /admin/planos/criar                                -> planos.criar_plano
+GET, HEAD, OPTIONS, POST /admin/planos/<int:plano_id>/editar                -> planos.editar_plano
+OPTIONS, POST        /admin/planos/<int:plano_id>/toggle                -> planos.toggle_plano
+GET, HEAD, OPTIONS   /admin/planos/assinaturas                          -> planos.list_assinaturas
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/criar                    -> planos.criar_assinatura
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/<int:assinatura_id>/editar -> planos.editar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/renovar -> planos.renovar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/cancelar -> planos.cancelar_assinatura
+GET, HEAD, OPTIONS   /admin/planos/relatorio/consumo                    -> planos.relatorio_consumo
+GET, HEAD, OPTIONS   /admin/planos/api/verificar-limite/<int:cliente_id> -> planos.verificar_limite_api
+GET, HEAD, OPTIONS   /                                                  -> home.home
+GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
+GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
+GET, HEAD, OPTIONS   /api/llm/ncms/export                               -> llm_api.export_ncms_for_training
+GET, HEAD, OPTIONS   /api/llm/ncms/search                               -> llm_api.search_ncms_for_llm
+GET, HEAD, OPTIONS   /api/llm/ncms/hierarquia/<codigo>                  -> llm_api.get_hierarquia_ncm
+GET, HEAD, OPTIONS   /api/llm/ncms/stats                                -> llm_api.get_ncm_statistics
+GET, HEAD, OPTIONS   /                                                  -> home
+GET, HEAD, OPTIONS   /health                                            -> health_check
+=== FIM DAS ROTAS ===
+
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.0.97:8080
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+lxml carregado com sucesso
+nfelib carregado com sucesso
+SefazService carregado com sucesso
+OK: Serviços locais carregados com sucesso
+
+=== ROTAS REGISTRADAS ===
+GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
+GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
+GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
+GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
+GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
+OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
+GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS   /api/nfe/proximo-numero                            -> api.get_proximo_numero_nfe
+GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
+GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
+GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
+GET, HEAD, OPTIONS   /admin/nfe/view/<int:nfe_id>                       -> nfe.view
+OPTIONS, POST        /admin/nfe/generate-danfe/<int:nfe_id>             -> nfe.generate_danfe
+OPTIONS, POST        /admin/nfe/generate-danfe-after-issue              -> nfe.generate_danfe_after_issue
+OPTIONS, POST        /admin/nfe/<int:nfe_id>/enviar-danfe               -> nfe.enviar_danfe_email
+GET, HEAD, OPTIONS, POST /admin/nfe/edit/<int:nfe_id>                       -> nfe.edit
+GET, HEAD, OPTIONS   /admin/nfe/download/<int:nfe_id>                   -> nfe.download
+OPTIONS, POST        /admin/nfe/reenviar/<int:nfe_id>                   -> nfe.reenviar_nfe
+OPTIONS, POST        /admin/nfe/emitir-rascunho/<int:nfe_id>            -> nfe.emitir_rascunho
+OPTIONS, POST        /admin/nfe/compartilhar/<int:nfe_id>               -> nfe.compartilhar_nfe
+GET, HEAD, OPTIONS, POST /admin/nfce/emitir                                 -> nfce.emitir_nfce
+GET, HEAD, OPTIONS   /admin/nfce/list                                   -> nfce.listar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/consultar/<int:nfce_id>                -> nfce.consultar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/download-xml/<int:nfce_id>             -> nfce.download_xml_nfce
+OPTIONS, POST        /admin/nfce/cancelar/<int:nfce_id>                 -> nfce.cancelar_nfce_route
+GET, HEAD, OPTIONS   /admin/nfce/danfce/<int:nfce_id>                   -> nfce.danfce
+GET, HEAD, OPTIONS, POST /admin/produtos/<int:produto_id>/editar            -> admin.editar_produto
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-csv                             -> admin.upload_ncm_csv
+GET, HEAD, OPTIONS, POST /admin/ncms/editar/<int:ncm_id>                    -> admin.edit_ncm
+OPTIONS, POST        /admin/produtos/<int:produto_id>/duplicar          -> admin.duplicar_produto
+GET, HEAD, OPTIONS   /admin/                                            -> admin.admin_home
+GET, HEAD, OPTIONS   /admin/nfes                                        -> admin.list_nfes
+GET, HEAD, OPTIONS   /admin/ncms                                        -> admin.list_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-siscomex                        -> admin.upload_siscomex_json
+GET, HEAD, OPTIONS   /admin/api/ncms/search                             -> admin.api_search_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/novo                                   -> admin.create_ncm
+OPTIONS, POST        /admin/ncms/excluir/<int:ncm_id>                   -> admin.delete_ncm
+GET, HEAD, OPTIONS   /admin/cst                                         -> admin.list_cst
+GET, HEAD, OPTIONS   /admin/cst/novo                                    -> admin.create_cst
+GET, HEAD, OPTIONS, POST /admin/cst/editar/<int:cst_id>                     -> admin.edit_cst
+OPTIONS, POST        /admin/cst/excluir/<int:cst_id>                    -> admin.delete_cst
+GET, HEAD, OPTIONS   /admin/cst/pis-cofins                              -> admin.list_cst_pis_cofins
+GET, HEAD, OPTIONS   /admin/cfops                                       -> admin.list_cfops
+GET, HEAD, OPTIONS   /admin/cfops/novo                                  -> admin.create_cfop
+OPTIONS, POST        /admin/cfops/salvar                                -> admin.save_cfop
+GET, HEAD, OPTIONS   /admin/cfops/editar/<int:cfop_id>                  -> admin.edit_cfop
+OPTIONS, POST        /admin/cfops/excluir/<int:cfop_id>                 -> admin.delete_cfop
+GET, HEAD, OPTIONS   /admin/usuarios                                    -> admin.list_usuarios
+GET, HEAD, OPTIONS, POST /admin/usuarios/novo                               -> admin.create_usuario
+GET, HEAD, OPTIONS, POST /admin/usuarios/editar/<int:usuario_id>            -> admin.edit_usuario
+OPTIONS, POST        /admin/usuarios/excluir/<int:usuario_id>           -> admin.delete_usuario
+GET, HEAD, OPTIONS   /admin/clientes/<int:cliente_id>/visualizar        -> admin.visualizar_cliente
+GET, HEAD, OPTIONS   /admin/csosn                                       -> admin.list_csosn
+GET, HEAD, OPTIONS   /admin/csosn/novo                                  -> admin.create_csosn
+GET, HEAD, OPTIONS, POST /admin/csosn/editar/<int:csosn_id>                 -> admin.edit_csosn
+OPTIONS, POST        /admin/csosn/excluir/<int:csosn_id>                -> admin.delete_csosn
+GET, HEAD, OPTIONS   /admin/regimes-tributarios                         -> admin.list_regimes_tributarios
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/novo                    -> admin.novo_regime_tributario
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/<int:regime_tributario_id>/editar -> admin.novo_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/salvar                  -> admin.salvar_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/<int:regime_tributario_id>/delete -> admin.delete_regime_tributario
+GET, HEAD, OPTIONS   /admin/roles                                       -> admin.list_roles
+GET, HEAD, OPTIONS, POST /admin/roles/novo                                  -> admin.create_role
+GET, HEAD, OPTIONS, POST /admin/roles/editar/<int:role_id>                  -> admin.edit_role
+OPTIONS, POST        /admin/roles/excluir/<int:role_id>                 -> admin.delete_role
+GET, HEAD, OPTIONS   /admin/permissions                                 -> admin.list_permissions
+GET, HEAD, OPTIONS   /admin/permissions/novo                            -> admin.create_permission
+GET, HEAD, OPTIONS, POST /admin/permissions/editar/<int:permission_id>      -> admin.edit_permission
+OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin.delete_permission
+GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
+GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
+GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
+GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
+OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
+GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
+OPTIONS, POST        /admin/backups/delete/<filename>                   -> admin.delete_backup
+GET, HEAD, OPTIONS   /admin/backup                                      -> admin.backup
+GET, HEAD, OPTIONS   /admin/dashboard                                   -> admin.dashboard
+GET, HEAD, OPTIONS   /admin/certificados/vencimento                     -> admin.relatorio_certificados_vencimento
+GET, HEAD, OPTIONS   /admin/dashboard/api/data                          -> admin.dashboard_api_data
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao                         -> admin.list_motivos_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/novo                    -> admin.novo_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/<int:motivo_id>/editar  -> admin.novo_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/<int:motivo_id>/delete  -> admin.delete_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/origens-mercadoria                          -> admin.list_origens_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/novo                     -> admin.create_origem_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/editar/<int:origem_id>   -> admin.edit_origem_mercadoria
+OPTIONS, POST        /admin/origens-mercadoria/excluir/<int:origem_id>  -> admin.delete_origem_mercadoria
+GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes
+GET, HEAD, OPTIONS, POST /admin/clientes/novo                               -> admin.create_cliente
+GET, HEAD, OPTIONS, POST /admin/clientes/<int:cliente_id>/edit              -> admin.edit_cliente
+OPTIONS, POST        /admin/clientes/<int:cliente_id>/delete            -> admin.delete_cliente
+GET, HEAD, OPTIONS   /admin/certificados/novo/<int:cliente_id>          -> admin.create_certificado
+GET, HEAD, OPTIONS   /admin/certificados/<int:certificado_digital_id>/edit/<int:cliente_id> -> admin.edit_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_digital_id>/delete -> admin.delete_certificado
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova/<int:cliente_id>     -> admin.create_regra_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/<int:regra_tributacao_id>/edit -> admin.edit_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -> admin.delete_regra_tributacao
+GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
+OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
+GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
+GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
+OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
+OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
+OPTIONS, POST        /admin/produtos/<int:produto_id>/delete            -> admin.delete_produto
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:cliente_id>              -> admin.list_destinatarios
+OPTIONS, POST        /admin/destinatarios/salvar                        -> admin.salvar_destinatario
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:destinatario_id>/edit    -> admin.edit_destinatario
+GET, HEAD, OPTIONS   /admin/certificados                                -> admin.list_certificados
+OPTIONS, POST        /admin/certificados/salvar                         -> admin.salvar_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_id>/toggle-status -> admin.toggle_certificado_status
+GET, HEAD, OPTIONS   /admin/regras-tributacao                           -> admin.list_regras_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova                      -> admin.nova_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/salvar                    -> admin.salvar_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/excluir/<int:regra_id>    -> admin.excluir_regra_tributacao
+GET, HEAD, OPTIONS   /admin/perfil                                      -> admin.perfil
+GET, HEAD, OPTIONS   /admin/api/buscar-cep/<cep>                        -> admin.buscar_cep
+GET, HEAD, OPTIONS   /admin/health                                      -> admin.admin_health
+OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin.api_sugestao_tributaria
+GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
+GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
+GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
+GET, HEAD, OPTIONS   /admin/faturamento                                 -> admin.list_faturamento
+GET, HEAD, OPTIONS, POST /admin/faturamento/cliente/<int:cliente_id>/editar -> admin.edit_faturamento_cliente
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs                      -> admin.list_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/nova                 -> admin.criar_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/<int:classificacao_id>/editar -> admin.editar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/salvar               -> admin.salvar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/<int:classificacao_id>/toggle -> admin.toggle_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/faturamento/relatorio-gerencial             -> admin.relatorio_gerencial
+GET, HEAD, OPTIONS, POST /admin/faturamento/extrato/<int:cliente_id>        -> admin.gerar_extrato_cliente
+GET, HEAD, OPTIONS   /admin/api/classificacoes-ibs-cbs                  -> admin.api_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/api/regime-tributario/<int:cliente_id>      -> admin.api_regime_tributario_cliente
+GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
+GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
+GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
+GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /admin/planos/                                     -> planos.list_planos
+GET, HEAD, OPTIONS, POST /admin/planos/criar                                -> planos.criar_plano
+GET, HEAD, OPTIONS, POST /admin/planos/<int:plano_id>/editar                -> planos.editar_plano
+OPTIONS, POST        /admin/planos/<int:plano_id>/toggle                -> planos.toggle_plano
+GET, HEAD, OPTIONS   /admin/planos/assinaturas                          -> planos.list_assinaturas
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/criar                    -> planos.criar_assinatura
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/<int:assinatura_id>/editar -> planos.editar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/renovar -> planos.renovar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/cancelar -> planos.cancelar_assinatura
+GET, HEAD, OPTIONS   /admin/planos/relatorio/consumo                    -> planos.relatorio_consumo
+GET, HEAD, OPTIONS   /admin/planos/api/verificar-limite/<int:cliente_id> -> planos.verificar_limite_api
+GET, HEAD, OPTIONS   /                                                  -> home.home
+GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
+GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
+GET, HEAD, OPTIONS   /api/llm/ncms/export                               -> llm_api.export_ncms_for_training
+GET, HEAD, OPTIONS   /api/llm/ncms/search                               -> llm_api.search_ncms_for_llm
+GET, HEAD, OPTIONS   /api/llm/ncms/hierarquia/<codigo>                  -> llm_api.get_hierarquia_ncm * Debugger is active!
+ * Debugger PIN: 175-327-359
+127.0.0.1 - - [11/Dec/2025 14:06:26] "GET /admin/motivos-desoneracao HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:27] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:29] "GET /admin/motivos-desoneracao/10/editar HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:30] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:06:34] "GET /admin/dashboard HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:34] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:06:34] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:37] "GET /admin/cst HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:37] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:06:44] "GET /admin/ncms HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:06:44] "GET /admin/ncms HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:44] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:06:44] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:06:53] "GET /admin/cfops HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:06:53] "GET /admin/cfops HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:06:53] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:06:53] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:07:01] "GET /admin/dashboard HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:07:01] "GET /admin/dashboard HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:07:01] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:07:01] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:07:01] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:07:01] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:09:22] "GET /admin/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:09:22] "GET /admin/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:09:22] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:09:22] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:10:02] "[32mGET /admin/ HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:10:02] "[32mGET /admin/ HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:10:02] "GET /admin/dashboard HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:10:02] "GET /admin/dashboard HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:10:02] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:10:02] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:10:02] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:10:02] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:02] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:02] "[32mGET / HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:14:02] "GET /auth/login HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:02] "GET /auth/login HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:02] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:02] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:02] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:02] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:07] "[32mPOST /auth/login HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:07] "[32mPOST /auth/login HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:14:07] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:07] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:07] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:07] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:14:28] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:28] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:28] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:28] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:14:30] "GET /admin/dashboard HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:30] "GET /admin/dashboard HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:30] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:30] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:31] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:31] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:32] "[32mGET /admin/ HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:32] "[32mGET /admin/ HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:14:32] "GET /admin/dashboard HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:32] "GET /admin/dashboard HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:14:32] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:32] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+
+GET, HEAD, OPTIONS   /api/llm/ncms/stats                                -> llm_api.get_ncm_statistics
+GET, HEAD, OPTIONS   /                                                  -> home
+GET, HEAD, OPTIONS   /health                                            -> health_check
+=== FIM DAS ROTAS ===
+
+[DEBUG] Iniciando dashboard_api_data...
+[DEBUG] Conexão DB obtida
+[DEBUG] Período: tudo, data_inicio: None, data_fim: None
+[DEBUG] Datas calculadas: None até None
+[DEBUG] Buscando NFes por mês...
+[DEBUG] NFes por mês: 3 registros
+[DEBUG] Buscando top produtos...
+[DEBUG] Top produtos: 5 registros
+[DEBUG] Top produtos data: {'labels': ['Monitor de Computador 22"', 'AGUA PRATA S/G PET 12X510ML 12', 'Monitor de Computador 21" ', 'Produto de Teste', 'Novo produto de teste'], 'valores': [10, 10, 4, 3, 2]}
+[DEBUG] Buscando status NFes...
+[DEBUG] Status NFes: 2 registros
+[DEBUG] Status NFes data: {'labels': ['AUTORIZADA', 'REJEITADA'], 'valores': [27, 1]}
+[DEBUG] Buscando top clientes...
+[DEBUG] Top clientes: 3 registros
+[DEBUG] Top clientes data: {'labels': ['4YOUPET MARKET PLACE E TECNOLO', 'TAVARES & MIOLA MERCEARIA LTDA', 'SJ TECNOLOGIA E DESENVOLVIMENT'], 'valores': [14, 8, 6]}
+[DEBUG] Retornando JSON com 4 chaves
+[DEBUG] Data keys: ['nfes_por_mes', 'top_produtos', 'status_nfes', 'top_clientes']
+[DEBUG] Iniciando dashboard_api_data...
+[DEBUG] Conexão DB obtida
+[DEBUG] Período: tudo, data_inicio: None, data_fim: None
+[DEBUG] Datas calculadas: None até None
+[DEBUG] Buscando NFes por mês...
+[DEBUG] NFes por mês: 3 registros
+[DEBUG] Buscando top produtos...
+[DEBUG] Top produtos: 5 registros
+[DEBUG] Top produtos data: {'labels': ['Monitor de Computador 22"', 'AGUA PRATA S/G PET 12X510ML 12', 'Monitor de Computador 21" ', 'Produto de Teste', 'Novo produto de teste'], 'valores': [10, 10, 4, 3, 2]}
+[DEBUG] Buscando status NFes...
+[DEBUG] Status NFes: 2 registros
+[DEBUG] Status NFes data: {'labels': ['AUTORIZADA', 'REJEITADA'], 'valores': [27, 1]}
+[DEBUG] Buscando top clientes...
+[DEBUG] Top clientes: 3 registros
+[DEBUG] Top clientes data: {'labels': ['4YOUPET MARKET PLACE E TECNOLO', 'TAVARES & MIOLA MERCEARIA LTDA', 'SJ TECNOLOGIA E DESENVOLVIMENT'], 'valores': [14, 8, 6]}
+[DEBUG] Retornando JSON com 4 chaves
+[DEBUG] Data keys: ['nfes_por_mes', 'top_produtos', 'status_nfes', 'top_clientes']
+[DEBUG] Iniciando dashboard_api_data...
+[DEBUG] Conexão DB obtida
+[DEBUG] Período: tudo, data_inicio: None, data_fim: None
+[DEBUG] Datas calculadas: None até None
+[DEBUG] Buscando NFes por mês...
+[DEBUG] NFes por mês: 3 registros
+[DEBUG] Buscando top produtos...
+[DEBUG] Top produtos: 5 registros
+[DEBUG] Top produtos data: {'labels': ['Monitor de Computador 22"', 'AGUA PRATA S/G PET 12X510ML 12', 'Monitor de Computador 21" ', 'Produto de Teste', 'Novo produto de teste'], 'valores': [10, 10, 4, 3, 2]}
+[DEBUG] Buscando status NFes...
+[DEBUG] Status NFes: 2 registros
+[DEBUG] Status NFes data: {'labels': ['AUTORIZADA', 'REJEITADA'], 'valores': [27, 1]}
+[DEBUG] Buscando top clientes...
+[DEBUG] Top clientes: 3 registros
+[DEBUG] Top clientes data: {'labels': ['4YOUPET MARKET PLACE E TECNOLO', 'TAVARES & MIOLA MERCEARIA LTDA', 'SJ TECNOLOGIA E DESENVOLVIMENT'], 'valores': [14, 8, 6]}
+[DEBUG] Retornando JSON com 4 chaves
+[DEBUG] Data keys: ['nfes_por_mes', 'top_produtos', 'status_nfes', 'top_clientes']
+[?] GET /login - Mostrando formulário de login
+
+================================================================================
+[AUTH] LOGIN: Iniciando processo de autenticação
+================================================================================
+[USER] Username: Izabel
+[DATA] Conectando ao banco de dados...
+[OK] Conexão estabelecida
+[SEARCH] Buscando usuário no banco...
+[LOG] Resultado da query: Usuário encontrado
+[KEY] Verificando senha...
+[UNLOCK] Senha válida: True
+[OK] Autenticação bem-sucedida!
+[ADMIN] Role atribuída: client
+[BUILD] Criando objeto User...
+[AUTH] Fazendo login do usuário...
+[OK] [OK] LOGIN: Usuario Izabel (ID: 7) logado com role client
+[START] Determinando redirecionamento...
+[SEARCH] Buscando clientes acessíveis do usuário...
+[LIST] Clientes encontrados: 2
+[CLIENT] Primeiro cliente: Empresa Teste Lucro Real (ID: 14)
+[SAVE] Salvando cliente na sessão...
+[OK] Cliente padrão atribuído: Empresa Teste Lucro Real (ID: 14)
+--> Redirecionando para cliente.dashboard com cliente_id=14
+================================================================================
+
+[?] Fechando conexão com banco de dados
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+
+================================================================================
+[?] DASHBOARD: Acessando dashboard do cliente 14
+[USER] Usuário: Izabel
+================================================================================
+[LIST] Clientes acessíveis: [14, 13]
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+[?] DASHBOARD: Entrando no dashboard do cliente 14
+[LOG] Buscando dados do cliente...
+[OK] Cliente: Empresa Teste Lucro Real
+[DATA] Calculando estatísticas...
+  Produtos: 0
+  Destinatários: 0
+  Regras: 0
+  Certificados: 1
+[DATA] Contando NFes...
+  Total NFes: 0
+  NFes no ano: 0
+  NFes no mês: 0
+[DATA] Contagens: 0P, 0D, 0R, 1C, 0N
+[DATA] Processando últimas NFes...
+[OK] DASHBOARD: Dados carregados - 0 produtos, 0 destinatários, 0 NFes recentes
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+
+================================================================================
+[?] DASHBOARD: Acessando dashboard do cliente 14
+[USER] Usuário: Izabel
+================================================================================
+[LIST] Clientes acessíveis: [14, 13]
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+[?] DASHBOARD: Entrando no dashboard do cliente 14
+[LOG] Buscando dados do cliente...
+[OK] Cliente: Empresa Teste Lucro Real
+[DATA] Calculando estatísticas...
+  Produtos: 0
+  Destinatários: 0
+  Regras: 0
+  Certificados: 1
+[DATA] Contando NFes...
+  Total NFes: 0
+  NFes no ano: 0
+  NFes no mês: 0
+[DATA] Contagens: 0P, 0D, 0R, 1C, 0N
+[DATA] Processando últimas NFes...
+[OK] DASHBOARD: Dados carregados - 0 produtos, 0 destinatários, 0 NFes recentes
+[DEBUG] Iniciando dashboard_api_data...
+[DEBUG] Conexão DB obtida
+[DEBUG] Período: tudo, data_inicio: None, data_fim: None
+[DEBUG] Datas calculadas: None até None
+[DEBUG] Buscando NFes por mês...
+[DEBUG] NFes por mês: 3 registros
+[DEBUG] Buscando top produtos...
+[DEBUG] Top produtos: 5 registros
+[DEBUG] Top produtos data: {'labels': ['Monitor de Computador 22"', 'AGUA PRATA S/G PET 12X510ML 12', 'Monitor de Computador 21" ', 'Produto de Teste', 'Novo produto de teste'], 'valores': [10, 10, 4, 3, 2]}
+[DEBUG] Buscando status NFes...
+[DEBUG] Status NFes: 2 registros
+[DEBUG] Status NFes data: {'labels': ['AUTORIZADA', 'REJEITADA'], 'valores': [27, 1]}
+[DEBUG] Buscando top clientes...
+[DEBUG] Top clientes: 3 registros
+[DEBUG] Top clientes data: {'labels': ['4YOUPET MARKET PLACE E TECNOLO', 'TAVARES & MIOLA MERCEARIA LTDA', 'SJ TECNOLOGIA E DESENVOLVIMENT'], 'valores': [14, 8, 6]}
+[DEBUG] Retornando JSON com 4 chaves
+[DEBUG] Data keys: ['nfes_por_mes', 'top_produtos', 'status_nfes', 'top_clientes']
+[DEBUG] Iniciando dashboard_api_data...
+[DEBUG] Conexão DB obtida
+[DEBUG] Período: tudo, data_inicio: None, data_fim: None
+[DEBUG] Datas calculadas: None até None
+[DEBUG] Buscando NFes por mês...
+[DEBUG] NFes por mês: 3 registros
+[DEBUG] Buscando top produtos...
+[DEBUG] Top produtos: 5 registros
+[DEBUG] Top produtos data: {'labels': ['Monitor de Computador 22"', 'AGUA PRATA S/G PET 12X510ML 12', 'Monitor de Computador 21" ', 'Produto de Teste', 'Novo produto de teste'], 'valores': [10, 10, 4, 3, 2]}
+[DEBUG] Buscando status NFes...
+[DEBUG] Status NFes: 2 registros
+[DEBUG] Status NFes data: {'labels': ['AUTORIZADA', 'REJEITADA'], 'valores': [27, 1]}
+[DEBUG] Buscando top clientes...
+[DEBUG] Top clientes: 3 registros
+[DEBUG] Top clientes data: {'labels': ['4YOUPET MARKET PLACE E TECNOLO', 'TAVARES & MIOLA MERCEARIA LTDA', 'SJ TECNOLOGIA E DESENVOLVIMENT'], 'valores': [14, 8, 6]}
+[DEBUG] Retornando JSON com 4 chaves
+[DEBUG] Data keys: ['nfes_por_mes', 'top_produtos', 'status_nfes', 'top_clientes']127.0.0.1 - - [11/Dec/2025 14:14:32] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:14:32] "GET /admin/dashboard/api/data HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:15:06] "GET /admin/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:06] "GET /admin/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:15:06] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:06] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:15:22] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:09] "GET /admin/produtos HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:09] "GET /admin/produtos HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:09] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:09] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:09] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:09] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:10] "GET /admin/produtos/add?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:10] "GET /admin/produtos/add?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:10] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:10] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:17:11] "GET /admin/api/cliente/14/info HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:11] "GET /admin/api/cliente/14/info HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:23] "[32mGET /switch-client HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:23] "[32mGET /switch-client HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:17:23] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:23] "GET / HTTP/1.1" 200 -
+
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 0 destinatários e 0 produtos para cliente 14
+
+================================================================================
+[ERROR] EXCEÇÃO NÃO TRATADA
+================================================================================
+[RED] Tipo: NotFound
+[LOG] Mensagem: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+[TRACE] Traceback completo:
+Traceback (most recent call last):
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+================================================================================
+
+
+================================================================================
+[X] ERRO 500 - INTERNAL SERVER ERROR
+================================================================================
+[RED] Tipo do erro: NotFound
+[LOG] Mensagem: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+[ERROR] Exceção: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+[TRACE] Traceback completo:
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+
+[LIST] Traceback formatado:
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+
+
+[SEARCH] Exception completa:
+Traceback (most recent call last):
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+================================================================================
+
+127.0.0.1 - - [11/Dec/2025 14:17:23] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:23] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+127.0.0.1 - - [11/Dec/2025 14:17:25] "[32mGET /select-client/13 HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:25] "[32mGET /select-client/13 HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:17:25] "GET /cliente/dashboard/13 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:25] "GET /cliente/dashboard/13 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:25] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:25] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:17:27] "GET /admin/produtos?cliente_id=13 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:27] "GET /admin/produtos?cliente_id=13 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:17:27] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:17:27] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:18:32] "[32mGET /switch-client HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:18:32] "[32mGET /switch-client HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:18:32] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:18:32] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:18:33] "[32mGET /select-client/14 HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:18:33] "[32mGET /select-client/14 HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:18:33] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:18:33] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:18:33] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:18:33] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:19:43] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:43] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:43] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:43] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:43] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:43] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:19:44] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:44] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:44] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:44] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:44] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:44] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:54] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:54] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:19:54] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:32:33] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:32:48] "[33mPOST /api/regras_tributacao/buscar HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:32:48] "[33mPOST /api/regras_tributacao/buscar HTTP/1.1[0m" 404 -
+127.0.0.1 - - [11/Dec/2025 14:33:23] "[32mPOST /admin/nfe/emitir?cliente_id=14 HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:23] "[32mPOST /admin/nfe/emitir?cliente_id=14 HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:33:24] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:24] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:24] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:24] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:33:25] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:25] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:25] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:25] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:25] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:25] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:45] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:45] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:45] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:45] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:33:49] "GET /admin/nfe/list?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:49] "GET /admin/nfe/list?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:49] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:49] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:33:57] "GET /admin/nfe/create HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:57] "GET /admin/nfe/create HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:57] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:57] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:33:57] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:57] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:57] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:57] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:33:58] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:33:58] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /admin/nfe/create HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /admin/nfe/create HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:34] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:34] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:34] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:35] "GET /admin/nfe/create HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:35] "GET /admin/nfe/create HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:36] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:36] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:34:36] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:36] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:36] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:36] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:36] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:36] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:37] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:37] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:38] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:38] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+[OK] Acesso permitido ao cliente 13 para usuário Izabel
+
+================================================================================
+[?] DASHBOARD: Acessando dashboard do cliente 13
+[USER] Usuário: Izabel
+================================================================================
+[LIST] Clientes acessíveis: [14, 13]
+[OK] Acesso permitido ao cliente 13 para usuário Izabel
+[?] DASHBOARD: Entrando no dashboard do cliente 13
+[LOG] Buscando dados do cliente...
+[OK] Cliente: TAVARES & MIOLA MERCEARIA LTDA
+[DATA] Calculando estatísticas...
+  Produtos: 1
+  Destinatários: 1
+  Regras: 1
+  Certificados: 1
+[DATA] Contando NFes...
+  Total NFes: 8
+  NFes no ano: 8
+  NFes no mês: 8
+[DATA] Contagens: 1P, 1D, 1R, 1C, 8N
+[DATA] Processando últimas NFes...
+  NFe ID 90: Status=AUTORIZADA, Data=2025-12-10 11:07:25.976755
+    [OK] Valor total: R$ 37.50
+  NFe ID 86: Status=AUTORIZADA, Data=2025-12-04 15:45:01.089951
+    [OK] Valor total: R$ 3.75
+  NFe ID 85: Status=AUTORIZADA, Data=2025-12-04 15:35:26.575628
+    [OK] Valor total: R$ 3.75
+[OK] DASHBOARD: Dados carregados - 1 produtos, 1 destinatários, 3 NFes recentes
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+
+================================================================================
+[?] DASHBOARD: Acessando dashboard do cliente 14
+[USER] Usuário: Izabel
+================================================================================
+[LIST] Clientes acessíveis: [14, 13]
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+[?] DASHBOARD: Entrando no dashboard do cliente 14
+[LOG] Buscando dados do cliente...
+[OK] Cliente: Empresa Teste Lucro Real
+[DATA] Calculando estatísticas...
+  Produtos: 0
+  Destinatários: 0
+  Regras: 0
+  Certificados: 1
+[DATA] Contando NFes...
+  Total NFes: 0
+  NFes no ano: 0
+  NFes no mês: 0
+[DATA] Contagens: 0P, 0D, 0R, 1C, 0N
+[DATA] Processando últimas NFes...
+[OK] DASHBOARD: Dados carregados - 0 produtos, 0 destinatários, 0 NFes recentes
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 0 destinatários e 0 produtos para cliente 14
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 0 destinatários e 0 produtos para cliente 14
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 0 destinatários e 0 produtos para cliente 14
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 1 destinatários e 1 produtos para cliente 14
+[SEARCH] CFOP '1102' → IDs encontrados: [2]
+[SEARCH] NCM '01022110' → IDs encontrados: [5]
+[!] Nenhuma regra encontrada para:
+   Cliente: 14, Regime: 7
+   NCM: 01022110, CFOP: 1102
+   UF Origem: SP, UF Destino: SP
+   Tipo: Produto
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === INICIANDO PROCESSAMENTO POST ===
+ Form data: {'tpNF': '1', 'finNFe': '1', 'dataEmissao': '2025-12-11T14:32', 'serie': '1', 'numero_nfe': '1', 'natOp': 'Venda de Mercadoria', 'infCpl': '', 'formaPagamento': '01', 'valorPagamento': '3500.00', 'modFrete': '9', 'transportadoraNome': '', 'transportadoraCnpjCpf': '', 'transportadoraIE': '', 'transportadoraEndereco': '', 'transportadoraMunicipio': '', 'transportadoraUF': '', 'veiculoPlaca': '', 'veiculoUF': '', 'transportadoraANTT': '', 'volumeQuantidade': '', 'volumeEspecie': '', 'volumeMarca': '', 'volumeNumeracao': '', 'volumePesoBruto': '', 'volumePesoLiquido': ''}
+ Dados transporte - Modalidade: 9, Transportadora: 
+ DEBUG - Ação recebida: emitir, Ambiente do cliente: homologacao (1)
+ === PROCESSANDO EMISSÃO ===
+ Destinatário ID: 10
+OK: Destinatário encontrado: Empresa Teste Ltda
+ Destinatário data: {'nome_razao_social': 'Empresa Teste Ltda', 'cpf_cnpj': '12345678000195', 'logradouro': 'Rua das Flores', 'numero': '123', 'bairro': 'Centro', 'cep': '01310100', 'codigo_municipio': '3550308', 'nome_municipio': 'São Paulo', 'uf': 'SP'}
+ === PROCESSANDO ITENS ===
+ Item 0 JSON: {"codigo_produto":"PROD001","descricao":"Notebook Dell Inspiron 15","unidade":"UN","quantidade":"1",...
+ Item 1: Notebook Dell Inspiron 15
+ Processando 1 itens
+ === VALIDANDO DADOS ===
+[SEARCH] VALIDAÇÃO - CNPJ Emitente recebido: '12345697890001'
+[SEARCH] VALIDAÇÃO - Tipo do CNPJ: <class 'str'>
+[SEARCH] VALIDAÇÃO - CNPJ após strip: '12345697890001'
+[SEARCH] VALIDAÇÃO - CPF/CNPJ Destinatário: '12345678000195'
+[OK] CNPJ do destinatário válido: 12345678000195
+[SEARCH] VALIDAÇÃO FINAL - 1 erros encontrados
+[X] CNPJ do emitente é inválido: 12345697890001
+ERRO: Erros de validação: ['CNPJ do emitente é inválido: 12345697890001']
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 1 destinatários e 1 produtos para cliente 14
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+
+================================================================================
+[?] DASHBOARD: Acessando dashboard do cliente 14
+[USER] Usuário: Izabel
+================================================================================
+[LIST] Clientes acessíveis: [14, 13]
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+[?] DASHBOARD: Entrando no dashboard do cliente 14
+[LOG] Buscando dados do cliente...
+[OK] Cliente: Empresa Teste Lucro Real
+[DATA] Calculando estatísticas...
+  Produtos: 1
+  Destinatários: 1
+  Regras: 0
+  Certificados: 1
+[DATA] Contando NFes...
+  Total NFes: 0
+  NFes no ano: 0
+  NFes no mês: 0
+[DATA] Contagens: 1P, 1D, 0R, 1C, 0N
+[DATA] Processando últimas NFes...
+[OK] DASHBOARD: Dados carregados - 1 produtos, 1 destinatários, 0 NFes recentes
+
+=== LIST_NFES: Iniciando ===
+[IN] cliente_id recebido: 14 (tipo: <class 'str'>)
+[OK] Cliente específico fornecido: 14
+ Usando primeiro cliente disponível: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 1 destinatários e 1 produtos para cliente 14
+ Usando primeiro cliente disponível: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 1 destinatários e 1 produtos para cliente 14
+ Usando primeiro cliente disponível: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 1 destinatários e 1 produtos para cliente 14
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+
+================================================================================
+[?] DASHBOARD: Acessando dashboard do cliente 14
+[USER] Usuário: Izabel
+================================================================================
+[LIST] Clientes acessíveis: [14, 13]
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+[?] DASHBOARD: Entrando no dashboard do cliente 14
+[LOG] Buscando dados do cliente...
+[OK] Cliente: Empresa Teste Lucro Real
+[DATA] Calculando estatísticas...
+  Produtos: 1
+  Destinatários: 1
+  Regras: 0
+  Certificados: 1
+[DATA] Contando NFes...
+  Total NFes: 0
+  NFes no ano: 0
+  NFes no mês: 0
+[DATA] Contagens: 1P, 1D, 0R, 1C, 0N
+[DATA] Processando últimas NFes...
+[OK] DASHBOARD: Dados carregados - 1 produtos, 1 destinatários, 0 NFes recentes
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+
+================================================================================
+[?] DASHBOARD: Acessando dashboard do cliente 14
+[USER] Usuário: Izabel
+================================================================================127.0.0.1 - - [11/Dec/2025 14:34:58] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:58] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:34:59] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:34:59] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:35:02] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:35:02] "GET /admin/nfe/emitir?cliente_id=14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:35:03] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:35:03] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:35:03] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:35:03] "GET /admin/api/regime-tributario/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:35:03] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:35:03] "GET /admin/api/classificacoes-ibs-cbs HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:35:03] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:35:03] "GET /api/nfe/proximo-numero?cliente_id=14&modelo=55&serie=1 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:35:12] "[33mPOST /api/regras_tributacao/buscar HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [11/Dec/2025 14:35:12] "[33mPOST /api/regras_tributacao/buscar HTTP/1.1[0m" 404 -
+ * Detected change in '/Users/renato/Documents/Developement/api_nfe/temp_fix_cnpj.py', reloading
+INFO:werkzeug: * Detected change in '/Users/renato/Documents/Developement/api_nfe/temp_fix_cnpj.py', reloading
+
+[LIST] Clientes acessíveis: [14, 13]
+[OK] Acesso permitido ao cliente 14 para usuário Izabel
+[?] DASHBOARD: Entrando no dashboard do cliente 14
+[LOG] Buscando dados do cliente...
+[OK] Cliente: Empresa Teste Lucro Real
+[DATA] Calculando estatísticas...
+  Produtos: 1
+  Destinatários: 1
+  Regras: 0
+  Certificados: 1
+[DATA] Contando NFes...
+  Total NFes: 0
+  NFes no ano: 0
+  NFes no mês: 0
+[DATA] Contagens: 1P, 1D, 0R, 1C, 0N
+[DATA] Processando últimas NFes...
+[OK] DASHBOARD: Dados carregados - 1 produtos, 1 destinatários, 0 NFes recentes
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === CARREGANDO FORMULÁRIO (GET) ===
+ CSTs carregados: 11 registros
+ CSOSNs carregados: 10 registros
+ Renderizando template com 1 destinatários e 1 produtos para cliente 14
+[SEARCH] CFOP '1102' → IDs encontrados: [2]
+[SEARCH] NCM '01022110' → IDs encontrados: [5]
+[!] Nenhuma regra encontrada para:
+   Cliente: 14, Regime: 7
+   NCM: 01022110, CFOP: 1102
+   UF Origem: SP, UF Destino: SP
+   Tipo: Produto
+ * Restarting with stat
+lxml carregado com sucesso
+nfelib carregado com sucesso
+SefazService carregado com sucesso
+OK: Serviços locais carregados com sucesso
+
+=== ROTAS REGISTRADAS ===
+GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
+GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
+GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
+GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
+GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
+OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
+GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS   /api/nfe/proximo-numero                            -> api.get_proximo_numero_nfe
+GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
+GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
+GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
+GET, HEAD, OPTIONS   /admin/nfe/view/<int:nfe_id>                       -> nfe.view
+OPTIONS, POST        /admin/nfe/generate-danfe/<int:nfe_id>             -> nfe.generate_danfe
+OPTIONS, POST        /admin/nfe/generate-danfe-after-issue              -> nfe.generate_danfe_after_issue
+OPTIONS, POST        /admin/nfe/<int:nfe_id>/enviar-danfe               -> nfe.enviar_danfe_email
+GET, HEAD, OPTIONS, POST /admin/nfe/edit/<int:nfe_id>                       -> nfe.edit
+GET, HEAD, OPTIONS   /admin/nfe/download/<int:nfe_id>                   -> nfe.download
+OPTIONS, POST        /admin/nfe/reenviar/<int:nfe_id>                   -> nfe.reenviar_nfe
+OPTIONS, POST        /admin/nfe/emitir-rascunho/<int:nfe_id>            -> nfe.emitir_rascunho
+OPTIONS, POST        /admin/nfe/compartilhar/<int:nfe_id>               -> nfe.compartilhar_nfe
+GET, HEAD, OPTIONS, POST /admin/nfce/emitir                                 -> nfce.emitir_nfce
+GET, HEAD, OPTIONS   /admin/nfce/list                                   -> nfce.listar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/consultar/<int:nfce_id>                -> nfce.consultar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/download-xml/<int:nfce_id>             -> nfce.download_xml_nfce
+OPTIONS, POST        /admin/nfce/cancelar/<int:nfce_id>                 -> nfce.cancelar_nfce_route
+GET, HEAD, OPTIONS   /admin/nfce/danfce/<int:nfce_id>                   -> nfce.danfce
+GET, HEAD, OPTIONS, POST /admin/produtos/<int:produto_id>/editar            -> admin.editar_produto
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-csv                             -> admin.upload_ncm_csv
+GET, HEAD, OPTIONS, POST /admin/ncms/editar/<int:ncm_id>                    -> admin.edit_ncm
+OPTIONS, POST        /admin/produtos/<int:produto_id>/duplicar          -> admin.duplicar_produto
+GET, HEAD, OPTIONS   /admin/                                            -> admin.admin_home
+GET, HEAD, OPTIONS   /admin/nfes                                        -> admin.list_nfes
+GET, HEAD, OPTIONS   /admin/ncms                                        -> admin.list_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-siscomex                        -> admin.upload_siscomex_json
+GET, HEAD, OPTIONS   /admin/api/ncms/search                             -> admin.api_search_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/novo                                   -> admin.create_ncm
+OPTIONS, POST        /admin/ncms/excluir/<int:ncm_id>                   -> admin.delete_ncm
+GET, HEAD, OPTIONS   /admin/cst                                         -> admin.list_cst
+GET, HEAD, OPTIONS   /admin/cst/novo                                    -> admin.create_cst
+GET, HEAD, OPTIONS, POST /admin/cst/editar/<int:cst_id>                     -> admin.edit_cst
+OPTIONS, POST        /admin/cst/excluir/<int:cst_id>                    -> admin.delete_cst
+GET, HEAD, OPTIONS   /admin/cst/pis-cofins                              -> admin.list_cst_pis_cofins
+GET, HEAD, OPTIONS   /admin/cfops                                       -> admin.list_cfops
+GET, HEAD, OPTIONS   /admin/cfops/novo                                  -> admin.create_cfop
+OPTIONS, POST        /admin/cfops/salvar                                -> admin.save_cfop
+GET, HEAD, OPTIONS   /admin/cfops/editar/<int:cfop_id>                  -> admin.edit_cfop
+OPTIONS, POST        /admin/cfops/excluir/<int:cfop_id>                 -> admin.delete_cfop
+GET, HEAD, OPTIONS   /admin/usuarios                                    -> admin.list_usuarios
+GET, HEAD, OPTIONS, POST /admin/usuarios/novo                               -> admin.create_usuario
+GET, HEAD, OPTIONS, POST /admin/usuarios/editar/<int:usuario_id>            -> admin.edit_usuario
+OPTIONS, POST        /admin/usuarios/excluir/<int:usuario_id>           -> admin.delete_usuario
+GET, HEAD, OPTIONS   /admin/clientes/<int:cliente_id>/visualizar        -> admin.visualizar_cliente
+GET, HEAD, OPTIONS   /admin/csosn                                       -> admin.list_csosn
+GET, HEAD, OPTIONS   /admin/csosn/novo                                  -> admin.create_csosn
+GET, HEAD, OPTIONS, POST /admin/csosn/editar/<int:csosn_id>                 -> admin.edit_csosn
+OPTIONS, POST        /admin/csosn/excluir/<int:csosn_id>                -> admin.delete_csosn
+GET, HEAD, OPTIONS   /admin/regimes-tributarios                         -> admin.list_regimes_tributarios
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/novo                    -> admin.novo_regime_tributario
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/<int:regime_tributario_id>/editar -> admin.novo_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/salvar                  -> admin.salvar_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/<int:regime_tributario_id>/delete -> admin.delete_regime_tributario
+GET, HEAD, OPTIONS   /admin/roles                                       -> admin.list_roles
+GET, HEAD, OPTIONS, POST /admin/roles/novo                                  -> admin.create_role
+GET, HEAD, OPTIONS, POST /admin/roles/editar/<int:role_id>                  -> admin.edit_role
+OPTIONS, POST        /admin/roles/excluir/<int:role_id>                 -> admin.delete_role
+GET, HEAD, OPTIONS   /admin/permissions                                 -> admin.list_permissions
+GET, HEAD, OPTIONS   /admin/permissions/novo                            -> admin.create_permission
+GET, HEAD, OPTIONS, POST /admin/permissions/editar/<int:permission_id>      -> admin.edit_permission
+OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin.delete_permission
+GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
+GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
+GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
+GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
+OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
+GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
+OPTIONS, POST        /admin/backups/delete/<filename>                   -> admin.delete_backup
+GET, HEAD, OPTIONS   /admin/backup                                      -> admin.backup
+GET, HEAD, OPTIONS   /admin/dashboard                                   -> admin.dashboard
+GET, HEAD, OPTIONS   /admin/certificados/vencimento                     -> admin.relatorio_certificados_vencimento
+GET, HEAD, OPTIONS   /admin/dashboard/api/data                          -> admin.dashboard_api_data
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao                         -> admin.list_motivos_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/novo                    -> admin.novo_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/<int:motivo_id>/editar  -> admin.novo_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/<int:motivo_id>/delete  -> admin.delete_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/origens-mercadoria                          -> admin.list_origens_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/novo                     -> admin.create_origem_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/editar/<int:origem_id>   -> admin.edit_origem_mercadoria
+OPTIONS, POST        /admin/origens-mercadoria/excluir/<int:origem_id>  -> admin.delete_origem_mercadoria
+GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes
+GET, HEAD, OPTIONS, POST /admin/clientes/novo                               -> admin.create_cliente
+GET, HEAD, OPTIONS, POST /admin/clientes/<int:cliente_id>/edit              -> admin.edit_cliente
+OPTIONS, POST        /admin/clientes/<int:cliente_id>/delete            -> admin.delete_cliente
+GET, HEAD, OPTIONS   /admin/certificados/novo/<int:cliente_id>          -> admin.create_certificado
+GET, HEAD, OPTIONS   /admin/certificados/<int:certificado_digital_id>/edit/<int:cliente_id> -> admin.edit_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_digital_id>/delete -> admin.delete_certificado
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova/<int:cliente_id>     -> admin.create_regra_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/<int:regra_tributacao_id>/edit -> admin.edit_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -> admin.delete_regra_tributacao
+GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
+OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
+GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
+GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
+OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
+OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
+OPTIONS, POST        /admin/produtos/<int:produto_id>/delete            -> admin.delete_produto
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:cliente_id>              -> admin.list_destinatarios
+OPTIONS, POST        /admin/destinatarios/salvar                        -> admin.salvar_destinatario
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:destinatario_id>/edit    -> admin.edit_destinatario
+GET, HEAD, OPTIONS   /admin/certificados                                -> admin.list_certificados
+OPTIONS, POST        /admin/certificados/salvar                         -> admin.salvar_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_id>/toggle-status -> admin.toggle_certificado_status
+GET, HEAD, OPTIONS   /admin/regras-tributacao                           -> admin.list_regras_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova                      -> admin.nova_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/salvar                    -> admin.salvar_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/excluir/<int:regra_id>    -> admin.excluir_regra_tributacao
+GET, HEAD, OPTIONS   /admin/perfil                                      -> admin.perfil
+GET, HEAD, OPTIONS   /admin/api/buscar-cep/<cep>                        -> admin.buscar_cep
+GET, HEAD, OPTIONS   /admin/health                                      -> admin.admin_health
+OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin.api_sugestao_tributaria
+GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
+GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
+GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
+GET, HEAD, OPTIONS   /admin/faturamento                                 -> admin.list_faturamento
+GET, HEAD, OPTIONS, POST /admin/faturamento/cliente/<int:cliente_id>/editar -> admin.edit_faturamento_cliente
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs                      -> admin.list_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/nova                 -> admin.criar_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/<int:classificacao_id>/editar -> admin.editar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/salvar               -> admin.salvar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/<int:classificacao_id>/toggle -> admin.toggle_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/faturamento/relatorio-gerencial             -> admin.relatorio_gerencial
+GET, HEAD, OPTIONS, POST /admin/faturamento/extrato/<int:cliente_id>        -> admin.gerar_extrato_cliente
+GET, HEAD, OPTIONS   /admin/api/classificacoes-ibs-cbs                  -> admin.api_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/api/regime-tributario/<int:cliente_id>      -> admin.api_regime_tributario_cliente
+GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
+GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
+GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
+GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /admin/planos/                                     -> planos.list_planos
+GET, HEAD, OPTIONS, POST /admin/planos/criar                                -> planos.criar_plano
+GET, HEAD, OPTIONS, POST /admin/planos/<int:plano_id>/editar                -> planos.editar_plano
+OPTIONS, POST        /admin/planos/<int:plano_id>/toggle                -> planos.toggle_plano
+GET, HEAD, OPTIONS   /admin/planos/assinaturas                          -> planos.list_assinaturas
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/criar                    -> planos.criar_assinatura
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/<int:assinatura_id>/editar -> planos.editar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/renovar -> planos.renovar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/cancelar -> planos.cancelar_assinatura
+GET, HEAD, OPTIONS   /admin/planos/relatorio/consumo                    -> planos.relatorio_consumo
+GET, HEAD, OPTIONS   /admin/planos/api/verificar-limite/<int:cliente_id> -> planos.verificar_limite_api
+GET, HEAD, OPTIONS   /                                                  -> home.home
+GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
+GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
+GET, HEAD, OPTIONS   /api/llm/ncms/export                               -> llm_api.export_ncms_for_training
+GET, HEAD, OPTIONS   /api/llm/ncms/search                               -> llm_api.search_ncms_for_llm
+GET, HEAD, OPTIONS   /api/llm/ncms/hierarquia/<codigo>                  -> llm_api.get_hierarquia_ncm * Debugger is active!
+ * Debugger PIN: 175-327-359
+ * Detected change in '/Users/renato/Documents/Developement/api_nfe/temp_fix_cnpj.py', reloading
+
+GET, HEAD, OPTIONS   /api/llm/ncms/stats                                -> llm_api.get_ncm_statistics
+GET, HEAD, OPTIONS   /                                                  -> home
+GET, HEAD, OPTIONS   /health                                            -> health_check
+=== FIM DAS ROTAS ===
+
+ * Restarting with stat
+lxml carregado com sucesso
+nfelib carregado com sucesso
+SefazService carregado com sucesso
+OK: Serviços locais carregados com sucesso
+
+=== ROTAS REGISTRADAS ===
+GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
+GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
+GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
+GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
+GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
+OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
+GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS   /api/nfe/proximo-numero                            -> api.get_proximo_numero_nfe
+GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
+GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
+GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
+GET, HEAD, OPTIONS   /admin/nfe/view/<int:nfe_id>                       -> nfe.view
+OPTIONS, POST        /admin/nfe/generate-danfe/<int:nfe_id>             -> nfe.generate_danfe
+OPTIONS, POST        /admin/nfe/generate-danfe-after-issue              -> nfe.generate_danfe_after_issue
+OPTIONS, POST        /admin/nfe/<int:nfe_id>/enviar-danfe               -> nfe.enviar_danfe_email
+GET, HEAD, OPTIONS, POST /admin/nfe/edit/<int:nfe_id>                       -> nfe.edit
+GET, HEAD, OPTIONS   /admin/nfe/download/<int:nfe_id>                   -> nfe.download
+OPTIONS, POST        /admin/nfe/reenviar/<int:nfe_id>                   -> nfe.reenviar_nfe
+OPTIONS, POST        /admin/nfe/emitir-rascunho/<int:nfe_id>            -> nfe.emitir_rascunho
+OPTIONS, POST        /admin/nfe/compartilhar/<int:nfe_id>               -> nfe.compartilhar_nfe
+GET, HEAD, OPTIONS, POST /admin/nfce/emitir                                 -> nfce.emitir_nfce
+GET, HEAD, OPTIONS   /admin/nfce/list                                   -> nfce.listar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/consultar/<int:nfce_id>                -> nfce.consultar_nfce
+GET, HEAD, OPTIONS   /admin/nfce/download-xml/<int:nfce_id>             -> nfce.download_xml_nfce
+OPTIONS, POST        /admin/nfce/cancelar/<int:nfce_id>                 -> nfce.cancelar_nfce_route
+GET, HEAD, OPTIONS   /admin/nfce/danfce/<int:nfce_id>                   -> nfce.danfce
+GET, HEAD, OPTIONS, POST /admin/produtos/<int:produto_id>/editar            -> admin.editar_produto
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-csv                             -> admin.upload_ncm_csv
+GET, HEAD, OPTIONS, POST /admin/ncms/editar/<int:ncm_id>                    -> admin.edit_ncm
+OPTIONS, POST        /admin/produtos/<int:produto_id>/duplicar          -> admin.duplicar_produto
+GET, HEAD, OPTIONS   /admin/                                            -> admin.admin_home
+GET, HEAD, OPTIONS   /admin/nfes                                        -> admin.list_nfes
+GET, HEAD, OPTIONS   /admin/ncms                                        -> admin.list_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/upload-siscomex                        -> admin.upload_siscomex_json
+GET, HEAD, OPTIONS   /admin/api/ncms/search                             -> admin.api_search_ncms
+GET, HEAD, OPTIONS, POST /admin/ncms/novo                                   -> admin.create_ncm
+OPTIONS, POST        /admin/ncms/excluir/<int:ncm_id>                   -> admin.delete_ncm
+GET, HEAD, OPTIONS   /admin/cst                                         -> admin.list_cst
+GET, HEAD, OPTIONS   /admin/cst/novo                                    -> admin.create_cst
+GET, HEAD, OPTIONS, POST /admin/cst/editar/<int:cst_id>                     -> admin.edit_cst
+OPTIONS, POST        /admin/cst/excluir/<int:cst_id>                    -> admin.delete_cst
+GET, HEAD, OPTIONS   /admin/cst/pis-cofins                              -> admin.list_cst_pis_cofins
+GET, HEAD, OPTIONS   /admin/cfops                                       -> admin.list_cfops
+GET, HEAD, OPTIONS   /admin/cfops/novo                                  -> admin.create_cfop
+OPTIONS, POST        /admin/cfops/salvar                                -> admin.save_cfop
+GET, HEAD, OPTIONS   /admin/cfops/editar/<int:cfop_id>                  -> admin.edit_cfop
+OPTIONS, POST        /admin/cfops/excluir/<int:cfop_id>                 -> admin.delete_cfop
+GET, HEAD, OPTIONS   /admin/usuarios                                    -> admin.list_usuarios
+GET, HEAD, OPTIONS, POST /admin/usuarios/novo                               -> admin.create_usuario
+GET, HEAD, OPTIONS, POST /admin/usuarios/editar/<int:usuario_id>            -> admin.edit_usuario
+OPTIONS, POST        /admin/usuarios/excluir/<int:usuario_id>           -> admin.delete_usuario
+GET, HEAD, OPTIONS   /admin/clientes/<int:cliente_id>/visualizar        -> admin.visualizar_cliente
+GET, HEAD, OPTIONS   /admin/csosn                                       -> admin.list_csosn
+GET, HEAD, OPTIONS   /admin/csosn/novo                                  -> admin.create_csosn
+GET, HEAD, OPTIONS, POST /admin/csosn/editar/<int:csosn_id>                 -> admin.edit_csosn
+OPTIONS, POST        /admin/csosn/excluir/<int:csosn_id>                -> admin.delete_csosn
+GET, HEAD, OPTIONS   /admin/regimes-tributarios                         -> admin.list_regimes_tributarios
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/novo                    -> admin.novo_regime_tributario
+GET, HEAD, OPTIONS   /admin/regimes-tributarios/<int:regime_tributario_id>/editar -> admin.novo_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/salvar                  -> admin.salvar_regime_tributario
+OPTIONS, POST        /admin/regimes-tributarios/<int:regime_tributario_id>/delete -> admin.delete_regime_tributario
+GET, HEAD, OPTIONS   /admin/roles                                       -> admin.list_roles
+GET, HEAD, OPTIONS, POST /admin/roles/novo                                  -> admin.create_role
+GET, HEAD, OPTIONS, POST /admin/roles/editar/<int:role_id>                  -> admin.edit_role
+OPTIONS, POST        /admin/roles/excluir/<int:role_id>                 -> admin.delete_role
+GET, HEAD, OPTIONS   /admin/permissions                                 -> admin.list_permissions
+GET, HEAD, OPTIONS   /admin/permissions/novo                            -> admin.create_permission
+GET, HEAD, OPTIONS, POST /admin/permissions/editar/<int:permission_id>      -> admin.edit_permission
+OPTIONS, POST        /admin/permissions/excluir/<int:permission_id>     -> admin.delete_permission
+GET, HEAD, OPTIONS   /admin/user-permissions                            -> admin.list_user_permissions
+GET, HEAD, OPTIONS   /admin/logs                                        -> admin.list_logs
+GET, HEAD, OPTIONS   /admin/configuracoes                               -> admin.configuracoes
+GET, HEAD, OPTIONS   /admin/backups                                     -> admin.list_backups
+OPTIONS, POST        /admin/backups/executar                            -> admin.executar_backup_manual
+GET, HEAD, OPTIONS   /admin/backups/download/<filename>                 -> admin.download_backup
+OPTIONS, POST        /admin/backups/delete/<filename>                   -> admin.delete_backup
+GET, HEAD, OPTIONS   /admin/backup                                      -> admin.backup
+GET, HEAD, OPTIONS   /admin/dashboard                                   -> admin.dashboard
+GET, HEAD, OPTIONS   /admin/certificados/vencimento                     -> admin.relatorio_certificados_vencimento
+GET, HEAD, OPTIONS   /admin/dashboard/api/data                          -> admin.dashboard_api_data
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao                         -> admin.list_motivos_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/novo                    -> admin.novo_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/motivos-desoneracao/<int:motivo_id>/editar  -> admin.novo_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/<int:motivo_id>/delete  -> admin.delete_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/origens-mercadoria                          -> admin.list_origens_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/novo                     -> admin.create_origem_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/editar/<int:origem_id>   -> admin.edit_origem_mercadoria
+OPTIONS, POST        /admin/origens-mercadoria/excluir/<int:origem_id>  -> admin.delete_origem_mercadoria
+GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes
+GET, HEAD, OPTIONS, POST /admin/clientes/novo                               -> admin.create_cliente
+GET, HEAD, OPTIONS, POST /admin/clientes/<int:cliente_id>/edit              -> admin.edit_cliente
+OPTIONS, POST        /admin/clientes/<int:cliente_id>/delete            -> admin.delete_cliente
+GET, HEAD, OPTIONS   /admin/certificados/novo/<int:cliente_id>          -> admin.create_certificado
+GET, HEAD, OPTIONS   /admin/certificados/<int:certificado_digital_id>/edit/<int:cliente_id> -> admin.edit_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_digital_id>/delete -> admin.delete_certificado
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova/<int:cliente_id>     -> admin.create_regra_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/<int:regra_tributacao_id>/edit -> admin.edit_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -> admin.delete_regra_tributacao
+GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
+OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
+GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
+GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
+OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
+OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
+OPTIONS, POST        /admin/produtos/<int:produto_id>/delete            -> admin.delete_produto
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:cliente_id>              -> admin.list_destinatarios
+OPTIONS, POST        /admin/destinatarios/salvar                        -> admin.salvar_destinatario
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:destinatario_id>/edit    -> admin.edit_destinatario
+GET, HEAD, OPTIONS   /admin/certificados                                -> admin.list_certificados
+OPTIONS, POST        /admin/certificados/salvar                         -> admin.salvar_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_id>/toggle-status -> admin.toggle_certificado_status
+GET, HEAD, OPTIONS   /admin/regras-tributacao                           -> admin.list_regras_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova                      -> admin.nova_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/salvar                    -> admin.salvar_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/excluir/<int:regra_id>    -> admin.excluir_regra_tributacao
+GET, HEAD, OPTIONS   /admin/perfil                                      -> admin.perfil
+GET, HEAD, OPTIONS   /admin/api/buscar-cep/<cep>                        -> admin.buscar_cep
+GET, HEAD, OPTIONS   /admin/health                                      -> admin.admin_health
+OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin.api_sugestao_tributaria
+GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
+GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
+GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
+GET, HEAD, OPTIONS   /admin/faturamento                                 -> admin.list_faturamento
+GET, HEAD, OPTIONS, POST /admin/faturamento/cliente/<int:cliente_id>/editar -> admin.edit_faturamento_cliente
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs                      -> admin.list_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/nova                 -> admin.criar_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/<int:classificacao_id>/editar -> admin.editar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/salvar               -> admin.salvar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/<int:classificacao_id>/toggle -> admin.toggle_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/faturamento/relatorio-gerencial             -> admin.relatorio_gerencial
+GET, HEAD, OPTIONS, POST /admin/faturamento/extrato/<int:cliente_id>        -> admin.gerar_extrato_cliente
+GET, HEAD, OPTIONS   /admin/api/classificacoes-ibs-cbs                  -> admin.api_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/api/regime-tributario/<int:cliente_id>      -> admin.api_regime_tributario_cliente
+GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
+GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
+GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
+GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /admin/planos/                                     -> planos.list_planos
+GET, HEAD, OPTIONS, POST /admin/planos/criar                                -> planos.criar_plano
+GET, HEAD, OPTIONS, POST /admin/planos/<int:plano_id>/editar                -> planos.editar_plano
+OPTIONS, POST        /admin/planos/<int:plano_id>/toggle                -> planos.toggle_plano
+GET, HEAD, OPTIONS   /admin/planos/assinaturas                          -> planos.list_assinaturas
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/criar                    -> planos.criar_assinatura
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/<int:assinatura_id>/editar -> planos.editar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/renovar -> planos.renovar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/cancelar -> planos.cancelar_assinatura
+GET, HEAD, OPTIONS   /admin/planos/relatorio/consumo                    -> planos.relatorio_consumo
+GET, HEAD, OPTIONS   /admin/planos/api/verificar-limite/<int:cliente_id> -> planos.verificar_limite_api
+GET, HEAD, OPTIONS   /                                                  -> home.home
+GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
+GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
+GET, HEAD, OPTIONS   /api/llm/ncms/export                               -> llm_api.export_ncms_for_training
+GET, HEAD, OPTIONS   /api/llm/ncms/search                               -> llm_api.search_ncms_for_llm
+GET, HEAD, OPTIONS   /api/llm/ncms/hierarquia/<codigo>                  -> llm_api.get_hierarquia_ncm * Debugger is active!
+ * Debugger PIN: 175-327-359
+
+GET, HEAD, OPTIONS   /api/llm/ncms/stats                                -> llm_api.get_ncm_statistics
+GET, HEAD, OPTIONS   /                                                  -> home
+GET, HEAD, OPTIONS   /health                                            -> health_check
+=== FIM DAS ROTAS ===
+
+ Cliente ID da URL: 14
+OK: Emitente encontrado: Empresa Teste Lucro Real
+ === INICIANDO PROCESSAMENTO POST ===
+ Form data: {'tpNF': '1', 'finNFe': '1', 'dataEmissao': '2025-12-11T14:35', 'serie': '1', 'numero_nfe': '1', 'natOp': 'Venda de Mercadoria', 'infCpl': '', 'formaPagamento': '01', 'valorPagamento': '3500.00', 'modFrete': '9', 'transportadoraNome': '', 'transportadoraCnpjCpf': '', 'transportadoraIE': '', 'transportadoraEndereco': '', 'transportadoraMunicipio': '', 'transportadoraUF': '', 'veiculoPlaca': '', 'veiculoUF': '', 'transportadoraANTT': '', 'volumeQuantidade': '', 'volumeEspecie': '', 'volumeMarca': '', 'volumeNumeracao': '', 'volumePesoBruto': '', 'volumePesoLiquido': ''}
+ Dados transporte - Modalidade: 9, Transportadora: 
+ DEBUG - Ação recebida: emitir, Ambiente do cliente: homologacao (1)
+ === PROCESSANDO EMISSÃO ===
+ Destinatário ID: 10
+OK: Destinatário encontrado: Empresa Teste Ltda
+ Destinatário data: {'nome_razao_social': 'Empresa Teste Ltda', 'cpf_cnpj': '12345678000195', 'logradouro': 'Rua das Flores', 'numero': '123', 'bairro': 'Centro', 'cep': '01310100', 'codigo_municipio': '3550308', 'nome_municipio': 'São Paulo', 'uf': 'SP'}
+ === PROCESSANDO ITENS ===
+ Item 0 JSON: {"codigo_produto":"PROD001","descricao":"Notebook Dell Inspiron 15","unidade":"UN","quantidade":"1",...
+ Item 1: Notebook Dell Inspiron 15
+ Processando 1 itens
+ === VALIDANDO DADOS ===
+[SEARCH] VALIDAÇÃO - CNPJ Emitente recebido: '11222333000181'
+[SEARCH] VALIDAÇÃO - Tipo do CNPJ: <class 'str'>
+[SEARCH] VALIDAÇÃO - CNPJ após strip: '11222333000181'
+[OK] CNPJ do emitente válido: 11222333000181
+[SEARCH] VALIDAÇÃO - CPF/CNPJ Destinatário: '12345678000195'
+[OK] CNPJ do destinatário válido: 12345678000195
+[SEARCH] VALIDAÇÃO FINAL - 0 erros encontrados
+OK: Validação passou
+ Ambiente SEFAZ: 2 (homologacao)
+ === GERANDO XML ===
+ === GERANDO XML NFE ===
+ Form data: {'tpNF': '1', 'finNFe': '1', 'dataEmissao': '2025-12-11T14:35', 'serie': '1', 'numero_nfe': '1', 'natOp': 'Venda de Mercadoria', 'infCpl': '', 'formaPagamento': '01', 'valorPagamento': '3500.00', 'modFrete': '9', 'transportadoraNome': '', 'transportadoraCnpjCpf': '', 'transportadoraIE': '', 'transportadoraEndereco': '', 'transportadoraMunicipio': '', 'transportadoraUF': '', 'veiculoPlaca': '', 'veiculoUF': '', 'transportadoraANTT': '', 'volumeQuantidade': '', 'volumeEspecie': '', 'volumeMarca': '', 'volumeNumeracao': '', 'volumePesoBruto': '', 'volumePesoLiquido': ''}
+ Items: 1 itens
+ Item 1 - CFOP original: '1102' (tipo: <class 'str'>)
+OK: Item 1 - CFOP corrigido: '1102'
+ [✓] Número da NFe fornecido: 1 (série 1)
+ Data emissão: 2025-12-11T14:35:00-03:00
+ Chave de acesso: 35251211222333000181550010000000011286983262
+ Item: Notebook Dell Inspiron 15 - Valor: R$ 3500.00 - CFOP: 1102
+ Totais - Produtos: R$ 3500.00, ICMS: R$ 0.00, NFe: R$ 3500.00
+ Item 1 - CFOP final no XML: '1102'
+OK: XML gerado com sucesso: 3241 caracteres
+ XML preview (primeiros 500 chars): <?xml version='1.0' encoding='UTF-8'?>
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+  <infNFe Id="NFe35251211222333000181550010000000011286983262" versao="4.00">
+    <ide>
+      <cUF>35</cUF>
+      <cNF>28698326</cNF>
+      <natOp>Venda de Mercadoria</natOp>
+      <mod>55</mod>
+      <serie>1</serie>
+      <nNF>1</nNF>
+      <dhEmi>2025-12-11T14:35:00-03:00</dhEmi>
+      <tpNF>1</tpNF>
+      <idDest>1</idDest>
+      <cMunFG>3549805</cMunFG>
+      <tpImp>1</tpImp>
+      <tpEmis>1</tpEmis>
+   ...
+OK: CFOPs encontrados no XML: ['1102']
+OK: XML gerado: 3241 caracteres
+ XML preview: <?xml version='1.0' encoding='UTF-8'?>
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+  <infNFe Id="NFe35251211222333000181550010000000011286983262" versao="4.00">
+    <ide>
+      <cUF>35</cUF>
+    ...
+ === VALIDANDO XML ===
+[SEARCH] VALIDAÇÃO XML - Tamanho: 3241 caracteres
+[OK] Tag NFe encontrada
+[OK] Dados do emitente encontrados
+[OK] Dados do destinatário encontrados
+[OK] Itens da NFe encontrados
+[OK] infNFe encontrado
+[OK] IDE encontrado
+ℹ️ XML ainda não foi assinado
+[SEARCH] ESTRUTURA XML DEBUG:
+   1: <?xml version='1.0' encoding='UTF-8'?>
+   2: <NFe xmlns="http://www.portalfiscal.inf.br/nfe"> [OK]
+   3: <infNFe Id="NFe35251211222333000181550010000000011286983262" versao="4.00"> [OK]
+   4: <ide> [OK]
+   5: <cUF>35</cUF>
+   6: <cNF>28698326</cNF>
+   7: <natOp>Venda de Mercadoria</natOp>
+   8: <mod>55</mod>
+   9: <serie>1</serie>
+  10: <nNF>1</nNF>
+  11: <dhEmi>2025-12-11T14:35:00-03:00</dhEmi>
+  12: <tpNF>1</tpNF>
+  13: <idDest>1</idDest> [OK]
+  14: <cMunFG>3549805</cMunFG>
+  15: <tpImp>1</tpImp>
+  16: <tpEmis>1</tpEmis>
+  17: <cDV>2</cDV>
+  18: <tpAmb>2</tpAmb>
+  19: <finNFe>1</finNFe> [OK]
+  20: <indFinal>1</indFinal>
+[OK] VALIDAÇÃO XML - XML válido!
+OK: XML válido
+ === BUSCANDO CERTIFICADO ===
+[AUTH] get_active_certificate_for_client: Buscando certificado para cliente 14
+[OK] get_active_certificate_for_client: Certificado encontrado: ID 25
+[OK] get_active_certificate_for_client: Certificado convertido: SJ TECNOLOGIA- Sj10260583.pfx
+[SEARCH] get_active_certificate_for_client: Tentando carregar certificado real...
+[SEARCH] _decode_certificate_data: Decodificando 12296 caracteres
+[OK] _decode_certificate_data: Sucesso com método 'base64' - 9222 bytes
+[UNLOCK] _decrypt_password: Iniciando descriptografia de 136 caracteres
+[UNLOCK] _decrypt_password: Dados: Z0FBQUFBQnBPdkdzVjcxbGw1aTJIeUZYNHpBTzVGNEVYekd6Zn...
+[UNLOCK] _decrypt_password: Base64 decodificado: 100 bytes
+[OK] _decrypt_password: Fernet SUCCESS! Senha descriptografada: 10 chars
+[SEARCH] get_active_certificate_for_client: Dados decodificados - cert: 9222 bytes, senha: 10 chars
+[?] _validate_pkcs12_simple: Validando com senha de 10 chars
+[OK] _validate_pkcs12_simple: PKCS#12 válido! Subject: <Name(C=BR,O=ICP-Brasil,OU=Certificado Digital PJ A1,OU=Videoconferencia,OU=25341524000177,OU=AC SyngularID Multipla,CN=SJ TECNOLOGIA E DESENVOLVIMENTO DE SOFTWARE LTDA:10260583000143)>
+[OK] get_active_certificate_for_client: Certificado real carregado com sucesso
+OK: Certificado encontrado: None
+️ === ASSINANDO XML ===
+[AUTH] === INICIANDO ASSINATURA REAL ===
+[AUTH] get_active_certificate_for_client: Buscando certificado para cliente 14
+[OK] get_active_certificate_for_client: Certificado encontrado: ID 25
+[OK] get_active_certificate_for_client: Certificado convertido: SJ TECNOLOGIA- Sj10260583.pfx
+[SEARCH] get_active_certificate_for_client: Tentando carregar certificado real...
+[SEARCH] _decode_certificate_data: Decodificando 12296 caracteres
+[OK] _decode_certificate_data: Sucesso com método 'base64' - 9222 bytes
+[UNLOCK] _decrypt_password: Iniciando descriptografia de 136 caracteres
+[UNLOCK] _decrypt_password: Dados: Z0FBQUFBQnBPdkdzVjcxbGw1aTJIeUZYNHpBTzVGNEVYekd6Zn...
+[UNLOCK] _decrypt_password: Base64 decodificado: 100 bytes
+[OK] _decrypt_password: Fernet SUCCESS! Senha descriptografada: 10 chars
+[SEARCH] get_active_certificate_for_client: Dados decodificados - cert: 9222 bytes, senha: 10 chars
+[?] _validate_pkcs12_simple: Validando com senha de 10 chars
+[OK] _validate_pkcs12_simple: PKCS#12 válido! Subject: <Name(C=BR,O=ICP-Brasil,OU=Certificado Digital PJ A1,OU=Videoconferencia,OU=25341524000177,OU=AC SyngularID Multipla,CN=SJ TECNOLOGIA E DESENVOLVIMENTO DE SOFTWARE LTDA:10260583000143)>
+[OK] get_active_certificate_for_client: Certificado real carregado com sucesso
+[AUTH] Carregando certificado real...
+[UNLOCK] _decrypt_password: Iniciando descriptografia de 136 caracteres
+[UNLOCK] _decrypt_password: Dados: Z0FBQUFBQnBPdkdzVjcxbGw1aTJIeUZYNHpBTzVGNEVYekd6Zn...
+[UNLOCK] _decrypt_password: Base64 decodificado: 100 bytes
+[OK] _decrypt_password: Fernet SUCCESS! Senha descriptografada: 10 chars
+[OK] Certificado carregado: <Name(C=BR,O=ICP-Brasil,OU=Certificado Digital PJ A1,OU=Videoconferencia,OU=25341524000177,OU=AC SyngularID Multipla,CN=SJ TECNOLOGIA E DESENVOLVIMENTO DE SOFTWARE LTDA:10260583000143)>2025-12-11 14:35:37,320 - services.danfe_service - INFO - ℹ️ Cliente 14 não tem logo cadastrada
+2025-12-11 14:35:37,321 - services.danfe_service - WARNING - [!] Nenhuma logo encontrada (nem do cliente, nem padrão)
+2025-12-11 14:35:37,322 - services.danfe_service - INFO - [START] Tentando gerar DANFE oficial usando nfelib
+2025-12-11 14:35:37,322 - services.danfe_service - INFO - [?] Processando como NFe
+2025-12-11 14:35:37,322 - services.danfe_service - INFO - [?] Usando bindings v4.0
+2025-12-11 14:35:37,469 - services.danfe_service - INFO - [OK] NFe carregada do XML com sucesso
+2025-12-11 14:35:37,469 - services.danfe_service - INFO - [LIST] NFe carregada (detalhes não disponíveis)
+2025-12-11 14:35:37,469 - services.danfe_service - INFO - [?] Gerando PDF...
+2025-12-11 14:35:37,469 - services.danfe_service - INFO - [?] Tentando engine: brazilfiscalreport
+2025-12-11 14:35:39,097 - services.danfe_service - INFO - [OK] PDF gerado com engine brazilfiscalreport
+2025-12-11 14:35:39,098 - services.danfe_service - INFO - [OK] DANFE nfelib gerado com sucesso: static/danfe/danfe_91_20251211143537.pdf
+2025-12-11 14:35:39,098 - services.danfe_service - INFO - [DATA] Tamanho do arquivo: 4928 bytes
+2025-12-11 14:35:39,098 - services.danfe_service - INFO - [?] DANFE oficial gerado com sucesso usando nfelib
+2025-12-11 14:35:39,101 - services.danfe_service - INFO - [OK] DANFE permanente salvo em: static/danfe/danfe_91.pdf
+127.0.0.1 - - [11/Dec/2025 14:35:39] "[32mPOST /admin/nfe/emitir?cliente_id=14 HTTP/1.1[0m" 302 -
+2025-12-11 14:35:39,105 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:35:39] "[32mPOST /admin/nfe/emitir?cliente_id=14 HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:35:39] "GET /admin/nfe/list?cliente_id=14&danfe_gerado=true&nfe_id=91&danfe_path=static/danfe/danfe_91.pdf HTTP/1.1" 200 -
+2025-12-11 14:35:39,239 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:35:39] "GET /admin/nfe/list?cliente_id=14&danfe_gerado=true&nfe_id=91&danfe_path=static/danfe/danfe_91.pdf HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:35:39] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+2025-12-11 14:35:39,324 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:35:39] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:35:42] "GET /static/danfe/danfe_91.pdf HTTP/1.1" 200 -
+2025-12-11 14:35:42,408 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:35:42] "GET /static/danfe/danfe_91.pdf HTTP/1.1" 200 -
+
+[OK] Elemento infNFe encontrado: NFe35251211222333000181550010000000011286983262
+[?] Criando assinatura XMLDSig...
+[SEARCH] Digest SHA-1: GC0Qs4ds6T+cOsP+KzqRpzXmU24=...
+[OK] Elemento Signature criado
+[OK] XML assinado com sucesso: 3241 caracteres
+OK: XML assinado: 3241 caracteres
+ === ENVIANDO PARA SEFAZ ===
+ === PROCESSANDO ENVIO SEFAZ ===
+OK: Chave extraída via regex: 35251211222333000181550010000000011286983262
+OK: Condições OK para SEFAZ real
+ === ENVIANDO PARA SEFAZ REAL ===
+ Conectando com SEFAZ real - Ambiente: homologacao
+[?] SefazService inicializado - Ambiente: homologacao
+[SEARCH] Consultando status do serviço SEFAZ...
+[X] Erro na consulta de status: HTTPSConnectionPool(host='homologacao.nfe.fazenda.sp.gov.br', port=443): Max retries exceeded with url: /ws/nfestatusservico4.asmx (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))
+AVISO: SEFAZ indisponível: HTTPSConnectionPool(host='homologacao.nfe.fazenda.sp.gov.br', port=443): Max retries exceeded with url: /ws/nfestatusservico4.asmx (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))
+ Simulação SEFAZ - Motivo: SEFAZ indisponível
+ Resultado SEFAZ: {'success': True, 'status': 'AUTORIZADA', 'chave_acesso': '35251211222333000181550010000000011286983262', 'protocolo': '13520251211143537', 'message': 'Autorizado o uso da NF-e', 'xml_protocolo': '<?xml version="1.0" encoding="UTF-8"?>\n<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">\n<?xml version="1.0" encoding="UTF-8"?>\n<NFe xmlns="http://www.portalfiscal.inf.br/nfe">\n  <infNFe Id="NFe35251211222333000181550010000000011286983262" versao="4.00">\n    <ide>\n      <cUF>35</cUF>\n      <cNF>28698326</cNF>\n      <natOp>Venda de Mercadoria</natOp>\n      <mod>55</mod>\n      <serie>1</serie>\n      <nNF>1</nNF>\n      <dhEmi>2025-12-11T14:35:00-03:00</dhEmi>\n      <tpNF>1</tpNF>\n      <idDest>1</idDest>\n      <cMunFG>3549805</cMunFG>\n      <tpImp>1</tpImp>\n      <tpEmis>1</tpEmis>\n      <cDV>2</cDV>\n      <tpAmb>2</tpAmb>\n      <finNFe>1</finNFe>\n      <indFinal>1</indFinal>\n      <indPres>9</indPres>\n    </ide>\n    <emit>\n      <CNPJ>11222333000181</CNPJ>\n      <xNome>Empresa Teste Lucro Real</xNome>\n      <xFant>Empresa Lucro Real</xFant>\n      <enderEmit>\n        <xLgr>Rua Saldanha Marinho</xLgr>\n        <nro>3884</nro>\n        <xBairro>Vila Santo Antônio</xBairro>\n        <cMun>3549805</cMun>\n        <xMun>São José do Rio Preto</xMun>\n        <UF>SP</UF>\n        <CEP>15014300</CEP>\n        <cPais>1058</cPais>\n        <xPais>Brasil</xPais>\n      </enderEmit>\n      <IE>215654868</IE>\n      <CNAE>6201500</CNAE>\n      <CRT>3</CRT>\n    </emit>\n    <dest>\n      <CNPJ>12345678000195</CNPJ>\n      <xNome>Empresa Teste Ltda</xNome>\n      <enderDest>\n        <xLgr>Rua das Flores</xLgr>\n        <nro>123</nro>\n        <xBairro>Centro</xBairro>\n        <cMun>3550308</cMun>\n        <xMun>São Paulo</xMun>\n        <UF>SP</UF>\n        <CEP>01310100</CEP>\n        <cPais>1058</cPais>\n        <xPais>Brasil</xPais>\n      </enderDest>\n      <indIEDest>9</indIEDest>\n    </dest>\n    <det nItem="1">\n      <prod>\n        <cProd>PROD001</cProd>\n        <cEAN>SEM GTIN</cEAN>\n        <xProd>Notebook Dell Inspiron 15</xProd>\n        <NCM>01022110</NCM>\n        <CFOP>1102</CFOP>\n        <uCom>UN</uCom>\n        <qCom>1.00</qCom>\n        <vUnCom>3500.00</vUnCom>\n        <vProd>3500.00</vProd>\n        <cEANTrib>SEM GTIN</cEANTrib>\n        <uTrib>UN</uTrib>\n        <qTrib>1.00</qTrib>\n        <vUnTrib>3500.00</vUnTrib>\n        <indTot>1</indTot>\n      </prod>\n      <imposto>\n        <ICMS>\n          <ICMS10>\n            <orig>0</orig>\n            <CST>10</CST>\n          </ICMS10>\n        </ICMS>\n        <PIS>\n          <PISNT>\n            <CST>07</CST>\n          </PISNT>\n        </PIS>\n        <COFINS>\n          <COFINSNT>\n            <CST>07</CST>\n          </COFINSNT>\n        </COFINS>\n      </imposto>\n    </det>\n    <total>\n      <ICMSTot>\n        <vBC>0.00</vBC>\n        <vICMS>0.00</vICMS>\n        <vICMSDeson>0.00</vICMSDeson>\n        <vFCP>0.00</vFCP>\n        <vBCST>0.00</vBCST>\n        <vST>0.00</vST>\n        <vFCPST>0.00</vFCPST>\n        <vFCPSTRet>0.00</vFCPSTRet>\n        <vProd>3500.00</vProd>\n        <vFrete>0.00</vFrete>\n        <vSeg>0.00</vSeg>\n        <vDesc>0.00</vDesc>\n        <vII>0.00</vII>\n        <vIPI>0.00</vIPI>\n        <vIPIDevol>0.00</vIPIDevol>\n        <vPIS>0.00</vPIS>\n        <vCOFINS>0.00</vCOFINS>\n        <vOutro>0.00</vOutro>\n        <vNF>3500.00</vNF>\n      </ICMSTot>\n    </total>\n    <transp>\n      <modFrete>9</modFrete>\n    </transp>\n    <pag>\n      <detPag>\n        <tPag>01</tPag>\n        <vPag>3500.00</vPag>\n      </detPag>\n    </pag>\n    <infAdic/>\n  </infNFe>\n</NFe>\n\n  <protNFe versao="4.00">\n    <infProt>\n      <tpAmb>2</tpAmb>\n      <verAplic>SP_NFE_PL_008i2</verAplic>\n      <chNFe>35251211222333000181550010000000011286983262</chNFe>\n      <dhRecbto>2025-12-11T14:35:37.079631</dhRecbto>\n      <nProt>13520251211143537</nProt>\n      <digVal>SIMULADO</digVal>\n      <cStat>100</cStat>\n      <xMotivo>Autorizado o uso da NF-e</xMotivo>\n    </infProt>\n  </protNFe>\n</nfeProc>', 'ambiente_real': False, 'motivo_simulacao': 'SEFAZ indisponível'}
+ === SALVANDO NO BANCO ===
+ Status NFe: AUTORIZADA
+OK: NFe salva no banco com ID: 91
+ === FINALIZANDO ===
+OK: NFe emitida com sucesso em homologacao! Protocolo: 13520251211143537
+ === GERANDO DANFE AUTOMATICAMENTE ===
+ℹ️ Cliente 14 não tem logo cadastrada
+[!] Nenhuma logo encontrada (nem do cliente, nem padrão)
+================================================================================
+INICIANDO GERAÇÃO DE DANFE
+NFe ID: 91
+Output path: static/danfe/danfe_91_20251211143537.pdf
+================================================================================
+[OK] nfelib está disponível
+[START] Chamando generate_danfe_nfelib...
+
+================================================================================
+DENTRO DE generate_danfe_nfelib
+================================================================================
+[START] Tentando gerar DANFE oficial usando nfelib
+[?] Processando como NFe
+[?] Tentando importar bindings v4.0...
+[OK] Bindings v4.0 importados com sucesso
+[?] Tentando carregar NFe do XML...
+[?] Tamanho do XML: 3241 caracteres
+[LOG] Primeiros 200 chars: <?xml version="1.0" encoding="UTF-8"?>
+<NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+  <infNFe Id="NFe35251211222333000181550010000000011286983262" versao="4.00">
+    <ide>
+      <cUF>35</cUF>
+    
+[OK] NFe carregada do XML com sucesso
+[!] Não foi possível extrair detalhes: 'Nfe' object has no attribute 'NFe'
+[?] Gerando PDF...
+[?] Tentando engine: brazilfiscalreport
+[OK] PDF gerado com engine brazilfiscalreport, tamanho: 4928 bytes
+[DATA] Resultado generate_danfe_nfelib: True
+[?] DANFE oficial gerado com sucesso usando nfelib
+OK: DANFE gerado: static/danfe/danfe_91_20251211143537.pdf
+ Redirecionando para lista de NFes...
+
+=== LIST_NFES: Iniciando ===
+[IN] cliente_id recebido: 14 (tipo: <class 'str'>)
+[OK] Cliente específico fornecido: 14
+
+================================================================================
+[ERROR] EXCEÇÃO NÃO TRATADA
+================================================================================
+[RED] Tipo: NotFound
+[LOG] Mensagem: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+[TRACE] Traceback completo:
+Traceback (most recent call last):
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+================================================================================
+
+
+================================================================================
+[X] ERRO 500 - INTERNAL SERVER ERROR
+================================================================================
+[RED] Tipo do erro: NotFound
+[LOG] Mensagem: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+[ERROR] Exceção: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+[TRACE] Traceback completo:
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+
+[LIST] Traceback formatado:
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+
+
+[SEARCH] Exception completa:
+Traceback (most recent call last):
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/flask/ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "/Users/renato/Documents/Developement/api_nfe/venv/lib/python3.13/site-packages/werkzeug/routing/map.py", line 629, in match
+    raise NotFound() from None
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+================================================================================
+
+127.0.0.1 - - [11/Dec/2025 14:35:42] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-12-11 14:35:42,743 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:35:42] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+{'nfe_emitida_id': 91, 'cliente_id': 14, 'tipo_nfe': '1', 'finalidade_emissao': 1, 'natureza_operacao': 'Venda de Mercadoria', 'informacoes_adicionais': '', 'destinatario_razao_social': 'Empresa Teste Ltda', 'destinatario_cnpj_cpf': '12345678000195', 'json_nfe': {'items': [{'ncm': '01022110', 'cfop': '1102', 'origem': '0', 'bc_icms': '0.00', 'unidade': 'UN', 'cst_icms': '10', 'descricao': 'Notebook Dell Inspiron 15', 'quantidade': '1', 'valor_icms': '0.00', 'valor_total': '3500.00', 'aliquota_icms': '0.00', 'codigo_produto': 'PROD001', 'valor_unitario': '3500.0'}], 'ambiente': 'homologacao', 'form_data': {'tpNF': '1', 'natOp': 'Venda de Mercadoria', 'serie': '1', 'finNFe': '1', 'infCpl': '', 'modFrete': '9', 'veiculoUF': '', 'numero_nfe': '1', 'dataEmissao': '2025-12-11T14:35', 'volumeMarca': '', 'veiculoPlaca': '', 'volumeEspecie': '', 'formaPagamento': '01', 'valorPagamento': '3500.00', 'volumeNumeracao': '', 'volumePesoBruto': '', 'transportadoraIE': '', 'transportadoraUF': '', 'volumeQuantidade': '', 'volumePesoLiquido': '', 'transportadoraANTT': '', 'transportadoraNome': '', 'transportadoraCnpjCpf': '', 'transportadoraEndereco': '', 'transportadoraMunicipio': ''}, 'xml_content': '<?xml version="1.0" encoding="UTF-8"?>\n<NFe xmlns="http://www.portalfiscal.inf.br/nfe">\n  <infNFe Id="NFe35251211222333000181550010000000011286983262" versao="4.00">\n    <ide>\n      <cUF>35</cUF>\n      <cNF>28698326</cNF>\n      <natOp>Venda de Mercadoria</natOp>\n      <mod>55</mod>\n      <serie>1</serie>\n      <nNF>1</nNF>\n      <dhEmi>2025-12-11T14:35:00-03:00</dhEmi>\n      <tpNF>1</tpNF>\n      <idDest>1</idDest>\n      <cMunFG>3549805</cMunFG>\n      <tpImp>1</tpImp>\n      <tpEmis>1</tpEmis>\n      <cDV>2</cDV>\n      <tpAmb>2</tpAmb>\n      <finNFe>1</finNFe>\n      <indFinal>1</indFinal>\n      <indPres>9</indPres>\n    </ide>\n    <emit>\n      <CNPJ>11222333000181</CNPJ>\n      <xNome>Empresa Teste Lucro Real</xNome>\n      <xFant>Empresa Lucro Real</xFant>\n      <enderEmit>\n        <xLgr>Rua Saldanha Marinho</xLgr>\n        <nro>3884</nro>\n        <xBairro>Vila Santo Antônio</xBairro>\n        <cMun>3549805</cMun>\n        <xMun>São José do Rio Preto</xMun>\n        <UF>SP</UF>\n        <CEP>15014300</CEP>\n        <cPais>1058</cPais>\n        <xPais>Brasil</xPais>\n      </enderEmit>\n      <IE>215654868</IE>\n      <CNAE>6201500</CNAE>\n      <CRT>3</CRT>\n    </emit>\n    <dest>\n      <CNPJ>12345678000195</CNPJ>\n      <xNome>Empresa Teste Ltda</xNome>\n      <enderDest>\n        <xLgr>Rua das Flores</xLgr>\n        <nro>123</nro>\n        <xBairro>Centro</xBairro>\n        <cMun>3550308</cMun>\n        <xMun>São Paulo</xMun>\n        <UF>SP</UF>\n        <CEP>01310100</CEP>\n        <cPais>1058</cPais>\n        <xPais>Brasil</xPais>\n      </enderDest>\n      <indIEDest>9</indIEDest>\n    </dest>\n    <det nItem="1">\n      <prod>\n        <cProd>PROD001</cProd>\n        <cEAN>SEM GTIN</cEAN>\n        <xProd>Notebook Dell Inspiron 15</xProd>\n        <NCM>01022110</NCM>\n        <CFOP>1102</CFOP>\n        <uCom>UN</uCom>\n        <qCom>1.00</qCom>\n        <vUnCom>3500.00</vUnCom>\n        <vProd>3500.00</vProd>\n        <cEANTrib>SEM GTIN</cEANTrib>\n        <uTrib>UN</uTrib>\n        <qTrib>1.00</qTrib>\n        <vUnTrib>3500.00</vUnTrib>\n        <indTot>1</indTot>\n      </prod>\n      <imposto>\n        <ICMS>\n          <ICMS10>\n            <orig>0</orig>\n            <CST>10</CST>\n          </ICMS10>\n        </ICMS>\n        <PIS>\n          <PISNT>\n            <CST>07</CST>\n          </PISNT>\n        </PIS>\n        <COFINS>\n          <COFINSNT>\n            <CST>07</CST>\n          </COFINSNT>\n        </COFINS>\n      </imposto>\n    </det>\n    <total>\n      <ICMSTot>\n        <vBC>0.00</vBC>\n        <vICMS>0.00</vICMS>\n        <vICMSDeson>0.00</vICMSDeson>\n        <vFCP>0.00</vFCP>\n        <vBCST>0.00</vBCST>\n        <vST>0.00</vST>\n        <vFCPST>0.00</vFCPST>\n        <vFCPSTRet>0.00</vFCPSTRet>\n        <vProd>3500.00</vProd>\n        <vFrete>0.00</vFrete>\n        <vSeg>0.00</vSeg>\n        <vDesc>0.00</vDesc>\n        <vII>0.00</vII>\n        <vIPI>0.00</vIPI>\n        <vIPIDevol>0.00</vIPIDevol>\n        <vPIS>0.00</vPIS>\n        <vCOFINS>0.00</vCOFINS>\n        <vOutro>0.00</vOutro>\n        <vNF>3500.00</vNF>\n      </ICMSTot>\n    </total>\n    <transp>\n      <modFrete>9</modFrete>\n    </transp>\n    <pag>\n      <detPag>\n        <tPag>01</tPag>\n        <vPag>3500.00</vPag>\n      </detPag>\n    </pag>\n    <infAdic/>\n  </infNFe>\n</NFe>\n', 'resultado_sefaz': {'status': 'AUTORIZADA', 'message': 'Autorizado o uso da NF-e', 'success': True, 'protocolo': '13520251211143537', 'chave_acesso': '35251211222333000181550010000000011286983262', 'ambiente_real': False, 'xml_protocolo': '<?xml version="1.0" encoding="UTF-8"?>\n<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">\n<?xml version="1.0" encoding="UTF-8"?>\n<NFe xmlns="http://www.portalfiscal.inf.br/nfe">\n  <infNFe Id="NFe35251211222333000181550010000000011286983262" versao="4.00">\n    <ide>\n      <cUF>35</cUF>\n      <cNF>28698326</cNF>\n      <natOp>Venda de Mercadoria</natOp>\n      <mod>55</mod>\n      <serie>1</serie>\n      <nNF>1</nNF>\n      <dhEmi>2025-12-11T14:35:00-03:00</dhEmi>\n      <tpNF>1</tpNF>\n      <idDest>1</idDest>\n      <cMunFG>3549805</cMunFG>\n      <tpImp>1</tpImp>\n      <tpEmis>1</tpEmis>\n      <cDV>2</cDV>\n      <tpAmb>2</tpAmb>\n      <finNFe>1</finNFe>\n      <indFinal>1</indFinal>\n      <indPres>9</indPres>\n    </ide>\n    <emit>\n      <CNPJ>11222333000181</CNPJ>\n      <xNome>Empresa Teste Lucro Real</xNome>\n      <xFant>Empresa Lucro Real</xFant>\n      <enderEmit>\n        <xLgr>Rua Saldanha Marinho</xLgr>\n        <nro>3884</nro>\n        <xBairro>Vila Santo Antônio</xBairro>\n        <cMun>3549805</cMun>\n        <xMun>São José do Rio Preto</xMun>\n        <UF>SP</UF>\n        <CEP>15014300</CEP>\n        <cPais>1058</cPais>\n        <xPais>Brasil</xPais>\n      </enderEmit>\n      <IE>215654868</IE>\n      <CNAE>6201500</CNAE>\n      <CRT>3</CRT>\n    </emit>\n    <dest>\n      <CNPJ>12345678000195</CNPJ>\n      <xNome>Empresa Teste Ltda</xNome>\n      <enderDest>\n        <xLgr>Rua das Flores</xLgr>\n        <nro>123</nro>\n        <xBairro>Centro</xBairro>\n        <cMun>3550308</cMun>\n        <xMun>São Paulo</xMun>\n        <UF>SP</UF>\n        <CEP>01310100</CEP>\n        <cPais>1058</cPais>\n        <xPais>Brasil</xPais>\n      </enderDest>\n      <indIEDest>9</indIEDest>\n    </dest>\n    <det nItem="1">\n      <prod>\n        <cProd>PROD001</cProd>\n        <cEAN>SEM GTIN</cEAN>\n        <xProd>Notebook Dell Inspiron 15</xProd>\n        <NCM>01022110</NCM>\n        <CFOP>1102</CFOP>\n        <uCom>UN</uCom>\n        <qCom>1.00</qCom>\n        <vUnCom>3500.00</vUnCom>\n        <vProd>3500.00</vProd>\n        <cEANTrib>SEM GTIN</cEANTrib>\n        <uTrib>UN</uTrib>\n        <qTrib>1.00</qTrib>\n        <vUnTrib>3500.00</vUnTrib>\n        <indTot>1</indTot>\n      </prod>\n      <imposto>\n        <ICMS>\n          <ICMS10>\n            <orig>0</orig>\n            <CST>10</CST>\n          </ICMS10>\n        </ICMS>\n        <PIS>\n          <PISNT>\n            <CST>07</CST>\n          </PISNT>\n        </PIS>\n        <COFINS>\n          <COFINSNT>\n            <CST>07</CST>\n          </COFINSNT>\n        </COFINS>\n      </imposto>\n    </det>\n    <total>\n      <ICMSTot>\n        <vBC>0.00</vBC>\n        <vICMS>0.00</vICMS>\n        <vICMSDeson>0.00</vICMSDeson>\n        <vFCP>0.00</vFCP>\n        <vBCST>0.00</vBCST>\n        <vST>0.00</vST>\n        <vFCPST>0.00</vFCPST>\n        <vFCPSTRet>0.00</vFCPSTRet>\n        <vProd>3500.00</vProd>\n        <vFrete>0.00</vFrete>\n        <vSeg>0.00</vSeg>\n        <vDesc>0.00</vDesc>\n        <vII>0.00</vII>\n        <vIPI>0.00</vIPI>\n        <vIPIDevol>0.00</vIPIDevol>\n        <vPIS>0.00</vPIS>\n        <vCOFINS>0.00</vCOFINS>\n        <vOutro>0.00</vOutro>\n        <vNF>3500.00</vNF>\n      </ICMSTot>\n    </total>\n    <transp>\n      <modFrete>9</modFrete>\n    </transp>\n    <pag>\n      <detPag>\n        <tPag>01</tPag>\n        <vPag>3500.00</vPag>\n      </detPag>\n    </pag>\n    <infAdic/>\n  </infNFe>\n</NFe>\n\n  <protNFe versao="4.00">\n    <infProt>\n      <tpAmb>2</tpAmb>\n      <verAplic>SP_NFE_PL_008i2</verAplic>\n      <chNFe>35251211222333000181550010000000011286983262</chNFe>\n      <dhRecbto>2025-12-11T14:35:37.079631</dhRecbto>\n      <nProt>13520251211143537</nProt>\n      <digVal>SIMULADO</digVal>\n      <cStat>100</cStat>\n      <xMotivo>Autorizado o uso da NF-e</xMotivo>\n    </infProt>\n  </protNFe>\n</nfeProc>', 'motivo_simulacao': 'SEFAZ indisponível'}}, 'data_criacao': datetime.datetime(2025, 12, 11, 14, 35, 37, 82181), 'status': 'AUTORIZADA', 'chave_acesso': '35251211222333000181550010000000011286983262', 'protocolo_sefaz': '13520251211143537', 'data_autorizacao': datetime.datetime(2025, 12, 11, 14, 35, 37, 82159), 'mensagem_sefaz': 'Autorizado o uso da NF-e', 'created_by_user_id': 7, 'modelo': '55', 'numero': 1, 'serie': 1, 'data_emissao': datetime.datetime(2025, 12, 11, 14, 35), 'valor_total': Decimal('3500.00'), 'total_ibs': Decimal('0.00'), 'total_cbs': Decimal('0.00'), 'total_ibs_bc': Decimal('0.00'), 'valor_icms_st_retido': Decimal('0.00'), 'cliente_nome': 'Empresa Teste Lucro Real'}127.0.0.1 - - [11/Dec/2025 14:36:20] "GET /admin/nfe/view/91 HTTP/1.1" 200 -
+2025-12-11 14:36:20,849 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:36:20] "GET /admin/nfe/view/91 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:36:21] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+2025-12-11 14:36:21,173 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:36:21] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:36:21] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+2025-12-11 14:36:21,272 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:36:21] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:36:59] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+2025-12-11 14:36:59,925 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:36:59] "GET /cliente/dashboard/14 HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:37:00] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+2025-12-11 14:37:00,026 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:37:00] "[36mGET /static/img/emitemax-logo.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [11/Dec/2025 14:41:23] "[32mGET /auth/logout HTTP/1.1[0m" 302 -
+2025-12-11 14:41:23,563 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:41:23] "[32mGET /auth/logout HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:41:23] "GET /auth/login HTTP/1.1" 200 -
+2025-12-11 14:41:23,635 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:41:23] "GET /auth/login HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:41:24] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+2025-12-11 14:41:24,183 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:41:24] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:53:56] "[32mGET /auth/logout HTTP/1.1[0m" 302 -
+2025-12-11 14:53:56,525 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:53:56] "[32mGET /auth/logout HTTP/1.1[0m" 302 -
+127.0.0.1 - - [11/Dec/2025 14:53:56] "GET /auth/login HTTP/1.1" 200 -
+2025-12-11 14:53:56,594 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:53:56] "GET /auth/login HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:53:57] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+2025-12-11 14:53:57,264 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:53:57] "GET /static/img/emitemax-logo.png HTTP/1.1" 200 -
+127.0.0.1 - - [11/Dec/2025 14:53:57] "GET /static/img/Logonew.ico HTTP/1.1" 200 -
+2025-12-11 14:53:57,444 - werkzeug - INFO - 127.0.0.1 - - [11/Dec/2025 14:53:57] "GET /static/img/Logonew.ico HTTP/1.1" 200 -

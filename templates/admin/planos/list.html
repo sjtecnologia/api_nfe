@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Planos de NFe{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="fas fa-box-open"></i> Planos de NFe</h2>
+            <p class="text-muted">Gerencie os planos e pacotes disponíveis para emissão de NFe</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('planos.criar_plano') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Novo Plano
+            </a>
+            <a href="{{ url_for('planos.list_assinaturas') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-users"></i> Assinaturas
+            </a>
+        </div>
+    </div>
+
+    {% if planos %}
+    <div class="row">
+        <!-- Planos Avulsos -->
+        <div class="col-12 mb-4">
+            <h4 class="mb-3"><i class="fas fa-file-invoice"></i> Cobrança Avulsa</h4>
+            <div class="row">
+                {% for plano in planos %}
+                {% if plano.tipo_plano == 'AVULSO' %}
+                <div class="col-md-4 mb-3">
+                    <div class="card {% if not plano.ativo %}border-secondary{% else %}border-primary{% endif %}">
+                        <div class="card-header {% if not plano.ativo %}bg-secondary text-white{% else %}bg-primary text-white{% endif %}">
+                            <h5 class="mb-0">
+                                {{ plano.nome }}
+                                {% if not plano.ativo %}
+                                <span class="badge bg-dark float-end">Inativo</span>
+                                {% endif %}
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">{{ plano.descricao or 'Sem descrição' }}</p>
+                            <h3 class="text-primary mb-0">
+                                R$ {{ "%.2f"|format(plano.valor_por_nfe|float) }}
+                                <small class="text-muted fs-6">por NFe</small>
+                            </h3>
+                            <hr>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-info">
+                                    {{ stats.get(plano.plano_id, 0) }} clientes
+                                </span>
+                                <div>
+                                    <a href="{{ url_for('planos.editar_plano', plano_id=plano.plano_id) }}" 
+                                       class="btn btn-sm btn-outline-primary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button onclick="togglePlano({{ plano.plano_id }})" 
+                                            class="btn btn-sm btn-outline-secondary" 
+                                            title="{% if plano.ativo %}Desativar{% else %}Ativar{% endif %}">
+                                        <i class="fas fa-power-off"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Planos de Pacotes -->
+        <div class="col-12">
+            <h4 class="mb-3"><i class="fas fa-boxes"></i> Pacotes Mensais</h4>
+            <div class="row">
+                {% for plano in planos %}
+                {% if plano.tipo_plano == 'PACOTE' %}
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100 {% if not plano.ativo %}border-secondary{% endif %}">
+                        <div class="card-header {% if not plano.ativo %}bg-secondary text-white{% endif %}">
+                            <h5 class="mb-0">
+                                {{ plano.nome }}
+                                {% if not plano.ativo %}
+                                <span class="badge bg-dark float-end">Inativo</span>
+                                {% endif %}
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">{{ plano.descricao or 'Sem descrição' }}</p>
+                            
+                            {% if plano.quantidade_nfes %}
+                            <div class="text-center mb-3">
+                                <h2 class="text-success mb-0">{{ plano.quantidade_nfes }}</h2>
+                                <small class="text-muted">NFes por mês</small>
+                            </div>
+                            {% else %}
+                            <div class="text-center mb-3">
+                                <h2 class="text-success mb-0">∞</h2>
+                                <small class="text-muted">NFes ilimitadas</small>
+                            </div>
+                            {% endif %}
+                            
+                            <h3 class="text-primary mb-0">
+                                R$ {{ "%.2f"|format(plano.valor_mensal|float) }}
+                                <small class="text-muted fs-6">/mês</small>
+                            </h3>
+                            
+                            {% if plano.valor_por_nfe and plano.valor_por_nfe > 0 %}
+                            <small class="text-muted">
+                                Excedente: R$ {{ "%.2f"|format(plano.valor_por_nfe|float) }}/NFe
+                            </small>
+                            {% endif %}
+                            
+                            <hr>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-info">
+                                    {{ stats.get(plano.plano_id, 0) }} clientes
+                                </span>
+                                <div>
+                                    <a href="{{ url_for('planos.editar_plano', plano_id=plano.plano_id) }}" 
+                                       class="btn btn-sm btn-outline-primary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button onclick="togglePlano({{ plano.plano_id }})" 
+                                            class="btn btn-sm btn-outline-secondary" 
+                                            title="{% if plano.ativo %}Desativar{% else %}Ativar{% endif %}">
+                                        <i class="fas fa-power-off"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Nenhum plano cadastrado.
+        <a href="{{ url_for('planos.criar_plano') }}">Criar primeiro plano</a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function togglePlano(planoId) {
+    if (!confirm('Deseja alterar o status deste plano?')) return;
+    
+    fetch(`{{ url_for('planos.toggle_plano', plano_id=0) }}`.replace('0', planoId), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao alterar status: ' + error);
+    });
+}
+</script>
+{% endblock %}

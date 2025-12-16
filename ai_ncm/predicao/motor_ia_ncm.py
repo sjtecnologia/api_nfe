@@ -22,7 +22,7 @@ except ImportError:
     RandomForestClassifier = None  # type: ignore
     cosine_similarity = None  # type: ignore
     np = None  # type: ignore
-    print("⚠️  scikit-learn não instalado. Funcionalidade de IA limitada.")
+    print("[!]  scikit-learn não instalado. Funcionalidade de IA limitada.")
 
 
 class MotorIANCM:
@@ -54,7 +54,7 @@ class MotorIANCM:
             self.modelo: Optional[RandomForestClassifier] = None  # type: ignore
             self._inicializar_modelo()
         else:
-            print("⚠️  Modelo de IA não disponível. Use 'pip install scikit-learn'")
+            print("[!]  Modelo de IA não disponível. Use 'pip install scikit-learn'")
     
     def _carregar_tabela_ncm(self) -> Dict:
         """Carrega tabela NCM vigente"""
@@ -71,7 +71,7 @@ class MotorIANCM:
             with open(arquivo_ncm_raiz, 'r', encoding='utf-8') as f:
                 return json.load(f)
         
-        print("⚠️  Tabela NCM não encontrada. Usando dados de exemplo.")
+        print("[!]  Tabela NCM não encontrada. Usando dados de exemplo.")
         return self._gerar_ncm_exemplo()
     
     def _carregar_lei_complementar(self) -> Dict:
@@ -82,7 +82,7 @@ class MotorIANCM:
             with open(arquivo_lei, 'r', encoding='utf-8') as f:
                 return json.load(f)
         
-        print("⚠️  Lei Complementar 214/2025 não encontrada.")
+        print("[!]  Lei Complementar 214/2025 não encontrada.")
         return {}
     
     def _carregar_historico_classificacoes(self) -> List[Dict]:
@@ -134,7 +134,7 @@ class MotorIANCM:
             return
         
         if len(self.historico) >= 10:  # Mínimo de 10 exemplos
-            print("🤖 Treinando modelo com histórico de classificações...")
+            print("[?] Treinando modelo com histórico de classificações...")
             descricoes = [item['descricao'] for item in self.historico]
             ncms = [item['ncm'] for item in self.historico]
             
@@ -142,7 +142,7 @@ class MotorIANCM:
             if RandomForestClassifier is not None:
                 self.modelo = RandomForestClassifier(n_estimators=100, random_state=42)
                 self.modelo.fit(X, ncms)
-                print(f"✅ Modelo treinado com {len(self.historico)} exemplos")
+                print(f"[OK] Modelo treinado com {len(self.historico)} exemplos")
             else:
                 self.modelo = None
         else:
@@ -261,7 +261,7 @@ class MotorIANCM:
         elif isinstance(self.tabela_ncm, list):
             lista_ncm = self.tabela_ncm
         else:
-            print("⚠️  Estrutura de tabela NCM não reconhecida")
+            print("[!]  Estrutura de tabela NCM não reconhecida")
             return []
         
         for item_ncm in lista_ncm:
@@ -316,7 +316,7 @@ class MotorIANCM:
             
             return resultados
         except Exception as e:
-            print(f"⚠️  Erro na predição: {e}")
+            print(f"[!]  Erro na predição: {e}")
             return []
     
     def _buscar_info_ncm(self, codigo_ncm: str) -> Optional[Dict]:
@@ -463,10 +463,10 @@ class MotorIANCM:
         
         # Se acumulou exemplos suficientes, retreina modelo
         if len(self.historico) % 50 == 0 and SKLEARN_AVAILABLE:
-            print(f"🔄 Retreinando modelo com {len(self.historico)} exemplos...")
+            print(f"[?] Retreinando modelo com {len(self.historico)} exemplos...")
             self._inicializar_modelo()
         
-        print(f"✅ Feedback registrado: {'Aprovado' if aprovado else 'Corrigido'}")
+        print(f"[OK] Feedback registrado: {'Aprovado' if aprovado else 'Corrigido'}")
 
 
 # Exemplo de uso
@@ -480,7 +480,7 @@ if __name__ == '__main__':
     )
     
     print("\n" + "="*60)
-    print("🪑 Teste: Cadeira de Escritório")
+    print("[?] Teste: Cadeira de Escritório")
     print("="*60)
     if resultado1['sucesso']:
         print(f"NCM Sugerido: {resultado1['ncm_sugerido']['codigo']}")
@@ -495,7 +495,7 @@ if __name__ == '__main__':
     )
     
     print("\n" + "="*60)
-    print("💻 Teste: Notebook")
+    print("[?] Teste: Notebook")
     print("="*60)
     if resultado2['sucesso']:
         print(f"NCM Sugerido: {resultado2['ncm_sugerido']['codigo']}")

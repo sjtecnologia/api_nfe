@@ -56,7 +56,7 @@ def auditar_acao(
                 )
             except Exception as e:
                 # Não falha a requisição se auditoria falhar
-                print(f"⚠️ Falha ao registrar auditoria: {e}")
+                print(f"[!] Falha ao registrar auditoria: {e}")
                 traceback.print_exc()
             
             return resultado
@@ -136,7 +136,7 @@ class AuditoriaMiddleware:
                 if self._deve_auditar(request.path, request.method):
                     self._registrar_acesso(request, response)
             except Exception as e:
-                print(f"⚠️ Erro no middleware de auditoria: {e}")
+                print(f"[!] Erro no middleware de auditoria: {e}")
             
             return response
     
@@ -194,7 +194,7 @@ class AuditoriaMiddleware:
                 user_agent=req.headers.get('User-Agent', '')
             )
         except Exception as e:
-            print(f"⚠️ Erro ao registrar acesso: {e}")
+            print(f"[!] Erro ao registrar acesso: {e}")
 
 
 # Funções auxiliares para uso manual
