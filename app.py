@@ -17,7 +17,6 @@ from routes.home_routes import home_bp
 from routes.cliente_routes import cliente_bp
 from routes.llm_api_routes import llm_api_bp
 from routes.planos_routes import planos_bp
-from routes.site_routes import site_bp
 
 # Configurar Flask-Login
 from auth.login_manager import init_login_manager
@@ -41,7 +40,6 @@ app.register_blueprint(cliente_bp, url_prefix='/cliente')
 app.register_blueprint(planos_bp, url_prefix='/admin/planos')
 app.register_blueprint(home_bp)
 app.register_blueprint(llm_api_bp)  # API específica para LLM
-app.register_blueprint(site_bp)  # API para site de vendas
 
 import re
 from markupsafe import Markup, escape
