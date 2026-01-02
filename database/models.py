@@ -511,6 +511,12 @@ class CertificadoDigital(Base):
     data_upload = Column(DateTime, nullable=False, default=datetime.now) 
     nome_arquivo_original = Column(String(255), nullable=True)
     created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    
+    # Suporte A1/A3
+    tipo_certificado = Column(String(10), default='A1', nullable=False)  # 'A1' ou 'A3'
+    token_slot_id = Column(Integer, nullable=True)  # Slot ID do token (apenas A3)
+    token_label = Column(String(255), nullable=True)  # Label no token (apenas A3)
+    pkcs11_library = Column(String(500), nullable=True)  # Biblioteca PKCS#11 (apenas A3)
 
     # [OK] Relacionamentos corrigidos
     cliente = relationship('Cliente', back_populates='certificados')
@@ -822,3 +828,168 @@ class AssinaturaCliente(Base):
     
     def __repr__(self):
         return f"<AssinaturaCliente(id={self.assinatura_id}, cliente_id={self.cliente_id}, plano='{self.plano.nome if self.plano else 'N/A'}', status='{self.status}')>"
+
+
+# --- API KEYS E WEBHOOKS ---
+
+class ApiKey(Base):
+    """Modelo para API Keys de integração"""
+    __tablename__ = 'api_keys'
+    
+    api_key_id = Column(Integer, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    key_hash = Column(String(255), unique=True, nullable=False)
+    key_prefix = Column(String(20), nullable=False)
+    nome = Column(String(100), nullable=False)
+    ativa = Column(Boolean, default=True)
+    criada_em = Column(DateTime, default=datetime.now)
+    ultima_utilizacao = Column(DateTime)
+    expira_em = Column(DateTime)
+    rate_limit = Column(Integer, default=1000)
+    ip_whitelist = Column(Text)  # JSON
+    permissoes = Column(Text)  # JSON
+    
+    # Relacionamentos
+    cliente = relationship('Cliente')
+    
+    def to_dict(self):
+        import json
+        data = serialize_sqla_object(self)
+        # Converter JSON strings em objetos
+        if self.ip_whitelist:
+            try:
+                data['ip_whitelist'] = json.loads(self.ip_whitelist)
+            except:
+                data['ip_whitelist'] = []
+        if self.permissoes:
+            try:
+                data['permissoes'] = json.loads(self.permissoes)
+            except:
+                data['permissoes'] = {}
+        return data
+    
+    def is_valid(self):
+        """Verifica se a chave está válida"""
+        if not self.ativa:
+            return False
+        if self.expira_em and self.expira_em < datetime.now():
+            return False
+        return True
+    
+    def has_permission(self, permission):
+        """Verifica se tem uma permissão específica"""
+        import json
+        if not self.permissoes:
+            return True  # Sem restrições
+        try:
+            perms = json.loads(self.permissoes)
+            return permission in perms.get('allowed', [])
+        except:
+            return True
+    
+    def __repr__(self):
+        return f"<ApiKey(id={self.api_key_id}, cliente_id={self.cliente_id}, nome='{self.nome}', ativa={self.ativa})>"
+
+
+class ApiUsageLog(Base):
+    """Modelo para logs de uso da API"""
+    __tablename__ = 'api_usage_logs'
+    
+    log_id = Column(BigInteger, primary_key=True)
+    api_key_id = Column(Integer, ForeignKey('api_keys.api_key_id', ondelete='SET NULL'))
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    endpoint = Column(String(255), nullable=False)
+    metodo = Column(String(10), nullable=False)
+    status_code = Column(Integer)
+    ip_origem = Column(String(45))
+    user_agent = Column(Text)
+    request_time = Column(DateTime, default=datetime.now)
+    response_time_ms = Column(Integer)
+    erro = Column(Text)
+    
+    # Relacionamentos
+    api_key = relationship('ApiKey')
+    cliente = relationship('Cliente')
+    
+    def to_dict(self):
+        return serialize_sqla_object(self)
+    
+    def __repr__(self):
+        return f"<ApiUsageLog(id={self.log_id}, endpoint='{self.endpoint}', status={self.status_code})>"
+
+
+class Webhook(Base):
+    """Modelo para webhooks de notificação"""
+    __tablename__ = 'webhooks'
+    
+    webhook_id = Column(Integer, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    url = Column(String(500), nullable=False)
+    eventos = Column(Text, nullable=False)  # JSON array
+    ativo = Column(Boolean, default=True)
+    secret = Column(String(255))
+    retry_count = Column(Integer, default=3)
+    timeout_seconds = Column(Integer, default=30)
+    criado_em = Column(DateTime, default=datetime.now)
+    ultima_tentativa = Column(DateTime)
+    ultimo_sucesso = Column(DateTime)
+    total_sucessos = Column(Integer, default=0)
+    total_falhas = Column(Integer, default=0)
+    
+    # Relacionamentos
+    cliente = relationship('Cliente')
+    
+    def to_dict(self):
+        import json
+        data = serialize_sqla_object(self)
+        if self.eventos:
+            try:
+                data['eventos'] = json.loads(self.eventos)
+            except:
+                data['eventos'] = []
+        return data
+    
+    def supports_event(self, event):
+        """Verifica se o webhook está inscrito neste evento"""
+        import json
+        try:
+            eventos_list = json.loads(self.eventos)
+            return event in eventos_list
+        except:
+            return False
+    
+    def __repr__(self):
+        return f"<Webhook(id={self.webhook_id}, cliente_id={self.cliente_id}, url='{self.url}', ativo={self.ativo})>"
+
+
+class WebhookQueue(Base):
+    """Modelo para fila de webhooks"""
+    __tablename__ = 'webhook_queue'
+    
+    queue_id = Column(BigInteger, primary_key=True)
+    webhook_id = Column(Integer, ForeignKey('webhooks.webhook_id', ondelete='CASCADE'), nullable=False)
+    evento = Column(String(50), nullable=False)
+    payload = Column(Text, nullable=False)  # JSON
+    tentativas = Column(Integer, default=0)
+    max_tentativas = Column(Integer, default=3)
+    proximo_retry = Column(DateTime)
+    status = Column(String(20), default='pending')
+    criado_em = Column(DateTime, default=datetime.now)
+    processado_em = Column(DateTime)
+    erro = Column(Text)
+    
+    # Relacionamentos
+    webhook = relationship('Webhook')
+    
+    def to_dict(self):
+        import json
+        data = serialize_sqla_object(self)
+        if self.payload:
+            try:
+                data['payload'] = json.loads(self.payload)
+            except:
+                data['payload'] = {}
+        return data
+    
+    def __repr__(self):
+        return f"<WebhookQueue(id={self.queue_id}, evento='{self.evento}', status='{self.status}', tentativas={self.tentativas})>"

@@ -7,6 +7,16 @@ from auth.permissions import has_permission
 from flask_login import current_user
 from models.user import User
 
+# Configurar encoding UTF-8 no stdout para Windows
+import sys
+import io
+if sys.platform == 'win32':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass  # Se falhar, continua com encoding padrão
+
 # Importar blueprints
 from routes.auth_routes import auth_bp
 from routes.api_routes import api_bp
@@ -17,6 +27,10 @@ from routes.home_routes import home_bp
 from routes.cliente_routes import cliente_bp
 from routes.llm_api_routes import llm_api_bp
 from routes.planos_routes import planos_bp
+from routes.a3_routes import a3_bp
+from routes.api_keys_routes import api_keys_bp
+from routes.api_v2_routes import api_v2_bp
+from routes.webhooks_routes import webhooks_bp
 
 # Configurar Flask-Login
 from auth.login_manager import init_login_manager
@@ -33,11 +47,15 @@ login_manager = init_login_manager(app)
 # Registrar blueprints
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(api_bp, url_prefix='/api')
+app.register_blueprint(api_v2_bp)  # API v2 com autenticação por API Key
 app.register_blueprint(nfe_bp, url_prefix='/admin/nfe')
 app.register_blueprint(nfce_bp)  # NFC-e já tem url_prefix='/admin/nfce' no blueprint
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(cliente_bp, url_prefix='/cliente')
 app.register_blueprint(planos_bp, url_prefix='/admin/planos')
+app.register_blueprint(a3_bp)  # Certificados A3
+app.register_blueprint(api_keys_bp)  # Gerenciamento de API Keys
+app.register_blueprint(webhooks_bp)  # Gerenciamento de Webhooks
 app.register_blueprint(home_bp)
 app.register_blueprint(llm_api_bp)  # API específica para LLM
 
@@ -72,7 +90,40 @@ def inject_permissions():
             return False
         return current_user.is_super_admin()
     
-    return dict(has_permission=has_permission, is_super_admin=is_super_admin)
+    def can_edit():
+        """Verifica se o usuário pode editar (não é Viewer)"""
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            return False
+        if is_super_admin():
+            return True
+        # Verifica se tem alguma permissão de edição (edit, create, delete)
+        return (has_permission('nfes.create') or 
+                has_permission('produtos.create') or 
+                has_permission('destinatarios_nfe.create') or
+                has_permission('clientes.edit'))
+    
+    def can_create():
+        """Verifica se o usuário pode criar registros (não é Viewer)"""
+        return can_edit()
+    
+    def is_viewer_only():
+        """Verifica se o usuário tem apenas permissão de visualização"""
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            return True
+        if is_super_admin():
+            return False
+        # Se não tem nenhuma permissão de edição, é viewer only
+        return not can_edit()
+    
+    return dict(
+        has_permission=has_permission, 
+        is_super_admin=is_super_admin,
+        can_edit=can_edit,
+        can_create=can_create,
+        is_viewer_only=is_viewer_only
+    )
 
 @app.route('/')
 def home():
@@ -147,6 +198,14 @@ def handle_exception(e):
     
     # Passar para o handler 500
     return internal_error(e)
+
+@app.route('/docs/<path:filename>')
+def serve_docs(filename):
+    """Serve arquivos de documentação"""
+    from flask import send_from_directory
+    import os
+    docs_dir = os.path.join(app.root_path, 'docs')
+    return send_from_directory(docs_dir, filename)
 
 def list_routes():
     """Lista todas as rotas registradas na aplicação"""

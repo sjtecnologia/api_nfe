@@ -45,9 +45,11 @@
                                 </div>
                             </div>
                         {% endif %}
+                        {% if can_create() %}
                         <a href="{{ url_for('nfe.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Nova NFe
                         </a>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="card-body">
@@ -57,6 +59,8 @@
                                 <thead>
                                     <tr>
                                         <th>ID</th>
+                                        <th>Número</th>
+                                        <th>Série</th>
                                         <th>Cliente</th>
                                         <th>Destinatário</th>
                                         <th>Tipo</th>
@@ -71,6 +75,8 @@
                                     {% for nfe in nfes %}
                                         <tr>
                                             <td>{{ nfe.nfe_emitida_id }}</td>
+                                            <td><strong>{{ nfe.numero }}</strong></td>
+                                            <td>{{ nfe.serie }}</td>
                                             <td>
                                                 <small class="text-muted d-block">{{ cliente_map.get(nfe.cliente_id, 'Cliente não encontrado') }}</small>
                                             </td>
@@ -108,7 +114,12 @@
                                                         <i class="fas fa-check-circle"></i> Autorizada
                                                     </span>
                                                 {% elif nfe.status|upper == 'REJEITADA' %}
-                                                    <span class="badge bg-danger">
+                                                    <span class="badge bg-danger" 
+                                                          {% if nfe.mensagem_sefaz %}
+                                                          data-bs-toggle="tooltip" 
+                                                          data-bs-placement="top" 
+                                                          title="{{ nfe.mensagem_sefaz }}"
+                                                          {% endif %}>
                                                         <i class="fas fa-times-circle"></i> Rejeitada
                                                     </span>
                                                 {% elif nfe.status|upper == 'PROCESSANDO' %}
@@ -399,5 +410,13 @@ async function enviarEmailDanfe() {
         alert(`Erro ao enviar email: ${error.message}`);
     }
 }
+
+// Inicializar tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
 </script>
 {% endblock %}

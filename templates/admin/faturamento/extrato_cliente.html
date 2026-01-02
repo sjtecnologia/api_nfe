@@ -113,61 +113,107 @@
                         <div class="alert alert-info d-flex justify-content-between align-items-center">
                             <div>
                                 <strong>Plano Contratado:</strong> {{ cliente.plano_nome }}
-                                <span class="badge bg-primary ms-2">{{ cliente.tipo_plano }}</span>
+                                <!-- <span class="badge bg-primary ms-2">{{ cliente.tipo_plano }}</span> -->
                             </div>
                             <div>
-                                <strong>NFes no Período:</strong> <span class="badge bg-success">{{ extrato.quantidade_nfes }}</span>
+                                <strong>NFes no Período:</strong> <span class="badge bg-success">{{ extrato.quantidade_nfes }}</span> / {{ extrato.limite_plano }}
                             </div>
                         </div>
 
-                        <!-- Resumo -->
-                        <table class="table table-bordered">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Descrição</th>
-                                    <th class="text-center" style="width: 150px;">Quantidade</th>
-                                    <th class="text-center" style="width: 150px;">Valor Unitário</th>
-                                    <th class="text-center" style="width: 150px;">Valor Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% if cliente.tipo_plano == 'MENSAL' %}
-                                    <!-- Valor da assinatura mensal -->
-                                    <tr>
-                                        <td>
-                                            <strong>Assinatura Mensal - {{ cliente.plano_nome }}</strong>
-                                            <br><small class="text-muted">Inclui até {{ extrato.limite_plano }} NFes</small>
-                                        </td>
-                                        <td class="text-center">1</td>
-                                        <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_plano) }}</td>
-                                        <td class="text-center"><strong>R$ {{ "%.2f"|format(extrato.valor_plano) }}</strong></td>
-                                    </tr>
-                                    
-                                    <!-- NFes incluídas (informativo) -->
-                                    <tr class="table-light">
-                                        <td colspan="4" class="text-muted">
-                                            <i class="fas fa-info-circle"></i> 
-                                            <strong>NFes Incluídas no Plano:</strong> {{ extrato.nfes_incluidas }} de {{ extrato.limite_plano }} 
+                        {% if cliente.tipo_plano in ['MENSAL', 'PACOTE'] %}
+                            <!-- Plano Mensal: Mostrar resumo sem tabela se não houver excedentes -->
+                            {% if extrato.quantidade_nfes <= extrato.limite_plano %}
+                                <!-- Apenas informativo - sem cobrança extra -->
+                                <div class="alert alert-success">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong><i class="fas fa-check-circle"></i> Assinatura Mensal - {{ cliente.plano_nome }}</strong>
+                                            <br><small>Inclui até {{ extrato.limite_plano }} NFes</small>
+                                            <br><small class="text-muted">NFes Utilizadas: {{ extrato.quantidade_nfes }} de {{ extrato.limite_plano }}
                                             {% if extrato.limite_plano > 0 %}
-                                                ({{ "%.1f"|format((extrato.nfes_incluidas / extrato.limite_plano * 100)) }}% utilizado)
+                                                ({{ "%.1f"|format((extrato.quantidade_nfes / extrato.limite_plano * 100)) }}% utilizado)
                                             {% endif %}
-                                        </td>
+                                            </small>
+                                        </div>
+                                        <div class="text-end">
+                                            <h4 class="text-success mb-0">R$ {{ "%.2f"|format(extrato.valor_plano) }}</h4>
+                                            <small class="text-muted">Valor do Plano</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <!-- Tabela detalhada quando houver excedentes -->
+                                <table class="table table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Descrição</th>
+                                            <th class="text-center" style="width: 150px;">Quantidade</th>
+                                            <th class="text-center" style="width: 150px;">Valor Unitário</th>
+                                            <th class="text-center" style="width: 150px;">Valor Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Valor da assinatura mensal -->
+                                        <tr>
+                                            <td>
+                                                <strong>Assinatura Mensal - {{ cliente.plano_nome }}</strong>
+                                                <br><small class="text-muted">Inclui até {{ extrato.limite_plano }} NFes</small>
+                                            </td>
+                                            <td class="text-center">1</td>
+                                            <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_plano) }}</td>
+                                            <td class="text-center"><strong>R$ {{ "%.2f"|format(extrato.valor_plano) }}</strong></td>
+                                        </tr>
+                                        
+                                        <!-- NFes incluídas (informativo) -->
+                                        <tr class="table-light">
+                                            <td colspan="4" class="text-muted">
+                                                <i class="fas fa-info-circle"></i> 
+                                                <strong>NFes Incluídas no Plano:</strong> {{ extrato.limite_plano }} de {{ extrato.limite_plano }} (100% utilizado)
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- NFes excedentes -->
+                                        {% set excedentes_calc = extrato.quantidade_nfes - extrato.limite_plano %}
+                                        <tr class="table-warning">
+                                            <td>
+                                                <strong>NFes Excedentes</strong>
+                                                <br><small class="text-muted">Além do limite do plano</small>
+                                            </td>
+                                            <td class="text-center"><strong class="text-danger">{{ excedentes_calc }}</strong></td>
+                                            <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_unitario) }}</td>
+                                            <td class="text-center"><strong class="text-warning">R$ {{ "%.2f"|format(excedentes_calc * extrato.valor_unitario) }}</strong></td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                        <tr>
+                                            <th colspan="3" class="text-end">SUBTOTAL ASSINATURA:</th>
+                                            <th class="text-center">R$ {{ "%.2f"|format(extrato.valor_plano) }}</th>
+                                        </tr>
+                                        <tr>
+                                            <th colspan="3" class="text-end">SUBTOTAL EXCEDENTES:</th>
+                                            <th class="text-center text-warning">R$ {{ "%.2f"|format(excedentes_calc * extrato.valor_unitario) }}</th>
+                                        </tr>
+                                        <tr>
+                                            <th colspan="3" class="text-end">TOTAL A PAGAR:</th>
+                                            <th class="text-center">
+                                                <h4 class="text-success mb-0">R$ {{ "%.2f"|format(extrato.valor_plano + (excedentes_calc * extrato.valor_unitario)) }}</h4>
+                                            </th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            {% endif %}
+                        {% else %}
+                            <!-- Plano Avulso: Sempre mostrar tabela detalhada -->
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Descrição</th>
+                                        <th class="text-center" style="width: 150px;">Quantidade</th>
+                                        <th class="text-center" style="width: 150px;">Valor Unitário</th>
+                                        <th class="text-center" style="width: 150px;">Valor Total</th>
                                     </tr>
-                                    
-                                    <!-- NFes excedentes (se houver) -->
-                                    {% if extrato.nfes_excedentes > 0 %}
-                                    <tr class="table-warning">
-                                        <td>
-                                            <strong>NFes Excedentes</strong>
-                                            <br><small class="text-muted">Além do limite do plano</small>
-                                        </td>
-                                        <td class="text-center"><strong class="text-danger">{{ extrato.nfes_excedentes }}</strong></td>
-                                        <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_unitario) }}</td>
-                                        <td class="text-center"><strong class="text-warning">R$ {{ "%.2f"|format(extrato.valor_excedentes) }}</strong></td>
-                                    </tr>
-                                    {% endif %}
-                                {% else %}
-                                    <!-- Plano Avulso - cobra por NFe -->
+                                </thead>
+                                <tbody>
                                     <tr>
                                         <td>
                                             <strong>Emissão de Nota Fiscal Eletrônica (NF-e)</strong>
@@ -177,27 +223,17 @@
                                         <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_unitario) }}</td>
                                         <td class="text-center"><strong class="text-success">R$ {{ "%.2f"|format(extrato.valor_nfes) }}</strong></td>
                                     </tr>
-                                {% endif %}
-                            </tbody>
-                            <tfoot class="table-light">
-                                {% if cliente.tipo_plano == 'MENSAL' and extrato.nfes_excedentes > 0 %}
-                                <tr>
-                                    <th colspan="3" class="text-end">SUBTOTAL ASSINATURA:</th>
-                                    <th class="text-center">R$ {{ "%.2f"|format(extrato.valor_plano) }}</th>
-                                </tr>
-                                <tr>
-                                    <th colspan="3" class="text-end">SUBTOTAL EXCEDENTES:</th>
-                                    <th class="text-center text-warning">R$ {{ "%.2f"|format(extrato.valor_excedentes) }}</th>
-                                </tr>
-                                {% endif %}
-                                <tr>
-                                    <th colspan="3" class="text-end">TOTAL A PAGAR:</th>
-                                    <th class="text-center">
-                                        <h4 class="text-success mb-0">R$ {{ "%.2f"|format(extrato.valor_total) }}</h4>
-                                    </th>
-                                </tr>
-                            </tfoot>
-                        </table>
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="3" class="text-end">TOTAL A PAGAR:</th>
+                                        <th class="text-center">
+                                            <h4 class="text-success mb-0">R$ {{ "%.2f"|format(extrato.valor_total) }}</h4>
+                                        </th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        {% endif %}
                     </div>
 
                     <!-- Detalhamento das NFes (opcional - pode ser muito grande) -->
@@ -223,8 +259,8 @@
                                     <tr>
                                         <td>{{ loop.index }}</td>
                                         <td>{{ nfe.data_criacao.strftime('%d/%m/%Y') if nfe.data_criacao else '-' }}</td>
-                                        <td>{{ nfe.destinatario_razao_social[:30] }}...</td>
-                                        <td><small class="text-muted">{{ nfe.chave_acesso[:10] }}...{{ nfe.chave_acesso[-10:] if nfe.chave_acesso else '-' }}</small></td>
+                                        <td>{{ nfe.destinatario_razao_social[:30] if nfe.destinatario_razao_social else '-' }}{{ '...' if nfe.destinatario_razao_social and nfe.destinatario_razao_social|length > 30 else '' }}</td>
+                                        <td><small class="text-muted">{{ nfe.chave_acesso[:10] + '...' + nfe.chave_acesso[-10:] if nfe.chave_acesso else '-' }}</small></td>
                                         <td class="text-center">
                                             <span class="badge {% if nfe.status == 'Autorizada' %}bg-success{% else %}bg-secondary{% endif %}">
                                                 {{ nfe.status }}
@@ -249,7 +285,7 @@
                             <div class="col-md-6">
                                 <p class="mb-2"><strong>Plano:</strong> 
                                     <span class="badge bg-primary">{{ cliente.plano_nome }}</span>
-                                    <span class="badge bg-info">{{ cliente.tipo_plano }}</span>
+                                    <!-- <span class="badge bg-info">{{ cliente.tipo_plano }}</span> -->
                                 </p>
                                 <p class="mb-2"><strong>Vencimento:</strong> {{ format_date(extrato.data_vencimento) }}</p>
                                 <p class="mb-0"><strong>Valor Total:</strong> 

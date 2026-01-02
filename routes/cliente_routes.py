@@ -125,9 +125,11 @@ def dashboard(cliente_id):
                 data_criacao,
                 chave_acesso,
                 protocolo_sefaz,
+                mensagem_sefaz,
                 destinatario_razao_social,
                 destinatario_cnpj_cpf,
                 tipo_nfe,
+                valor_total,
                 json_nfe
             FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
@@ -144,48 +146,51 @@ def dashboard(cliente_id):
                 nfe_dict = dict(row._mapping)
                 print(f"  NFe ID {nfe_dict.get('nfe_emitida_id')}: Status={nfe_dict.get('status')}, Data={nfe_dict.get('data_criacao')}")
                 
-                # CORRIGIDO: Extrair valor da NFe/NFCe do JSON
+                # CORRIGIDO: Usar valor_total do banco ou extrair do JSON como fallback
                 try:
-                    import json
-                    
-                    # Se json_nfe for None, definir valor padrão
-                    if nfe_dict.get('json_nfe') is None:
-                        print(f"    [!] json_nfe é None")
-                        nfe_dict['valor_total'] = 0.0
-                        ultimas_nfes.append(nfe_dict)
-                        continue
-                    
-                    json_data = json.loads(nfe_dict['json_nfe']) if isinstance(nfe_dict['json_nfe'], str) else nfe_dict['json_nfe']
-                    
-                    # Tentar extrair o valor total de diferentes formas possíveis na estrutura JSON
-                    valor_total = None
-                    if isinstance(json_data, dict):
-                        # 1. NFCe: Verificar em totais -> valor_total
-                        if 'totais' in json_data and isinstance(json_data['totais'], dict):
-                            valor_total = json_data['totais'].get('valor_total')
-                        
-                        # 2. NFe: Verificar várias possíveis localizações do valor total
-                        elif 'total' in json_data and isinstance(json_data['total'], dict):
-                            if 'ICMSTot' in json_data['total'] and isinstance(json_data['total']['ICMSTot'], dict):
-                                valor_total = json_data['total']['ICMSTot'].get('vNF')
-                        
-                        # 3. Verificar na estrutura form_data -> valorPagamento
-                        elif 'form_data' in json_data and isinstance(json_data['form_data'], dict):
-                            valor_total = json_data['form_data'].get('valorPagamento')
-                    
-                    if valor_total is not None:
+                    # Primeiro tentar usar o valor_total do banco de dados
+                    if nfe_dict.get('valor_total') is not None:
                         try:
-                            nfe_dict['valor_total'] = float(valor_total)
-                            print(f"    [OK] Valor total: R$ {nfe_dict['valor_total']:.2f}")
+                            nfe_dict['valor_total'] = float(nfe_dict['valor_total'])
+                            print(f"    [OK] Valor total do banco: R$ {nfe_dict['valor_total']:.2f}")
                         except (ValueError, TypeError):
-                            print(f"    [!] Erro ao converter valor: {valor_total}")
+                            print(f"    [!] Erro ao converter valor do banco: {nfe_dict['valor_total']}")
+                            nfe_dict['valor_total'] = 0.0
+                    # Se não tiver no banco, tentar extrair do JSON
+                    elif nfe_dict.get('json_nfe') is not None:
+                        import json
+                        json_data = json.loads(nfe_dict['json_nfe']) if isinstance(nfe_dict['json_nfe'], str) else nfe_dict['json_nfe']
+                        
+                        # Tentar extrair o valor total de diferentes formas possíveis na estrutura JSON
+                        valor_total = None
+                        if isinstance(json_data, dict):
+                            # 1. NFCe: Verificar em totais -> valor_total
+                            if 'totais' in json_data and isinstance(json_data['totais'], dict):
+                                valor_total = json_data['totais'].get('valor_total')
+                            # 2. NFe: Verificar várias possíveis localizações do valor total
+                            elif 'total' in json_data and isinstance(json_data['total'], dict):
+                                if 'ICMSTot' in json_data['total'] and isinstance(json_data['total']['ICMSTot'], dict):
+                                    valor_total = json_data['total']['ICMSTot'].get('vNF')
+                            # 3. Verificar na estrutura form_data -> valorPagamento
+                            elif 'form_data' in json_data and isinstance(json_data['form_data'], dict):
+                                valor_total = json_data['form_data'].get('valorPagamento')
+                        
+                        if valor_total is not None:
+                            try:
+                                nfe_dict['valor_total'] = float(valor_total)
+                                print(f"    [OK] Valor total do JSON: R$ {nfe_dict['valor_total']:.2f}")
+                            except (ValueError, TypeError):
+                                print(f"    [!] Erro ao converter valor do JSON: {valor_total}")
+                                nfe_dict['valor_total'] = 0.0
+                        else:
+                            print(f"    [!] Valor total não encontrado no JSON")
                             nfe_dict['valor_total'] = 0.0
                     else:
-                        print(f"    [!] Valor total não encontrado no JSON")
+                        print(f"    [!] Nem valor_total nem json_nfe disponíveis")
                         nfe_dict['valor_total'] = 0.0
                         
                 except Exception as e:
-                    print(f"    [X] Erro ao processar JSON da NFe {nfe_dict.get('nfe_emitida_id')}: {e}")
+                    print(f"    [X] Erro ao processar valor da NFe {nfe_dict.get('nfe_emitida_id')}: {e}")
                     import traceback
                     traceback.print_exc()
                     nfe_dict['valor_total'] = 0.0

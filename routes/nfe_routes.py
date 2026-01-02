@@ -105,7 +105,7 @@ def emitir_nfe():
                 'finNFe': request.form.get('finNFe', '1'),
                 'dataEmissao': request.form.get('dataEmissao'),
                 'serie': request.form.get('serie', '1'),
-                'numero_nfe': request.form.get('numero_nfe', '1'),  # ⭐ Capturar número da NFe da tela
+                'numero_nfe': request.form.get('numero_nfe', '1'),  # [*] Capturar número da NFe da tela
                 'natOp': request.form.get('natOp'),
                 'infCpl': request.form.get('infCpl', ''),
                 'formaPagamento': request.form.get('formaPagamento'),
@@ -704,7 +704,7 @@ def list_nfes():
         # OK: AJUSTE: Admin comum só vê NFes do cliente ativo
         # Super Admin vê todas as NFes quando cliente_id não é fornecido
         if not cliente_id_str:
-            print("❓ Nenhum cliente_id fornecido na URL")
+            print("[?] Nenhum cliente_id fornecido na URL")
             # Se não forneceu cliente_id, verificar se é Super Admin
             if hasattr(current_user, 'is_super_admin') and current_user.is_super_admin():
                 # Super Admin: buscar todos os clientes acessíveis
@@ -754,6 +754,9 @@ def list_nfes():
                     n.destinatario_cnpj_cpf,
                     n.chave_acesso,
                     n.protocolo_sefaz,
+                    n.mensagem_sefaz,
+                    n.numero,
+                    n.serie,
                     c.razao_social as cliente_nome
                 FROM nfe_emitidas n
                 JOIN clientes c ON n.cliente_id = c.cliente_id
@@ -781,6 +784,9 @@ def list_nfes():
                     n.destinatario_cnpj_cpf,
                     n.chave_acesso,
                     n.protocolo_sefaz,
+                    n.mensagem_sefaz,
+                    n.numero,
+                    n.serie,
                     c.razao_social as cliente_nome
                 FROM nfe_emitidas n
                 JOIN clientes c ON n.cliente_id = c.cliente_id

@@ -1,0 +1,92 @@
+===========================================
+ARQUIVOS PARA DEPLOY - CERTIFICADO A3
+Data: 18/12/2024
+===========================================
+
+ARQUIVOS NOVOS (criar no servidor):
+====================================
+
+1. database/migrations/add_tipo_certificado.sql
+   → Migração do banco de dados para suporte A3
+
+2. services/pkcs11_service.py
+   → Serviço principal para comunicação com tokens PKCS#11
+
+3. routes/a3_routes.py
+   → Rotas da API para gerenciamento de certificados A3
+
+4. templates/a3/select_certificate.html
+   → Interface wizard de 3 passos para seleção de certificados A3
+
+5. docs/SUPORTE_CERTIFICADOS_A3.md
+   → Documentação completa do suporte A3
+
+
+ARQUIVOS MODIFICADOS (substituir no servidor):
+==============================================
+
+1. database/models.py
+   → Adicionadas colunas: tipo_certificado, token_slot_id, token_label, pkcs11_library
+
+2. services/certificate_service.py
+   → Adicionada função: process_certificate_a3_registration()
+
+3. services/xml_signature_service.py
+   → Adicionada função: _sign_with_a3_token()
+   → Modificada função: sign_nfe_xml() para detectar tipo de certificado
+
+4. templates/admin/certificados/list.html
+   → Adicionado botão "Certificado A3" ao lado do "Certificado A1"
+   → Adicionada coluna "Tipo" na tabela com badges A1/A3
+
+5. app.py
+   → Importado e registrado blueprint: a3_bp
+
+6. requirements.txt
+   → Adicionada dependência: PyKCS11>=1.5.12
+
+
+ESTRUTURA DE DIRETÓRIOS A CRIAR:
+================================
+
+templates/a3/
+   └── select_certificate.html
+
+
+APÓS UPLOAD DOS ARQUIVOS:
+=========================
+
+1. Executar migração do banco de dados:
+   python deployment/atualizar_banco_a3_windows.bat
+
+2. Instalar nova dependência:
+   pip install PyKCS11
+
+3. Instalar drivers dos tokens:
+   - SafeNet: https://support.globalsign.com/ca-certificates/local-registration-authorities-lras/safenet-drivers
+   - Certisign: https://www.certisign.com.br/downloads
+   - Gemalto: https://www.thalesgroup.com/en/markets/digital-identity-and-security/government/customer-services/software-downloads
+
+4. Reiniciar serviços:
+   net stop api_nfe_principal
+   net start api_nfe_principal
+
+
+VERIFICAÇÃO PÓS-DEPLOY:
+=======================
+
+1. Acessar: http://servidor/admin/certificados?cliente_id=1
+2. Verificar se aparecem dois botões: "Certificado A1" e "Certificado A3"
+3. Clicar em "Certificado A3"
+4. Verificar se abre o wizard de 3 passos
+
+
+NOTAS IMPORTANTES:
+==================
+
+- A migração adiciona 4 novas colunas na tabela certificados_digitais
+- Certificados A1 existentes continuam funcionando normalmente
+- PyKCS11 requer SWIG no Windows (incluído na maioria das instalações Python)
+- Tokens devem estar conectados via USB durante o uso
+- Drivers específicos do fabricante do token devem estar instalados
+

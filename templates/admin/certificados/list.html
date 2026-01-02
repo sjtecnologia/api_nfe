@@ -10,10 +10,16 @@
             Certificados Digitais - {{ cliente_nome }}
         </h4>
         <div>
-            <a href="{{ url_for('admin.create_certificado', cliente_id=cliente_id) }}" 
-               class="btn btn-primary">
-                <i class="fas fa-plus"></i> Novo Certificado
-            </a>
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('admin.create_certificado', cliente_id=cliente_id) }}" 
+                   class="btn btn-primary" title="Certificado A1 (arquivo .pfx/.p12)">
+                    <i class="fas fa-file-upload"></i> Certificado A1
+                </a>
+                <a href="{{ url_for('a3.select_certificate', cliente_id=cliente_id) }}" 
+                   class="btn btn-success" title="Certificado A3 (token/smartcard USB)">
+                    <i class="fas fa-usb"></i> Certificado A3
+                </a>
+            </div>
         </div>
     </div>
 
@@ -31,6 +37,7 @@
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>Tipo</th>
                             <th>Arquivo</th>
                             <th>Fingerprint</th>
                             <th>Status</th>
@@ -46,8 +53,19 @@
                                 <code>#{{ certificado.certificado_digital_id }}</code>
                             </td>
                             <td>
+                                {% if certificado.tipo_certificado == 'A3' %}
+                                    <span class="badge bg-success" title="Certificado A3 (Token/Smartcard)">
+                                        <i class="fas fa-usb"></i> A3
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-primary" title="Certificado A1 (Arquivo)">
+                                        <i class="fas fa-file"></i> A1
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 <i class="fas fa-certificate text-primary"></i>
-                                {{ certificado.nome_arquivo_original or 'Certificado.pfx' }}
+                                {{ certificado.nome_arquivo_original or certificado.token_label or 'Certificado.pfx' }}
                             </td>
                             <td>
                                 {% if certificado.fingerprint %}

@@ -295,7 +295,7 @@ def ativar_assinatura(session):
         db.commit()
         db.close()
         
-        print(f"✅ Assinatura ativada para cliente {cliente_id}")
+        print(f"[OK] Assinatura ativada para cliente {cliente_id}")
         
         # Aqui você pode enviar email de boas-vindas
         
@@ -328,7 +328,7 @@ def renovar_assinatura(invoice):
         db.commit()
         db.close()
         
-        print(f"✅ Assinatura renovada: {subscription_id}")
+        print(f"[OK] Assinatura renovada: {subscription_id}")
         
     except Exception as e:
         print(f"Erro ao renovar assinatura: {e}")
@@ -372,7 +372,7 @@ def cancelar_assinatura(subscription):
         db.commit()
         db.close()
         
-        print(f"✅ Assinatura cancelada: {subscription_id}")
+        print(f"[OK] Assinatura cancelada: {subscription_id}")
         
     except Exception as e:
         print(f"Erro ao cancelar assinatura: {e}")

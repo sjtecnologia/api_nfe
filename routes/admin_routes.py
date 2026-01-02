@@ -467,7 +467,7 @@ def list_nfes():
     rows = db.execute(text(f"""
         SELECT n.nfe_emitida_id, n.cliente_id, n.chave_acesso, n.data_criacao, n.status,
                n.destinatario_razao_social, n.destinatario_cnpj_cpf,
-               n.tipo_nfe, n.finalidade_emissao,
+               n.tipo_nfe, n.finalidade_emissao, n.numero, n.serie, n.protocolo_sefaz, n.mensagem_sefaz,
                c.razao_social, c.cnpj
         FROM nfe_emitidas n
         JOIN clientes c ON c.cliente_id = n.cliente_id
@@ -4508,10 +4508,10 @@ def api_sugestao_tributaria():
                 dados['regime_tributario'] = cliente.get('regime_nome')
                 print(f"[IA] [TRACE] Contexto cliente: UF={cliente.get('uf')}, Regime={cliente.get('regime_nome')}")
         
-        # Chama API IA Unificada (porta 9000)
+        # Chama API IA Unificada (porta 8081)
         print(f"[IA] [?] Chamando API IA Unificada...")
         api_response = req_lib.post(
-            'http://localhost:9000/api/sugestao',
+            'http://localhost:8081/sugestao',
             json={
                 'descricao': dados.get('descricao'),
                 'tipo_item': dados.get('tipo_item', 'Produto'),
@@ -4530,11 +4530,18 @@ def api_sugestao_tributaria():
         
         resultado_api = api_response.json()
         
-        if not resultado_api.get('success'):
+        # Verifica se há erro explícito na resposta
+        if resultado_api.get('erro'):
             print(f"[IA] [X] API retornou erro: {resultado_api.get('erro')}")
-            return jsonify(resultado_api), 500
+            return jsonify({'erro': resultado_api.get('erro')}), 500
         
-        classificacao = resultado_api.get('classificacao', {})
+        # A API de IA retorna direto os campos (ncm, cfop, cst, etc)
+        # Se não houver campo 'ncm', considera como erro
+        if not resultado_api.get('ncm'):
+            print(f"[IA] [X] Resposta da API inválida: {resultado_api}")
+            return jsonify({'erro': 'Resposta da API de IA inválida'}), 500
+        
+        classificacao = resultado_api  # A resposta já é a classificação
         print(f"[IA] [OK] Classificação recebida: NCM={classificacao.get('ncm')}")
         
         # Converte códigos para IDs do banco de dados
@@ -4626,7 +4633,7 @@ def api_sugestao_tributaria():
     except req_lib.exceptions.RequestException as e:
         print(f"[IA] [X] Erro ao conectar com API IA: {e}")
         return jsonify({
-            'erro': 'API de IA não está disponível. Certifique-se de que está rodando na porta 9000.',
+            'erro': 'API de IA não está disponível. Certifique-se de que está rodando na porta 8081.',
             'detalhes': str(e)
         }), 503
         

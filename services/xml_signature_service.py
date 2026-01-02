@@ -12,7 +12,7 @@ from services.certificate_service import get_active_certificate_for_client
 
 class XMLSignatureService:
     """
-    Serviço para assinatura digital de XML com certificado A1
+    Serviço para assinatura digital de XML com certificados A1 e A3
     """
     
     def __init__(self):
@@ -37,8 +37,15 @@ class XMLSignatureService:
                 print("[!] Certificado em modo simulado - não é possível assinar realmente")
                 return self._simulate_signature(xml_content)
             
-            # 2. Carregar certificado PKCS#12
-            private_key, certificate = self._load_certificate(certificado)
+            # 2. Verificar tipo de certificado
+            tipo_cert = certificado.get('tipo_certificado', 'A1')
+            
+            if tipo_cert == 'A3':
+                # Assinar com token A3
+                return self._sign_with_a3_token(xml_content, certificado)
+            else:
+                # Assinar com certificado A1 (arquivo)
+                private_key, certificate = self._load_certificate(certificado)
             
             # 3. Parsear XML
             xml_tree = etree.fromstring(xml_content.encode('utf-8'))
@@ -228,6 +235,129 @@ class XMLSignatureService:
         x509_cert.text = base64.b64encode(cert_der).decode('utf-8')
         
         return signature
+    
+    def _sign_with_a3_token(self, xml_content, certificado):
+        """
+        Assina XML usando certificado A3 (token/smartcard)
+        
+        Args:
+            xml_content: Conteúdo XML a assinar
+            certificado: Dict com informações do certificado A3
+        
+        Returns:
+            XML assinado
+        """
+        try:
+            from services.pkcs11_service import get_pkcs11_service
+            from services.certificate_service import _decrypt_password
+            
+            print("[A3] Iniciando assinatura com token A3")
+            
+            # Extrair informações do token
+            library_path = certificado.get('pkcs11_library')
+            slot_id = certificado.get('token_slot_id')
+            cert_label = certificado.get('token_label')
+            encrypted_pin = certificado.get('senha_certificado')
+            
+            if not all([library_path, slot_id is not None, cert_label, encrypted_pin]):
+                raise Exception("Informações do token A3 incompletas")
+            
+            # Descriptografar PIN
+            pin = _decrypt_password(encrypted_pin)
+            
+            # Parsear XML
+            xml_tree = etree.fromstring(xml_content.encode('utf-8'))
+            
+            # Encontrar elemento infNFe
+            inf_nfe = xml_tree.find('.//nfe:infNFe', self.namespaces)
+            if inf_nfe is None:
+                inf_nfe = xml_tree.find('.//infNFe')
+            
+            if inf_nfe is None:
+                raise Exception("Elemento infNFe não encontrado")
+            
+            inf_nfe_id = inf_nfe.get('Id')
+            print(f"[A3] Assinando elemento: {inf_nfe_id}")
+            
+            # Canonicalizar infNFe
+            canonicalized_infnfe = self._canonicalize_element(inf_nfe)
+            
+            # Calcular hash SHA-1 do conteúdo canonicalizado
+            digest_value = base64.b64encode(
+                hashlib.sha1(canonicalized_infnfe.encode('utf-8')).digest()
+            ).decode('utf-8')
+            
+            # Criar SignedInfo
+            signed_info_template = f"""<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+    <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+    <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+    <Reference URI="#{inf_nfe_id}">
+        <Transforms>
+            <Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+            <Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+        </Transforms>
+        <DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+        <DigestValue>{digest_value}</DigestValue>
+    </Reference>
+</SignedInfo>"""
+            
+            # Canonicalizar SignedInfo
+            signed_info_element = etree.fromstring(signed_info_template)
+            canonicalized_signed_info = self._canonicalize_element(signed_info_element)
+            
+            # Assinar com token
+            pkcs11 = get_pkcs11_service()
+            signature_bytes = pkcs11.sign_data_with_token(
+                library_path,
+                slot_id,
+                pin,
+                cert_label,
+                canonicalized_signed_info.encode('utf-8')
+            )
+            
+            if not signature_bytes:
+                raise Exception("Falha ao assinar com token A3")
+            
+            signature_value = base64.b64encode(signature_bytes).decode('utf-8')
+            
+            # Obter certificado do token
+            cert_der = pkcs11.get_certificate_from_token(library_path, slot_id, pin, cert_label)
+            if not cert_der:
+                raise Exception("Falha ao obter certificado do token")
+            
+            cert_base64 = base64.b64encode(cert_der).decode('utf-8')
+            
+            # Montar elemento Signature
+            signature_xml = etree.fromstring(f"""<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+    {signed_info_template.replace('<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">', '<SignedInfo>')}
+    <SignatureValue>{signature_value}</SignatureValue>
+    <KeyInfo>
+        <X509Data>
+            <X509Certificate>{cert_base64}</X509Certificate>
+        </X509Data>
+    </KeyInfo>
+</Signature>""")
+            
+            # Inserir assinatura no XML
+            nfe_element = xml_tree.find('.//nfe:NFe', self.namespaces)
+            if nfe_element is None:
+                nfe_element = xml_tree.find('.//NFe')
+            
+            if nfe_element is not None:
+                nfe_element.append(signature_xml)
+            
+            # Serializar XML final
+            signed_xml = etree.tostring(xml_tree, encoding='unicode', pretty_print=True)
+            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + signed_xml
+            
+            print(f"[OK] XML assinado com token A3: {len(signed_xml)} caracteres")
+            return signed_xml
+        
+        except Exception as e:
+            print(f"[X] Erro ao assinar com token A3: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def _simulate_signature(self, xml_content):
         """

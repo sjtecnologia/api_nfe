@@ -149,7 +149,8 @@
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-file-invoice"></i> 
-            NF-e ID: {{ nfe.nfe_emitida_id }}
+            NF-e Nº {{ nfe.numero }} - Série {{ nfe.serie }}
+            <small class="text-muted">(ID: {{ nfe.nfe_emitida_id }})</small>
         </h1>
     </div>
 
@@ -184,6 +185,19 @@
         </div>
     </div>
 
+    <!-- Alerta de NFe Rejeitada -->
+    {% if nfe.status|upper == 'REJEITADA' %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-danger shadow-sm" role="alert">
+                <h5 class="alert-heading"><i class="fas fa-times-circle"></i> NFe Rejeitada pela SEFAZ</h5>
+                <hr>
+                <p class="mb-0"><strong>Motivo:</strong> {{ nfe.mensagem_sefaz or 'Motivo da rejeição não disponível' }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Card de Ações Rápidas -->
     <div class="row mb-4">
         <div class="col-12">
@@ -194,7 +208,7 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    <div class="action-buttons d-flex flex-wrap justify-content-center">
+                    <div class="action-buttons d-flex flex-wrap justify-content-center gap-2">
                         {% if nfe.status|upper == 'AUTORIZADA' and nfe.json_nfe and nfe.json_nfe.xml_content %}                       
                         <!-- Botão para download do XML -->
                         <button type="button" id="btn-download-xml" class="btn btn-primary">
@@ -410,14 +424,14 @@
                                 {% for item in nfe.json_nfe.get('items') %}
                                 <tr>
                                     <td>{{ loop.index }}</td>
-                                    <td>{{ item.codigo_produto }}</td>
+                                    <td>{{ item.codigo_produto or item.get('codigo_produto') }}</td>
                                     <td>{{ item.descricao }}</td>
                                     <td>{{ item.ncm }}</td>
                                     <td>{{ item.cfop }}</td>
-                                    <td>{{ item.quantidade }}</td>
-                                    <td>{{ item.unidade }}</td>
-                                    <td>R$ {{ "%.2f"|format(item.valor_unitario|float) }}</td>
-                                    <td>R$ {{ "%.2f"|format(item.valor_unitario|float * item.quantidade|float) }}</td>
+                                    <td>{{ item.quantidade_comercial or item.quantidade }}</td>
+                                    <td>{{ item.unidade_comercial or item.unidade }}</td>
+                                    <td>R$ {{ "%.2f"|format((item.valor_unitario_comercial or item.valor_unitario or 0)|float) }}</td>
+                                    <td>R$ {{ "%.2f"|format(((item.valor_unitario_comercial or item.valor_unitario or 0)|float) * ((item.quantidade_comercial or item.quantidade or 0)|float)) }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -426,7 +440,17 @@
                                     <td colspan="7"></td>
                                     <td><strong>Total:</strong></td>
                                     <td>
-                                        <strong>R$ {{ "%.2f"|format(nfe.json_nfe.form_data.valorPagamento|float) if nfe.json_nfe and nfe.json_nfe.form_data and nfe.json_nfe.form_data.valorPagamento else "0.00" }}</strong>
+                                        {% if nfe.valor_total %}
+                                            <strong>R$ {{ "%.2f"|format(nfe.valor_total|float) }}</strong>
+                                        {% elif nfe.json_nfe and nfe.json_nfe.get('items') %}
+                                            {% set total = namespace(value=0) %}
+                                            {% for item in nfe.json_nfe.get('items') %}
+                                                {% set total.value = total.value + (((item.valor_unitario_comercial or item.valor_unitario or 0)|float) * ((item.quantidade_comercial or item.quantidade or 0)|float)) %}
+                                            {% endfor %}
+                                            <strong>R$ {{ "%.2f"|format(total.value) }}</strong>
+                                        {% else %}
+                                            <strong>R$ 0.00</strong>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             </tfoot>

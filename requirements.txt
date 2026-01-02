@@ -51,3 +51,6 @@ openpyxl>=3.1.2
 
 # Busca de CEP via API
 requests>=2.31.0
+
+# Suporte a certificados A3 (tokens/smartcards) via PKCS#11
+PyKCS11>=1.5.12

@@ -85,10 +85,12 @@
                            class="btn btn-primary">
                             <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
+                        {% if can_create() %}
                         <a href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ cliente.cliente_id }}" 
                            class="btn btn-success">
                             <i class="fas fa-plus-circle"></i> Nova NFe
                         </a>
+                        {% endif %}
                         <a href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ cliente.cliente_id }}" 
                            class="btn btn-info">
                             <i class="fas fa-list"></i> Ver NFes

@@ -750,6 +750,9 @@
                                     <div class="dropdown-divider"></div>
                                     <a class="dropdown-item" href="{{ url_for('planos.list_planos') }}"><i class="fas fa-box-open"></i> Planos e Assinaturas</a>
                                     <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-key"></i> API Keys</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-webhook"></i> Webhooks</a>
+                                    <div class="dropdown-divider"></div>
                                     <a class="dropdown-item" href="{{ url_for('admin.list_faturamento') }}"><i class="fas fa-dollar-sign"></i> Faturamento</a>
                                     <a class="dropdown-item" href="{{ url_for('admin.list_auditoria') }}"><i class="fas fa-clipboard-list"></i> Logs e Auditoria</a>
                                     {% endif %}

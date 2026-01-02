@@ -63,6 +63,10 @@ def buscar_regra_tributacao():
         db = next(get_db())
         data = request.get_json()
         
+        print(f"\n{'='*80}")
+        print(f"[BUSCA REGRA] Requisição recebida")
+        print(f"{'='*80}")
+        
         if not data:
             return jsonify({"error": "Dados JSON não fornecidos."}), 400
         
@@ -74,15 +78,34 @@ def buscar_regra_tributacao():
         uf_destino = data.get('uf_destino')
         tipo_item = data.get('tipo_item')
         
+        print(f"[PARAMS] Cliente ID: {cliente_id}")
+        print(f"[PARAMS] Regime Tributário ID: {regime_tributario_id}")
+        print(f"[PARAMS] CFOP: {cfop_codigo}")
+        print(f"[PARAMS] NCM: {ncm_codigo}")
+        print(f"[PARAMS] UF Origem: {uf_origem} | UF Destino: {uf_destino}")
+        print(f"[PARAMS] Tipo Item: {tipo_item}")
+        
         # Normalizar tipo_item para o formato do banco (primeira letra maiúscula)
         # Aceita: "PRODUTO", "produto", "Produto" → converte para "Produto"
         if tipo_item:
             tipo_item = tipo_item.capitalize()  # "PRODUTO" → "Produto", "produto" → "Produto"
+            print(f"[PARAMS] Tipo Item normalizado: {tipo_item}")
         
         # Validar acesso ao cliente
         accessible_client_ids = get_accessible_client_ids(db)
+        print(f"[ACCESS] IDs acessíveis: {accessible_client_ids}")
+        
         if cliente_id and int(cliente_id) not in accessible_client_ids:
+            print(f"[ERROR] Acesso negado ao cliente {cliente_id}")
             return jsonify({"error": "Acesso negado para este cliente."}), 403
+        
+        # Contar total de regras ativas no banco
+        total_regras = db.query(RegraTributacao).filter(RegraTributacao.ativo == True).count()
+        print(f"[INFO] Total de regras ativas no banco: {total_regras}")
+        
+        if total_regras == 0:
+            print(f"[WARNING] ⚠️ NENHUMA REGRA TRIBUTÁRIA CADASTRADA NO BANCO!")
+            return jsonify({"sucesso": False, "message": "Nenhuma regra tributária cadastrada. Cadastre regras em Admin > Regras de Tributação."}), 404
         
         query = db.query(RegraTributacao).options(
         joinedload(RegraTributacao.regime_tributario),
@@ -106,13 +129,13 @@ def buscar_regra_tributacao():
         if cfop_codigo:
             cfop_subquery = db.query(Cfop.cfop_id).filter(Cfop.cfop == cfop_codigo)
             cfop_ids = [c.cfop_id for c in cfop_subquery.all()]
-            print(f"[SEARCH] CFOP '{cfop_codigo}' → IDs encontrados: {cfop_ids}")
+            print(f"[SEARCH] CFOP '{cfop_codigo}' -> IDs encontrados: {cfop_ids}")
             query = query.filter(or_(RegraTributacao.cfop_id.in_(cfop_subquery), RegraTributacao.cfop_id.is_(None)))
         
         if ncm_codigo:
             ncm_subquery = db.query(Ncm.ncm_id).filter(Ncm.codigo == ncm_codigo)
             ncm_ids = [n.ncm_id for n in ncm_subquery.all()]
-            print(f"[SEARCH] NCM '{ncm_codigo}' → IDs encontrados: {ncm_ids}")
+            print(f"[SEARCH] NCM '{ncm_codigo}' -> IDs encontrados: {ncm_ids}")
             query = query.filter(or_(RegraTributacao.ncm_id.in_(ncm_subquery), RegraTributacao.ncm_id.is_(None)))
             
         if uf_origem:
@@ -128,6 +151,21 @@ def buscar_regra_tributacao():
             RegraTributacao.cliente_id.desc(),
             RegraTributacao.prioridade.desc()
         )
+        
+        # Debug: contar quantas regras passaram nos filtros
+        count_filtradas = query.count()
+        print(f"[QUERY] Regras após filtros: {count_filtradas}")
+        
+        if count_filtradas == 0:
+            print(f"[WARNING] ⚠️ Nenhuma regra passou nos filtros!")
+            print(f"[HINT] Verifique se existe regra com:")
+            print(f"   - Cliente ID: {cliente_id} (ou NULL para regra global)")
+            print(f"   - Regime: {regime_tributario_id}")
+            print(f"   - CFOP: {cfop_codigo} (ou NULL)")
+            print(f"   - NCM: {ncm_codigo} (ou NULL)")
+            print(f"   - UF Origem: {uf_origem} (ou NULL)")
+            print(f"   - UF Destino: {uf_destino} (ou NULL)")
+            print(f"   - Tipo: {tipo_item} (ou NULL)")
         
         regra_encontrada = query.first()
         if regra_encontrada:
@@ -217,7 +255,7 @@ def get_proximo_numero_nfe():
             proximo_numero = result if result else 1
         except Exception as e:
             # Fallback: buscar MAX + 1
-            print(f"⚠️ Função get_proximo_numero_nfe não encontrada, usando fallback: {e}")
+            print(f"[WARN] Função get_proximo_numero_nfe não encontrada, usando fallback: {e}")
             result = db.execute(
                 text("""
                     SELECT COALESCE(MAX(numero), 0) + 1 
@@ -239,5 +277,5 @@ def get_proximo_numero_nfe():
         }), 200
         
     except Exception as e:
-        print(f"❌ Erro ao buscar próximo número: {e}")
+        print(f"[ERROR] Erro ao buscar próximo número: {e}")
         return jsonify({"success": False, "error": str(e)}), 500

@@ -112,6 +112,99 @@ def _decrypt_password_fallback(encrypted_password):
         print(f"[X] _decrypt_password_fallback: Todos os fallbacks falharam: {e}")
         return encrypted_password
 
+def process_certificate_a3_registration(db_session, cliente_id, a3_data):
+    """
+    Registra certificado A3 (token/smartcard) no sistema
+    
+    Args:
+        db_session: Sessão do banco
+        cliente_id: ID do cliente
+        a3_data: Dict com dados do token (slot_id, label, library_path, pin, etc)
+    
+    Returns:
+        Tuple (sucesso: bool, certificado_obj ou None)
+    """
+    try:
+        from services.pkcs11_service import get_pkcs11_service
+        
+        print(f"[A3] Registrando certificado A3 para cliente {cliente_id}")
+        
+        pkcs11 = get_pkcs11_service()
+        if not pkcs11.pkcs11_available:
+            flash('PyKCS11 não está instalado. Certificados A3 não suportados.', 'danger')
+            return False, None
+        
+        # Extrair dados
+        library_path = a3_data.get('library_path')
+        slot_id = a3_data.get('slot_id')
+        pin = a3_data.get('pin')
+        cert_label = a3_data.get('cert_label')
+        
+        if not all([library_path, slot_id is not None, pin, cert_label]):
+            flash('Dados incompletos do token A3.', 'danger')
+            return False, None
+        
+        # Listar certificados no token
+        certificates = pkcs11.list_certificates_in_token(library_path, slot_id, pin)
+        
+        # Encontrar certificado específico
+        selected_cert = None
+        for cert in certificates:
+            if cert['label'] == cert_label:
+                selected_cert = cert
+                break
+        
+        if not selected_cert:
+            flash(f'Certificado "{cert_label}" não encontrado no token.', 'danger')
+            return False, None
+        
+        # Verificar validade
+        if not selected_cert['is_valid']:
+            flash('Certificado no token está vencido.', 'danger')
+            return False, None
+        
+        # Criptografar PIN
+        encrypted_pin = _encrypt_password(pin)
+        
+        # Desativar certificados antigos
+        db_session.query(CertificadoDigital).filter_by(
+            cliente_id=cliente_id,
+            ativo=True
+        ).update({'ativo': False})
+        
+        # Criar registro do certificado A3
+        cert_obj = CertificadoDigital(
+            cliente_id=cliente_id,
+            fingerprint=selected_cert['fingerprint'],
+            conteudo_certificado=base64.b64encode(selected_cert['cert_der']).decode('utf-8'),  # Certificado em DER
+            senha_certificado=encrypted_pin,  # PIN criptografado
+            validade_inicio=selected_cert['not_before'].replace(tzinfo=None),
+            validade_fim=selected_cert['not_after'].replace(tzinfo=None),
+            ativo=True,
+            data_upload=datetime.now(),
+            nome_arquivo_original=f"Token: {cert_label}",
+            tipo_certificado='A3',
+            token_slot_id=slot_id,
+            token_label=cert_label,
+            pkcs11_library=library_path,
+            created_by_user_id=current_user.id if current_user.is_authenticated else None
+        )
+        
+        db_session.add(cert_obj)
+        db_session.commit()
+        
+        print(f"[OK] Certificado A3 registrado com ID: {cert_obj.certificado_digital_id}")
+        flash('Certificado A3 registrado com sucesso!', 'success')
+        return True, cert_obj
+    
+    except Exception as e:
+        print(f"[X] Erro ao registrar certificado A3: {e}")
+        import traceback
+        traceback.print_exc()
+        db_session.rollback()
+        flash(f'Erro ao registrar certificado A3: {e}', 'danger')
+        return False, None
+
 def process_certificate_upload(db_session, cliente_id, request_form, request_files):
     """Processa o upload de certificado digital"""
     print(f"[SEARCH] process_certificate_upload: Iniciando para cliente {cliente_id}")

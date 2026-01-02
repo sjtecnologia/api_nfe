@@ -84,12 +84,14 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
+                        {% if can_create() %}
                         <div class="col-md-3 mb-3">
                             <a href="{{ url_for('nfe.emitir_nfe') }}" class="btn btn-primary btn-block btn-lg">
                                 <i class="fas fa-plus-circle"></i>
                                 Nova NFe
                             </a>
                         </div>
+                        {% endif %}
                         <div class="col-md-3 mb-3">
                             <a href="{{ url_for('admin.list_produtos') }}" class="btn btn-outline-primary btn-block btn-lg">
                                 <i class="fas fa-boxes"></i>

@@ -197,9 +197,11 @@
                     <div class="card mb-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-box me-2"></i>Produtos Associados</span>
+                            {% if can_create() %}
                             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
                                 <i class="fas fa-plus"></i> Adicionar Novo Produto
                             </button>
+                            {% endif %}
                         </div>
                         <div class="card-body pt-3">
                             {% set cliente_id = cliente.cliente_id %}
@@ -212,9 +214,11 @@
                     <div class="card mb-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-certificate me-2"></i>Certificados Associados</span>
+                            {% if can_create() %}
                             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
                                 <i class="fas fa-plus"></i> Adicionar Novo Certificado
                             </button>
+                            {% endif %}
                         </div>
                         <div class="card-body pt-3">
                             {% include 'admin/certificados/list_partial.html' %}
@@ -240,9 +244,11 @@
                     <div class="card mb-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-users me-2"></i>Destinatários NF-e Associados</span>
+                            {% if can_create() %}
                             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Destinatário" data-modal-url="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id, modal=true) }}">
                                 <i class="fas fa-plus"></i> Adicionar Novo Destinatário
                             </button>
+                            {% endif %}
                         </div>
                         <div class="card-body pt-3">
                             {% include 'admin/destinatarios/list_partial.html' %}

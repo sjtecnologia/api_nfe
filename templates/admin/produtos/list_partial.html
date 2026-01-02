@@ -30,6 +30,7 @@
                             </span>
                         </td>
                         <td>
+                            {% if can_edit() %}
                             <div class="btn-group" role="group">
                                 <!-- Editar -->
                                 <a href="{{ url_for('admin.editar_produto', produto_id=produto.produto_id) }}" 
@@ -53,6 +54,9 @@
                                     <i class="fas fa-{{ 'eye-slash' if produto.ativo else 'eye' }}"></i>
                                 </button>
                             </div>
+                            {% else %}
+                            <span class="text-muted"><i class="fas fa-eye"></i> Visualização</span>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}
@@ -62,10 +66,12 @@
         <div class="text-center py-4">
             <i class="fas fa-box fa-3x text-muted mb-3"></i>
             <h5>Nenhum produto cadastrado</h5>
+            {% if can_create() %}
             <p class="text-muted">Comece adicionando um novo produto ao catálogo.</p>
             <a href="{{ url_for('admin.create_produto', cliente_id=cliente_id) }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Adicionar Primeiro Produto
             </a>
+            {% endif %}
         </div>
     {% endif %}
 </div>

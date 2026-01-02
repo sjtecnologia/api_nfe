@@ -20,10 +20,14 @@ class SefazService:
         'status_servico': 'https://nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx'
     }
     
-    def __init__(self, ambiente='homologacao'):
+    def __init__(self, ambiente='homologacao', cert_path=None, key_path=None):
         self.ambiente = ambiente
         self.urls = self.URLS_HOMOLOGACAO if ambiente == 'homologacao' else self.URLS_PRODUCAO
+        self.cert_path = cert_path
+        self.key_path = key_path
         print(f"[?] SefazService inicializado - Ambiente: {ambiente}")
+        if cert_path:
+            print(f"[?] Certificado digital configurado")
     
     def enviar_nfe(self, xml_assinado, chave_acesso):
         """
@@ -47,13 +51,21 @@ class SefazService:
             print(f"[?] Enviando para: {self.urls['autorizacao']}")
             
             # Fazer requisição
-            response = requests.post(
-                self.urls['autorizacao'],
-                data=envelope_soap,
-                headers=headers,
-                timeout=30,
-                verify=True  # Verificar certificados SSL
-            )
+            request_kwargs = {
+                'data': envelope_soap,
+                'headers': headers,
+                'timeout': 30,
+                'verify': (self.ambiente == 'producao')  # Verificar SSL apenas em produção
+            }
+            
+            # Adicionar certificado digital se disponível
+            if self.cert_path and self.key_path:
+                request_kwargs['cert'] = (self.cert_path, self.key_path)
+                print(f"[?] Usando certificado digital para autenticação")
+            else:
+                print(f"[!] AVISO: Nenhum certificado digital configurado - SEFAZ pode rejeitar")
+            
+            response = requests.post(self.urls['autorizacao'], **request_kwargs)
             
             print(f"[?] Status HTTP: {response.status_code}")
             print(f"[?] Resposta recebida: {len(response.text)} chars")
@@ -63,10 +75,17 @@ class SefazService:
             else:
                 print(f"[X] Erro HTTP: {response.status_code}")
                 print(f"[X] Resposta: {response.text[:500]}...")
+                
+                mensagem_erro = f'Erro HTTP {response.status_code}'
+                if response.status_code == 403:
+                    mensagem_erro = 'Acesso negado - Certificado digital inválido ou não configurado'
+                elif response.status_code == 401:
+                    mensagem_erro = 'Não autorizado - Verifique o certificado digital'
+                
                 return {
                     'status': 'ERRO_HTTP',
                     'codigo': response.status_code,
-                    'mensagem': f'Erro HTTP {response.status_code}',
+                    'mensagem': mensagem_erro,
                     'resposta_completa': response.text
                 }
                 
@@ -113,27 +132,56 @@ class SefazService:
         """Processa resposta da SEFAZ"""
         try:
             print(f"[SEARCH] Processando resposta da SEFAZ...")
+            print(f"[DEBUG] Resposta completa (primeiros 1000 chars): {resposta_xml[:1000]}")
             
             # Parse do XML de resposta
             root = ET.fromstring(resposta_xml)
             
-            # Buscar elementos de retorno
-            ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+            # Namespace pode variar
+            namespaces = {
+                'soap': 'http://www.w3.org/2003/05/soap-envelope',
+                'nfe': 'http://www.portalfiscal.inf.br/nfe'
+            }
             
-            # Buscar código de status
-            cstat_element = root.find('.//nfe:cStat', ns)
-            xmotivo_element = root.find('.//nfe:xMotivo', ns)
-            protocolo_element = root.find('.//nfe:nProt', ns)
+            # Buscar código de status do LOTE (cStat do retorno)
+            cstat_lote = root.find('.//nfe:cStat', namespaces)
+            xmotivo_lote = root.find('.//nfe:xMotivo', namespaces)
             
-            if cstat_element is not None:
-                codigo_status = cstat_element.text
-                motivo = xmotivo_element.text if xmotivo_element is not None else 'Sem motivo'
-                protocolo = protocolo_element.text if protocolo_element is not None else None
+            # Buscar código de status da NFE individual (dentro de protNFe)
+            cstat_nfe = root.find('.//nfe:protNFe//nfe:infProt//nfe:cStat', namespaces)
+            xmotivo_nfe = root.find('.//nfe:protNFe//nfe:infProt//nfe:xMotivo', namespaces)
+            protocolo_element = root.find('.//nfe:protNFe//nfe:infProt//nfe:nProt', namespaces)
+            
+            # Preferir status da NFe individual, senão usar do lote
+            codigo_status = None
+            motivo = None
+            
+            if cstat_nfe is not None:
+                codigo_status = cstat_nfe.text
+                motivo = xmotivo_nfe.text if xmotivo_nfe is not None else 'Sem motivo'
+                print(f"[INFO] Status NFe individual: {codigo_status} - {motivo}")
+            elif cstat_lote is not None:
+                codigo_status = cstat_lote.text
+                motivo = xmotivo_lote.text if xmotivo_lote is not None else 'Sem motivo'
+                print(f"[INFO] Status Lote: {codigo_status} - {motivo}")
+            
+            protocolo = protocolo_element.text if protocolo_element is not None else None
+            
+            if codigo_status:
+                print(f"[RESULT] Código final: {codigo_status} - {motivo}")
                 
-                print(f"[LIST] Status SEFAZ: {codigo_status} - {motivo}")
+                # Códigos de sucesso da SEFAZ
+                # 100 = Autorizada
+                # 150 = Autorizada fora de prazo
+                codigos_sucesso = ['100', '150']
                 
-                # Status de sucesso: 100 = Autorizado
-                if codigo_status == '100':
+                # Códigos de processamento (não é sucesso nem rejeição final)
+                # 103 = Lote recebido com sucesso
+                # 104 = Lote processado
+                # 105 = Lote em processamento
+                codigos_processamento = ['103', '104', '105']
+                
+                if codigo_status in codigos_sucesso:
                     return {
                         'status': 'AUTORIZADA',
                         'codigo': codigo_status,
@@ -143,7 +191,17 @@ class SefazService:
                         'data_autorizacao': datetime.now().isoformat(),
                         'resposta_completa': resposta_xml
                     }
+                elif codigo_status in codigos_processamento:
+                    # Lote em processamento - aguardar consulta posterior
+                    return {
+                        'status': 'PROCESSANDO',
+                        'codigo': codigo_status,
+                        'mensagem': f'Lote em processamento - Consulte o status posteriormente. {motivo}',
+                        'chave_acesso': chave_acesso,
+                        'resposta_completa': resposta_xml
+                    }
                 else:
+                    # Rejeição
                     return {
                         'status': 'REJEITADA',
                         'codigo': codigo_status,
@@ -154,14 +212,17 @@ class SefazService:
                     }
             else:
                 print(f"[X] Não foi possível extrair status da resposta")
+                print(f"[DEBUG] XML completo: {resposta_xml}")
                 return {
                     'status': 'ERRO_RESPOSTA',
-                    'mensagem': 'Resposta da SEFAZ inválida',
+                    'mensagem': 'Resposta da SEFAZ inválida - não foi possível extrair status',
                     'resposta_completa': resposta_xml
                 }
                 
         except Exception as e:
             print(f"[X] Erro ao processar resposta: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'status': 'ERRO_PROCESSAMENTO',
                 'mensagem': f'Erro ao processar resposta: {e}',
@@ -199,13 +260,18 @@ class SefazService:
                 'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4/nfeStatusServicoNF'
             }
             
-            response = requests.post(
-                self.urls['status_servico'],
-                data=envelope,
-                headers=headers,
-                timeout=30,
-                verify=True
-            )
+            request_kwargs = {
+                'data': envelope,
+                'headers': headers,
+                'timeout': 30,
+                'verify': (self.ambiente == 'producao')  # Verificar SSL apenas em produção
+            }
+            
+            # Adicionar certificado digital se disponível
+            if self.cert_path and self.key_path:
+                request_kwargs['cert'] = (self.cert_path, self.key_path)
+            
+            response = requests.post(self.urls['status_servico'], **request_kwargs)
             
             if response.status_code == 200:
                 # Parse básico da resposta

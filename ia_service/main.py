@@ -34,7 +34,7 @@ from typing import Optional
 class SugestaoTributariaRequest(BaseModel):
     descricao: str
     tipo_item: str
-    cliente_id: int
+    cliente_id: Optional[int] = None
     preco_unitario_padrao: Optional[float] = None
     unidade_comercial: Optional[str] = None
     codigo_interno: Optional[str] = None
@@ -46,7 +46,7 @@ def buscar_ncms_sugeridos(descricao: str) -> str:
     """Busca NCMs na API especializada para enriquecer o contexto"""
     try:
         response = requests.get(
-            "http://localhost:1234/api/llm/ncms/search",
+            "http://localhost:8080/api/llm/ncms/search",
             params={"q": descricao, "tipo": "analitico", "limit": 3},
             timeout=2
         )
@@ -116,7 +116,7 @@ async def sugestao_tributaria(req: SugestaoTributariaRequest):
     try:
         # Exemplo: chamada para Ollama/Mistral/HuggingFace local
         # Ajuste o endpoint conforme o modelo instalado
-        llm_url = "http://192.168.0.52:1234/v1/chat/completions"
+        llm_url = "http://177.189.240.158:1234/v1/chat/completions"
         payload = {
             "model": "codellama-7b-instruct",
             "messages": [

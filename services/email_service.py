@@ -147,3 +147,115 @@ class EmailService:
                 'success': False,
                 'message': f'Erro interno: {str(e)}'
             }
+
+
+def enviar_email_recuperacao_senha(destinatario, usuario, reset_url):
+    """
+    Envia email com link de recuperação de senha
+    """
+    assunto = "Recuperação de Senha - EmiteMax"
+    
+    corpo_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f9f9f9;
+            }}
+            .header {{
+                background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+                color: white;
+                padding: 30px;
+                text-align: center;
+                border-radius: 10px 10px 0 0;
+            }}
+            .content {{
+                background-color: white;
+                padding: 30px;
+                border-radius: 0 0 10px 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+            .button {{
+                display: inline-block;
+                background-color: #00bcd4;
+                color: white;
+                padding: 15px 30px;
+                text-decoration: none;
+                border-radius: 5px;
+                margin: 20px 0;
+                font-weight: bold;
+            }}
+            .button:hover {{
+                background-color: #0097a7;
+            }}
+            .warning {{
+                background-color: #fff3cd;
+                border-left: 4px solid #ffc107;
+                padding: 15px;
+                margin: 20px 0;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 20px;
+                color: #666;
+                font-size: 12px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔐 Recuperação de Senha</h1>
+                <p>EmiteMax - Sistema de Emissão de Notas Fiscais</p>
+            </div>
+            
+            <div class="content">
+                <p>Olá, <strong>{usuario}</strong>!</p>
+                
+                <p>Recebemos uma solicitação para redefinir a senha da sua conta no EmiteMax.</p>
+                
+                <p>Clique no botão abaixo para criar uma nova senha:</p>
+                
+                <div style="text-align: center;">
+                    <a href="{reset_url}" class="button">Redefinir Senha</a>
+                </div>
+                
+                <p>Ou copie e cole este link no seu navegador:</p>
+                <p style="word-break: break-all; color: #00bcd4;">{reset_url}</p>
+                
+                <div class="warning">
+                    <strong>⚠️ Importante:</strong>
+                    <ul>
+                        <li>Este link é válido por <strong>1 hora</strong></li>
+                        <li>Por motivos de segurança, o link só pode ser usado uma vez</li>
+                        <li>Se você não solicitou esta redefinição, ignore este email</li>
+                    </ul>
+                </div>
+                
+                <p>Se você tiver alguma dúvida, entre em contato com nosso suporte.</p>
+                
+                <p>Atenciosamente,<br>
+                <strong>Equipe EmiteMax</strong></p>
+            </div>
+            
+            <div class="footer">
+                <p>Este é um email automático, por favor não responda.</p>
+                <p>&copy; 2025 EmiteMax - Todos os direitos reservados</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    email_service = EmailService()
+    return email_service.enviar_email(destinatario, assunto, corpo_html)

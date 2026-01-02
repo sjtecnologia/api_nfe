@@ -253,7 +253,7 @@ class BaseXMLSigner:
     
     def _sign_xml_fallback(self, xml_content: str, certificado: Dict[str, Any]) -> str:
         """Fallback para assinatura simulada"""
-        print("️ Usando assinatura simulada...")
+        print("[SIGN] Usando assinatura simulada...")
         
         assinatura_simulada = '''
     <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
@@ -359,16 +359,15 @@ class NFeService:
             from sqlalchemy import text
             
             # Buscar dados do emitente e destinatário
-            # Buscar emitente (empresa)
+            # Buscar emitente (empresa) - DEVE SER DO CLIENTE ESPECÍFICO
             emitente_query = text("""
                 SELECT razao_social, nome_fantasia, cnpj, inscricao_estadual,
                        logradouro, numero, bairro, cep, nome_municipio, 
                        codigo_municipio, uf, regime_tributario_id
                 FROM clientes 
-                WHERE ativo = true 
-                LIMIT 1
+                WHERE cliente_id = :cliente_id AND ativo = true
             """)
-            emitente_result = self.db.execute(emitente_query).fetchone()
+            emitente_result = self.db.execute(emitente_query, {'cliente_id': cliente_id}).fetchone()
             
             if not emitente_result:
                 return {'success': False, 'message': 'Dados do emitente não encontrados'}
@@ -402,8 +401,8 @@ class NFeService:
             else:
                 return {'success': False, 'message': 'CNPJ/CPF do destinatário não informado'}
             
-            destinatario_query = text("SELECT * FROM destinatarios_nfe WHERE cnpj_cpf = :cnpj_cpf")
-            destinatario_result = self.db.execute(destinatario_query, {'cnpj_cpf': destinatario_cnpj_cpf}).fetchone()
+            destinatario_query = text("SELECT * FROM destinatarios_nfe WHERE cpf_cnpj = :cpf_cnpj")
+            destinatario_result = self.db.execute(destinatario_query, {'cpf_cnpj': destinatario_cnpj_cpf}).fetchone()
             
             if not destinatario_result:
                 return {'success': False, 'message': 'Cliente não encontrado'}
@@ -451,6 +450,45 @@ class NFeService:
             from sqlalchemy import text
             
             if resultado['success']:
+                # Obter valor total da nota (com impostos)
+                # Preferir o valor dos totais se fornecido, senão calcular dos itens
+                from decimal import Decimal
+                valor_total_nota = Decimal('0')
+                
+                # Verificar se tem totais.valor_total_nota no dados_nfe
+                totais = dados_nfe.get('totais', {})
+                if totais and totais.get('valor_total_nota'):
+                    valor_total_nota = Decimal(str(totais['valor_total_nota']))
+                    print(f"[TOTAL] Usando valor_total_nota dos totais: R$ {valor_total_nota}")
+                else:
+                    # Calcular: produtos + IPI + ICMS ST + frete + seguro + outras - desconto
+                    valor_produtos = Decimal('0')
+                    valor_ipi = Decimal('0')
+                    valor_icms_st = Decimal('0')
+                    
+                    for item in itens:
+                        qtd = Decimal(str(item.get('quantidade_comercial') or item.get('quantidade', 0)))
+                        val_unit = Decimal(str(item.get('valor_unitario_comercial') or item.get('valor_unitario', 0)))
+                        valor_produtos += qtd * val_unit
+                        
+                        # Somar IPI se houver
+                        ipi = item.get('ipi', {})
+                        if ipi.get('valor'):
+                            valor_ipi += Decimal(str(ipi['valor']))
+                        
+                        # Somar ICMS ST se houver
+                        icms = item.get('icms', {})
+                        if icms.get('valor_st'):
+                            valor_icms_st += Decimal(str(icms['valor_st']))
+                    
+                    valor_frete = Decimal(str(totais.get('valor_frete', 0)))
+                    valor_seguro = Decimal(str(totais.get('valor_seguro', 0)))
+                    valor_outras = Decimal(str(totais.get('valor_outras_despesas', 0)))
+                    valor_desconto = Decimal(str(totais.get('valor_desconto', 0)))
+                    
+                    valor_total_nota = valor_produtos + valor_ipi + valor_icms_st + valor_frete + valor_seguro + valor_outras - valor_desconto
+                    print(f"[TOTAL] Calculado: Produtos={valor_produtos} + IPI={valor_ipi} + ST={valor_icms_st} + Frete={valor_frete} - Desc={valor_desconto} = R$ {valor_total_nota}")
+                
                 # Atualizar com sucesso
                 update_query = text("""
                     UPDATE nfe_emitidas 
@@ -459,6 +497,7 @@ class NFeService:
                         protocolo_sefaz = :protocolo,
                         data_autorizacao = :data_autorizacao,
                         mensagem_sefaz = :mensagem,
+                        valor_total = :valor_total,
                         json_nfe = :json_nfe
                     WHERE nfe_emitida_id = :nfe_id
                 """)
@@ -476,36 +515,44 @@ class NFeService:
                     'protocolo': resultado.get('protocolo'),
                     'data_autorizacao': datetime.now(),
                     'mensagem': resultado.get('message', 'Autorizada com sucesso'),
+                    'valor_total': float(valor_total_nota),
                     'json_nfe': json.dumps(json_nfe)
                 })
                 self.db.commit()
                 
                 return {
                     'success': True,
+                    'status': 'AUTORIZADA',
                     'message': 'NFe atualizada e autorizada com sucesso!',
                     'nfe_id': nfe_id,
                     'chave_acesso': resultado.get('chave_acesso'),
                     'protocolo': resultado.get('protocolo')
                 }
             else:
-                # Atualizar com erro
+                # Atualizar com erro/rejeição
+                status = resultado.get('status', 'REJEITADA')
+                mensagem = resultado.get('message', 'Erro desconhecido')
+                
                 update_query = text("""
                     UPDATE nfe_emitidas 
-                    SET status = 'REJEITADA',
+                    SET status = :status,
                         mensagem_sefaz = :mensagem
                     WHERE nfe_emitida_id = :nfe_id
                 """)
                 
                 self.db.execute(update_query, {
                     'nfe_id': nfe_id,
-                    'mensagem': resultado.get('message', 'Erro na SEFAZ')
+                    'status': status,
+                    'mensagem': mensagem[:250]
                 })
                 self.db.commit()
                 
                 return {
                     'success': False,
-                    'message': resultado.get('message', 'Erro na SEFAZ'),
-                    'nfe_id': nfe_id
+                    'status': status,
+                    'message': mensagem,
+                    'nfe_id': nfe_id,
+                    'sefaz_response': resultado
                 }
                 
         except Exception as e:
@@ -516,10 +563,10 @@ class NFeService:
         """Cria nova NFe no banco"""
         try:
             print(f"\n{'='*80}")
-            print(f"🆕 CRIANDO NOVA NFe NO BANCO")
+            print(f"[NEW] CRIANDO NOVA NFe NO BANCO")
             print(f"{'='*80}")
-            print(f"📋 dados_nfe recebidos: {dados_nfe}")
-            print(f"📦 Total de itens: {len(itens)}")
+            print(f"[DATA] dados_nfe recebidos: {dados_nfe}")
+            print(f"[INFO] Total de itens: {len(itens)}")
             print(f"{'='*80}\n")
             
             if not self.db:
@@ -532,7 +579,7 @@ class NFeService:
             modelo = '55'  # 55=NFe
             numero_nfe = int(dados_nfe.get('numero_nfe', 1))
             
-            print(f"🔢 VALORES EXTRAÍDOS:")
+            print(f"[NUM] VALORES EXTRAÍDOS:")
             print(f"   - Série: {serie}")
             print(f"   - Modelo: {modelo}")
             print(f"   - Número NFe: {numero_nfe}")
@@ -558,11 +605,11 @@ class NFeService:
                         'message': f'Número {numero_nfe} da série {serie} já existe! Escolha outro número.'
                     }
             except Exception as e:
-                print(f"⚠️ Erro ao validar número existente: {e}")
+                print(f"[WARN] Erro ao validar número existente: {e}")
             
             # Calcular valores
             valor_total = sum(float(item.get('valor_total', 0)) for item in itens)
-            print(f"📊 Dados para INSERT: numero={numero_nfe}, serie={serie}, valor_total={valor_total}")
+            print(f"[STATS] Dados para INSERT: numero={numero_nfe}, serie={serie}, valor_total={valor_total}")
             
             # Inserir nova NFe
             insert_query = text("""
@@ -591,8 +638,8 @@ class NFeService:
             else:
                 dt = datetime.now()
             
-            print(f"📅 Data emissão: {dt}")
-            print(f"🔢 Número NFe: {numero_nfe}, Série: {serie}, Modelo: {modelo}")
+            print(f"[DATE] Data emissão: {dt}")
+            print(f"[NUM] Número NFe: {numero_nfe}, Série: {serie}, Modelo: {modelo}")
             
             json_nfe = {
                 'form_data': dados_nfe,
@@ -701,16 +748,29 @@ class NFeService:
     def _assinar_xml_real(self, xml_content: str, certificado: Dict[str, Any]) -> Optional[str]:
         """Assina XML com certificado real ou simulado"""
         try:
-            print("️ === ASSINANDO XML ===")
+            print("[SIGN] === ASSINANDO XML ===")
+            print(f"[SIGN] Certificado: {certificado.get('nome_arquivo_original', 'N/A')}")
+            print(f"[SIGN] Modo simulado: {certificado.get('modo_simulado', False)}")
             
             if self.xml_signer:
-                return self.xml_signer.assinar_xml(xml_content, certificado)
+                print("[SIGN] Usando xml_signer...")
+                resultado = self.xml_signer.assinar_xml(xml_content, certificado)
+                if resultado:
+                    print(f"[SIGN] [OK] XML assinado: {len(resultado)} caracteres")
+                    return resultado
+                else:
+                    print("[SIGN] [WARN] xml_signer retornou None, usando fallback")
+                    return sign_xml(xml_content, certificado)
             else:
-                print(" === USANDO ASSINATURA SIMULADA DIRETA ===")
+                print("[SIGN] === USANDO ASSINATURA SIMULADA DIRETA ===")
                 return sign_xml(xml_content, certificado)
                 
         except Exception as e:
-            print(f"ERRO: Erro na assinatura: {e}")
+            print(f"[SIGN] [ERROR] Erro na assinatura: {e}")
+            import traceback
+            traceback.print_exc()
+            print("[SIGN] [FALLBACK] Usando assinatura simulada...")
+            return sign_xml(xml_content, certificado)
             return None
     
     def _processar_envio_sefaz(self, xml_assinado: str, certificado: Dict[str, Any], ambiente: str) -> Dict[str, Any]:
@@ -964,8 +1024,14 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
     """
     try:
         print(f" === GERANDO XML NFE ===")
-        print(f" Form data: {form_data}")
+        print(f" Form data keys: {list(form_data.keys())}")
         print(f" Items: {len(items)} itens")
+        
+        # Debug: verificar tributação dos itens
+        print(f" [DEBUG] Verificando tributação dos itens:")
+        for idx, item in enumerate(items[:3], 1):  # Primeiros 3 itens
+            icms = item.get('icms', {})
+            print(f"   Item {idx}: CST={icms.get('cst')}, CSOSN={icms.get('csosn')}")
         
         # OK: CORREÇÃO: Verificar e processar CFOP nos itens
         for i, item in enumerate(items, 1):
@@ -1012,7 +1078,7 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         # Obter número da NFe fornecido pelo usuário
         from sqlalchemy import text
         numero_nfe = int(form_data.get('numero_nfe', 1))
-        print(f" [✓] Número da NFe fornecido: {numero_nfe} (série {serie})")
+        print(f" [[OK]] Número da NFe fornecido: {numero_nfe} (série {serie})")
         # Nota: Validação de número duplicado é feita em _criar_nova_nfe()
         
         # Data de emissão
@@ -1065,27 +1131,65 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         else:
             raise ValueError(f"CPF/CNPJ do destinatário inválido: {dest_cpf_cnpj}")
         
-        # OK: CALCULAR TOTAIS DA NFE
-        total_produtos = 0
-        total_icms = 0
-        total_ipi = 0
-        total_pis = 0
-        total_cofins = 0
+        # OK: CALCULAR TOTAIS DA NFE - aceitar totais do JSON ou calcular dos itens
+        totais_json = form_data.get('totais', {})
         
-        for item in items:
-            try:
-                valor_total_item = float(item.get('valor_total', 0))
-                valor_icms_item = float(item.get('valor_icms', 0))
-                
-                total_produtos += valor_total_item
-                total_icms += valor_icms_item
-                
-                print(f" Item: {item.get('descricao', 'N/A')[:30]} - Valor: R$ {valor_total_item:.2f} - CFOP: {item.get('cfop', 'N/A')}")
-            except (ValueError, TypeError) as e:
-                print(f"AVISO: Erro ao processar valores do item: {e}")
-                continue
-        
-        total_nfe = total_produtos
+        if totais_json:
+            # Usar totais fornecidos no JSON
+            total_produtos = float(totais_json.get('valor_produtos', 0))
+            total_icms = float(totais_json.get('valor_icms', 0))
+            total_icms_st = float(totais_json.get('valor_icms_st', 0))
+            base_icms = float(totais_json.get('base_calculo_icms', 0))
+            base_icms_st = float(totais_json.get('base_calculo_icms_st', 0))
+            total_ipi = float(totais_json.get('valor_ipi', 0))
+            total_pis = float(totais_json.get('valor_pis', 0))
+            total_cofins = float(totais_json.get('valor_cofins', 0))
+            total_frete = float(totais_json.get('valor_frete', 0))
+            total_seguro = float(totais_json.get('valor_seguro', 0))
+            total_desconto = float(totais_json.get('valor_desconto', 0))
+            total_outras = float(totais_json.get('valor_outras_despesas', 0))
+            total_nfe = float(totais_json.get('valor_total_nota', 0))
+            print(f" Usando totais do JSON")
+        else:
+            # Calcular totais dos itens
+            total_produtos = 0
+            total_icms = 0
+            total_icms_st = 0
+            base_icms = 0
+            base_icms_st = 0
+            total_ipi = 0
+            total_pis = 0
+            total_cofins = 0
+            total_frete = 0
+            total_seguro = 0
+            total_desconto = 0
+            total_outras = 0
+            
+            for item in items:
+                try:
+                    # Aceitar campos da API v2 ou interface web
+                    valor_total_item = float(item.get('valor_total_bruto') or item.get('valor_total', 0))
+                    
+                    icms_item = item.get('icms', {})
+                    ipi_item = item.get('ipi', {})
+                    pis_item = item.get('pis', {})
+                    cofins_item = item.get('cofins', {})
+                    
+                    total_produtos += valor_total_item
+                    total_icms += float(icms_item.get('valor', 0))
+                    total_icms_st += float(icms_item.get('valor_st', 0))
+                    base_icms += float(icms_item.get('base_calculo', 0))
+                    base_icms_st += float(icms_item.get('base_calculo_st', 0))
+                    total_ipi += float(ipi_item.get('valor', 0))
+                    total_pis += float(pis_item.get('valor', 0))
+                    total_cofins += float(cofins_item.get('valor', 0))
+                    
+                    print(f" Item: {item.get('descricao', 'N/A')[:30]} - Valor: R$ {valor_total_item:.2f} - CFOP: {item.get('cfop', 'N/A')}")
+                except (ValueError, TypeError) as e:
+                    print(f"AVISO: Erro ao processar valores do item: {e}")
+                    continue
+            
+            total_nfe = total_produtos + total_ipi + total_icms_st + total_frete + total_seguro + total_outras - total_desconto
         
         print(f" Totais - Produtos: R$ {total_produtos:.2f}, ICMS: R$ {total_icms:.2f}, NFe: R$ {total_nfe:.2f}")
         
@@ -1151,7 +1255,20 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         # CRT - Código de Regime Tributário
         # 1=Simples Nacional, 2=Simples Nacional - excesso, 3=Regime Normal
         regime_tributario_id = emitente_data.get('regime_tributario_id', 3)
-        crt = "1" if regime_tributario_id == 1 else "3"  # 1=Simples Nacional, 3=Regime Normal
+        
+        # CORREÇÃO: Verificar tributação dos itens para determinar regime real
+        # Se algum item tem CST (não CSOSN), usar Regime Normal mesmo se emitente for Simples
+        has_cst_items = any(
+            item.get('icms', {}).get('cst') and not item.get('icms', {}).get('csosn')
+            for item in items
+        )
+        
+        if has_cst_items:
+            print(f" [AUTO] Itens têm CST - forçando Regime Normal (CRT=3)")
+            crt = "3"  # Regime Normal
+        else:
+            crt = "1" if regime_tributario_id == 1 else "3"
+            print(f" [INFO] Usando CRT={crt} baseado no emitente")
         etree.SubElement(emit, "CRT").text = crt
         
         # dest
@@ -1193,12 +1310,12 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             print(f" Item {i} - CFOP final no XML: '{cfop_item}'")
             etree.SubElement(prod, "CFOP").text = str(cfop_item)
             
-            etree.SubElement(prod, "uCom").text = str(item.get('unidade', 'UN'))
+            etree.SubElement(prod, "uCom").text = str(item.get('unidade_comercial') or item.get('unidade', 'UN'))
             
-            # Quantidades e valores
-            quantidade = float(item.get('quantidade', 1))
-            valor_unitario = float(item.get('valor_unitario', 0))
-            valor_total = float(item.get('valor_total', 0))
+            # Quantidades e valores - aceitar campos da API v2 ou interface web
+            quantidade = float(item.get('quantidade_comercial') or item.get('quantidade', 1))
+            valor_unitario = float(item.get('valor_unitario_comercial') or item.get('valor_unitario', 0))
+            valor_total = float(item.get('valor_total_bruto') or item.get('valor_total', quantidade * valor_unitario))
             
             etree.SubElement(prod, "qCom").text = f"{quantidade:.2f}"
             etree.SubElement(prod, "vUnCom").text = f"{valor_unitario:.2f}"
@@ -1212,7 +1329,8 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             # imposto
             imposto = etree.SubElement(det, "imposto")
             
-            # ICMS
+            # ICMS - processar dados do JSON
+            icms_data = item.get('icms', {})
             icms = etree.SubElement(imposto, "ICMS")
             
             # Verificar se é Simples Nacional (CRT = 1)
@@ -1220,55 +1338,139 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             
             if is_simples_nacional:
                 # SIMPLES NACIONAL - Usar CSOSN
-                csosn = item.get('csosn_icms', '102')  # 102=Tributada pelo Simples Nacional sem permissão de crédito
+                csosn = icms_data.get('csosn') or item.get('csosn_icms', '102')
                 icms_sn = etree.SubElement(icms, f"ICMSSN{csosn}")
-                etree.SubElement(icms_sn, "orig").text = str(item.get('origem', '0'))
+                etree.SubElement(icms_sn, "orig").text = str(icms_data.get('origem', '0'))
                 etree.SubElement(icms_sn, "CSOSN").text = csosn
                 
-                # CSOSN 102, 103, 300, 400 = Sem cálculo de ICMS
-                # CSOSN 101, 201, 202, 203, 500, 900 = Com cálculo de ICMS
                 if csosn in ['101', '201', '202', '203', '500', '900']:
-                    # Tributado - calcular ICMS
-                    aliq_icms = float(item.get('aliquota_icms', 0))
+                    aliq_icms = float(icms_data.get('aliquota', 0))
                     if aliq_icms > 0:
-                        bc_icms = float(item.get('bc_icms', valor_total))
-                        valor_icms = bc_icms * aliq_icms / 100
+                        bc_icms = float(icms_data.get('base_calculo', valor_total))
+                        valor_icms = float(icms_data.get('valor', bc_icms * aliq_icms / 100))
                         etree.SubElement(icms_sn, "pCredSN").text = f"{aliq_icms:.2f}"
                         etree.SubElement(icms_sn, "vCredICMSSN").text = f"{valor_icms:.2f}"
             else:
                 # REGIME NORMAL - Usar CST
-                cst_icms = item.get('cst_icms', '00')
+                cst_icms = icms_data.get('cst', '00')
+                origem = icms_data.get('origem', '0')
                 
-                if cst_icms in ['00', '10', '20']:
-                    # Tributado
-                    icms_tributado = etree.SubElement(icms, f"ICMS{cst_icms}")
-                    etree.SubElement(icms_tributado, "orig").text = str(item.get('origem', '0'))
+                # Mapear CST para tag XML correta (alguns CSTs compartilham a mesma tag)
+                # CST 40, 41, 50: usam ICMS40
+                # CST 51: usa ICMS51 (diferimento)
+                # CST 60: usa ICMS60 (ICMS ST retido)
+                cst_to_tag = {
+                    '00': 'ICMS00', '10': 'ICMS10', '20': 'ICMS20', '30': 'ICMS30',
+                    '40': 'ICMS40', '41': 'ICMS40', '50': 'ICMS40',  # 40, 41, 50 usam ICMS40
+                    '51': 'ICMS51', '60': 'ICMS60', '70': 'ICMS70', '90': 'ICMS90'
+                }
+                
+                if cst_icms in cst_to_tag:
+                    icms_tag = cst_to_tag[cst_icms]
+                    icms_tributado = etree.SubElement(icms, icms_tag)
+                    etree.SubElement(icms_tributado, "orig").text = str(origem)
                     etree.SubElement(icms_tributado, "CST").text = cst_icms
                     
-                    aliq_icms = float(item.get('aliquota_icms', 0))
-                    if aliq_icms > 0 and cst_icms == '00':  # Tributada integralmente
-                        bc_icms = float(item.get('bc_icms', valor_total))
-                        valor_icms = bc_icms * aliq_icms / 100
+                    # Processar conforme CST
+                    if cst_icms in ['00', '10', '20', '51', '70', '90']:  # Tributados
+                        aliq_icms = float(icms_data.get('aliquota', 0))
+                        bc_icms = float(icms_data.get('base_calculo', 0))
+                        valor_icms = float(icms_data.get('valor', 0))
                         
-                        etree.SubElement(icms_tributado, "modBC").text = "0"  # 0=Margem Valor Agregado (%)
-                        etree.SubElement(icms_tributado, "vBC").text = f"{bc_icms:.2f}"
-                        etree.SubElement(icms_tributado, "pICMS").text = f"{aliq_icms:.2f}"
-                        etree.SubElement(icms_tributado, "vICMS").text = f"{valor_icms:.2f}"
+                        if bc_icms > 0 and aliq_icms > 0:
+                            etree.SubElement(icms_tributado, "modBC").text = str(icms_data.get('modalidade_bc', '3'))
+                            etree.SubElement(icms_tributado, "vBC").text = f"{bc_icms:.2f}"
+                            etree.SubElement(icms_tributado, "pICMS").text = f"{aliq_icms:.2f}"
+                            etree.SubElement(icms_tributado, "vICMS").text = f"{valor_icms:.2f}"
+                        
+                        # CST 10, 30, 70: ICMS ST
+                        if cst_icms in ['10', '30', '70'] and icms_data.get('valor_st'):
+                            etree.SubElement(icms_tributado, "modBCST").text = str(icms_data.get('modalidade_bc_st', '4'))
+                            if icms_data.get('mva_st'):
+                                etree.SubElement(icms_tributado, "pMVAST").text = f"{float(icms_data['mva_st']):.2f}"
+                            etree.SubElement(icms_tributado, "vBCST").text = f"{float(icms_data.get('base_calculo_st', 0)):.2f}"
+                            etree.SubElement(icms_tributado, "pICMSST").text = f"{float(icms_data.get('aliquota_st', 18)):.2f}"
+                            etree.SubElement(icms_tributado, "vICMSST").text = f"{float(icms_data['valor_st']):.2f}"
+                        
+                        # CST 20, 70: Redução de BC
+                        if cst_icms in ['20', '70'] and icms_data.get('percentual_reducao_bc'):
+                            etree.SubElement(icms_tributado, "pRedBC").text = f"{float(icms_data['percentual_reducao_bc']):.2f}"
+                        
+                        # CST 51: Diferimento
+                        if cst_icms == '51' and icms_data.get('percentual_diferimento'):
+                            etree.SubElement(icms_tributado, "pDif").text = f"{float(icms_data['percentual_diferimento']):.2f}"
+                            if icms_data.get('valor_icms_diferido'):
+                                etree.SubElement(icms_tributado, "vICMSDif").text = f"{float(icms_data['valor_icms_diferido']):.2f}"
+                    
+                    # CST 40, 41, 50: Isenta/Não tributada (usam tag ICMS40 mas CST diferente)
+                    elif cst_icms in ['40', '41', '50']:
+                        if icms_data.get('motivo_desoneracao'):
+                            etree.SubElement(icms_tributado, "motDesICMS").text = str(icms_data['motivo_desoneracao'])
+                        # Não precisa adicionar mais nada, apenas orig e CST já foram adicionados
+                    
+                    # CST 60: ST retido anteriormente
+                    elif cst_icms == '60':
+                        if icms_data.get('base_calculo_st_retido'):
+                            etree.SubElement(icms_tributado, "vBCSTRet").text = f"{float(icms_data['base_calculo_st_retido']):.2f}"
+                        if icms_data.get('valor_icms_st_retido'):
+                            etree.SubElement(icms_tributado, "vICMSSTRet").text = f"{float(icms_data['valor_icms_st_retido']):.2f}"
                 else:
-                    # CST não tributado (40, 41, 50, 51, 60)
+                    # CST não reconhecido - usar ICMS40
                     icms_nt = etree.SubElement(icms, "ICMS40")
-                    etree.SubElement(icms_nt, "orig").text = str(item.get('origem', '0'))
-                    etree.SubElement(icms_nt, "CST").text = cst_icms or "41"  # 41=Não tributada
+                    etree.SubElement(icms_nt, "orig").text = str(origem)
+                    etree.SubElement(icms_nt, "CST").text = "41"
+            
+            # IPI
+            ipi_data = item.get('ipi', {})
+            if ipi_data and ipi_data.get('valor'):
+                ipi = etree.SubElement(imposto, "IPI")
+                ipi_trib = etree.SubElement(ipi, "IPITrib")
+                etree.SubElement(ipi_trib, "CST").text = str(ipi_data.get('cst', '50'))
+                etree.SubElement(ipi_trib, "vBC").text = f"{float(ipi_data.get('base_calculo', 0)):.2f}"
+                etree.SubElement(ipi_trib, "pIPI").text = f"{float(ipi_data.get('aliquota', 0)):.2f}"
+                etree.SubElement(ipi_trib, "vIPI").text = f"{float(ipi_data['valor']):.2f}"
             
             # PIS
+            pis_data = item.get('pis', {})
             pis = etree.SubElement(imposto, "PIS")
-            pis_nt = etree.SubElement(pis, "PISNT")
-            etree.SubElement(pis_nt, "CST").text = "07"  # Operação isenta da contribuição
+            pis_cst = str(pis_data.get('cst', '07'))
+            
+            if pis_cst in ['01', '02'] and pis_data.get('valor'):
+                pis_aliq = etree.SubElement(pis, "PISAliq")
+                etree.SubElement(pis_aliq, "CST").text = pis_cst
+                etree.SubElement(pis_aliq, "vBC").text = f"{float(pis_data.get('base_calculo', 0)):.2f}"
+                etree.SubElement(pis_aliq, "pPIS").text = f"{float(pis_data.get('aliquota', 0)):.2f}"
+                etree.SubElement(pis_aliq, "vPIS").text = f"{float(pis_data['valor']):.2f}"
+            elif pis_cst == '99' and pis_data.get('valor'):
+                pis_outr = etree.SubElement(pis, "PISOutr")
+                etree.SubElement(pis_outr, "CST").text = pis_cst
+                etree.SubElement(pis_outr, "vBC").text = f"{float(pis_data.get('base_calculo', 0)):.2f}"
+                etree.SubElement(pis_outr, "pPIS").text = f"{float(pis_data.get('aliquota', 0)):.2f}"
+                etree.SubElement(pis_outr, "vPIS").text = f"{float(pis_data['valor']):.2f}"
+            else:
+                pis_nt = etree.SubElement(pis, "PISNT")
+                etree.SubElement(pis_nt, "CST").text = pis_cst
             
             # COFINS
+            cofins_data = item.get('cofins', {})
             cofins = etree.SubElement(imposto, "COFINS")
-            cofins_nt = etree.SubElement(cofins, "COFINSNT")
-            etree.SubElement(cofins_nt, "CST").text = "07"  # Operação isenta da contribuição
+            cofins_cst = str(cofins_data.get('cst', '07'))
+            
+            if cofins_cst in ['01', '02'] and cofins_data.get('valor'):
+                cofins_aliq = etree.SubElement(cofins, "COFINSAliq")
+                etree.SubElement(cofins_aliq, "CST").text = cofins_cst
+                etree.SubElement(cofins_aliq, "vBC").text = f"{float(cofins_data.get('base_calculo', 0)):.2f}"
+                etree.SubElement(cofins_aliq, "pCOFINS").text = f"{float(cofins_data.get('aliquota', 0)):.2f}"
+                etree.SubElement(cofins_aliq, "vCOFINS").text = f"{float(cofins_data['valor']):.2f}"
+            elif cofins_cst == '99' and cofins_data.get('valor'):
+                cofins_outr = etree.SubElement(cofins, "COFINSOutr")
+                etree.SubElement(cofins_outr, "CST").text = cofins_cst
+                etree.SubElement(cofins_outr, "vBC").text = f"{float(cofins_data.get('base_calculo', 0)):.2f}"
+                etree.SubElement(cofins_outr, "pCOFINS").text = f"{float(cofins_data.get('aliquota', 0)):.2f}"
+                etree.SubElement(cofins_outr, "vCOFINS").text = f"{float(cofins_data['valor']):.2f}"
+            else:
+                cofins_nt = etree.SubElement(cofins, "COFINSNT")
+                etree.SubElement(cofins_nt, "CST").text = cofins_cst
             
             det_list.append(det)
         
@@ -1277,37 +1479,37 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         
         # ICMSTot
         icms_tot = etree.SubElement(total, "ICMSTot")
-        # vBC deve ser 0 se não houver ICMS calculado
-        vBC = total_produtos if total_icms > 0 else 0.00
-        etree.SubElement(icms_tot, "vBC").text = f"{vBC:.2f}"
+        etree.SubElement(icms_tot, "vBC").text = f"{base_icms:.2f}"
         etree.SubElement(icms_tot, "vICMS").text = f"{total_icms:.2f}"
         etree.SubElement(icms_tot, "vICMSDeson").text = "0.00"
         etree.SubElement(icms_tot, "vFCP").text = "0.00"
-        etree.SubElement(icms_tot, "vBCST").text = "0.00"
-        etree.SubElement(icms_tot, "vST").text = "0.00"
+        etree.SubElement(icms_tot, "vBCST").text = f"{base_icms_st:.2f}"
+        etree.SubElement(icms_tot, "vST").text = f"{total_icms_st:.2f}"
         etree.SubElement(icms_tot, "vFCPST").text = "0.00"
         etree.SubElement(icms_tot, "vFCPSTRet").text = "0.00"
         etree.SubElement(icms_tot, "vProd").text = f"{total_produtos:.2f}"
-        etree.SubElement(icms_tot, "vFrete").text = "0.00"
-        etree.SubElement(icms_tot, "vSeg").text = "0.00"
-        etree.SubElement(icms_tot, "vDesc").text = "0.00"
+        etree.SubElement(icms_tot, "vFrete").text = f"{total_frete:.2f}"
+        etree.SubElement(icms_tot, "vSeg").text = f"{total_seguro:.2f}"
+        etree.SubElement(icms_tot, "vDesc").text = f"{total_desconto:.2f}"
         etree.SubElement(icms_tot, "vII").text = "0.00"
         etree.SubElement(icms_tot, "vIPI").text = f"{total_ipi:.2f}"
         etree.SubElement(icms_tot, "vIPIDevol").text = "0.00"
         etree.SubElement(icms_tot, "vPIS").text = f"{total_pis:.2f}"
         etree.SubElement(icms_tot, "vCOFINS").text = f"{total_cofins:.2f}"
-        etree.SubElement(icms_tot, "vOutro").text = "0.00"
+        etree.SubElement(icms_tot, "vOutro").text = f"{total_outras:.2f}"
         etree.SubElement(icms_tot, "vNF").text = f"{total_nfe:.2f}"
         
-        # transp
+        # transp - processar dados do JSON ou form_data
+        transp_data = form_data.get('transporte', {})
         transp = etree.SubElement(inf_nfe, "transp")
-        mod_frete = str(form_data.get('modFrete', '9'))
+        mod_frete = str(transp_data.get('modalidade_frete') or form_data.get('modFrete', '9'))
         etree.SubElement(transp, "modFrete").text = mod_frete
         
         # Adicionar dados da transportadora se modalidade != 9 (Sem transporte)
         if mod_frete != '9':
-            transportadora_nome = form_data.get('transportadoraNome', '').strip()
-            transportadora_cnpj = form_data.get('transportadoraCnpjCpf', '').strip()
+            transportadora_data = transp_data.get('transportadora', {})
+            transportadora_nome = transportadora_data.get('razao_social') or form_data.get('transportadoraNome', '').strip()
+            transportadora_cnpj = transportadora_data.get('cpf_cnpj') or form_data.get('transportadoraCnpjCpf', '').strip()
             
             if transportadora_nome or transportadora_cnpj:
                 transporta = etree.SubElement(transp, "transporta")
@@ -1325,36 +1527,29 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
                     etree.SubElement(transporta, "xNome").text = transportadora_nome[:60]
                 
                 # Inscrição Estadual (opcional)
-                transportadora_ie = form_data.get('transportadoraIE', '').strip()
+                transportadora_ie = transportadora_data.get('inscricao_estadual') or form_data.get('transportadoraIE', '').strip()
                 if transportadora_ie:
                     etree.SubElement(transporta, "IE").text = transportadora_ie
                 
                 # Endereço
-                transportadora_endereco = form_data.get('transportadoraEndereco', '').strip()
+                transportadora_endereco = transportadora_data.get('endereco_completo') or form_data.get('transportadoraEndereco', '').strip()
                 if transportadora_endereco:
                     etree.SubElement(transporta, "xEnder").text = transportadora_endereco[:60]
                 
                 # Município
-                transportadora_municipio = form_data.get('transportadoraMunicipio', '').strip()
+                transportadora_municipio = transportadora_data.get('municipio') or form_data.get('transportadoraMunicipio', '').strip()
                 if transportadora_municipio:
                     etree.SubElement(transporta, "xMun").text = transportadora_municipio[:60]
                 
                 # UF
-                transportadora_uf = form_data.get('transportadoraUF', '').strip()
+                transportadora_uf = transportadora_data.get('uf') or form_data.get('transportadoraUF', '').strip()
                 if transportadora_uf:
                     etree.SubElement(transporta, "UF").text = transportadora_uf
             
-            # RNTC (ANTT) - Registro Nacional de Transportador de Carga
-            # TEMPORARIAMENTE DESABILITADO: nfelib 2.2.0 não reconhece o campo <RNTC>
-            # Causava erro: "Unknown property Transp:RNTC" impedindo geração de DANFE oficial
-            # TODO: Reativar quando nfelib for atualizada ou usar campo infAdic
-            # transportadora_antt = form_data.get('transportadoraANTT', '').strip()
-            # if transportadora_antt:
-            #     etree.SubElement(transp, "RNTC").text = transportadora_antt[:20]
-            
             # Dados do veículo
-            veiculo_placa = form_data.get('veiculoPlaca', '').strip()
-            veiculo_uf = form_data.get('veiculoUF', '').strip()
+            veiculo_data = transp_data.get('veiculo', {})
+            veiculo_placa = veiculo_data.get('placa') or form_data.get('veiculoPlaca', '').strip()
+            veiculo_uf = veiculo_data.get('uf') or form_data.get('veiculoUF', '').strip()
             
             if veiculo_placa:
                 vei_transp = etree.SubElement(transp, "veicTransp")
@@ -1363,64 +1558,150 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
                     etree.SubElement(vei_transp, "UF").text = veiculo_uf
             
             # Dados dos volumes
-            volume_qtd = form_data.get('volumeQuantidade', '').strip()
-            volume_especie = form_data.get('volumeEspecie', '').strip()
-            volume_marca = form_data.get('volumeMarca', '').strip()
-            volume_numeracao = form_data.get('volumeNumeracao', '').strip()
-            volume_peso_bruto = form_data.get('volumePesoBruto', '').strip()
-            volume_peso_liquido = form_data.get('volumePesoLiquido', '').strip()
-            
-            if volume_qtd or volume_especie or volume_marca or volume_numeracao or volume_peso_bruto or volume_peso_liquido:
-                vol = etree.SubElement(transp, "vol")
+            volumes_list = transp_data.get('volumes', [])
+            if volumes_list:
+                for vol_data in volumes_list:
+                    vol = etree.SubElement(transp, "vol")
+                    
+                    if vol_data.get('quantidade'):
+                        try:
+                            etree.SubElement(vol, "qVol").text = str(int(float(vol_data['quantidade'])))
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if vol_data.get('especie'):
+                        etree.SubElement(vol, "esp").text = str(vol_data['especie'])[:60]
+                    
+                    if vol_data.get('marca'):
+                        etree.SubElement(vol, "marca").text = str(vol_data['marca'])[:60]
+                    
+                    if vol_data.get('numeracao'):
+                        etree.SubElement(vol, "nVol").text = str(vol_data['numeracao'])[:60]
+                    
+                    if vol_data.get('peso_bruto'):
+                        try:
+                            etree.SubElement(vol, "pesoB").text = f"{float(vol_data['peso_bruto']):.3f}"
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if vol_data.get('peso_liquido'):
+                        try:
+                            etree.SubElement(vol, "pesoL").text = f"{float(vol_data['peso_liquido']):.3f}"
+                        except (ValueError, TypeError):
+                            pass
+            else:
+                # Usar formato antigo form_data
+                volume_qtd = form_data.get('volumeQuantidade', '').strip()
+                volume_especie = form_data.get('volumeEspecie', '').strip()
+                volume_marca = form_data.get('volumeMarca', '').strip()
+                volume_numeracao = form_data.get('volumeNumeracao', '').strip()
+                volume_peso_bruto = form_data.get('volumePesoBruto', '').strip()
+                volume_peso_liquido = form_data.get('volumePesoLiquido', '').strip()
                 
-                if volume_qtd:
-                    try:
-                        etree.SubElement(vol, "qVol").text = str(int(float(volume_qtd)))
-                    except (ValueError, TypeError):
-                        pass
-                
-                if volume_especie:
-                    etree.SubElement(vol, "esp").text = volume_especie[:60]
-                
-                if volume_marca:
-                    etree.SubElement(vol, "marca").text = volume_marca[:60]
-                
-                if volume_numeracao:
-                    etree.SubElement(vol, "nVol").text = volume_numeracao[:60]
-                
-                if volume_peso_bruto:
-                    try:
-                        etree.SubElement(vol, "pesoB").text = f"{float(volume_peso_bruto):.3f}"
-                    except (ValueError, TypeError):
-                        pass
-                
-                if volume_peso_liquido:
-                    try:
-                        etree.SubElement(vol, "pesoL").text = f"{float(volume_peso_liquido):.3f}"
-                    except (ValueError, TypeError):
-                        pass
+                if volume_qtd or volume_especie or volume_marca or volume_numeracao or volume_peso_bruto or volume_peso_liquido:
+                    vol = etree.SubElement(transp, "vol")
+                    
+                    if volume_qtd:
+                        try:
+                            etree.SubElement(vol, "qVol").text = str(int(float(volume_qtd)))
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if volume_especie:
+                        etree.SubElement(vol, "esp").text = volume_especie[:60]
+                    
+                    if volume_marca:
+                        etree.SubElement(vol, "marca").text = volume_marca[:60]
+                    
+                    if volume_numeracao:
+                        etree.SubElement(vol, "nVol").text = volume_numeracao[:60]
+                    
+                    if volume_peso_bruto:
+                        try:
+                            etree.SubElement(vol, "pesoB").text = f"{float(volume_peso_bruto):.3f}"
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if volume_peso_liquido:
+                        try:
+                            etree.SubElement(vol, "pesoL").text = f"{float(volume_peso_liquido):.3f}"
+                        except (ValueError, TypeError):
+                            pass
         
-        # pag
+        # pag - processar dados do JSON ou form_data
+        cobranca_data = form_data.get('cobranca', {})
         pag = etree.SubElement(inf_nfe, "pag")
-        det_pag = etree.SubElement(pag, "detPag")
-        etree.SubElement(det_pag, "tPag").text = str(form_data.get('formaPagamento', '01'))  # 01=Dinheiro
-        etree.SubElement(det_pag, "vPag").text = f"{total_nfe:.2f}"
         
-        # infAdic
+        # Processar pagamentos do JSON
+        pagamentos_list = cobranca_data.get('pagamentos', [])
+        if pagamentos_list:
+            for pag_data in pagamentos_list:
+                det_pag = etree.SubElement(pag, "detPag")
+                meio_pag = str(pag_data.get('meio_pagamento', '01'))
+                valor_pag = float(pag_data.get('valor', total_nfe))
+                
+                etree.SubElement(det_pag, "tPag").text = meio_pag
+                etree.SubElement(det_pag, "vPag").text = f"{valor_pag:.2f}"
+                
+                # Dados do cartão se houver
+                if pag_data.get('dados_cartao'):
+                    cartao_data = pag_data['dados_cartao']
+                    card = etree.SubElement(det_pag, "card")
+                    etree.SubElement(card, "tpIntegra").text = str(cartao_data.get('tipo_integracao', '2'))
+                    if cartao_data.get('cnpj_credenciadora'):
+                        etree.SubElement(card, "CNPJ").text = cartao_data['cnpj_credenciadora']
+                    if cartao_data.get('bandeira'):
+                        etree.SubElement(card, "tBand").text = str(cartao_data['bandeira'])
+                    if cartao_data.get('numero_autorizacao'):
+                        etree.SubElement(card, "cAut").text = str(cartao_data['numero_autorizacao'])
+        else:
+            # Usar formato antigo form_data
+            det_pag = etree.SubElement(pag, "detPag")
+            etree.SubElement(det_pag, "tPag").text = str(form_data.get('formaPagamento', '01'))
+            etree.SubElement(det_pag, "vPag").text = f"{total_nfe:.2f}"
+        
+        # Adicionar duplicatas se houver
+        if cobranca_data.get('duplicatas'):
+            cobr = etree.SubElement(inf_nfe, "cobr")
+            dup_list = cobranca_data['duplicatas']
+            for dup_data in dup_list:
+                dup = etree.SubElement(cobr, "dup")
+                etree.SubElement(dup, "nDup").text = str(dup_data.get('numero', '001'))
+                if dup_data.get('data_vencimento'):
+                    etree.SubElement(dup, "dVenc").text = str(dup_data['data_vencimento'])
+                etree.SubElement(dup, "vDup").text = f"{float(dup_data.get('valor', 0)):.2f}"
+        
+        # infAdic - processar informações adicionais do JSON
+        info_adic_data = form_data.get('informacoes_adicionais', {})
         inf_adic = etree.SubElement(inf_nfe, "infAdic")
-        inf_compl = form_data.get('infCpl', '')
         
-        # Adicionar RNTC/ANTT nas informações adicionais (workaround para nfelib 2.2.0)
-        transportadora_antt = form_data.get('transportadoraANTT', '').strip()
+        # Informações complementares
+        if isinstance(info_adic_data, dict):
+            inf_compl = info_adic_data.get('informacoes_complementares', '')
+            inf_fisco = info_adic_data.get('informacoes_fisco', '')
+        elif isinstance(info_adic_data, str):
+            inf_compl = info_adic_data
+            inf_fisco = ''
+        else:
+            inf_compl = form_data.get('infCpl', '')
+            inf_fisco = ''
+        
+        # Adicionar RNTC/ANTT nas informações adicionais se houver
+        transp_data = form_data.get('transporte', {})
+        veiculo_data = transp_data.get('veiculo', {})
+        transportadora_antt = veiculo_data.get('rntc') or form_data.get('transportadoraANTT', '').strip()
         if transportadora_antt:
-            antt_info = f"RNTC/ANTT da Transportadora: {transportadora_antt}"
+            antt_info = f"RNTC/ANTT: {transportadora_antt}"
             if inf_compl:
                 inf_compl = f"{inf_compl}. {antt_info}"
             else:
                 inf_compl = antt_info
         
         if inf_compl:
-            etree.SubElement(inf_adic, "infCpl").text = str(inf_compl)
+            etree.SubElement(inf_adic, "infCpl").text = str(inf_compl)[:5000]
+        
+        if inf_fisco:
+            etree.SubElement(inf_adic, "infAdFisco").text = str(inf_fisco)[:2000]
         
         # Converter para string XML (compatível com lxml ou xml.etree)
         try:
