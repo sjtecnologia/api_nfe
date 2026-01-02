@@ -1,14 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, session, request, flash, jsonify, g
 from flask_login import login_required, current_user
-# Certifique-se de que o decorator existe ou defina um placeholder temporário
-try:
-    from auth.decorators import client_access_required
-except ImportError:
-    # Placeholder: Permite acesso sem restrição (substitua pela lógica correta depois)
-    def client_access_required():
-        def decorator(f):
-            return f
-        return decorator
+from auth.decorators import (
+    client_access_required,
+    viewer_or_higher_required,
+    block_viewer_access
+)
 from auth.permissions import get_accessible_client_ids
 from database.connection import get_db
 from sqlalchemy import func, text

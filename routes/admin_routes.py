@@ -15,18 +15,12 @@ from sqlalchemy.engine import Result
 from datetime import datetime
 from pathlib import Path
 import asyncio
-from auth.decorators import admin_required  # Importar decorator de admin
-
-# Definição do Blueprint admin_bp
-
-# Defina o decorator permission_required (stub ou real)
-try:
-    from ..core.permissions import permission_required  # type: ignore
-except Exception:
-    def permission_required(permission):
-        def decorator(f):
-            return f
-        return decorator
+from auth.decorators import (
+    admin_required, 
+    super_admin_required,
+    block_viewer_access,
+    editor_or_admin_required
+)
 
 # Inicializa get_db na primeira chamada
 from database.connection import get_db
@@ -37,7 +31,8 @@ from database.connection import get_db
 
 @admin_bp.route('/produtos/<int:produto_id>/editar', methods=['GET', 'POST'])
 @login_required
-@permission_required('produtos.edit')
+@admin_required()
+@block_viewer_access()
 def editar_produto(produto_id):
     db = _get_db()
     try:
@@ -234,6 +229,8 @@ except Exception:
 # ...existing code...
 @admin_bp.route('/produtos/<int:produto_id>/duplicar', methods=['POST'])
 @login_required
+@admin_required()
+@block_viewer_access()
 @permission_required('produtos.create')
 def duplicar_produto(produto_id: int):
     db = _get_db()
@@ -423,6 +420,7 @@ from database.connection import get_db
 
 @admin_bp.route('/')
 @login_required
+@admin_required()
 def admin_home():
     """Dashboard admin - super admin vê todos os clientes, outros selecionam"""
     # Super admin tem acesso direto ao dashboard com dados de todos os clientes
@@ -430,6 +428,7 @@ def admin_home():
 
 @admin_bp.route('/nfes')
 @login_required
+@admin_required()
 @permission_required('nfes.view')
 def list_nfes():
     db = _get_db()
@@ -539,6 +538,7 @@ def _add_ncm_hierarchy_data(ncms):
 
 @admin_bp.route('/ncms')
 @login_required
+@admin_required()
 def list_ncms():
     from services.ncm_service import ncm_service
     
@@ -579,6 +579,8 @@ def list_ncms():
 
 @admin_bp.route('/ncms/upload-siscomex', methods=['GET', 'POST'])
 @login_required
+@admin_required()
+@block_viewer_access()
 @permission_required('ncms.sync')
 def upload_siscomex_json():
     """
@@ -712,7 +714,8 @@ def create_ncm():
 # Rota para excluir NCM
 @admin_bp.route('/ncms/excluir/<int:ncm_id>', methods=['POST'])
 @login_required
-@permission_required('ncms.delete')
+@admin_required()
+@block_viewer_access()
 def delete_ncm(ncm_id):
     db = _get_db()
     try:
@@ -750,6 +753,7 @@ def delete_ncm(ncm_id):
 
 @admin_bp.route('/cst')
 @login_required
+@admin_required()
 @permission_required('cst.view')
 def list_cst():
     db = _get_db()
@@ -779,13 +783,16 @@ def list_cst():
 
 @admin_bp.route('/cst/novo')
 @login_required
+@admin_required()
+@block_viewer_access()
 @permission_required('cst.create')
 def create_cst():
     return render_template('admin/cst/form.html', cst=None)
 
 @admin_bp.route('/cst/editar/<int:cst_id>', methods=['GET', 'POST'])
 @login_required
-@permission_required('cst.edit')
+@admin_required()
+@block_viewer_access()
 def edit_cst(cst_id):
     db = _get_db()
     if request.method == 'POST':
@@ -814,7 +821,8 @@ def edit_cst(cst_id):
 
 @admin_bp.route('/cst/excluir/<int:cst_id>', methods=['POST'])
 @login_required
-@permission_required('cst.delete')
+@admin_required()
+@block_viewer_access()
 def delete_cst(cst_id):
     db = _get_db()
     try:
@@ -841,6 +849,7 @@ def list_cst_pis_cofins():
 
 @admin_bp.route('/cfops')
 @login_required
+@admin_required()
 def list_cfops():
     db = _get_db()
     q = request.args.get('q', '').strip()
@@ -947,7 +956,7 @@ def delete_cfop(cfop_id):
 
 @admin_bp.route('/usuarios')
 @login_required
-@permission_required('usuarios.view')
+@super_admin_required()
 def list_usuarios():
     db = _get_db()
     q = request.args.get('q', '').strip()
@@ -1018,7 +1027,7 @@ from werkzeug.security import generate_password_hash
 
 @admin_bp.route('/usuarios/novo', methods=['GET', 'POST'])
 @login_required
-@permission_required('usuarios.create')
+@super_admin_required()
 def create_usuario():
     db = _get_db()
     roles = db.execute(text("SELECT id, name FROM roles ORDER BY name")).fetchall()
@@ -1086,7 +1095,7 @@ def create_usuario():
 
 @admin_bp.route('/usuarios/editar/<int:usuario_id>', methods=['GET', 'POST'])
 @login_required
-@permission_required('usuarios.edit')
+@super_admin_required()
 def edit_usuario(usuario_id):
     db = _get_db()
     roles = db.execute(text("SELECT id, name FROM roles ORDER BY name")).fetchall()
@@ -1182,7 +1191,7 @@ def edit_usuario(usuario_id):
 
 @admin_bp.route('/usuarios/excluir/<int:usuario_id>', methods=['POST'])
 @login_required
-@permission_required('usuarios.delete')
+@super_admin_required()
 def delete_usuario(usuario_id):
     db = _get_db()
     try:
@@ -1199,6 +1208,7 @@ def delete_usuario(usuario_id):
 
 @admin_bp.route('/clientes/<int:cliente_id>/visualizar')
 @login_required
+@admin_required()
 @permission_required('clientes.view')
 def visualizar_cliente(cliente_id: int):
     db = _get_db()
@@ -1254,6 +1264,7 @@ def visualizar_cliente(cliente_id: int):
 
 @admin_bp.route('/csosn')
 @login_required
+@admin_required()
 @permission_required('csosn.view')
 def list_csosn():
     db = _get_db()
@@ -1277,12 +1288,16 @@ def list_csosn():
 
 @admin_bp.route('/csosn/novo')
 @login_required
+@admin_required()
+@block_viewer_access()
 @permission_required('csosn.create')
 def create_csosn():
     return render_template('admin/csosn/form.html', csosn=None)
 
 @admin_bp.route('/csosn/editar/<int:csosn_id>', methods=['GET', 'POST'])
 @login_required
+@admin_required()
+@block_viewer_access()
 @permission_required('csosn.edit')
 def edit_csosn(csosn_id):
     db = _get_db()
@@ -1312,6 +1327,8 @@ def edit_csosn(csosn_id):
 
 @admin_bp.route('/csosn/excluir/<int:csosn_id>', methods=['POST'])
 @login_required
+@admin_required()
+@block_viewer_access()
 @permission_required('csosn.delete')
 def delete_csosn(csosn_id):
     db = _get_db()
@@ -1404,6 +1421,8 @@ def salvar_regime_tributario():
 
 @admin_bp.route('/regimes-tributarios/<int:regime_tributario_id>/delete', methods=['POST'])
 @login_required
+@admin_required()
+@block_viewer_access()
 @permission_required('regimes_tributarios.delete')
 def delete_regime_tributario(regime_tributario_id: int):
     db = _get_db()
@@ -1422,7 +1441,7 @@ def delete_regime_tributario(regime_tributario_id: int):
 
 @admin_bp.route('/roles')
 @login_required
-@permission_required('roles.view')
+@super_admin_required()
 def list_roles():
     db = _get_db()
     q = request.args.get('q', '').strip()
@@ -1444,7 +1463,7 @@ def list_roles():
 
 @admin_bp.route('/roles/novo', methods=['GET', 'POST'])
 @login_required
-@permission_required('roles.create')
+@super_admin_required()
 def create_role():
     db = _get_db()
     permissions = db.execute(text("SELECT id, name, description FROM permissions ORDER BY name")).fetchall()
@@ -1474,7 +1493,7 @@ def create_role():
 
 @admin_bp.route('/roles/editar/<int:role_id>', methods=['GET', 'POST'])
 @login_required
-@permission_required('roles.edit')
+@super_admin_required()
 def edit_role(role_id):
     db = _get_db()
     permissions = db.execute(text("SELECT id, name, description FROM permissions ORDER BY name")).fetchall()
@@ -1509,7 +1528,7 @@ def edit_role(role_id):
 
 @admin_bp.route('/roles/excluir/<int:role_id>', methods=['POST'])
 @login_required
-@permission_required('roles.delete')
+@super_admin_required()
 def delete_role(role_id):
     db = _get_db()
     try:
@@ -1527,7 +1546,7 @@ def delete_role(role_id):
 
 @admin_bp.route('/permissions')
 @login_required
-@permission_required('permissions.view')
+@super_admin_required()
 def list_permissions():
     db = _get_db()
     q = request.args.get('q', '').strip()
@@ -1549,13 +1568,13 @@ def list_permissions():
 
 @admin_bp.route('/permissions/novo')
 @login_required
-@permission_required('permissions.create')
+@super_admin_required()
 def create_permission():
     return render_template('admin/permissions/form.html', permission=None)
 
 @admin_bp.route('/permissions/editar/<int:permission_id>', methods=['GET', 'POST'])
 @login_required
-@permission_required('permissions.edit')
+@super_admin_required()
 def edit_permission(permission_id):
     db = _get_db()
     if request.method == 'POST':
@@ -1584,7 +1603,7 @@ def edit_permission(permission_id):
 
 @admin_bp.route('/permissions/excluir/<int:permission_id>', methods=['POST'])
 @login_required
-@permission_required('permissions.delete')
+@super_admin_required()
 def delete_permission(permission_id):
     db = _get_db()
     try:

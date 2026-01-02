@@ -8,7 +8,12 @@ from sqlalchemy import text
 from datetime import datetime
 from database.connection import get_db
 from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
-from auth.decorators import permission_required, admin_required
+from auth.decorators import (
+    admin_required,
+    block_viewer_access,
+    editor_or_admin_required,
+    viewer_or_higher_required
+)
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
 from services.nfe_service import NFeService, generate_nfe_xml, sign_xml, send_to_sefaz
@@ -21,14 +26,14 @@ nfe_bp = Blueprint('nfe', __name__)
 # ALIAS PARA COMPATIBILIDADE
 @nfe_bp.route('/create', methods=['GET', 'POST'])
 @login_required
-@permission_required('nfe.issue')
+@editor_or_admin_required()
 def create():
     """Alias para emitir_nfe - para compatibilidade com templates"""
     return emitir_nfe()
 
 @nfe_bp.route('/emitir', methods=['GET', 'POST'])
 @login_required
-@permission_required('nfe.issue')
+@editor_or_admin_required()
 def emitir_nfe():
     db = next(get_db())
     
@@ -689,7 +694,7 @@ def emitir_nfe():
 
 @nfe_bp.route('/list')
 @login_required
-@permission_required('nfe.read')
+@viewer_or_higher_required()
 def list_nfes():
     db = next(get_db())
     
@@ -833,7 +838,7 @@ def list_nfes():
 
 @nfe_bp.route('/view/<int:nfe_id>')
 @login_required
-@permission_required('nfe.read')
+@viewer_or_higher_required()
 def view(nfe_id):
     """Visualizar uma NFe específica"""
     db = next(get_db())
@@ -902,7 +907,7 @@ def view(nfe_id):
 
 @nfe_bp.route('/generate-danfe/<int:nfe_id>', methods=['POST'])
 @login_required
-@permission_required('nfe.read')
+@viewer_or_higher_required()
 def generate_danfe(nfe_id):
     """Gerar PDF do DANFE para uma NFe"""
     db = next(get_db())
@@ -957,7 +962,7 @@ def generate_danfe(nfe_id):
 
 @nfe_bp.route('/generate-danfe-after-issue', methods=['POST'])
 @login_required
-@permission_required('nfe.read')
+@viewer_or_higher_required()
 def generate_danfe_after_issue():
     """Gerar PDF do DANFE para uma NFe recém emitida"""
     db = next(get_db())
@@ -1020,7 +1025,7 @@ def generate_danfe_after_issue():
 
 @nfe_bp.route('/<int:nfe_id>/enviar-danfe', methods=['POST'])
 @login_required
-@permission_required('nfe.read')
+@viewer_or_higher_required()
 def enviar_danfe_email(nfe_id):
     """Enviar DANFE por email"""
     db = next(get_db())
@@ -1159,6 +1164,7 @@ def enviar_danfe_email(nfe_id):
 
 @nfe_bp.route('/edit/<int:nfe_id>', methods=['GET', 'POST'])
 @login_required
+@editor_or_admin_required()
 def edit(nfe_id):
     """Editar NFe (rascunho ou rejeitada)"""
     db = next(get_db())
@@ -1679,7 +1685,7 @@ def edit(nfe_id):
 
 @nfe_bp.route('/download/<int:nfe_id>')
 @login_required
-@permission_required('nfe.read')
+@viewer_or_higher_required()
 def download(nfe_id):
     """Download do XML da NFe"""
     flash('Funcionalidade de download em desenvolvimento.', 'info')
@@ -1687,6 +1693,7 @@ def download(nfe_id):
 
 @nfe_bp.route('/reenviar/<int:nfe_id>', methods=['POST'])
 @login_required
+@editor_or_admin_required()
 def reenviar_nfe(nfe_id):
     """Reenviar NFe rejeitada para a SEFAZ"""
     try:
@@ -1896,6 +1903,7 @@ def reenviar_nfe(nfe_id):
         }), 500
 @nfe_bp.route('/emitir-rascunho/<int:nfe_id>', methods=['POST'])
 @login_required
+@editor_or_admin_required()
 def emitir_rascunho(nfe_id):
     """Emitir NFe que está em rascunho"""
     db = None
@@ -2140,7 +2148,7 @@ def emitir_rascunho(nfe_id):
 
 @nfe_bp.route('/compartilhar/<int:nfe_id>', methods=['POST'])
 @login_required
-@permission_required('nfe.read')
+@viewer_or_higher_required()
 def compartilhar_nfe(nfe_id):
     """Compartilhar NFe por email"""
     db = next(get_db())

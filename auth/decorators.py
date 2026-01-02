@@ -158,3 +158,123 @@ def client_access_required():
                     
         return decorated_function
     return decorator
+
+def role_required(allowed_roles):
+    """
+    Decorator para verificar se o usuário tem uma das roles especificadas
+    
+    Args:
+        allowed_roles: Lista de roles permitidas (ex: ['Super_Admin', 'Admin', 'Editor'])
+        
+    Usage:
+        @role_required(['Super_Admin', 'Admin'])
+        def minha_funcao():
+            pass
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash('Acesso não autorizado. Faça login.', 'danger')
+                return redirect(url_for('auth.login'))
+            
+            db = None
+            try:
+                db = next(get_db())
+                
+                # Verificar se o usuário tem uma das roles permitidas
+                user_roles = db.execute(text("""
+                    SELECT r.name
+                    FROM user_roles ur
+                    JOIN roles r ON ur.role_id = r.id
+                    WHERE ur.user_id = :user_id
+                """), {"user_id": current_user.id}).fetchall()
+                
+                user_role_names = [role.name for role in user_roles]
+                
+                # Verificar se tem alguma das roles permitidas
+                has_access = any(role in allowed_roles for role in user_role_names)
+                
+                if not has_access:
+                    print(f"[X] Acesso negado: Usuário {current_user.username} com roles {user_role_names} tentou acessar função que requer {allowed_roles}")
+                    flash(f'Acesso negado. Esta funcionalidade requer uma das seguintes permissões: {", ".join(allowed_roles)}.', 'danger')
+                    return redirect(url_for('home.home'))
+                
+                print(f"[OK] Acesso autorizado para {current_user.username} com roles: {user_role_names}")
+                return f(*args, **kwargs)
+                
+            except Exception as e:
+                print(f"[X] Erro na verificação de roles: {e}")
+                import traceback
+                traceback.print_exc()
+                flash(f'Erro na verificação de permissões: {str(e)}', 'error')
+                return redirect(url_for('auth.login'))
+            finally:
+                if db is not None:
+                    db.close()
+                    
+        return decorated_function
+    return decorator
+
+def editor_or_admin_required():
+    """Decorator para verificar se o usuário é Editor, Admin ou Super_Admin"""
+    return role_required(['Super_Admin', 'Admin', 'Editor'])
+
+def viewer_or_higher_required():
+    """Decorator para verificar se o usuário tem qualquer role (Viewer, Editor, Admin ou Super_Admin)"""
+    return role_required(['Super_Admin', 'Admin', 'Editor', 'Viewer'])
+
+def block_viewer_access():
+    """
+    Decorator para bloquear explicitamente acesso de Viewers (somente leitura)
+    Permite apenas Editor, Admin e Super_Admin
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash('Acesso não autorizado. Faça login.', 'danger')
+                return redirect(url_for('auth.login'))
+            
+            db = None
+            try:
+                db = next(get_db())
+                
+                # Verificar se o usuário é Viewer
+                is_viewer = db.execute(text("""
+                    SELECT 1
+                    FROM user_roles ur
+                    JOIN roles r ON ur.role_id = r.id
+                    WHERE ur.user_id = :user_id AND r.name = 'Viewer'
+                """), {"user_id": current_user.id}).first()
+                
+                if is_viewer:
+                    # Verificar se tem outras roles além de Viewer
+                    other_roles = db.execute(text("""
+                        SELECT r.name
+                        FROM user_roles ur
+                        JOIN roles r ON ur.role_id = r.id
+                        WHERE ur.user_id = :user_id AND r.name != 'Viewer'
+                    """), {"user_id": current_user.id}).fetchall()
+                    
+                    if not other_roles:
+                        print(f"[X] Acesso negado: Usuário {current_user.username} com role Viewer tentou realizar ação de escrita")
+                        flash('Acesso negado. Usuários com perfil Viewer não podem realizar esta ação (somente leitura).', 'warning')
+                        # Redirecionar para a página anterior ou home
+                        return redirect(request.referrer or url_for('home.home'))
+                
+                print(f"[OK] Usuário {current_user.username} autorizado para ação de escrita")
+                return f(*args, **kwargs)
+                
+            except Exception as e:
+                print(f"[X] Erro na verificação de Viewer: {e}")
+                import traceback
+                traceback.print_exc()
+                flash(f'Erro na verificação de permissões: {str(e)}', 'error')
+                return redirect(url_for('auth.login'))
+            finally:
+                if db is not None:
+                    db.close()
+                    
+        return decorated_function
+    return decorator
