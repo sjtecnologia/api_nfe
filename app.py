@@ -42,6 +42,12 @@ from auth.login_manager import init_login_manager
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
+# Configurações de sessão para compatibilidade com iOS/Safari
+app.config['SESSION_COOKIE_SECURE'] = True  # Apenas HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Proteção contra XSS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Compatível com iOS
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hora
+
 # Configurar CORS - Permitir acesso de qualquer origem
 CORS(app, 
      resources={r"/*": {"origins": "*"}},
