@@ -1,4 +1,5 @@
 from flask import Flask, render_template, jsonify
+from flask_cors import CORS
 from datetime import datetime
 from config.settings import SECRET_KEY, DEBUG, HOST, PORT
 from database.connection import get_db
@@ -40,6 +41,14 @@ from auth.login_manager import init_login_manager
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+
+# Configurar CORS - Permitir acesso de qualquer origem
+CORS(app, 
+     resources={r"/*": {"origins": "*"}},
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-API-Key"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+     expose_headers=["Content-Type", "X-Total-Count"])
 
 # Inicializar Flask-Login
 login_manager = init_login_manager(app)
