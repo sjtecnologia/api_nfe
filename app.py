@@ -150,6 +150,11 @@ def health_check():
     """Endpoint para verificar a saúde da API"""
     return jsonify({"status": "UP", "timestamp": datetime.now().isoformat()}), 200
 
+@app.route('/diagnostico', methods=['GET'])
+def diagnostico():
+    """Página de diagnóstico para verificar conectividade"""
+    return render_template('diagnostico.html')
+
 @app.errorhandler(500)
 def internal_error(error):
     """Handler para erro 500 - loga detalhes completos"""
