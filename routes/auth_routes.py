@@ -2,23 +2,10 @@ from flask import Blueprint, render_template, redirect, url_for, session, reques
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 from database.connection import get_db
+from database.models import User
 from sqlalchemy import text
 
 auth_bp = Blueprint('auth', __name__)
-
-# Classe User simples (sem arquivo separado)
-class User:
-    def __init__(self, user_id, username, role_name='client', permissions=None):
-        self.user_id = user_id
-        self.username = username
-        self.role_name = role_name
-        self.permissions = permissions or {}
-        self.is_authenticated = True
-        self.is_active = True
-        self.is_anonymous = False
-    
-    def get_id(self):
-        return str(self.user_id)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -98,12 +85,12 @@ def login():
             
             print("[BUILD] Criando objeto User...")
             user = User(
-                id=user_data.id,
-                username=user_data.username or user_data.email,
-                email=user_data.email,
-                _is_active=user_data._is_active,
-                roles=user_roles,
-                clients=user_clients
+                user_data.id,
+                user_data.username or user_data.email,
+                user_data.email,
+                user_data._is_active,
+                user_roles,
+                user_clients
             )
             
             print("[AUTH] Fazendo login do usuário...")

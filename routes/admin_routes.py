@@ -424,7 +424,11 @@ from database.connection import get_db
 def admin_home():
     """Dashboard admin - super admin vê todos os clientes, outros selecionam"""
     # Super admin tem acesso direto ao dashboard com dados de todos os clientes
-    return redirect(url_for('admin.dashboard'))
+    if current_user.is_super_admin():
+        return redirect(url_for('admin.dashboard'))
+    else:
+        # Admin comum vai para home de seleção de cliente
+        return redirect(url_for('home.home'))
 
 @admin_bp.route('/nfes')
 @login_required
@@ -956,8 +960,9 @@ def delete_cfop(cfop_id):
 
 @admin_bp.route('/usuarios')
 @login_required
-@super_admin_required()
+@admin_required()
 def list_usuarios():
+    """Lista usuários - Super_Admin vê todos, Admin vê apenas usuários dos seus clientes"""
     db = _get_db()
     q = request.args.get('q', '').strip()
     
@@ -1812,9 +1817,11 @@ def backup():
 
 @admin_bp.route('/dashboard')
 @login_required
+@super_admin_required()
 def dashboard():
     """
     Dashboard principal com analytics, gráficos e KPIs do sistema.
+    ACESSO EXCLUSIVO: Super_Admin
     """
     db = _get_db()
     try:
@@ -2093,7 +2100,7 @@ def relatorio_certificados_vencimento():
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar relatório de certificados: {str(e)}', 'danger')
-        return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('home.home'))
 
 @admin_bp.route('/dashboard/api/data')
 @login_required
@@ -2567,13 +2574,11 @@ def list_clientes():
             'cliente_id','razao_social','cnpj','ativo','data_cadastro','email_contato','telefone_contato'
         ]) for r in rows]
         
-        # Passar flag indicando se é super admin
-        is_super_admin = current_user.is_super_admin()
-        return render_template('admin/clientes/list.html', clientes=clientes, is_super_admin=is_super_admin)
+        return render_template('admin/clientes/list.html', clientes=clientes)
     except Exception as e:
         print(f"[X] Erro list_clientes: {e}")
         flash('Erro ao carregar clientes', 'error')
-        return render_template('admin/clientes/list.html', clientes=[], is_super_admin=False)
+        return render_template('admin/clientes/list.html', clientes=[])
     finally:
         db.close()
 
@@ -4816,7 +4821,7 @@ def list_auditoria():
         import traceback
         traceback.print_exc()
         flash('Erro ao carregar logs de auditoria', 'danger')
-        return redirect(url_for('admin.dashboard'))
+        return redirect(url_for('home.home'))
 
 
 @admin_bp.route('/auditoria/estatisticas')

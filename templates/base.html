@@ -687,7 +687,7 @@
                 href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
                         {{ url_for('admin.admin_home') }}
                     {% elif current_user.is_authenticated and session.current_client_id %}
-                        {{ url_for('cliente.dashboard', cliente_id=session.current_client_id) }}
+                        {{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}
                     {% else %}
                         {{ url_for('home.home') }}
                     {% endif %}">
@@ -904,7 +904,7 @@
                                     href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
                                             {{ url_for('admin.admin_home') }}
                                         {% elif current_user.is_authenticated and session.current_client_id %}
-                                            {{ url_for('cliente.dashboard', cliente_id=session.current_client_id) }}
+                                            {{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}
                                         {% else %}
                                             {{ url_for('home.home') }}
                                         {% endif %}">

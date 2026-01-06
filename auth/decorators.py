@@ -3,6 +3,7 @@ from flask import redirect, url_for, flash, session
 from flask_login import current_user
 from database.connection import get_db
 from sqlalchemy import text
+from utils.id_encoder import decode_id
 
 def permission_required(permission):
     """Decorator para verificar se o usuário tem uma permissão específica"""
@@ -83,7 +84,8 @@ def super_admin_required():
                 if not user_roles:
                     print(f"[X] Acesso negado: Usuário {current_user.username} (ID:{current_user.id}) não é Super Admin")
                     flash('Acesso negado. Esta funcionalidade é exclusiva para Super Administradores.', 'danger')
-                    return redirect(url_for('admin.dashboard'))
+                    # Redirecionar para home ao invés de dashboard (que agora é protegido)
+                    return redirect(url_for('home.home'))
                 
                 print(f"[OK] Acesso Super Admin autorizado para {current_user.username}")
                 return f(*args, **kwargs)
@@ -110,8 +112,16 @@ def client_access_required():
                 flash('Acesso não autorizado. Faça login.', 'danger')
                 return redirect(url_for('auth.login'))
             
-            # Extrair cliente_id dos argumentos da URL
+            # Extrair cliente_id dos argumentos da URL (suporta cliente_id e cliente_hash)
             cliente_id = kwargs.get('cliente_id')
+            cliente_hash = kwargs.get('cliente_hash')
+            
+            # Se recebeu hash, decodifica para obter o ID
+            if cliente_hash and not cliente_id:
+                cliente_id = decode_id(cliente_hash)
+                if cliente_id is None:
+                    flash('Link inválido ou expirado.', 'danger')
+                    return redirect(url_for('auth.login'))
             
             if not cliente_id:
                 flash('Cliente não especificado.', 'danger')
