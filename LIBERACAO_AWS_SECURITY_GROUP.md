@@ -160,4 +160,20 @@ Se precisar de ajuda para acessar o console AWS ou não tiver permissões:
 
 ---
 
-**RESUMO:** O servidor está perfeito. O problema é 100% no AWS Security Group bloqueando IPs externos. Basta liberar portas 80 e 443 para 0.0.0.0/0 no console AWS.
+## 🔧 SOLUÇÃO FINAL IMPLEMENTADA
+
+**Problema Real Identificado:** VPN OpenVPN redirecionando TODO o tráfego HTTP/HTTPS através do túnel (rotas 0.0.0.0/1 e 128.0.0.0/1).
+
+**Solução Permanente:**
+1. Script automático criado: `/usr/local/bin/fix-vpn-routes.sh`
+2. Cron job executando a cada minuto: `/etc/cron.d/fix-vpn-routes`
+3. Remove automaticamente rotas problemáticas mantendo VPN funcional para LLM
+
+**Status:**
+- ✅ Sistema acessível de qualquer rede (4G/5G, WiFi externa)
+- ✅ VPN continua funcionando para acessar LLM
+- ✅ Solução automática e permanente via cron
+
+---
+
+**RESUMO:** O problema era a VPN redirecionando todo o tráfego. Solução: cron job remove rotas problemáticas automaticamente a cada minuto.
