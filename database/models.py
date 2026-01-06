@@ -66,8 +66,8 @@ class User(UserMixin):
 
     def is_admin(self):
         """Verifica se o usuário é administrador da plataforma"""
-        admin_roles = ['admin']
-        return any(role.name.lower() in admin_roles for role in self.roles)
+        admin_roles = ['admin', 'super_admin']
+        return any(role.get('name', '').lower() in admin_roles for role in self.roles)
     
     
     

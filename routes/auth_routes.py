@@ -67,31 +67,59 @@ def login():
             # Autenticação bem-sucedida!
             print("[OK] Autenticação bem-sucedida!")
             
-            # Determinar role baseado no email (temporário)
-            role_name = 'admin' if user_data.email == 'admin@emitemax.com.br' else 'client'
-            print(f"[ADMIN] Role atribuída: {role_name}")
+            # Buscar roles do usuário no banco de dados
+            print("[DB] Buscando roles do usuário...")
+            user_roles_query = db.execute(text("""
+                SELECT r.id, r.name, r.description
+                FROM roles r
+                INNER JOIN user_roles ur ON r.id = ur.role_id
+                WHERE ur.user_id = :user_id
+            """), {'user_id': user_data.id})
+            
+            user_roles = [{'id': row.id, 'name': row.name, 'description': row.description} 
+                         for row in user_roles_query]
+            
+            print(f"[ROLES] Roles encontradas: {[r['name'] for r in user_roles]}")
+            
+            # Buscar clientes vinculados ao usuário
+            print("[DB] Buscando clientes do usuário...")
+            user_clients_query = db.execute(text("""
+                SELECT c.cliente_id, c.razao_social, c.nome_fantasia, c.cnpj
+                FROM clientes c
+                INNER JOIN user_clients uc ON c.cliente_id = uc.client_id
+                WHERE uc.user_id = :user_id AND c.ativo = true
+            """), {'user_id': user_data.id})
+            
+            user_clients = [{'cliente_id': row.cliente_id, 'razao_social': row.razao_social,
+                           'nome_fantasia': row.nome_fantasia, 'cnpj': row.cnpj}
+                          for row in user_clients_query]
+            
+            print(f"[CLIENTS] Clientes vinculados: {len(user_clients)}")
             
             print("[BUILD] Criando objeto User...")
             user = User(
-                user_id=user_data.id,  # [OK] USAR 'id' EM VEZ DE 'user_id'
-                username=user_data.username or user_data.email,  # Usa username ou email
-                role_name=role_name,
-                permissions={}
+                id=user_data.id,
+                username=user_data.username or user_data.email,
+                email=user_data.email,
+                _is_active=user_data._is_active,
+                roles=user_roles,
+                clients=user_clients
             )
             
             print("[AUTH] Fazendo login do usuário...")
             login_user(user)
             
-            print(f"[OK] [OK] LOGIN: Usuario {user_data.email} (ID: {user_data.id}) logado com role {role_name}")
+            print(f"[OK] LOGIN: Usuario {user_data.email} (ID: {user_data.id}) logado com roles {[r['name'] for r in user_roles]}")
             
-            # Determinar redirecionamento
+            # Determinar redirecionamento baseado nas roles
             print("[START] Determinando redirecionamento...")
-            if role_name == 'admin':
+            
+            if user.is_super_admin():
                 # Super admin vai para dashboard que mostra dados de todos os clientes
-                print("--> Redirecionando para admin.dashboard")
+                print("--> Super Admin detectado, redirecionando para admin.dashboard")
                 return redirect(url_for('admin.dashboard'))
             else:
-                print("[SEARCH] Buscando clientes acessíveis do usuário...")
+                print("[SEARCH] Usuário comum ou admin, buscando clientes acessíveis...")
                 # Buscar todos os clientes acessíveis do usuário
                 clientes_result = db.execute(text("""
                     SELECT c.cliente_id, c.razao_social
@@ -113,7 +141,8 @@ def login():
                     print(f"[OK] Cliente padrão atribuído: {primeiro_cliente['razao_social']} (ID: {primeiro_cliente['cliente_id']})")
                     print(f"--> Redirecionando para cliente.dashboard com cliente_id={primeiro_cliente['cliente_id']}")
                     print("="*80 + "\n")
-                    return redirect(url_for('cliente.dashboard', cliente_id=primeiro_cliente['cliente_id']))
+                    from utils.id_encoder import encode_id
+                    return redirect(url_for('cliente.dashboard', cliente_hash=encode_id(primeiro_cliente['cliente_id'])))
                 else:
                     print(f"[!] Nenhum cliente encontrado para user_id {user_data.id}")
                     print("="*80 + "\n")
