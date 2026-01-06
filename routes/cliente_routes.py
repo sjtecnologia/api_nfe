@@ -9,17 +9,25 @@ from auth.permissions import get_accessible_client_ids
 from database.connection import get_db
 from sqlalchemy import func, text
 from datetime import datetime, timedelta
+from utils.id_encoder import encode_id, decode_id
 
 from database.models import CertificadoDigital, Cliente, DestinatarioNFe, Produto, RegraTributacao
 
 cliente_bp = Blueprint('cliente', __name__)
 
-@cliente_bp.route('/dashboard/<int:cliente_id>')
+@cliente_bp.route('/dashboard/<string:cliente_hash>')
 @login_required
 @client_access_required()
-def dashboard(cliente_id):
+def dashboard(cliente_hash):
     """Dashboard principal do cliente"""
     db = next(get_db())
+    
+    # Decodifica o ID encriptado
+    cliente_id = decode_id(cliente_hash)
+    if cliente_id is None:
+        print(f"[X] ID inválido ou adulterado: {cliente_hash}")
+        flash('Link inválido ou expirado.', 'danger')
+        return redirect(url_for('home.home'))
     
     try:
         print(f"\n{'='*80}")

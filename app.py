@@ -132,12 +132,16 @@ def inject_permissions():
         # Se não tem nenhuma permissão de edição, é viewer only
         return not can_edit()
     
+    # Importar função de encode_id para templates
+    from utils.id_encoder import encode_id
+    
     return dict(
         has_permission=has_permission, 
         is_super_admin=is_super_admin,
         can_edit=can_edit,
         can_create=can_create,
-        is_viewer_only=is_viewer_only
+        is_viewer_only=is_viewer_only,
+        encode_id=encode_id
     )
 
 @app.route('/')

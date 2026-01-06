@@ -7,11 +7,19 @@ OK: Serviços locais carregados com sucesso
 GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
 GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
 GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS, POST /auth/forgot-password                              -> auth.forgot_password
+GET, HEAD, OPTIONS, POST /auth/reset-password/<token>                       -> auth.reset_password
 GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
 GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
 GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
 OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
 GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS   /api/nfe/proximo-numero                            -> api.get_proximo_numero_nfe
+OPTIONS, POST        /api/v2/nfe/emitir                                 -> api_v2.emit_nfe
+GET, HEAD, OPTIONS   /api/v2/nfe/<int:nfe_id>                           -> api_v2.get_nfe
+GET, HEAD, OPTIONS   /api/v2/nfes                                       -> api_v2.list_nfes
+GET, HEAD, OPTIONS   /api/v2/nfe/<int:nfe_id>/xml                       -> api_v2.get_nfe_xml
+OPTIONS, POST        /api/v2/nfe/<int:nfe_id>/cancelar                  -> api_v2.cancel_nfe
 GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
 GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
 GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
@@ -137,13 +145,50 @@ GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin
 OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
 GET, HEAD, OPTIONS   /admin/faturamento                                 -> admin.list_faturamento
 GET, HEAD, OPTIONS, POST /admin/faturamento/cliente/<int:cliente_id>/editar -> admin.edit_faturamento_cliente
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs                      -> admin.list_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/nova                 -> admin.criar_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/<int:classificacao_id>/editar -> admin.editar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/salvar               -> admin.salvar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/<int:classificacao_id>/toggle -> admin.toggle_classificacao_ibs_cbs
 GET, HEAD, OPTIONS   /admin/faturamento/relatorio-gerencial             -> admin.relatorio_gerencial
 GET, HEAD, OPTIONS, POST /admin/faturamento/extrato/<int:cliente_id>        -> admin.gerar_extrato_cliente
-GET, HEAD, OPTIONS   /cliente/dashboard/<int:cliente_id>                -> cliente.dashboard
+GET, HEAD, OPTIONS   /admin/api/classificacoes-ibs-cbs                  -> admin.api_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/api/regime-tributario/<int:cliente_id>      -> admin.api_regime_tributario_cliente
+GET, HEAD, OPTIONS   /cliente/dashboard/<string:cliente_hash>           -> cliente.dashboard
 GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
 GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
 GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
 GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /admin/planos/                                     -> planos.list_planos
+GET, HEAD, OPTIONS, POST /admin/planos/criar                                -> planos.criar_plano
+GET, HEAD, OPTIONS, POST /admin/planos/<int:plano_id>/editar                -> planos.editar_plano
+OPTIONS, POST        /admin/planos/<int:plano_id>/toggle                -> planos.toggle_plano
+GET, HEAD, OPTIONS   /admin/planos/assinaturas                          -> planos.list_assinaturas
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/criar                    -> planos.criar_assinatura
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/<int:assinatura_id>/editar -> planos.editar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/renovar -> planos.renovar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/cancelar -> planos.cancelar_assinatura
+GET, HEAD, OPTIONS   /admin/planos/relatorio/consumo                    -> planos.relatorio_consumo
+GET, HEAD, OPTIONS   /admin/planos/api/verificar-limite/<int:cliente_id> -> planos.verificar_limite_api
+GET, HEAD, OPTIONS   /a3/detect-tokens                                  -> a3.detect_tokens
+OPTIONS, POST        /a3/list-certificates                              -> a3.list_certificates
+OPTIONS, POST        /a3/register                                       -> a3.register_certificate
+GET, HEAD, OPTIONS   /a3/select/<int:cliente_id>                        -> a3.select_certificate
+GET, HEAD, OPTIONS   /admin/api-keys/<int:cliente_id>                   -> api_keys.list_api_keys
+GET, HEAD, OPTIONS, POST /admin/api-keys/<int:cliente_id>/create            -> api_keys.create_api_key
+OPTIONS, POST        /admin/api-keys/<int:api_key_id>/toggle            -> api_keys.toggle_api_key
+OPTIONS, POST        /admin/api-keys/<int:api_key_id>/delete            -> api_keys.delete_api_key
+GET, HEAD, OPTIONS   /admin/api-keys/<int:api_key_id>/stats             -> api_keys.api_key_stats
+GET, HEAD, OPTIONS   /admin/api-keys/api/v2/keys                        -> api_keys.api_list_keys
+GET, HEAD, OPTIONS   /admin/api-keys/api/v2/keys/stats                  -> api_keys.api_key_usage_stats
+GET, HEAD, OPTIONS   /admin/webhooks/<int:cliente_id>                   -> webhooks.list_webhooks
+GET, HEAD, OPTIONS, POST /admin/webhooks/<int:cliente_id>/create            -> webhooks.create_webhook
+OPTIONS, POST        /admin/webhooks/<int:webhook_id>/toggle            -> webhooks.toggle_webhook
+OPTIONS, POST        /admin/webhooks/<int:webhook_id>/delete            -> webhooks.delete_webhook
+OPTIONS, POST        /admin/webhooks/<int:webhook_id>/test              -> webhooks.test_webhook
+GET, HEAD, OPTIONS   /admin/webhooks/api/v2/webhooks                    -> webhooks.api_list_webhooks
+OPTIONS, POST        /admin/webhooks/api/v2/webhooks                    -> webhooks.api_create_webhook
+DELETE, OPTIONS      /admin/webhooks/api/v2/webhooks/<int:webhook_id>   -> webhooks.api_delete_webhook
 GET, HEAD, OPTIONS   /                                                  -> home.home
 GET, HEAD, OPTIONS   /select-client/<int:cliente_id>                    -> home.select_client
 GET, HEAD, OPTIONS   /switch-client                                     -> home.switch_client
@@ -153,6 +198,8 @@ GET, HEAD, OPTIONS   /api/llm/ncms/hierarquia/<codigo>                  -> llm_a
 GET, HEAD, OPTIONS   /api/llm/ncms/stats                                -> llm_api.get_ncm_statistics
 GET, HEAD, OPTIONS   /                                                  -> home
 GET, HEAD, OPTIONS   /health                                            -> health_check
+GET, HEAD, OPTIONS   /diagnostico                                       -> diagnostico
+GET, HEAD, OPTIONS   /docs/<path:filename>                              -> serve_docs
 === FIM DAS ROTAS ===
 
  * Serving Flask app 'app'
@@ -172,11 +219,19 @@ OK: Serviços locais carregados com sucesso
 GET, HEAD, OPTIONS   /static/<path:filename>                            -> static
 GET, HEAD, OPTIONS, POST /auth/login                                        -> auth.login
 GET, HEAD, OPTIONS   /auth/logout                                       -> auth.logout
+GET, HEAD, OPTIONS, POST /auth/forgot-password                              -> auth.forgot_password
+GET, HEAD, OPTIONS, POST /auth/reset-password/<token>                       -> auth.reset_password
 GET, HEAD, OPTIONS   /api/cfops                                         -> api.get_cfops
 GET, HEAD, OPTIONS   /api/ncms                                          -> api.get_ncms
 GET, HEAD, OPTIONS   /api/produtos/cliente/<int:cliente_id>             -> api.get_produtos_cliente
 OPTIONS, POST        /api/regras_tributacao/buscar                      -> api.buscar_regra_tributacao
 GET, HEAD, OPTIONS   /api/clientes                                      -> api.get_clientes
+GET, HEAD, OPTIONS   /api/nfe/proximo-numero                            -> api.get_proximo_numero_nfe
+OPTIONS, POST        /api/v2/nfe/emitir                                 -> api_v2.emit_nfe
+GET, HEAD, OPTIONS   /api/v2/nfe/<int:nfe_id>                           -> api_v2.get_nfe
+GET, HEAD, OPTIONS   /api/v2/nfes                                       -> api_v2.list_nfes
+GET, HEAD, OPTIONS   /api/v2/nfe/<int:nfe_id>/xml                       -> api_v2.get_nfe_xml
+OPTIONS, POST        /api/v2/nfe/<int:nfe_id>/cancelar                  -> api_v2.cancel_nfe
 GET, HEAD, OPTIONS, POST /admin/nfe/create                                  -> nfe.create
 GET, HEAD, OPTIONS, POST /admin/nfe/emitir                                  -> nfe.emitir_nfe
 GET, HEAD, OPTIONS   /admin/nfe/list                                    -> nfe.list_nfes
@@ -252,5 +307,78 @@ GET, HEAD, OPTIONS   /admin/dashboard/api/data                          -> admin
 GET, HEAD, OPTIONS   /admin/motivos-desoneracao                         -> admin.list_motivos_desoneracao
 GET, HEAD, OPTIONS   /admin/motivos-desoneracao/novo                    -> admin.novo_motivo_desoneracao
 GET, HEAD, OPTIONS   /admin/motivos-desoneracao/<int:motivo_id>/editar  -> admin.novo_motivo_desoneracao
-OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao * Debugger is active!
+OPTIONS, POST        /admin/motivos-desoneracao/salvar                  -> admin.salvar_motivo_desoneracao
+OPTIONS, POST        /admin/motivos-desoneracao/<int:motivo_id>/delete  -> admin.delete_motivo_desoneracao
+GET, HEAD, OPTIONS   /admin/origens-mercadoria                          -> admin.list_origens_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/novo                     -> admin.create_origem_mercadoria
+GET, HEAD, OPTIONS, POST /admin/origens-mercadoria/editar/<int:origem_id>   -> admin.edit_origem_mercadoria
+OPTIONS, POST        /admin/origens-mercadoria/excluir/<int:origem_id>  -> admin.delete_origem_mercadoria
+GET, HEAD, OPTIONS   /admin/clientes                                    -> admin.list_clientes
+GET, HEAD, OPTIONS, POST /admin/clientes/novo                               -> admin.create_cliente
+GET, HEAD, OPTIONS, POST /admin/clientes/<int:cliente_id>/edit              -> admin.edit_cliente
+OPTIONS, POST        /admin/clientes/<int:cliente_id>/delete            -> admin.delete_cliente
+GET, HEAD, OPTIONS   /admin/certificados/novo/<int:cliente_id>          -> admin.create_certificado
+GET, HEAD, OPTIONS   /admin/certificados/<int:certificado_digital_id>/edit/<int:cliente_id> -> admin.edit_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_digital_id>/delete -> admin.delete_certificado
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova/<int:cliente_id>     -> admin.create_regra_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/<int:regra_tributacao_id>/edit -> admin.edit_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/<int:regra_tributacao_id>/delete -> admin.delete_regra_tributacao
+GET, HEAD, OPTIONS, POST /admin/destinatarios/add/<int:cliente_id>          -> admin.admin_destinatarios_nfe_add
+OPTIONS, POST        /admin/destinatarios/<int:destinatario_id>/delete  -> admin.delete_destinatario
+GET, HEAD, OPTIONS   /admin/produtos                                    -> admin.list_produtos
+GET, HEAD, OPTIONS, POST /admin/produtos/importar                           -> admin.importar_produtos
+GET, HEAD, OPTIONS   /admin/produtos/template-csv                       -> admin.download_template_csv
+GET, HEAD, OPTIONS   /admin/produtos/template-xlsx                      -> admin.download_template_xlsx
+GET, HEAD, OPTIONS   /admin/produtos/add                                -> admin.create_produto
+OPTIONS, POST        /admin/produtos/add                                -> admin.store_produto
+OPTIONS, POST        /admin/produtos/alterar-status                     -> admin.alterar_status_produto
+OPTIONS, POST        /admin/produtos/<int:produto_id>/delete            -> admin.delete_produto
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:cliente_id>              -> admin.list_destinatarios
+OPTIONS, POST        /admin/destinatarios/salvar                        -> admin.salvar_destinatario
+GET, HEAD, OPTIONS   /admin/destinatarios/<int:destinatario_id>/edit    -> admin.edit_destinatario
+GET, HEAD, OPTIONS   /admin/certificados                                -> admin.list_certificados
+OPTIONS, POST        /admin/certificados/salvar                         -> admin.salvar_certificado
+OPTIONS, POST        /admin/certificados/<int:certificado_id>/toggle-status -> admin.toggle_certificado_status
+GET, HEAD, OPTIONS   /admin/regras-tributacao                           -> admin.list_regras_tributacao
+GET, HEAD, OPTIONS   /admin/regras-tributacao/nova                      -> admin.nova_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/salvar                    -> admin.salvar_regra_tributacao
+OPTIONS, POST        /admin/regras-tributacao/excluir/<int:regra_id>    -> admin.excluir_regra_tributacao
+GET, HEAD, OPTIONS   /admin/perfil                                      -> admin.perfil
+GET, HEAD, OPTIONS   /admin/api/buscar-cep/<cep>                        -> admin.buscar_cep
+GET, HEAD, OPTIONS   /admin/health                                      -> admin.admin_health
+OPTIONS, POST        /admin/api/sugestao_tributaria                     -> admin.api_sugestao_tributaria
+GET, HEAD, OPTIONS   /admin/api/cliente/<int:cliente_id>/info           -> admin.api_cliente_info
+GET, HEAD, OPTIONS   /admin/teste-preenchimento-ia                      -> admin.teste_preenchimento_ia
+GET, HEAD, OPTIONS   /admin/teste-select-ncm                            -> admin.teste_select_ncm
+GET, HEAD, OPTIONS   /admin/auditoria                                   -> admin.list_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/estatisticas                      -> admin.estatisticas_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/export                            -> admin.export_auditoria
+GET, HEAD, OPTIONS   /admin/auditoria/<int:auditoria_id>                -> admin.view_auditoria
+OPTIONS, POST        /admin/auditoria/limpar                            -> admin.limpar_auditoria
+GET, HEAD, OPTIONS   /admin/faturamento                                 -> admin.list_faturamento
+GET, HEAD, OPTIONS, POST /admin/faturamento/cliente/<int:cliente_id>/editar -> admin.edit_faturamento_cliente
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs                      -> admin.list_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/nova                 -> admin.criar_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/classificacoes-ibs-cbs/<int:classificacao_id>/editar -> admin.editar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/salvar               -> admin.salvar_classificacao_ibs_cbs
+OPTIONS, POST        /admin/classificacoes-ibs-cbs/<int:classificacao_id>/toggle -> admin.toggle_classificacao_ibs_cbs
+GET, HEAD, OPTIONS   /admin/faturamento/relatorio-gerencial             -> admin.relatorio_gerencial
+GET, HEAD, OPTIONS, POST /admin/faturamento/extrato/<int:cliente_id>        -> admin.gerar_extrato_cliente
+GET, HEAD, OPTIONS   /admin/api/classificacoes-ibs-cbs                  -> admin.api_classificacoes_ibs_cbs
+GET, HEAD, OPTIONS   /admin/api/regime-tributario/<int:cliente_id>      -> admin.api_regime_tributario_cliente
+GET, HEAD, OPTIONS   /cliente/dashboard/<string:cliente_hash>           -> cliente.dashboard
+GET, HEAD, OPTIONS   /cliente/resumo/<int:cliente_id>                   -> cliente.resumo
+GET, HEAD, OPTIONS   /cliente/selecionar-cliente                        -> cliente.selecionar_cliente
+GET, HEAD, OPTIONS   /cliente/api/estatisticas/<int:cliente_id>         -> cliente.api_estatisticas
+GET, HEAD, OPTIONS   /cliente/api/nfes_por_mes/<int:cliente_id>         -> cliente.api_nfes_por_mes
+GET, HEAD, OPTIONS   /admin/planos/                                     -> planos.list_planos
+GET, HEAD, OPTIONS, POST /admin/planos/criar                                -> planos.criar_plano
+GET, HEAD, OPTIONS, POST /admin/planos/<int:plano_id>/editar                -> planos.editar_plano
+OPTIONS, POST        /admin/planos/<int:plano_id>/toggle                -> planos.toggle_plano
+GET, HEAD, OPTIONS   /admin/planos/assinaturas                          -> planos.list_assinaturas
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/criar                    -> planos.criar_assinatura
+GET, HEAD, OPTIONS, POST /admin/planos/assinaturas/<int:assinatura_id>/editar -> planos.editar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/renovar -> planos.renovar_assinatura
+OPTIONS, POST        /admin/planos/assinaturas/<int:assinatura_id>/cancelar -> planos.cancelar_assinatura
+GET, HEAD, OPTIONS   /admin/planos/relatorio/consumo                    -> planos.relatorio_consumo * Debugger is active!
  * Debugger PIN: 827-659-244
