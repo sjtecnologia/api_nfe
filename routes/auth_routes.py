@@ -234,15 +234,24 @@ def forgot_password():
                 reset_url = url_for('auth.reset_password', token=token, _external=True)
                 
                 try:
-                    enviar_email_recuperacao_senha(
+                    resultado = enviar_email_recuperacao_senha(
                         destinatario=email,
                         usuario=user_data.username,
                         reset_url=reset_url
                     )
-                    flash('Email de recuperação enviado! Verifique sua caixa de entrada.', 'success')
+                    
+                    if resultado and resultado.get('success'):
+                        print(f"[✓] Email de recuperação enviado para {email}")
+                        flash('Email de recuperação enviado! Verifique sua caixa de entrada e spam.', 'success')
+                    else:
+                        erro_msg = resultado.get('message', 'Erro desconhecido') if resultado else 'Sem resposta do servidor'
+                        print(f"[X] Falha ao enviar email: {erro_msg}")
+                        flash(f'Erro ao enviar email: {erro_msg}', 'danger')
                 except Exception as email_error:
-                    print(f"[X] Erro ao enviar email: {email_error}")
-                    flash('Erro ao enviar email. Tente novamente mais tarde.', 'danger')
+                    print(f"[X] Exceção ao enviar email: {email_error}")
+                    import traceback
+                    traceback.print_exc()
+                    flash('Erro ao enviar email. Entre em contato com o suporte.', 'danger')
             else:
                 # Por segurança, mostrar mesma mensagem mesmo se email não existir
                 flash('Se o email existir, você receberá as instruções de recuperação.', 'info')
