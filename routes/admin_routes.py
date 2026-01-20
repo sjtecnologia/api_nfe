@@ -5857,3 +5857,144 @@ def api_regime_tributario_cliente(cliente_id):
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
+
+
+# -------------------------------------------------------------------
+# TESTE DE EMAIL (DEBUG)
+# -------------------------------------------------------------------
+
+@admin_bp.route('/test-email', methods=['GET', 'POST'])
+@login_required
+@admin_required()
+def test_email():
+    """Endpoint para testar envio de emails e diagnosticar problemas"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    if request.method == 'POST':
+        email_destino = request.form.get('email')
+        
+        if not email_destino:
+            flash('Por favor, informe um email de destino.', 'danger')
+            return render_template('admin/test_email.html')
+        
+        # Log de informações de configuração (sem mostrar senha)
+        config_info = {
+            'SMTP_SERVER': os.getenv('SMTP_SERVER'),
+            'SMTP_PORT': os.getenv('SMTP_PORT'),
+            'SMTP_USER': os.getenv('SMTP_USER'),
+            'SMTP_PASSWORD_SET': 'Sim' if os.getenv('SMTP_PASSWORD') else 'Não'
+        }
+        
+        resultados = []
+        sucesso = False
+        
+        try:
+            # Teste 1: Verificar variáveis de ambiente
+            resultados.append('✓ Variáveis de ambiente carregadas')
+            resultados.append(f"  - Servidor: {config_info['SMTP_SERVER']}")
+            resultados.append(f"  - Porta: {config_info['SMTP_PORT']}")
+            resultados.append(f"  - Usuário: {config_info['SMTP_USER']}")
+            resultados.append(f"  - Senha configurada: {config_info['SMTP_PASSWORD_SET']}")
+            
+            # Teste 2: Conectar ao servidor SMTP
+            smtp_server = os.getenv('SMTP_SERVER')
+            smtp_port = int(os.getenv('SMTP_PORT', 587))
+            smtp_user = os.getenv('SMTP_USER')
+            smtp_password = os.getenv('SMTP_PASSWORD')
+            
+            resultados.append('\n✓ Conectando ao servidor SMTP...')
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+            resultados.append('✓ Conectado ao servidor SMTP')
+            
+            # Teste 3: Iniciar TLS
+            resultados.append('\n✓ Iniciando TLS...')
+            server.starttls()
+            resultados.append('✓ TLS iniciado com sucesso')
+            
+            # Teste 4: Fazer login
+            resultados.append('\n✓ Autenticando...')
+            server.login(smtp_user, smtp_password)
+            resultados.append('✓ Autenticação realizada com sucesso')
+            
+            # Teste 5: Enviar email de teste
+            resultados.append(f'\n✓ Enviando email para {email_destino}...')
+            
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = '🔧 Email de Teste - Sistema NFe'
+            msg['From'] = smtp_user
+            msg['To'] = email_destino
+            
+            # Corpo do email em HTML
+            html = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 2px solid #4CAF50; border-radius: 8px;">
+                        <h2 style="color: #4CAF50; text-align: center;">✅ Email de Teste</h2>
+                        <p>Este é um email de teste do sistema de recuperação de senha.</p>
+                        <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <p><strong>Informações:</strong></p>
+                            <ul>
+                                <li>Data/Hora: {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')}</li>
+                                <li>Servidor: {smtp_server}:{smtp_port}</li>
+                                <li>Remetente: {smtp_user}</li>
+                                <li>Destinatário: {email_destino}</li>
+                            </ul>
+                        </div>
+                        <p><strong>✓ Se você recebeu este email, significa que o sistema de envio está funcionando corretamente!</strong></p>
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                        <p style="font-size: 12px; color: #666; text-align: center;">
+                            Sistema NFe - Teste de Email<br>
+                            Testado por: {current_user.nome} ({current_user.email})
+                        </p>
+                    </div>
+                </body>
+            </html>
+            """
+            
+            msg.attach(MIMEText(html, 'html'))
+            
+            server.send_message(msg)
+            resultados.append('✓ Email enviado com sucesso!')
+            
+            server.quit()
+            resultados.append('\n✓ Conexão encerrada')
+            
+            sucesso = True
+            resultados.append(f'\n\n🎉 TESTE CONCLUÍDO COM SUCESSO!')
+            resultados.append(f'\nVerifique a caixa de entrada (e spam) de {email_destino}')
+            
+        except smtplib.SMTPAuthenticationError as e:
+            resultados.append(f'\n✗ ERRO DE AUTENTICAÇÃO')
+            resultados.append(f'  {str(e)}')
+            resultados.append('\n  Possíveis causas:')
+            resultados.append('  - Senha de aplicativo incorreta ou expirada')
+            resultados.append('  - Verificação em duas etapas não configurada')
+            resultados.append('  - Conta Gmail bloqueada')
+            
+        except smtplib.SMTPException as e:
+            resultados.append(f'\n✗ ERRO SMTP')
+            resultados.append(f'  {str(e)}')
+            
+        except Exception as e:
+            resultados.append(f'\n✗ ERRO GERAL')
+            resultados.append(f'  {str(e)}')
+            import traceback
+            resultados.append(f'\n  Stack trace:')
+            resultados.append(traceback.format_exc())
+        
+        # Log detalhado no console do servidor
+        print('\n' + '='*80)
+        print('TESTE DE EMAIL - RESULTADO')
+        print('='*80)
+        for linha in resultados:
+            print(linha)
+        print('='*80 + '\n')
+        
+        return render_template('admin/test_email.html', 
+                             resultados=resultados, 
+                             sucesso=sucesso,
+                             email_testado=email_destino)
+    
+    return render_template('admin/test_email.html')

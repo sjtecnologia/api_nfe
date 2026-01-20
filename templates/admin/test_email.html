@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Teste de Email{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">🔧 Teste de Envio de Email</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Esta ferramenta permite testar o envio de emails e diagnosticar problemas de configuração SMTP.
+                    </p>
+
+                    {% if not resultados %}
+                    <form method="POST" class="mt-4">
+                        <div class="form-group">
+                            <label for="email">Email de Destino:</label>
+                            <input type="email" 
+                                   class="form-control" 
+                                   id="email" 
+                                   name="email" 
+                                   placeholder="seu.email@exemplo.com"
+                                   required>
+                            <small class="form-text text-muted">
+                                Digite o email onde deseja receber o teste
+                            </small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-block mt-3">
+                            📧 Enviar Email de Teste
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    {% if resultados %}
+                    <div class="alert {% if sucesso %}alert-success{% else %}alert-danger{% endif %} mt-4">
+                        <h5 class="alert-heading">
+                            {% if sucesso %}
+                                ✅ Teste Concluído com Sucesso
+                            {% else %}
+                                ❌ Teste Falhou
+                            {% endif %}
+                        </h5>
+                        {% if sucesso %}
+                        <p class="mb-0">
+                            Email enviado para <strong>{{ email_testado }}</strong>.<br>
+                            Verifique a caixa de entrada e a pasta de spam.
+                        </p>
+                        {% endif %}
+                    </div>
+
+                    <div class="card mt-3">
+                        <div class="card-header bg-light">
+                            <strong>📋 Log Detalhado</strong>
+                        </div>
+                        <div class="card-body">
+                            <pre class="mb-0" style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-size: 13px; max-height: 500px; overflow-y: auto;">{% for linha in resultados %}{{ linha }}
+{% endfor %}</pre>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <a href="{{ url_for('admin.test_email') }}" class="btn btn-secondary">
+                            🔄 Fazer Novo Teste
+                        </a>
+                        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">
+                            ← Voltar ao Dashboard
+                        </a>
+                    </div>
+                    {% endif %}
+
+                    {% if not resultados %}
+                    <div class="alert alert-info mt-4">
+                        <h6><strong>ℹ️ O que este teste verifica:</strong></h6>
+                        <ul class="mb-0">
+                            <li>Variáveis de ambiente SMTP configuradas</li>
+                            <li>Conexão com o servidor SMTP</li>
+                            <li>Inicialização do TLS</li>
+                            <li>Autenticação com credenciais</li>
+                            <li>Envio efetivo do email</li>
+                        </ul>
+                    </div>
+
+                    <div class="alert alert-warning mt-3">
+                        <h6><strong>⚠️ Problemas comuns:</strong></h6>
+                        <ul class="mb-0">
+                            <li><strong>Email não chega:</strong> Verifique pasta de spam</li>
+                            <li><strong>Erro de autenticação:</strong> Senha de aplicativo pode estar incorreta</li>
+                            <li><strong>Timeout:</strong> Firewall pode estar bloqueando porta 587</li>
+                            <li><strong>IP bloqueado:</strong> Gmail pode bloquear IPs de servidores AWS</li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
