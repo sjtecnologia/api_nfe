@@ -33,11 +33,18 @@
                 </div>
                 <div class="mb-3">
                     <label for="password_hash" class="form-label">Senha:</label>
-                    <input type="password" id="password_hash" name="password_hash" class="form-control" maxlength="255" autocomplete="new-password">
+                    <input type="password" id="password_hash" name="password_hash" class="form-control" maxlength="255" autocomplete="new-password" minlength="8">
+                    <small class="text-muted">Mínimo 8 caracteres, incluindo maiúscula, minúscula e número.</small>
                 </div>
                 <div class="mb-3">
                     <label for="confirm_password" class="form-label">Confirme a Senha:</label>
                     <input type="password" id="confirm_password" name="confirm_password" class="form-control" maxlength="255" autocomplete="new-password">
+                    <div id="password-strength" class="mt-2" style="display: none;">
+                        <small class="d-block" id="length-check">✗ Mínimo 8 caracteres</small>
+                        <small class="d-block" id="uppercase-check">✗ Pelo menos uma letra maiúscula</small>
+                        <small class="d-block" id="lowercase-check">✗ Pelo menos uma letra minúscula</small>
+                        <small class="d-block" id="number-check">✗ Pelo menos um número</small>
+                    </div>
                     <small class="text-muted">Preencha apenas para definir ou alterar a senha.</small>
                 </div>
                 <div class="mb-3">
@@ -81,13 +88,93 @@
                 </div>
             </form>
             <script>
+                // Validação de força de senha em tempo real
+                const passwordInput = document.getElementById('password_hash');
+                const strengthDiv = document.getElementById('password-strength');
+                const lengthCheck = document.getElementById('length-check');
+                const uppercaseCheck = document.getElementById('uppercase-check');
+                const lowercaseCheck = document.getElementById('lowercase-check');
+                const numberCheck = document.getElementById('number-check');
+
+                passwordInput.addEventListener('input', function() {
+                    const password = this.value;
+                    
+                    if (password.length > 0) {
+                        strengthDiv.style.display = 'block';
+                        
+                        // Validar comprimento
+                        if (password.length >= 8) {
+                            lengthCheck.innerHTML = '✓ Mínimo 8 caracteres';
+                            lengthCheck.style.color = 'green';
+                        } else {
+                            lengthCheck.innerHTML = '✗ Mínimo 8 caracteres';
+                            lengthCheck.style.color = 'red';
+                        }
+                        
+                        // Validar maiúscula
+                        if (/[A-Z]/.test(password)) {
+                            uppercaseCheck.innerHTML = '✓ Pelo menos uma letra maiúscula';
+                            uppercaseCheck.style.color = 'green';
+                        } else {
+                            uppercaseCheck.innerHTML = '✗ Pelo menos uma letra maiúscula';
+                            uppercaseCheck.style.color = 'red';
+                        }
+                        
+                        // Validar minúscula
+                        if (/[a-z]/.test(password)) {
+                            lowercaseCheck.innerHTML = '✓ Pelo menos uma letra minúscula';
+                            lowercaseCheck.style.color = 'green';
+                        } else {
+                            lowercaseCheck.innerHTML = '✗ Pelo menos uma letra minúscula';
+                            lowercaseCheck.style.color = 'red';
+                        }
+                        
+                        // Validar número
+                        if (/[0-9]/.test(password)) {
+                            numberCheck.innerHTML = '✓ Pelo menos um número';
+                            numberCheck.style.color = 'green';
+                        } else {
+                            numberCheck.innerHTML = '✗ Pelo menos um número';
+                            numberCheck.style.color = 'red';
+                        }
+                    } else {
+                        strengthDiv.style.display = 'none';
+                    }
+                });
+
+                // Validação no submit
                 document.getElementById('usuarioForm').addEventListener('submit', function(e) {
                     var senha = document.getElementById('password_hash').value;
                     var confirma = document.getElementById('confirm_password').value;
+                    
                     if (senha || confirma) {
+                        // Verificar se senhas coincidem
                         if (senha !== confirma) {
                             e.preventDefault();
                             alert('As senhas não coincidem!');
+                            return;
+                        }
+                        
+                        // Validar força da senha
+                        if (senha.length < 8) {
+                            e.preventDefault();
+                            alert('A senha deve ter no mínimo 8 caracteres.');
+                            return;
+                        }
+                        if (!/[A-Z]/.test(senha)) {
+                            e.preventDefault();
+                            alert('A senha deve conter pelo menos uma letra maiúscula.');
+                            return;
+                        }
+                        if (!/[a-z]/.test(senha)) {
+                            e.preventDefault();
+                            alert('A senha deve conter pelo menos uma letra minúscula.');
+                            return;
+                        }
+                        if (!/[0-9]/.test(senha)) {
+                            e.preventDefault();
+                            alert('A senha deve conter pelo menos um número.');
+                            return;
                         }
                     }
                 });

@@ -1125,6 +1125,33 @@ def edit_usuario(usuario_id):
         selected_clientes = request.form.getlist('clientes')
         try:
             if password:
+                # Validar senha forte
+                import re
+                if len(password) < 8:
+                    flash('A senha deve ter no mínimo 8 caracteres.', 'danger')
+                    usuario = db.execute(text("SELECT * FROM users WHERE id = :id"), {'id': usuario_id}).fetchone()
+                    usuario_roles = [r[0] for r in db.execute(text("SELECT role_id FROM user_roles WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    usuario_clientes = [c[0] for c in db.execute(text("SELECT client_id FROM user_clients WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    return render_template('admin/usuarios/form.html', usuario=usuario, roles=roles, clientes=clientes, usuario_roles=usuario_roles, usuario_clientes=usuario_clientes)
+                if not re.search(r'[A-Z]', password):
+                    flash('A senha deve conter pelo menos uma letra maiúscula.', 'danger')
+                    usuario = db.execute(text("SELECT * FROM users WHERE id = :id"), {'id': usuario_id}).fetchone()
+                    usuario_roles = [r[0] for r in db.execute(text("SELECT role_id FROM user_roles WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    usuario_clientes = [c[0] for c in db.execute(text("SELECT client_id FROM user_clients WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    return render_template('admin/usuarios/form.html', usuario=usuario, roles=roles, clientes=clientes, usuario_roles=usuario_roles, usuario_clientes=usuario_clientes)
+                if not re.search(r'[a-z]', password):
+                    flash('A senha deve conter pelo menos uma letra minúscula.', 'danger')
+                    usuario = db.execute(text("SELECT * FROM users WHERE id = :id"), {'id': usuario_id}).fetchone()
+                    usuario_roles = [r[0] for r in db.execute(text("SELECT role_id FROM user_roles WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    usuario_clientes = [c[0] for c in db.execute(text("SELECT client_id FROM user_clients WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    return render_template('admin/usuarios/form.html', usuario=usuario, roles=roles, clientes=clientes, usuario_roles=usuario_roles, usuario_clientes=usuario_clientes)
+                if not re.search(r'[0-9]', password):
+                    flash('A senha deve conter pelo menos um número.', 'danger')
+                    usuario = db.execute(text("SELECT * FROM users WHERE id = :id"), {'id': usuario_id}).fetchone()
+                    usuario_roles = [r[0] for r in db.execute(text("SELECT role_id FROM user_roles WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    usuario_clientes = [c[0] for c in db.execute(text("SELECT client_id FROM user_clients WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
+                    return render_template('admin/usuarios/form.html', usuario=usuario, roles=roles, clientes=clientes, usuario_roles=usuario_roles, usuario_clientes=usuario_clientes)
+                
                 password_hash = generate_password_hash(password)
                 db.execute(text("""
                     UPDATE users SET
