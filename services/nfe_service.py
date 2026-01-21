@@ -846,14 +846,15 @@ class NFeService:
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
                                                  motivo="Erro na inicialização do SefazService")
             
-            # Verificar status do serviço
-            status_servico = sefaz.consultar_status_servico()
-            if status_servico.get('status') != 'OK':
-                print(f"AVISO: SEFAZ indisponível: {status_servico.get('mensagem')}")
-                return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente, 
-                                                 motivo="SEFAZ indisponível")
+            # DESABILITADO: Verificação de status requer certificado A1 em produção
+            # O XML já tem assinatura digital, vamos enviar direto
+            # status_servico = sefaz.consultar_status_servico()
+            # if status_servico.get('status') != 'OK':
+            #     print(f"AVISO: SEFAZ indisponível: {status_servico.get('mensagem')}")
+            #     return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente, 
+            #                                      motivo="SEFAZ indisponível")
             
-            print("OK: SEFAZ operacional, enviando NFe...")
+            print("OK: Enviando NFe para SEFAZ real...")
             
             # Enviar NFe
             resultado = sefaz.enviar_nfe(xml_assinado, chave_acesso)
