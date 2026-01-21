@@ -921,6 +921,14 @@ class NFeService:
                     'ambiente_real': True
                 }
         
+        except Exception as e:
+            print(f"ERRO: Erro SEFAZ real: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback para simulação
+            return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
+                                             motivo=f"Erro: {str(e)}")
+        
         finally:
             # Limpar arquivos temporários
             if cert_path and os.path.exists(cert_path):
@@ -936,12 +944,6 @@ class NFeService:
                     print(f"[OK] Arquivo temporário removido: {key_path}")
                 except:
                     pass
-                
-        except Exception as e:
-            print(f"ERRO: Erro SEFAZ real: {e}")
-            # Fallback para simulação
-            return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
-                                             motivo=f"Erro: {str(e)}")
     
     def _enviar_sefaz_simulado(self, xml_assinado: str, chave_acesso: str, ambiente: str, motivo: Optional[str] = None) -> Dict[str, Any]:
         """Envia para SEFAZ simulado"""
