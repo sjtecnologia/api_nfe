@@ -243,6 +243,9 @@ class SefazService:
         try:
             print(f"[SEARCH] Consultando status do serviço SEFAZ...")
             
+            # tpAmb: 1=Produção, 2=Homologação
+            tp_amb = '1' if self.ambiente == 'producao' else '2'
+            
             envelope = f'''<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
                 xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
@@ -256,7 +259,7 @@ class SefazService:
   <soap12:Body>
     <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">
       <consStatServ xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-        <tpAmb>2</tpAmb>
+        <tpAmb>{tp_amb}</tpAmb>
         <cUF>35</cUF>
         <xServ>STATUS</xServ>
       </consStatServ>
