@@ -2,7 +2,6 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import os
-import certifi
 
 class SefazService:
     """Serviço para comunicação com SEFAZ real"""
@@ -26,7 +25,16 @@ class SefazService:
         self.urls = self.URLS_HOMOLOGACAO if ambiente == 'homologacao' else self.URLS_PRODUCAO
         self.cert_path = cert_path
         self.key_path = key_path
+        
+        # Usar bundle de certificados que inclui ICP-Brasil
+        # Caminho absoluto para o bundle customizado no servidor
+        self.ca_bundle = '/home/ubuntu/api_nfe/ca-bundle-icpbrasil.pem'
+        if not os.path.exists(self.ca_bundle):
+            # Fallback para certificados do sistema se bundle não existir
+            self.ca_bundle = True
+            
         print(f"[?] SefazService inicializado - Ambiente: {ambiente}")
+        print(f"[?] CA Bundle: {self.ca_bundle}")
         if cert_path:
             print(f"[?] Certificado digital configurado")
     
@@ -56,7 +64,7 @@ class SefazService:
                 'data': envelope_soap,
                 'headers': headers,
                 'timeout': 30,
-                'verify': certifi.where()  # Usar certificados do certifi para validação SSL
+                'verify': self.ca_bundle  # Usar bundle com ICP-Brasil
             }
             
             # Adicionar certificado digital se disponível
@@ -265,7 +273,7 @@ class SefazService:
                 'data': envelope,
                 'headers': headers,
                 'timeout': 30,
-                'verify': certifi.where()  # Usar certificados do certifi para validação SSL
+                'verify': self.ca_bundle  # Usar bundle com ICP-Brasil
             }
             
             # Adicionar certificado digital se disponível
