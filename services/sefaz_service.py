@@ -2,6 +2,7 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import os
+import certifi
 
 class SefazService:
     """Serviço para comunicação com SEFAZ real"""
@@ -55,7 +56,7 @@ class SefazService:
                 'data': envelope_soap,
                 'headers': headers,
                 'timeout': 30,
-                'verify': (self.ambiente == 'producao')  # Verificar SSL apenas em produção
+                'verify': certifi.where()  # Usar certificados do certifi para validação SSL
             }
             
             # Adicionar certificado digital se disponível
@@ -264,7 +265,7 @@ class SefazService:
                 'data': envelope,
                 'headers': headers,
                 'timeout': 30,
-                'verify': (self.ambiente == 'producao')  # Verificar SSL apenas em produção
+                'verify': certifi.where()  # Usar certificados do certifi para validação SSL
             }
             
             # Adicionar certificado digital se disponível
