@@ -125,6 +125,7 @@ def dashboard(cliente_hash):
             SELECT 
                 nfe_emitida_id,
                 cliente_id,
+                numero,
                 status,
                 data_criacao,
                 chave_acesso,

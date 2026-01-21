@@ -201,7 +201,7 @@
                             <tbody>
                                 {% for nfe in ultimas_nfes %}
                                 <tr>
-                                    <td><strong>#{{ nfe.nfe_emitida_id }}</strong></td>
+                                    <td><strong>#{{ nfe.numero if nfe.numero else nfe.nfe_emitida_id }}</strong></td>
                                     <td>{{ nfe.data_criacao.strftime('%d/%m/%Y %H:%M') if nfe.data_criacao else '-' }}</td>
                                     <td>R$ {{ "%.2f"|format(nfe.valor_total or 0) }}</td>
                                     <td>
