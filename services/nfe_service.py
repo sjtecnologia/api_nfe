@@ -7,6 +7,9 @@ import json
 from flask import current_app
 from typing import Optional, Dict, Any, Union, Callable
 import os
+import tempfile
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import pkcs12
 
 # OK: IMPORTAÇÕES XML TOTALMENTE CORRIGIDAS
 XML_PARSER = None
@@ -829,6 +832,9 @@ class NFeService:
     
     def _enviar_sefaz_real(self, xml_assinado: str, chave_acesso: str, ambiente: str) -> Dict[str, Any]:
         """Envia para SEFAZ real"""
+        cert_path = None
+        key_path = None
+        
         try:
             print(f" Conectando com SEFAZ real - Ambiente: {ambiente}")
             
@@ -838,9 +844,45 @@ class NFeService:
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
                                                  motivo="SefazService não disponível")
             
-            # Inicializar serviço SEFAZ com tratamento de erro
+            # Obter certificado do cliente
+            print("[CERT] Carregando certificado digital para HTTPS...")
+            certificado = self._obter_certificado()
+            
+            if certificado and certificado.get('private_key') and certificado.get('certificate'):
+                try:
+                    # Extrair certificado e chave para arquivos temporários
+                    cert_data = certificado['cert_data']  # Dados binários do PKCS#12
+                    password = certificado['password'].encode('utf-8')
+                    
+                    # Carregar PKCS#12
+                    private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(
+                        cert_data, password
+                    )
+                    
+                    # Criar arquivos temporários
+                    with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
+                        cert_file.write(certificate.public_bytes(serialization.Encoding.PEM))
+                        cert_path = cert_file.name
+                    
+                    with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
+                        key_file.write(private_key.private_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PrivateFormat.TraditionalOpenSSL,
+                            encryption_algorithm=serialization.NoEncryption()
+                        ))
+                        key_path = key_file.name
+                    
+                    print(f"[OK] Certificado extraído: {cert_path}")
+                    print(f"[OK] Chave privada extraída: {key_path}")
+                    
+                except Exception as e:
+                    print(f"[X] Erro ao extrair certificado: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Inicializar serviço SEFAZ com certificado
             try:
-                sefaz = SefazService(ambiente=ambiente)
+                sefaz = SefazService(ambiente=ambiente, cert_path=cert_path, key_path=key_path)
             except Exception as e:
                 print(f"ERRO: Erro ao inicializar SefazService: {e}")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
@@ -878,6 +920,22 @@ class NFeService:
                     'message': resultado.get('mensagem', 'Erro desconhecido'),
                     'ambiente_real': True
                 }
+        
+        finally:
+            # Limpar arquivos temporários
+            if cert_path and os.path.exists(cert_path):
+                try:
+                    os.unlink(cert_path)
+                    print(f"[OK] Arquivo temporário removido: {cert_path}")
+                except:
+                    pass
+            
+            if key_path and os.path.exists(key_path):
+                try:
+                    os.unlink(key_path)
+                    print(f"[OK] Arquivo temporário removido: {key_path}")
+                except:
+                    pass
                 
         except Exception as e:
             print(f"ERRO: Erro SEFAZ real: {e}")
