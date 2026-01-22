@@ -846,7 +846,12 @@ class NFeService:
             
             # Obter certificado do cliente
             print("[CERT] Carregando certificado digital para HTTPS...")
-            certificado = self._obter_certificado()
+            certificado = certificate_service_function(self.db, self.cliente_id) if certificate_service_function else None
+            
+            if not certificado:
+                print("[X] Certificado não encontrado")
+                return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
+                                                 motivo="Certificado não encontrado")
             
             if certificado and certificado.get('private_key') and certificado.get('certificate'):
                 try:
