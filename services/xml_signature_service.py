@@ -24,18 +24,24 @@ class XMLSignatureService:
     def sign_nfe_xml(self, xml_content, db_session, cliente_id):
         """
         Assina XML da NFe com certificado digital A1
+        ATENÇÃO: NÃO USA ASSINATURA SIMULADA - FALHA SE CERTIFICADO FOR INVÁLIDO
         """
         try:
             print("[AUTH] === INICIANDO ASSINATURA REAL ===")
+            print(f"[AUTH] Cliente ID: {cliente_id}")
             
             # 1. Buscar certificado
             certificado = get_active_certificate_for_client(db_session, cliente_id)
             if not certificado:
-                raise Exception("Certificado não encontrado")
+                raise Exception("❌ ERRO CRÍTICO: Nenhum certificado ativo encontrado para este cliente. Cadastre um certificado válido antes de emitir NFe.")
             
+            print(f"[AUTH] Certificado encontrado: ID={certificado.get('certificado_id')}")
+            print(f"[AUTH] Modo simulado: {certificado.get('modo_simulado')}")
+            print(f"[AUTH] Tipo: {certificado.get('tipo_certificado', 'A1')}")
+            
+            # CRÍTICO: NÃO PERMITIR ASSINATURA SIMULADA
             if certificado.get('modo_simulado'):
-                print("[!] Certificado em modo simulado - não é possível assinar realmente")
-                return self._simulate_signature(xml_content)
+                raise Exception("❌ ERRO CRÍTICO: Certificado inválido ou corrompido. Recadastre o certificado com o arquivo e senha corretos.")
             
             # 2. Verificar tipo de certificado
             tipo_cert = certificado.get('tipo_certificado', 'A1')
@@ -46,6 +52,10 @@ class XMLSignatureService:
             else:
                 # Assinar com certificado A1 (arquivo)
                 private_key, certificate = self._load_certificate(certificado)
+                
+                # VALIDAR que certificado foi carregado corretamente
+                if not private_key or not certificate:
+                    raise Exception("❌ ERRO CRÍTICO: Falha ao carregar chave privada ou certificado. Verifique se o certificado e senha estão corretos.")
             
             # 3. Parsear XML
             xml_tree = etree.fromstring(xml_content.encode('utf-8'))
@@ -86,9 +96,11 @@ class XMLSignatureService:
             return signed_xml
             
         except Exception as e:
-            print(f"[X] Erro na assinatura: {e}")
-            print("[?] Usando assinatura simulada como fallback")
-            return self._simulate_signature(xml_content)
+            # NÃO USA FALLBACK SIMULADO - PROPAGA O ERRO
+            print(f"[X] ERRO CRÍTICO na assinatura: {e}")
+            import traceback
+            traceback.print_exc()
+            raise Exception(f"Falha na assinatura digital: {str(e)}")
     
     def _load_certificate(self, certificado_data):
         """
@@ -358,27 +370,6 @@ class XMLSignatureService:
             import traceback
             traceback.print_exc()
             raise
-    
-    def _simulate_signature(self, xml_content):
-        """
-        Fallback: assinatura simulada
-        """
-        print("[?] Usando assinatura simulada")
-        
-        signature_xml = """
-    <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
-        <SignedInfo>
-            <CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-            <SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
-        </SignedInfo>
-        <SignatureValue>ASSINATURA_SIMULADA_PARA_TESTES</SignatureValue>
-    </Signature>"""
-        
-        # Inserir antes de </NFe>
-        if '</NFe>' in xml_content:
-            return xml_content.replace('</NFe>', f'  {signature_xml}\n    </NFe>')
-        else:
-            return xml_content + signature_xml
 
 # Instância global
 xml_signature_service = XMLSignatureService()

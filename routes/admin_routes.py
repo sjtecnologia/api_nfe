@@ -2827,6 +2827,7 @@ def _cliente_to_form_data(cliente_row):
         'inscricao_estadual': cliente_row.get('inscricao_estadual', ''),
         'inscricao_municipal': cliente_row.get('inscricao_municipal', ''),
         'regime_tributario_id': cliente_row.get('regime_tributario_id', ''),
+        'ambiente': cliente_row.get('ambiente', 1),
         'cnae': cliente_row.get('cnae', ''),
         'cep': cliente_row.get('cep', ''),
         'logradouro': cliente_row.get('logradouro', ''),
@@ -3914,79 +3915,216 @@ def salvar_certificado():
         cert_ativo = request.form.get('cert_ativo') == 'on'
         cert_nome_arquivo = request.form.get('cert_nome_arquivo_original', 'Upload via Modal')
         
-        if not cert_file or not cert_file.filename:
-            raise Exception("Arquivo de certificado não fornecido")
+        # Verificar se é edição (UPDATE) ou novo cadastro (INSERT)
+        certificado_id = request.form.get('certificado_id')
+        is_update = certificado_id is not None and certificado_id != ''
         
-        # Ler conteúdo do arquivo
-        conteudo_certificado = cert_file.read()
-        senha_criptografada = _encrypt_password(cert_senha) if cert_senha else None
-        nome_arquivo_original = cert_file.filename
-        
-        # Extrair fingerprint e validades do certificado
-        fingerprint = None
-        validade_inicio = None
-        validade_fim = None
-        
-        try:
-            from cryptography.hazmat.primitives.serialization import pkcs12
-            from cryptography.hazmat.primitives import hashes
+        # Se for edição, campos de arquivo e senha são opcionais
+        if is_update:
+            certificado_id = int(certificado_id)
+            print(f"[DEBUG] Modo EDIÇÃO - Certificado ID: {certificado_id}")
             
-            # Carregar PKCS#12
-            password_bytes = cert_senha.encode('utf-8') if cert_senha else None
-            private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
-                conteudo_certificado,
-                password_bytes
-            )
+            # Verificar se certificado existe
+            cert_existente = db.execute(text("""
+                SELECT * FROM certificados_digitais WHERE certificado_digital_id = :cid
+            """), {'cid': certificado_id}).fetchone()
             
-            cert_obj = cert_x509_obj
-            if cert_obj is None and additional_certificates:
-                cert_obj = additional_certificates[0]
-            if cert_obj is None:
-                raise Exception("Certificado X.509 não encontrado dentro do PKCS#12")
+            if not cert_existente:
+                raise Exception(f"Certificado ID {certificado_id} não encontrado")
+            
+            # Se não forneceu arquivo novo, manter o atual
+            if not cert_file or not cert_file.filename:
+                print(f"[DEBUG] Sem arquivo novo - mantendo certificado atual")
+                conteudo_certificado_b64 = cert_existente.conteudo_certificado
+                nome_arquivo_original = cert_existente.nome_arquivo_original
+                fingerprint = cert_existente.fingerprint
+                validade_inicio = cert_existente.validade_inicio
+                validade_fim = cert_existente.validade_fim
+            else:
+                # Processar novo arquivo
+                print(f"[DEBUG] Novo arquivo fornecido: {cert_file.filename}")
+                conteudo_certificado = cert_file.read()
+                nome_arquivo_original = cert_file.filename
                 
-            fingerprint = cert_obj.fingerprint(hashes.SHA256()).hex()
-            validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
-            validade_fim = getattr(cert_obj, "not_valid_after_utc", None)
+                # VALIDAÇÃO OBRIGATÓRIA - Não permite salvar se falhar
+                if not cert_senha or cert_senha.strip() == '':
+                    raise Exception("Senha do certificado é obrigatória para validação")
+                
+                try:
+                    from cryptography.hazmat.primitives.serialization import pkcs12
+                    from cryptography.hazmat.primitives import hashes
+                    
+                    print(f"[VALIDATION] Validando certificado antes de salvar...")
+                    password_bytes = cert_senha.encode('utf-8')
+                    private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
+                        conteudo_certificado,
+                        password_bytes
+                    )
+                    
+                    # VALIDAÇÃO CRÍTICA: Certificado DEVE ter chave privada e certificado X.509
+                    if not private_key:
+                        raise Exception("Chave privada não encontrada no certificado PKCS#12. Verifique se o arquivo está correto.")
+                    
+                    cert_obj = cert_x509_obj or (additional_certificates[0] if additional_certificates else None)
+                    if cert_obj is None:
+                        raise Exception("Certificado X.509 não encontrado no arquivo PKCS#12. Verifique se o arquivo está correto.")
+                    
+                    # Extrair metadados
+                    fingerprint = cert_obj.fingerprint(hashes.SHA256()).hex()
+                    validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
+                    validade_fim = getattr(cert_obj, "not_valid_after_utc", None)
+                    
+                    # Verificar validade
+                    from datetime import datetime, timezone
+                    now = datetime.now(timezone.utc)
+                    if validade_fim and validade_fim < now:
+                        raise Exception(f"Certificado VENCIDO! Válido até {validade_fim.strftime('%d/%m/%Y')}. Não é possível cadastrar certificado vencido.")
+                    
+                    print(f"[OK] Certificado validado com sucesso!")
+                    print(f"[OK] Fingerprint: {fingerprint[:20]}...")
+                    print(f"[OK] Válido de {validade_inicio} até {validade_fim}")
+                    
+                except Exception as e:
+                    # NÃO PERMITE SALVAR SE VALIDAÇÃO FALHAR
+                    error_msg = f"Erro na validação do certificado: {str(e)}"
+                    print(f"[X] {error_msg}")
+                    raise Exception(error_msg)
+                
+                # Converter para base64
+                import base64
+                conteudo_certificado_b64 = base64.b64encode(conteudo_certificado).decode('utf-8')
             
-        except Exception as e:
-            print(f"[!] Aviso ao extrair dados do certificado: {e}")
-            # Continua mesmo sem extrair os dados (melhor do que falhar)
+            # Se não forneceu senha nova, manter a atual
+            if not cert_senha or cert_senha.strip() == '':
+                print(f"[DEBUG] Sem senha nova - mantendo senha atual")
+                senha_criptografada = cert_existente.senha_certificado
+            else:
+                print(f"[DEBUG] Nova senha fornecida")
+                senha_criptografada = _encrypt_password(cert_senha)
+            
+            # Fazer UPDATE
+            db.execute(text("""
+                UPDATE certificados_digitais SET
+                    conteudo_certificado = :conteudo_certificado,
+                    senha_certificado = :senha_certificado,
+                    ativo = :ativo,
+                    nome_arquivo_original = :nome_arquivo_original,
+                    fingerprint = :fingerprint,
+                    validade_inicio = :validade_inicio,
+                    validade_fim = :validade_fim
+                WHERE certificado_digital_id = :certificado_id
+            """), {
+                'certificado_id': certificado_id,
+                'conteudo_certificado': conteudo_certificado_b64,
+                'senha_certificado': senha_criptografada,
+                'ativo': cert_ativo,
+                'nome_arquivo_original': nome_arquivo_original,
+                'fingerprint': fingerprint,
+                'validade_inicio': validade_inicio,
+                'validade_fim': validade_fim
+            })
+            db.commit()
+            
+            message = 'Certificado atualizado com sucesso!'
+            
+        else:
+            # Modo INSERT (novo certificado)
+            print(f"[DEBUG] Modo CADASTRO - Novo certificado")
+            # Modo INSERT (novo certificado)
+            print(f"[DEBUG] Modo CADASTRO - Novo certificado")
         
-        # Converter conteúdo para base64
-        import base64
-        conteudo_certificado_b64 = base64.b64encode(conteudo_certificado).decode('utf-8')
+            if not cert_file or not cert_file.filename:
+                raise Exception("Arquivo de certificado não fornecido")
+            
+            if not cert_senha or cert_senha.strip() == '':
+                raise Exception("Senha do certificado não fornecida")
         
-        # Inserir no banco
-        db.execute(text("""
-            INSERT INTO certificados_digitais (
-                cliente_id, conteudo_certificado, senha_certificado, ativo, data_upload,
-                nome_arquivo_original, created_by_user_id, fingerprint, validade_inicio, validade_fim
-            ) VALUES (
-                :cliente_id, :conteudo_certificado, :senha_certificado, :ativo, NOW(),
-                :nome_arquivo_original, :created_by_user_id, :fingerprint, :validade_inicio, :validade_fim
-            )
-        """), {
-            'cliente_id': cliente_id,
-            'conteudo_certificado': conteudo_certificado_b64,
-            'senha_certificado': senha_criptografada,
-            'ativo': cert_ativo,
-            'nome_arquivo_original': nome_arquivo_original,
-            'created_by_user_id': current_user.id,
-            'fingerprint': fingerprint,
-            'validade_inicio': validade_inicio,
-            'validade_fim': validade_fim
-        })
-        db.commit()
+            # Ler conteúdo do arquivo
+            conteudo_certificado = cert_file.read()
+            nome_arquivo_original = cert_file.filename
+        
+            # VALIDAÇÃO OBRIGATÓRIA - Não permite salvar se falhar
+            try:
+                from cryptography.hazmat.primitives.serialization import pkcs12
+                from cryptography.hazmat.primitives import hashes
+            
+                print(f"[VALIDATION] Validando certificado antes de salvar...")
+                password_bytes = cert_senha.encode('utf-8')
+                private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
+                    conteudo_certificado,
+                    password_bytes
+                )
+            
+                # VALIDAÇÃO CRÍTICA: Certificado DEVE ter chave privada e certificado X.509
+                if not private_key:
+                    raise Exception("Chave privada não encontrada no certificado PKCS#12. Verifique se o arquivo está correto.")
+                
+                cert_obj = cert_x509_obj or (additional_certificates[0] if additional_certificates else None)
+                if cert_obj is None:
+                    raise Exception("Certificado X.509 não encontrado no arquivo PKCS#12. Verifique se o arquivo está correto.")
+                
+                # Extrair metadados
+                fingerprint = cert_obj.fingerprint(hashes.SHA256()).hex()
+                validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
+                validade_fim = getattr(cert_obj, "not_valid_after_utc", None)
+                
+                # Verificar validade
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                if validade_fim and validade_fim < now:
+                    raise Exception(f"Certificado VENCIDO! Válido até {validade_fim.strftime('%d/%m/%Y')}. Não é possível cadastrar certificado vencido.")
+                
+                print(f"[OK] Certificado validado com sucesso!")
+                print(f"[OK] Fingerprint: {fingerprint[:20]}...")
+                print(f"[OK] Válido de {validade_inicio} até {validade_fim}")
+                
+            except Exception as e:
+                # NÃO PERMITE SALVAR SE VALIDAÇÃO FALHAR
+                error_msg = f"Erro na validação do certificado: {str(e)}"
+                print(f"[X] {error_msg}")
+                raise Exception(error_msg)
+            
+            # Se validação passou, criptografar senha
+            senha_criptografada = _encrypt_password(cert_senha)
+        
+            # Converter conteúdo para base64
+            import base64
+            conteudo_certificado_b64 = base64.b64encode(conteudo_certificado).decode('utf-8')
+        
+            # Inserir no banco
+            db.execute(text("""
+                INSERT INTO certificados_digitais (
+                    cliente_id, conteudo_certificado, senha_certificado, ativo, data_upload,
+                    nome_arquivo_original, created_by_user_id, fingerprint, validade_inicio, validade_fim
+                ) VALUES (
+                    :cliente_id, :conteudo_certificado, :senha_certificado, :ativo, NOW(),
+                    :nome_arquivo_original, :created_by_user_id, :fingerprint, :validade_inicio, :validade_fim
+                )
+            """), {
+                'cliente_id': cliente_id,
+                'conteudo_certificado': conteudo_certificado_b64,
+                'senha_certificado': senha_criptografada,
+                'ativo': cert_ativo,
+                'nome_arquivo_original': nome_arquivo_original,
+                'created_by_user_id': current_user.id,
+                'fingerprint': fingerprint,
+                'validade_inicio': validade_inicio,
+                'validade_fim': validade_fim
+            })
+            db.commit()
+            
+            message = 'Certificado salvo com sucesso!'
         
         # Se for requisição AJAX, retorna JSON
         if is_ajax:
             return jsonify({
                 'success': True,
-                'message': 'Certificado salvo com sucesso!',
+                'message': message,
                 'redirect_url': url_for('admin.edit_cliente', cliente_id=cliente_id) + '#certificados'
             })
         
         # Senão, redirect tradicional
+        flash(message, 'success')
         flash('Certificado salvo com sucesso!', 'success')
         return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id))
         

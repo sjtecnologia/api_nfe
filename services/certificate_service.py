@@ -450,6 +450,8 @@ def get_active_certificate_for_client(db, cliente_id):
                     'private_key': private_key,
                     'certificate': certificate,
                     'additional_certificates': additional_certificates,
+                    'cert_data': cert_data,  # Dados binários do PKCS#12
+                    'password': senha_descriptografada,  # Senha descriptografada
                     'modo_simulado': False
                 })
                 print(f"[OK] get_active_certificate_for_client: Certificado real carregado com sucesso")
@@ -487,6 +489,13 @@ def _decode_certificate_data(cert_data_encoded):
         return None
     
     print(f"[SEARCH] _decode_certificate_data: Decodificando {len(cert_data_encoded)} caracteres")
+    print(f"[SEARCH] _decode_certificate_data: Tipo de dados: {type(cert_data_encoded)}")
+    print(f"[SEARCH] _decode_certificate_data: Primeiros 100 chars: {str(cert_data_encoded)[:100]}")
+    
+    # Se já for bytes, retorna direto
+    if isinstance(cert_data_encoded, bytes):
+        print(f"[OK] _decode_certificate_data: Dados já são bytes - {len(cert_data_encoded)} bytes")
+        return cert_data_encoded
     
     methods = [
         ('base64', lambda x: base64.b64decode(x)),
@@ -498,6 +507,14 @@ def _decode_certificate_data(cert_data_encoded):
         try:
             result = decode_func(cert_data_encoded)
             print(f"[OK] _decode_certificate_data: Sucesso com método '{method_name}' - {len(result)} bytes")
+            
+            # Verificar se os bytes começam com assinatura PKCS#12 (0x30 0x82)
+            if len(result) > 2:
+                hex_start = result[:4].hex()
+                print(f"[SEARCH] _decode_certificate_data: Primeiros bytes (hex): {hex_start}")
+                if result[0] == 0x30:
+                    print(f"[OK] _decode_certificate_data: Assinatura PKCS#12 detectada (0x30)")
+            
             return result
         except Exception as e:
             print(f"[X] _decode_certificate_data: Método '{method_name}' falhou: {e}")
@@ -507,11 +524,18 @@ def _decode_certificate_data(cert_data_encoded):
 def _validate_pkcs12_simple(cert_data, password):
     """Valida certificado PKCS#12 de forma simples"""
     try:
-        print(f"[?] _validate_pkcs12_simple: Validando com senha de {len(password)} chars")
+        print(f"[?] _validate_pkcs12_simple: Validando PKCS#12")
+        print(f"[?] _validate_pkcs12_simple: Dados do certificado - {len(cert_data)} bytes")
+        print(f"[?] _validate_pkcs12_simple: Senha - {len(password)} chars (tipo: {type(password)})")
+        print(f"[?] _validate_pkcs12_simple: Primeiros 4 bytes do cert (hex): {cert_data[:4].hex()}")
+        
+        # Converter senha para bytes
+        password_bytes = password.encode('utf-8') if isinstance(password, str) else password
+        print(f"[?] _validate_pkcs12_simple: Senha convertida para bytes - {len(password_bytes)} bytes")
         
         private_key, certificate, additional_certificates = pkcs12.load_key_and_certificates(
             cert_data, 
-            password.encode('utf-8') if isinstance(password, str) else password
+            password_bytes
         )
         
         if private_key and certificate:
@@ -519,10 +543,13 @@ def _validate_pkcs12_simple(cert_data, password):
             return private_key, certificate, additional_certificates
         else:
             print(f"[X] _validate_pkcs12_simple: PKCS#12 carregado mas incompleto")
+            print(f"[X] _validate_pkcs12_simple: private_key = {private_key is not None}, certificate = {certificate is not None}")
             return None, None, None
             
     except Exception as e:
         print(f"[X] _validate_pkcs12_simple: Erro na validação: {e}")
+        import traceback
+        traceback.print_exc()
         return None, None, None
 
 # [OK] MANTER FUNÇÃO ANTIGA PARA COMPATIBILIDADE

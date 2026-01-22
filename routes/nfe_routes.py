@@ -62,7 +62,17 @@ def emitir_nfe():
                 flash('ID do cliente inválido', 'danger')
                 return redirect(url_for('home.home'))
         
-        # 2. Se não tem cliente_id na URL, usar primeiro disponível
+        # 2. Se não tem cliente_id na URL, tentar usar cliente ativo da sessão
+        elif session.get('current_client_id'):
+            emitente_cliente_id = session.get('current_client_id')
+            print(f" Usando cliente ativo da sessão: {emitente_cliente_id}")
+            
+            # Verificar se usuário tem acesso a este cliente
+            if emitente_cliente_id not in accessible_clients:
+                emitente_cliente_id = accessible_clients[0]
+                print(f" Cliente da sessão sem acesso, usando primeiro disponível: {emitente_cliente_id}")
+        
+        # 3. Se não tem na URL nem na sessão, usar primeiro disponível
         else:
             emitente_cliente_id = accessible_clients[0]
             print(f" Usando primeiro cliente disponível: {emitente_cliente_id}")
@@ -98,7 +108,8 @@ def emitir_nfe():
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
-            'regime_tributario_id': emitente_data.regime_tributario_id  # [?] CRÍTICO para buscar regras tributárias
+            'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
+            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
         }
         
         if request.method == 'POST':
@@ -144,7 +155,7 @@ def emitir_nfe():
             action = request.form.get('action')
             # Usar ambiente do cliente (1=Homologação, 2=Produção)
             ambiente_cliente = emitente_data.ambiente
-            ambiente = 'homologacao' if ambiente_cliente == 1 else 'producao'
+            ambiente = 'producao' if ambiente_cliente == 2 else 'homologacao'
             
             print(f" DEBUG - Ação recebida: {action}, Ambiente do cliente: {ambiente} ({ambiente_cliente})")
             
@@ -237,10 +248,9 @@ def emitir_nfe():
                     print("OK: Validação passou")
                     
                     # PROCESSAR EMISSÃO DA NFE
-                    tp_amb = 2 if ambiente == 'homologacao' else 1
-                    print(f" Ambiente SEFAZ: {tp_amb} ({ambiente})")
-                    
-                    # 1. GERAR XML DA NFE
+                    # tpAmb SEFAZ: 1=Produção, 2=Homologação
+                    tp_amb = 1 if ambiente == 'producao' else 2
+                    print(f"→ Ambiente SEFAZ: {tp_amb} ({ambiente})")
                     print(" === GERANDO XML ===")
                     try:
                         xml_nfe = generate_nfe_xml(
@@ -309,7 +319,8 @@ def emitir_nfe():
                         resultado_sefaz = nfe_service._processar_envio_sefaz(
                             xml_assinado,
                             certificado,
-                            ambiente
+                            ambiente,
+                            emitente_cliente_id
                         )
                         print(f" Resultado SEFAZ: {resultado_sefaz}")
                     except Exception as e:
@@ -1775,7 +1786,8 @@ def reenviar_nfe(nfe_id):
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
-            'regime_tributario_id': emitente_data.regime_tributario_id  # [?] CRÍTICO para buscar regras tributárias
+            'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
+            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
         }
         # Buscar destinatário baseado nos dados do form_data
         
@@ -1829,7 +1841,8 @@ def reenviar_nfe(nfe_id):
         
         # Gerar XML
         ambiente = json_data.get('ambiente', 'homologacao')
-        tp_amb = 2 if ambiente == 'homologacao' else 1
+        # tpAmb SEFAZ: 1=Produção, 2=Homologação
+        tp_amb = 1 if ambiente == 'producao' else 2
         
         xml_gerado = generate_nfe_xml(
             json_data.get('form_data', {}),
@@ -1840,9 +1853,17 @@ def reenviar_nfe(nfe_id):
             'emitir'
         )
         
-        # Assinar XML
-        from services.xml_signature_service import xml_signature_service
-        xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
+        # Assinar XML - BLOQUEIA SE FALHAR
+        try:
+            from services.xml_signature_service import xml_signature_service
+            xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
+            print(f"[OK] XML assinado com sucesso - reenvio")
+        except Exception as e:
+            print(f"[X] ERRO CRÍTICO na assinatura (reenvio): {e}")
+            return jsonify({
+                'success': False,
+                'message': f'Erro na assinatura digital: {str(e)}. Verifique se o certificado está válido.'
+            }), 400
         
         # Buscar certificado
         certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
@@ -1853,7 +1874,7 @@ def reenviar_nfe(nfe_id):
             }), 400
         
         # Enviar para SEFAZ
-        resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente)
+        resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente, nfe_data['cliente_id'])
         
         # Preparar resultado
         resultado = {
@@ -1987,7 +2008,8 @@ def emitir_rascunho(nfe_id):
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
-            'regime_tributario_id': emitente_data.regime_tributario_id  # [?] CRÍTICO para buscar regras tributárias
+            'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
+            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
         }
         
         # Buscar destinatário para o rascunho
@@ -2023,7 +2045,8 @@ def emitir_rascunho(nfe_id):
         
         # OK: CORREÇÃO: Gerar XML com dados válidos
         ambiente = json_data.get('ambiente', 'homologacao')
-        tp_amb = 2 if ambiente == 'homologacao' else 1
+        # tpAmb SEFAZ: 1=Produção, 2=Homologação
+        tp_amb = 1 if ambiente == 'producao' else 2
         
         xml_gerado = generate_nfe_xml(
             json_data.get('form_data', {}),
@@ -2034,9 +2057,17 @@ def emitir_rascunho(nfe_id):
             'emitir'
         )
         
-        # Assinar XML
-        from services.xml_signature_service import xml_signature_service
-        xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
+        # Assinar XML - BLOQUEIA SE FALHAR
+        try:
+            from services.xml_signature_service import xml_signature_service
+            xml_assinado = xml_signature_service.sign_nfe_xml(xml_gerado, db, nfe_data['cliente_id'])
+            print(f"[OK] XML assinado com sucesso - emissão de rascunho")
+        except Exception as e:
+            print(f"[X] ERRO CRÍTICO na assinatura (rascunho): {e}")
+            return jsonify({
+                'success': False,
+                'message': f'Erro na assinatura digital: {str(e)}. Verifique se o certificado está válido.'
+            }), 400
         
         # Buscar certificado
         certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
@@ -2047,7 +2078,7 @@ def emitir_rascunho(nfe_id):
             }), 400
         
         # Enviar para SEFAZ
-        resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente)
+        resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente, nfe_data['cliente_id'])
         
         # Preparar resultado
         resultado = {

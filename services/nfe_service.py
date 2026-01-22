@@ -719,9 +719,10 @@ class NFeService:
                 return {'success': False, 'errors': ['Falha na assinatura']}
             
             print(f"OK: XML assinado: {len(xml_assinado)} caracteres")
+            print(f"[DEBUG] XML assinado tem <Signature>: {'<Signature' in xml_assinado}")
             
             # 4. ENVIAR PARA SEFAZ
-            resultado_sefaz = self._processar_envio_sefaz(xml_assinado, certificado, ambiente)
+            resultado_sefaz = self._processar_envio_sefaz(xml_assinado, certificado, ambiente, cliente_id)
             
             if not resultado_sefaz.get('success', False):
                 return {
@@ -754,12 +755,14 @@ class NFeService:
             print("[SIGN] === ASSINANDO XML ===")
             print(f"[SIGN] Certificado: {certificado.get('nome_arquivo_original', 'N/A')}")
             print(f"[SIGN] Modo simulado: {certificado.get('modo_simulado', False)}")
+            print(f"[SIGN] XML entrada tem Signature: {'<Signature' in xml_content}")
             
             if self.xml_signer:
                 print("[SIGN] Usando xml_signer...")
                 resultado = self.xml_signer.assinar_xml(xml_content, certificado)
                 if resultado:
                     print(f"[SIGN] [OK] XML assinado: {len(resultado)} caracteres")
+                    print(f"[SIGN] [OK] XML resultado tem Signature: {'<Signature' in resultado}")
                     return resultado
                 else:
                     print("[SIGN] [WARN] xml_signer retornou None, usando fallback")
@@ -776,7 +779,7 @@ class NFeService:
             return sign_xml(xml_content, certificado)
             return None
     
-    def _processar_envio_sefaz(self, xml_assinado: str, certificado: Dict[str, Any], ambiente: str) -> Dict[str, Any]:
+    def _processar_envio_sefaz(self, xml_assinado: str, certificado: Dict[str, Any], ambiente: str, cliente_id: int) -> Dict[str, Any]:
         """Processa envio para SEFAZ real ou simulado"""
         try:
             print(f" === PROCESSANDO ENVIO SEFAZ ===")
@@ -791,7 +794,7 @@ class NFeService:
             
             if usar_sefaz_real and SEFAZ_DISPONIVEL:
                 print(" === ENVIANDO PARA SEFAZ REAL ===")
-                return self._enviar_sefaz_real(xml_assinado, chave_acesso, ambiente)
+                return self._enviar_sefaz_real(xml_assinado, chave_acesso, ambiente, cliente_id)
             else:
                 print(" === USANDO SIMULAÇÃO SEFAZ ===")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente)
@@ -830,7 +833,7 @@ class NFeService:
         print("OK: Condições OK para SEFAZ real")
         return True
     
-    def _enviar_sefaz_real(self, xml_assinado: str, chave_acesso: str, ambiente: str) -> Dict[str, Any]:
+    def _enviar_sefaz_real(self, xml_assinado: str, chave_acesso: str, ambiente: str, cliente_id: int) -> Dict[str, Any]:
         """Envia para SEFAZ real"""
         cert_path = None
         key_path = None
@@ -846,15 +849,17 @@ class NFeService:
             
             # Obter certificado do cliente
             print("[CERT] Carregando certificado digital para HTTPS...")
-            certificado = certificate_service_function(self.db, self.cliente_id) if certificate_service_function else None
+            certificado = certificate_service_function(self.db, cliente_id) if certificate_service_function else None
             
             if not certificado:
                 print("[X] Certificado não encontrado")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
                                                  motivo="Certificado não encontrado")
             
-            if certificado and certificado.get('private_key') and certificado.get('certificate'):
+            # Extrair certificado e chave para arquivos temporários
+            if certificado and certificado.get('cert_data') and certificado.get('password'):
                 try:
+                    print("[DEBUG] Iniciando extração do certificado PKCS#12...")
                     # Extrair certificado e chave para arquivos temporários
                     cert_data = certificado['cert_data']  # Dados binários do PKCS#12
                     password = certificado['password'].encode('utf-8')
@@ -868,6 +873,7 @@ class NFeService:
                     with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
                         cert_file.write(certificate.public_bytes(serialization.Encoding.PEM))
                         cert_path = cert_file.name
+                        temp_cert_file = cert_file.name
                     
                     with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
                         key_file.write(private_key.private_bytes(
@@ -876,6 +882,7 @@ class NFeService:
                             encryption_algorithm=serialization.NoEncryption()
                         ))
                         key_path = key_file.name
+                        temp_key_file = key_file.name
                     
                     print(f"[OK] Certificado extraído: {cert_path}")
                     print(f"[OK] Chave privada extraída: {key_path}")
@@ -884,6 +891,12 @@ class NFeService:
                     print(f"[X] Erro ao extrair certificado: {e}")
                     import traceback
                     traceback.print_exc()
+                    return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
+                                                     motivo=f"Erro ao extrair certificado: {e}")
+            else:
+                print("[X] Certificado sem dados necessários (cert_data ou password)")
+                return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
+                                                 motivo="Certificado incompleto")
             
             # Inicializar serviço SEFAZ com certificado
             try:

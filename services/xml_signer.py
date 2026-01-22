@@ -1,10 +1,21 @@
 class XMLSigner:
     """
     Classe para assinatura de XML da NFe.
-    No modo real, implemente a assinatura digital.
-    No modo simulado, apenas retorna o XML original.
+    Usa XMLSignatureService para assinatura real.
     """
     def assinar_xml(self, xml_content, certificado):
-        # Aqui você pode implementar a assinatura real usando o certificado
-        # Por enquanto, retorna o XML original (simulação)
-        return xml_content
+        """Assina XML usando XMLSignatureService"""
+        try:
+            from services.xml_signature_service import XMLSignatureService
+            
+            signature_service = XMLSignatureService()
+            xml_assinado = signature_service.assinar_xml(xml_content, certificado)
+            
+            return xml_assinado
+            
+        except Exception as e:
+            print(f"[XMLSigner] Erro ao assinar: {e}")
+            import traceback
+            traceback.print_exc()
+            # Retornar None para que o fallback seja usado
+            return None

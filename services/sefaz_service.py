@@ -47,21 +47,27 @@ class SefazService:
             print(f"[?] Ambiente: {self.ambiente}")
             print(f"[KEY] Chave: {chave_acesso}")
             print(f"[?] XML: {len(xml_assinado)} caracteres")
+            print(f"[DEBUG] XML tem Signature: {'<Signature' in xml_assinado}")
             
             # Criar envelope SOAP
             envelope_soap = self._criar_envelope_autorizacao(xml_assinado, chave_acesso)
             
-            # Headers para requisição
+            # Debug: salvar envelope em arquivo temporário
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False, dir='/tmp') as f:
+                f.write(envelope_soap)
+                print(f"[DEBUG] Envelope salvo em: {f.name}")
+            
+            # Headers para requisição SOAP 1.2
             headers = {
-                'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4/nfeAutorizacaoLote'
+                'Content-Type': 'application/soap+xml; charset=utf-8',
             }
             
             print(f"[?] Enviando para: {self.urls['autorizacao']}")
             
             # Fazer requisição
             request_kwargs = {
-                'data': envelope_soap,
+                'data': envelope_soap.encode('utf-8'),
                 'headers': headers,
                 'timeout': 30,
                 'verify': self.ca_bundle  # Usar bundle com ICP-Brasil
@@ -83,13 +89,25 @@ class SefazService:
                 return self._processar_resposta_autorizacao(response.text, chave_acesso)
             else:
                 print(f"[X] Erro HTTP: {response.status_code}")
-                print(f"[X] Resposta: {response.text[:500]}...")
+                print(f"[X] Resposta completa: {response.text}")
                 
                 mensagem_erro = f'Erro HTTP {response.status_code}'
                 if response.status_code == 403:
                     mensagem_erro = 'Acesso negado - Certificado digital inválido ou não configurado'
                 elif response.status_code == 401:
                     mensagem_erro = 'Não autorizado - Verifique o certificado digital'
+                elif response.status_code == 400:
+                    # Tentar extrair mensagem de erro do XML
+                    try:
+                        import xml.etree.ElementTree as ET
+                        root = ET.fromstring(response.text)
+                        # Buscar faultstring no SOAP
+                        faultstring = root.find('.//{http://www.w3.org/2003/05/soap-envelope}Fault/{http://www.w3.org/2003/05/soap-envelope}Reason/{http://www.w3.org/2003/05/soap-envelope}Text')
+                        if faultstring is not None and faultstring.text:
+                            mensagem_erro = f'Erro SEFAZ: {faultstring.text}'
+                            print(f"[X] Mensagem SEFAZ: {faultstring.text}")
+                    except:
+                        pass
                 
                 return {
                     'status': 'ERRO_HTTP',
@@ -113,22 +131,36 @@ class SefazService:
         # Gerar número do lote (timestamp)
         numero_lote = datetime.now().strftime("%Y%m%d%H%M%S")
         
+        # DEBUG: Ver o que está chegando
+        print(f"[ENVELOPE-DEBUG] XML recebido tem {len(xml_nfe)} caracteres")
+        print(f"[ENVELOPE-DEBUG] XML tem Signature: {'<Signature' in xml_nfe}")
+        
+        # Remover declaração XML do xml_nfe se existir (não pode ter dentro do SOAP)
+        xml_nfe_limpo = xml_nfe.strip()
+        if xml_nfe_limpo.startswith('<?xml'):
+            # Remove até o final da declaração XML
+            xml_nfe_limpo = xml_nfe_limpo.split('?>', 1)[1].strip()
+        
+        print(f"[ENVELOPE-DEBUG] Após remover declaração: {len(xml_nfe_limpo)} caracteres")
+        print(f"[ENVELOPE-DEBUG] Ainda tem Signature: {'<Signature' in xml_nfe_limpo}")
+        
+        # Remover o namespace da tag NFe para evitar conflito (o enviNFe já define o namespace)
+        # Substituir <NFe xmlns="http://www.portalfiscal.inf.br/nfe"> por <NFe>
+        xml_nfe_limpo = xml_nfe_limpo.replace('<NFe xmlns="http://www.portalfiscal.inf.br/nfe">', '<NFe>')
+        
+        print(f"[ENVELOPE-DEBUG] Após remover xmlns: {len(xml_nfe_limpo)} caracteres")
+        print(f"[ENVELOPE-DEBUG] Ainda tem Signature final: {'<Signature' in xml_nfe_limpo}")
+        
         envelope = f'''<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
                 xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
                 xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Header>
-    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">
-      <cUF>35</cUF>
-      <versaoDados>4.00</versaoDados>
-    </nfeCabecMsg>
-  </soap12:Header>
   <soap12:Body>
     <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">
       <enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
         <idLote>{numero_lote}</idLote>
         <indSinc>1</indSinc>
-        {xml_nfe}
+        {xml_nfe_limpo}
       </enviNFe>
     </nfeDadosMsg>
   </soap12:Body>
