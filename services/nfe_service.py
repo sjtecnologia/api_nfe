@@ -1306,6 +1306,8 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         etree.SubElement(ide, "finNFe").text = str(fin_nfe)
         etree.SubElement(ide, "indFinal").text = "1"  # 1=Consumidor final
         etree.SubElement(ide, "indPres").text = "9"  # 9=Operação não presencial
+        etree.SubElement(ide, "procEmi").text = "0"  # 0=Emissão com aplicação do contribuinte
+        etree.SubElement(ide, "verProc").text = "EmiteMax_1.0"  # Versão do aplicativo (sem espaços)
         
         # emit
         emit = etree.SubElement(inf_nfe, "emit")
@@ -1380,7 +1382,7 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             # prod
             prod = etree.SubElement(det, "prod")
             etree.SubElement(prod, "cProd").text = str(item.get('codigo_produto', f'PROD{i:03d}'))
-            etree.SubElement(prod, "cEAN").text = "SEM GTIN"
+            etree.SubElement(prod, "cEAN").text = "SemGTIN"
             etree.SubElement(prod, "xProd").text = str(item.get('descricao', f'Produto {i}'))
             etree.SubElement(prod, "NCM").text = str(item.get('ncm', '99999999'))
             
@@ -1399,7 +1401,7 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             etree.SubElement(prod, "qCom").text = f"{quantidade:.2f}"
             etree.SubElement(prod, "vUnCom").text = f"{valor_unitario:.2f}"
             etree.SubElement(prod, "vProd").text = f"{valor_total:.2f}"
-            etree.SubElement(prod, "cEANTrib").text = "SEM GTIN"
+            etree.SubElement(prod, "cEANTrib").text = "SemGTIN"
             etree.SubElement(prod, "uTrib").text = str(item.get('unidade', 'UN'))
             etree.SubElement(prod, "qTrib").text = f"{quantidade:.2f}"
             etree.SubElement(prod, "vUnTrib").text = f"{valor_unitario:.2f}"
@@ -1711,6 +1713,13 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         cobranca_data = form_data.get('cobranca', {})
         pag = etree.SubElement(inf_nfe, "pag")
         
+        # indPag - OBRIGATÓRIO na NFe 4.0
+        # 0=Pagamento à Vista; 1=Pagamento à Prazo; 2=Outros
+        ind_pag = "0"  # Default: à vista
+        if cobranca_data.get('duplicatas'):
+            ind_pag = "1"  # Se tem duplicatas, é à prazo
+        etree.SubElement(pag, "indPag").text = ind_pag
+        
         # Processar pagamentos do JSON
         pagamentos_list = cobranca_data.get('pagamentos', [])
         if pagamentos_list:
@@ -1751,8 +1760,8 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
                 etree.SubElement(dup, "vDup").text = f"{float(dup_data.get('valor', 0)):.2f}"
         
         # infAdic - processar informações adicionais do JSON
+        # IMPORTANTE: infAdic só deve existir se tiver conteúdo (infCpl ou infAdFisco)
         info_adic_data = form_data.get('informacoes_adicionais', {})
-        inf_adic = etree.SubElement(inf_nfe, "infAdic")
         
         # Informações complementares
         if isinstance(info_adic_data, dict):
@@ -1776,11 +1785,15 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             else:
                 inf_compl = antt_info
         
-        if inf_compl:
-            etree.SubElement(inf_adic, "infCpl").text = str(inf_compl)[:5000]
-        
-        if inf_fisco:
-            etree.SubElement(inf_adic, "infAdFisco").text = str(inf_fisco)[:2000]
+        # Só criar infAdic se houver algum conteúdo
+        if inf_compl or inf_fisco:
+            inf_adic = etree.SubElement(inf_nfe, "infAdic")
+            
+            if inf_compl:
+                etree.SubElement(inf_adic, "infCpl").text = str(inf_compl)[:5000]
+            
+            if inf_fisco:
+                etree.SubElement(inf_adic, "infAdFisco").text = str(inf_fisco)[:2000]
         
         # Converter para string XML (compatível com lxml ou xml.etree)
         try:
