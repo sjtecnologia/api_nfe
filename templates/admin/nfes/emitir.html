@@ -1933,6 +1933,147 @@ document.addEventListener('DOMContentLoaded', function() {
             mostrarModalAcoesDanfe(nfeId, danfeCaminho);
         }, 500);
     }
+    
+    // ========================================================================
+    // FUNCIONALIDADE: Enter funciona como Tab
+    // ========================================================================
+    const form = document.getElementById('nfeForm');
+    if (form) {
+        form.addEventListener('keydown', function(e) {
+            // Se pressionar Enter em qualquer campo (exceto textarea)
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.type !== 'submit') {
+                e.preventDefault(); // Prevenir submit do formulário
+                
+                // Encontrar todos os campos focáveis
+                const focusableElements = form.querySelectorAll(
+                    'input:not([type="hidden"]):not([readonly]):not([disabled]), ' +
+                    'select:not([disabled]), ' +
+                    'textarea:not([readonly]):not([disabled]), ' +
+                    'button:not([disabled])'
+                );
+                
+                const focusableArray = Array.from(focusableElements);
+                const currentIndex = focusableArray.indexOf(e.target);
+                
+                // Ir para o próximo campo
+                if (currentIndex > -1 && currentIndex < focusableArray.length - 1) {
+                    focusableArray[currentIndex + 1].focus();
+                }
+            }
+        });
+    }
+    
+    // ========================================================================
+    // FUNCIONALIDADE: Validação e confirmação antes de emitir
+    // ========================================================================
+    const btnEmitir = form.querySelector('button[name="action"][value="emitir"]');
+    if (btnEmitir) {
+        btnEmitir.addEventListener('click', function(e) {
+            e.preventDefault(); // Prevenir submit imediato
+            
+            // 1. VALIDAR CAMPOS OBRIGATÓRIOS
+            const erros = [];
+            
+            // Validar destinatário
+            const tipoDestinatario = document.querySelector('input[name="tipo_destinatario"]:checked')?.value;
+            if (!tipoDestinatario) {
+                erros.push('Selecione o tipo de destinatário (Pessoa Física ou Jurídica)');
+            }
+            
+            // Validar documento do destinatário
+            const cpfCnpj = document.getElementById('input-cpf-cnpj')?.value;
+            if (!cpfCnpj || cpfCnpj.trim() === '') {
+                erros.push('Informe o CPF/CNPJ do destinatário');
+            }
+            
+            // Validar nome do destinatário
+            const nomeDestinatario = document.getElementById('input-nome-razao')?.value;
+            if (!nomeDestinatario || nomeDestinatario.trim() === '') {
+                erros.push('Informe o nome/razão social do destinatário');
+            }
+            
+            // Validar endereço
+            const logradouro = document.getElementById('input-logradouro')?.value;
+            const numero = document.getElementById('input-numero')?.value;
+            const bairro = document.getElementById('input-bairro')?.value;
+            const municipio = document.getElementById('input-municipio')?.value;
+            const uf = document.getElementById('input-uf')?.value;
+            const cep = document.getElementById('input-cep')?.value;
+            
+            if (!logradouro || logradouro.trim() === '') erros.push('Informe o logradouro');
+            if (!numero || numero.trim() === '') erros.push('Informe o número do endereço');
+            if (!bairro || bairro.trim() === '') erros.push('Informe o bairro');
+            if (!municipio || municipio.trim() === '') erros.push('Informe o município');
+            if (!uf || uf.trim() === '') erros.push('Informe a UF');
+            if (!cep || cep.trim() === '') erros.push('Informe o CEP');
+            
+            // Validar produtos
+            const produtosTable = document.getElementById('produtosTable');
+            const produtosRows = produtosTable?.querySelectorAll('tbody tr');
+            if (!produtosRows || produtosRows.length === 0) {
+                erros.push('Adicione pelo menos um produto à nota fiscal');
+            }
+            
+            // Validar forma de pagamento
+            const formaPagamento = document.getElementById('forma_pagamento')?.value;
+            if (!formaPagamento || formaPagamento.trim() === '') {
+                erros.push('Selecione a forma de pagamento');
+            }
+            
+            // Se houver erros, mostrar e não prosseguir
+            if (erros.length > 0) {
+                let mensagemErro = '<strong>Corrija os seguintes erros antes de emitir:</strong><ul>';
+                erros.forEach(erro => {
+                    mensagemErro += `<li>${erro}</li>`;
+                });
+                mensagemErro += '</ul>';
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Campos obrigatórios não preenchidos',
+                    html: mensagemErro,
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#d33'
+                });
+                return;
+            }
+            
+            // 2. CONFIRMAR EMISSÃO
+            Swal.fire({
+                title: 'Confirmar emissão de NFe?',
+                html: `
+                    <p><strong>Destinatário:</strong> ${nomeDestinatario}</p>
+                    <p><strong>Documento:</strong> ${cpfCnpj}</p>
+                    <p><strong>Produtos:</strong> ${produtosRows.length} item(ns)</p>
+                    <br>
+                    <p class="text-danger"><strong>ATENÇÃO:</strong> Esta ação irá transmitir a nota fiscal para a SEFAZ e não poderá ser desfeita!</p>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#28a745',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-paper-plane"></i> Sim, emitir NFe',
+                cancelButtonText: '<i class="fas fa-times"></i> Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Mostrar loading
+                    Swal.fire({
+                        title: 'Emitindo NFe...',
+                        html: 'Aguarde enquanto a nota fiscal está sendo transmitida para a SEFAZ.',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        showConfirmButton: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Submeter o formulário
+                    form.submit();
+                }
+            });
+        });
+    }
 });
 </script>
 {% endblock %}

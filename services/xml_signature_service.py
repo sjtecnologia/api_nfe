@@ -23,11 +23,11 @@ class XMLSignatureService:
     
     def sign_nfe_xml(self, xml_content, db_session, cliente_id):
         """
-        Assina XML da NFe com certificado digital A1
+        Assina XML da NFe com certificado digital A1 usando signxml
         ATENÇÃO: NÃO USA ASSINATURA SIMULADA - FALHA SE CERTIFICADO FOR INVÁLIDO
         """
         try:
-            print("[AUTH] === INICIANDO ASSINATURA REAL ===")
+            print("[AUTH] === INICIANDO ASSINATURA REAL COM SIGNXML ===")
             print(f"[AUTH] Cliente ID: {cliente_id}")
             
             # 1. Buscar certificado
@@ -50,20 +50,23 @@ class XMLSignatureService:
                 # Assinar com token A3
                 return self._sign_with_a3_token(xml_content, certificado)
             else:
-                # Assinar com certificado A1 (arquivo)
+                # Assinar com certificado A1 usando signxml
                 private_key, certificate = self._load_certificate(certificado)
                 
                 # VALIDAR que certificado foi carregado corretamente
                 if not private_key or not certificate:
                     raise Exception("❌ ERRO CRÍTICO: Falha ao carregar chave privada ou certificado. Verifique se o certificado e senha estão corretos.")
             
-            # 3. Parsear XML
+            # 3. Usar signxml para assinar
+            from signxml import XMLSigner
+            from lxml import etree
+            
+            # Parsear XML
             xml_tree = etree.fromstring(xml_content.encode('utf-8'))
             
-            # 4. Encontrar elemento infNFe para assinar
-            inf_nfe = xml_tree.find('.//nfe:infNFe', self.namespaces)
+            # Encontrar elemento infNFe para assinar
+            inf_nfe = xml_tree.find('.//{http://www.portalfiscal.inf.br/nfe}infNFe')
             if inf_nfe is None:
-                # Tentar sem namespace
                 inf_nfe = xml_tree.find('.//infNFe')
             
             if inf_nfe is None:
@@ -75,24 +78,27 @@ class XMLSignatureService:
             
             print(f"[OK] Elemento infNFe encontrado: {inf_nfe_id}")
             
-            # 5. Criar assinatura
-            signature_xml = self._create_signature_element(
-                xml_tree, inf_nfe, inf_nfe_id, private_key, certificate
+            # Configurar XMLSigner com parâmetros corretos para NFe
+            signer = XMLSigner(
+                method='enveloped',
+                signature_algorithm='rsa-sha1',
+                digest_algorithm='sha1',
+                c14n_algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315'
             )
             
-            # 6. Inserir assinatura no XML
-            nfe_element = xml_tree.find('.//nfe:NFe', self.namespaces)
-            if nfe_element is None:
-                nfe_element = xml_tree.find('.//NFe')
+            # Assinar o XML
+            signed_root = signer.sign(
+                xml_tree,
+                key=private_key,
+                cert=certificate,
+                reference_uri=f'#{inf_nfe_id}'
+            )
             
-            if nfe_element is not None:
-                nfe_element.append(signature_xml)
-            
-            # 7. Serializar XML final
-            signed_xml = etree.tostring(xml_tree, encoding='unicode', pretty_print=True)
+            # Serializar XML assinado
+            signed_xml = etree.tostring(signed_root, encoding='unicode')
             signed_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + signed_xml
             
-            print(f"[OK] XML assinado com sucesso: {len(signed_xml)} caracteres")
+            print(f"[OK] XML assinado com sucesso usando signxml: {len(signed_xml)} caracteres")
             return signed_xml
             
         except Exception as e:
@@ -138,8 +144,8 @@ class XMLSignatureService:
         """
         print("[?] Criando assinatura XMLDSig...")
         
-        # 1. Canonicalizar infNFe
-        canonicalized_infnfe = self._canonicalize_element(inf_nfe)
+        # 1. Canonicalizar infNFe com Exclusive C14N
+        canonicalized_infnfe = self._canonicalize_element_exclusive(inf_nfe)
         
         # 2. Calcular hash SHA-1
         digest_value = base64.b64encode(
@@ -151,8 +157,8 @@ class XMLSignatureService:
         # 3. Criar SignedInfo
         signed_info = self._create_signed_info(inf_nfe_id, digest_value)
         
-        # 4. Canonicalizar SignedInfo
-        canonicalized_signed_info = self._canonicalize_element(signed_info)
+        # 4. Canonicalizar SignedInfo com C14N normal (conforme CanonicalizationMethod)
+        canonicalized_signed_info = self._canonicalize_element_normal(signed_info)
         
         # 5. Assinar com RSA-SHA1
         signature_value = self._sign_data(canonicalized_signed_info, private_key)
@@ -165,9 +171,22 @@ class XMLSignatureService:
         print("[OK] Elemento Signature criado")
         return signature_element
     
-    def _canonicalize_element(self, element):
+    def _canonicalize_element_exclusive(self, element):
         """
-        Canonicaliza elemento XML (C14N)
+        Canonicaliza elemento XML com Exclusive C14N
+        Usado para: infNFe (conforme Transform Algorithm)
+        """
+        return etree.tostring(
+            element,
+            method='c14n',
+            exclusive=True,
+            with_comments=False
+        )
+    
+    def _canonicalize_element_normal(self, element):
+        """
+        Canonicaliza elemento XML com C14N normal
+        Usado para: SignedInfo (conforme CanonicalizationMethod)
         """
         return etree.tostring(
             element,
@@ -178,33 +197,36 @@ class XMLSignatureService:
     
     def _create_signed_info(self, reference_uri, digest_value):
         """
-        Cria elemento SignedInfo
+        Cria elemento SignedInfo com namespace padrão (sem prefixo)
         """
-        signed_info = etree.Element('{http://www.w3.org/2000/09/xmldsig#}SignedInfo')
+        DSIG_NS = 'http://www.w3.org/2000/09/xmldsig#'
+        nsmap = {None: DSIG_NS}
+        
+        signed_info = etree.Element('SignedInfo', nsmap=nsmap)
         
         # CanonicalizationMethod
-        canon_method = etree.SubElement(signed_info, '{http://www.w3.org/2000/09/xmldsig#}CanonicalizationMethod')
+        canon_method = etree.SubElement(signed_info, 'CanonicalizationMethod')
         canon_method.set('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315')
         
         # SignatureMethod
-        sig_method = etree.SubElement(signed_info, '{http://www.w3.org/2000/09/xmldsig#}SignatureMethod')
+        sig_method = etree.SubElement(signed_info, 'SignatureMethod')
         sig_method.set('Algorithm', 'http://www.w3.org/2000/09/xmldsig#rsa-sha1')
         
         # Reference
-        reference = etree.SubElement(signed_info, '{http://www.w3.org/2000/09/xmldsig#}Reference')
+        reference = etree.SubElement(signed_info, 'Reference')
         reference.set('URI', f'#{reference_uri}')
         
         # Transforms
-        transforms = etree.SubElement(reference, '{http://www.w3.org/2000/09/xmldsig#}Transforms')
-        transform = etree.SubElement(transforms, '{http://www.w3.org/2000/09/xmldsig#}Transform')
+        transforms = etree.SubElement(reference, 'Transforms')
+        transform = etree.SubElement(transforms, 'Transform')
         transform.set('Algorithm', 'http://www.w3.org/2001/10/xml-exc-c14n#')
         
         # DigestMethod
-        digest_method = etree.SubElement(reference, '{http://www.w3.org/2000/09/xmldsig#}DigestMethod')
+        digest_method = etree.SubElement(reference, 'DigestMethod')
         digest_method.set('Algorithm', 'http://www.w3.org/2000/09/xmldsig#sha1')
         
         # DigestValue
-        digest_value_elem = etree.SubElement(reference, '{http://www.w3.org/2000/09/xmldsig#}DigestValue')
+        digest_value_elem = etree.SubElement(reference, 'DigestValue')
         digest_value_elem.text = digest_value
         
         return signed_info
@@ -226,26 +248,60 @@ class XMLSignatureService:
     
     def _create_full_signature_element(self, signed_info, signature_value, certificate):
         """
-        Cria elemento Signature completo
+        Cria elemento Signature completo com namespace padrão (sem prefixo)
         """
-        signature = etree.Element('{http://www.w3.org/2000/09/xmldsig#}Signature')
+        # Criar o elemento Signature com namespace padrão
+        DSIG_NS = 'http://www.w3.org/2000/09/xmldsig#'
+        nsmap = {None: DSIG_NS}  # None = namespace padrão (sem prefixo)
         
-        # SignedInfo
-        signature.append(signed_info)
+        signature = etree.Element('Signature', nsmap=nsmap)
+        
+        # SignedInfo - copiar do signed_info já criado
+        # Precisamos remover o namespace prefix dele também
+        signed_info_copy = self._remove_namespace_prefix(signed_info, DSIG_NS)
+        signature.append(signed_info_copy)
         
         # SignatureValue
-        sig_value = etree.SubElement(signature, '{http://www.w3.org/2000/09/xmldsig#}SignatureValue')
+        sig_value = etree.SubElement(signature, 'SignatureValue')
         sig_value.text = signature_value
         
         # KeyInfo
-        key_info = etree.SubElement(signature, '{http://www.w3.org/2000/09/xmldsig#}KeyInfo')
-        x509_data = etree.SubElement(key_info, '{http://www.w3.org/2000/09/xmldsig#}X509Data')
-        x509_cert = etree.SubElement(x509_data, '{http://www.w3.org/2000/09/xmldsig#}X509Certificate')
+        key_info = etree.SubElement(signature, 'KeyInfo')
+        x509_data = etree.SubElement(key_info, 'X509Data')
+        x509_cert = etree.SubElement(x509_data, 'X509Certificate')
         
         # Certificado em Base64
         cert_der = certificate.public_bytes(serialization.Encoding.DER)
         x509_cert.text = base64.b64encode(cert_der).decode('utf-8')
         
+        return signature
+    
+    def _remove_namespace_prefix(self, element, namespace):
+        """
+        Remove prefixo de namespace de um elemento e seus filhos,
+        mantendo o namespace como padrão
+        """
+        nsmap = {None: namespace}
+        
+        # Criar novo elemento sem prefixo
+        new_elem = etree.Element(etree.QName(element).localname, nsmap=nsmap)
+        
+        # Copiar atributos
+        for key, value in element.attrib.items():
+            new_elem.set(etree.QName(key).localname, value)
+        
+        # Copiar texto
+        if element.text:
+            new_elem.text = element.text
+        if element.tail:
+            new_elem.tail = element.tail
+        
+        # Copiar filhos recursivamente
+        for child in element:
+            new_child = self._remove_namespace_prefix(child, namespace)
+            new_elem.append(new_child)
+        
+        return new_elem
         return signature
     
     def _sign_with_a3_token(self, xml_content, certificado):

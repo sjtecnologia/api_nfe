@@ -144,12 +144,13 @@ class SefazService:
         print(f"[ENVELOPE-DEBUG] Após remover declaração: {len(xml_nfe_limpo)} caracteres")
         print(f"[ENVELOPE-DEBUG] Ainda tem Signature: {'<Signature' in xml_nfe_limpo}")
         
-        # Remover o namespace da tag NFe para evitar conflito (o enviNFe já define o namespace)
-        # Substituir <NFe xmlns="http://www.portalfiscal.inf.br/nfe"> por <NFe>
-        xml_nfe_limpo = xml_nfe_limpo.replace('<NFe xmlns="http://www.portalfiscal.inf.br/nfe">', '<NFe>')
-        
-        print(f"[ENVELOPE-DEBUG] Após remover xmlns: {len(xml_nfe_limpo)} caracteres")
-        print(f"[ENVELOPE-DEBUG] Ainda tem Signature final: {'<Signature' in xml_nfe_limpo}")
+        # CRÍTICO: Remover xmlns APENAS da tag <NFe> de abertura
+        # O namespace já é declarado em <enviNFe>, então <NFe> herda ele
+        # Declaração duplicada causa erro 225 no validador da SEFAZ
+        xml_nfe_limpo = xml_nfe_limpo.replace(
+            '<NFe xmlns="http://www.portalfiscal.inf.br/nfe">',
+            '<NFe>'
+        )
         
         envelope = f'''<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
