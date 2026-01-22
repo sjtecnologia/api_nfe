@@ -5,7 +5,7 @@ from decimal import Decimal
 import re
 import json
 from flask import current_app
-from typing import Optional, Dict, Any, Union, Callable
+from typing import Optional, Dict, Any, Union, Callable, List, Tuple
 import os
 import tempfile
 from cryptography.hazmat.primitives import serialization
@@ -53,6 +53,158 @@ try:
     print("SefazService carregado com sucesso")
 except ImportError:
     print("AVISO: SefazService nao disponivel - usando apenas simulacao")
+
+
+# ========== VALIDAÇÃO TRIBUTÁRIA ==========
+def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool, List[str]]:
+    """
+    Valida compatibilidade entre CFOP, CST/CSOSN e regime tributário
+    
+    Retorna:
+        (sucesso: bool, erros: List[str])
+    """
+    erros = []
+    
+    # Determinar regime tributário
+    crt = str(emitente_data.get('regime_tributario_id', '1'))
+    is_simples_nacional = (crt == "1")
+    regime_nome = "Simples Nacional" if is_simples_nacional else "Regime Normal"
+    
+    print(f"\n=== VALIDAÇÃO TRIBUTÁRIA ===")
+    print(f"Regime: {regime_nome} (CRT {crt})")
+    print(f"Total de itens: {len(itens)}")
+    
+    for i, item in enumerate(itens, 1):
+        cfop = str(item.get('cfop', ''))
+        
+        if not cfop:
+            erros.append(f"Item {i} ({item.get('descricao', 'sem descrição')}): CFOP não informado")
+            continue
+        
+        # Validações para Simples Nacional (CRT = 1)
+        if is_simples_nacional:
+            csosn = str(item.get('csosn_icms', ''))
+            
+            if not csosn:
+                erros.append(f"Item {i} ({item.get('descricao', '')}): CSOSN não informado (obrigatório no Simples Nacional)")
+                continue
+            
+            # CFOP 5401/6401 = Venda de produção própria com ST (SUBSTITUTO)
+            # Incompatível com Simples Nacional
+            if cfop in ['5401', '6401']:
+                erros.append(
+                    f"Item {i} ({item.get('descricao', '')}): "
+                    f"CFOP {cfop} é incompatível com Simples Nacional.\n"
+                    f"  • CFOP {cfop} = Venda de produção própria com ST (empresa é SUBSTITUTA)\n"
+                    f"  • Simples Nacional não pode ser substituto tributário\n"
+                    f"  • Sugestões:\n"
+                    f"    - CFOP 5405/6405 se for ST SUBSTITUÍDO (fornecedor já recolheu ST)\n"
+                    f"    - CFOP 5102/6102 para venda normal sem ST"
+                )
+            
+            # CFOP 5405/6405 = Venda de mercadoria ST na condição de SUBSTITUÍDO
+            # Deve usar CSOSN 500
+            elif cfop in ['5405', '6405']:
+                if csosn != '500':
+                    erros.append(
+                        f"Item {i} ({item.get('descricao', '')}): "
+                        f"CFOP {cfop} requer CSOSN 500.\n"
+                        f"  • CFOP {cfop} = Mercadoria ST já tributada (você é SUBSTITUÍDO)\n"
+                        f"  • CSOSN atual: {csosn}\n"
+                        f"  • CSOSN 500 = ICMS cobrado anteriormente por ST\n"
+                        f"  • Corrija o CSOSN no cadastro do produto"
+                    )
+            
+            # CFOP 5102/6102 = Venda normal
+            # Usar CSOSN 102, 103, 300, 400, 900
+            elif cfop in ['5102', '6102', '5103', '6103']:
+                if csosn not in ['102', '103', '300', '400', '900']:
+                    erros.append(
+                        f"Item {i} ({item.get('descricao', '')}): "
+                        f"CFOP {cfop} não é compatível com CSOSN {csosn}.\n"
+                        f"  • Para operação normal, use:\n"
+                        f"    - CSOSN 102: Tributada sem crédito\n"
+                        f"    - CSOSN 103: Isenção com crédito\n"
+                        f"    - CSOSN 400: Não tributada\n"
+                        f"    - CSOSN 900: Outros"
+                    )
+        
+        # Validações para Regime Normal (CRT = 3)
+        else:
+            cst = str(item.get('cst_icms', ''))
+            
+            if not cst:
+                erros.append(f"Item {i} ({item.get('descricao', '')}): CST não informado (obrigatório no Regime Normal)")
+                continue
+            
+            # CFOP 5405/6405 com CST
+            if cfop in ['5405', '6405']:
+                if cst not in ['10', '60']:
+                    erros.append(
+                        f"Item {i} ({item.get('descricao', '')}): "
+                        f"CFOP {cfop} requer CST 10 ou 60.\n"
+                        f"  • CFOP {cfop} = Mercadoria ST (substituído)\n"
+                        f"  • CST atual: {cst}\n"
+                        f"  • CST 10 = Tributada com ST\n"
+                        f"  • CST 60 = ICMS ST cobrado anteriormente"
+                    )
+    
+    if erros:
+        print(f"\n❌ {len(erros)} erro(s) de validação encontrado(s)")
+        for erro in erros:
+            print(f"  • {erro}")
+    else:
+        print(f"✅ Validação tributária OK - {len(itens)} itens validados")
+    
+    # ========== VALIDAÇÃO ADICIONAL COM IA (OPCIONAL) ==========
+    try:
+        print("\n🤖 Executando validação adicional com IA...")
+        import requests
+        
+        ia_response = requests.post(
+            "http://localhost:8081/valida/tributacao",
+            json={"crt": crt, "itens": itens},
+            timeout=65  # Timeout aumentado para LLM
+        )
+        
+        if ia_response.status_code == 200:
+            ia_result = ia_response.json()
+            
+            if not ia_result.get("valido", True):
+                print("⚠️  IA detectou problemas adicionais:")
+                erros_ia = ia_result.get("erros", [])
+                for erro_ia in erros_ia:
+                    erro_texto = erro_ia.get('erro', 'Erro desconhecido')
+                    sugestao_texto = erro_ia.get('sugestao', '')
+                    
+                    # IGNORA erros que dizem "está correto" ou "nenhuma correção"
+                    if "está correto" in erro_texto.lower() or "está correto" in sugestao_texto.lower():
+                        print(f"  ✓ Item {erro_ia.get('item', '?')}: {erro_texto} (OK)")
+                        continue
+                    if "nenhuma correção" in sugestao_texto.lower():
+                        print(f"  ✓ Item {erro_ia.get('item', '?')}: {erro_texto} (OK)")
+                        continue
+                    
+                    print(f"  • Item {erro_ia.get('item', '?')}: {erro_texto}")
+                    # Adicionar apenas se não for duplicado
+                    erro_msg = f"[IA] Item {erro_ia.get('item', '?')}: {erro_texto} - {sugestao_texto}"
+                    if erro_msg not in erros:
+                        erros.append(erro_msg)
+            
+            alertas = ia_result.get("alertas", [])
+            if alertas:
+                print("💡 Alertas da IA:")
+                for alerta in alertas:
+                    print(f"  • {alerta}")
+        else:
+            print(f"⚠️  IA não disponível (HTTP {ia_response.status_code})")
+    except requests.exceptions.Timeout:
+        print("⏱️  Timeout na validação com IA (continuando sem validação adicional)")
+    except Exception as e:
+        print(f"⚠️  Erro ao consultar IA: {e} (continuando sem validação adicional)")
+    
+    return (len(erros) == 0, erros)
+
 
 # FUNCAO PARA CARREGAR NFE PARA EDICAO - ADICIONADA
 def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
@@ -706,6 +858,13 @@ class NFeService:
             
             print(f"OK: XML gerado: {len(xml_nfe)} caracteres")
             
+            # DEBUG: Verificar estrutura ICMS
+            if '<ICMSSN500>' in xml_nfe:
+                import re
+                icms_match = re.search(r'<ICMS>.*?</ICMS>', xml_nfe, re.DOTALL)
+                if icms_match:
+                    print(f"[DEBUG-XML] Estrutura ICMS completa: {icms_match.group()}")
+            
             # 2. BUSCAR CERTIFICADO
             certificado = certificate_service_function(self.db, cliente_id) if certificate_service_function else None
             if not certificado:
@@ -1106,13 +1265,7 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         print(f" Form data keys: {list(form_data.keys())}")
         print(f" Items: {len(items)} itens")
         
-        # Debug: verificar tributação dos itens
-        print(f" [DEBUG] Verificando tributação dos itens:")
-        for idx, item in enumerate(items[:3], 1):  # Primeiros 3 itens
-            icms = item.get('icms', {})
-            print(f"   Item {idx}: CST={icms.get('cst')}, CSOSN={icms.get('csosn')}")
-        
-        # OK: CORREÇÃO: Verificar e processar CFOP nos itens
+        # OK: CORREÇÃO: Verificar e processar CFOP nos itens ANTES DA VALIDAÇÃO
         for i, item in enumerate(items, 1):
             cfop_original = item.get('cfop', '')
             print(f" Item {i} - CFOP original: '{cfop_original}' (tipo: {type(cfop_original)})")
@@ -1138,6 +1291,20 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             else:
                 print(f"AVISO: Item {i} - CFOP vazio -> usando padrão '5102'")
                 item['cfop'] = '5102'
+        
+        # ========== VALIDAÇÃO TRIBUTÁRIA ==========
+        validacao_ok, erros_validacao = validar_tributacao_nfe(emitente_data, items)
+        
+        if not validacao_ok:
+            erro_msg = "❌ ERROS DE TRIBUTAÇÃO ENCONTRADOS:\n\n" + "\n\n".join(erros_validacao)
+            print(f"\n{erro_msg}")
+            raise ValueError(erro_msg)
+        
+        # Debug: verificar tributação dos itens
+        print(f" [DEBUG] Verificando tributação dos itens:")
+        for idx, item in enumerate(items[:3], 1):  # Primeiros 3 itens
+            icms = item.get('icms', {})
+            print(f"   Item {idx}: CST={icms.get('cst')}, CSOSN={icms.get('csosn')}")
         
         # Importar bibliotecas necessárias (corrigido para fallback caso lxml não esteja instalado)
         try:
@@ -1386,8 +1553,21 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             etree.SubElement(prod, "xProd").text = str(item.get('descricao', f'Produto {i}'))
             etree.SubElement(prod, "NCM").text = str(item.get('ncm', '99999999'))
             
-            # OK: CFOP CORRIGIDO - garantir que está presente e correto
+            # CFOP - validar compatibilidade com regime tributário
             cfop_item = item.get('cfop', '5102')
+            
+            # Simples Nacional (CRT=1): ajustar CFOP 5401 para 5405
+            # 5401 = Venda produção própria com ST (incompatível com Simples)
+            # 5405 = Venda mercadoria com ST, na condição de substituído (correto para Simples)
+            if crt == "1":
+                if cfop_item == '5401':
+                    cfop_original = cfop_item
+                    cfop_item = '5405'  # Mercadoria com ST - substituído
+                    print(f"⚠️  CFOP {cfop_original} ajustado para {cfop_item} (Simples Nacional com ST)")
+                elif cfop_item == '6401':
+                    cfop_item = '6405'  # Interestadual com ST
+                    print(f"⚠️  CFOP 6401 ajustado para 6405 (Simples Nacional com ST interestadual)")
+            
             print(f" Item {i} - CFOP final no XML: '{cfop_item}'")
             etree.SubElement(prod, "CFOP").text = str(cfop_item)
             
@@ -1420,11 +1600,26 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             if is_simples_nacional:
                 # SIMPLES NACIONAL - Usar CSOSN
                 csosn = icms_data.get('csosn') or item.get('csosn_icms', '102')
+                
+                # CORREÇÃO: Se CFOP for 5405/6405 (ST substituído), deve usar CSOSN 500
+                # CSOSN 500 = ICMS cobrado anteriormente por ST (substituído)
+                if cfop_item in ['5405', '6405'] and csosn != '500':
+                    print(f"⚠️  CSOSN {csosn} ajustado para 500 (CFOP {cfop_item} - ST substituído)")
+                    csosn = '500'
+                
                 icms_sn = etree.SubElement(icms, f"ICMSSN{csosn}")
                 etree.SubElement(icms_sn, "orig").text = str(icms_data.get('origem', '0'))
                 etree.SubElement(icms_sn, "CSOSN").text = csosn
                 
-                if csosn in ['101', '201', '202', '203', '500', '900']:
+                print(f"[DEBUG-ICMS] CSOSN {csosn} - Origem: {icms_data.get('origem', '0')}")
+                
+                # CSOSN 500: ICMS cobrado anteriormente por ST
+                # Deve ter APENAS orig e CSOSN (sem pCredSN nem vCredICMSSN)
+                if csosn == '500':
+                    print(f"[DEBUG-ICMS] CSOSN 500 - XML: <ICMSSN500><orig>{icms_data.get('origem', '0')}</orig><CSOSN>500</CSOSN></ICMSSN500>")
+                    pass  # Não adiciona nenhum campo extra
+                # CSOSN 101, 201, 202, 203, 900: Podem ter crédito
+                elif csosn in ['101', '201', '202', '203', '900']:
                     aliq_icms = float(icms_data.get('aliquota', 0))
                     if aliq_icms > 0:
                         bc_icms = float(icms_data.get('base_calculo', valor_total))
@@ -1713,19 +1908,28 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         cobranca_data = form_data.get('cobranca', {})
         pag = etree.SubElement(inf_nfe, "pag")
         
-        # indPag - OBRIGATÓRIO na NFe 4.0
+        # indPag - OBRIGATÓRIO na NFe 4.0, mas vai dentro de detPag
         # 0=Pagamento à Vista; 1=Pagamento à Prazo; 2=Outros
         ind_pag = "0"  # Default: à vista
         if cobranca_data.get('duplicatas'):
             ind_pag = "1"  # Se tem duplicatas, é à prazo
-        etree.SubElement(pag, "indPag").text = ind_pag
         
         # Processar pagamentos do JSON
         pagamentos_list = cobranca_data.get('pagamentos', [])
         if pagamentos_list:
             for pag_data in pagamentos_list:
                 det_pag = etree.SubElement(pag, "detPag")
+                
+                # indPag vai DENTRO de detPag, não em pag!
+                etree.SubElement(det_pag, "indPag").text = ind_pag
+                
                 meio_pag = str(pag_data.get('meio_pagamento', '01'))
+                
+                # Se for 17 (PIX), usar 99 (Outros) para compatibilidade
+                if meio_pag == '17':
+                    print(f"⚠️  tPag 17 (PIX) alterado para 99 (Outros) - compatibilidade SEFAZ")
+                    meio_pag = '99'
+                
                 valor_pag = float(pag_data.get('valor', total_nfe))
                 
                 etree.SubElement(det_pag, "tPag").text = meio_pag
@@ -1745,7 +1949,20 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         else:
             # Usar formato antigo form_data
             det_pag = etree.SubElement(pag, "detPag")
-            etree.SubElement(det_pag, "tPag").text = str(form_data.get('formaPagamento', '01'))
+            
+            # indPag vai DENTRO de detPag
+            etree.SubElement(det_pag, "indPag").text = ind_pag
+            
+            # Meio de pagamento - validar código
+            meio_pag = str(form_data.get('formaPagamento', '01'))
+            
+            # Se for 17 (PIX), usar 99 (Outros) para compatibilidade
+            # Alguns estados ainda não aceitam código 17
+            if meio_pag == '17':
+                print(f"⚠️  tPag 17 (PIX) alterado para 99 (Outros) - compatibilidade SEFAZ")
+                meio_pag = '99'
+            
+            etree.SubElement(det_pag, "tPag").text = meio_pag
             etree.SubElement(det_pag, "vPag").text = f"{total_nfe:.2f}"
         
         # Adicionar duplicatas se houver
