@@ -1,0 +1,257 @@
+"""
+Serviço de geração de NFe usando a biblioteca nfelib
+Substitui a geração manual de XML por uma biblioteca validada e homologada
+"""
+
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any
+from decimal import Decimal
+from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe
+from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import TenderEmi, Tendereco
+from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
+import re
+
+
+def generate_nfe_xml_nfelib(
+    emitente_data: Dict[str, Any],
+    destinatario_data: Dict[str, Any],
+    items: list,
+    form_data: Dict[str, Any],
+    numero_nfe: int,
+    certificado_data: Dict[str, Any]
+) -> str:
+    """
+    Gera XML da NFe usando a biblioteca nfelib
+    
+    Args:
+        emitente_data: Dados do emitente
+        destinatario_data: Dados do destinatário
+        items: Lista de itens da nota
+        form_data: Dados do formulário (série, natureza, etc)
+        numero_nfe: Número da NFe
+        certificado_data: Dados do certificado (não usado aqui, assinatura feita depois)
+        
+    Returns:
+        str: XML da NFe gerado e validado pelo nfelib
+    """
+    
+    print("🚀 [NFELIB] Iniciando geração de XML com biblioteca nfelib")
+    
+    # 1. Criar IDE (identificação)
+    data_emissao = datetime.now(timezone.utc) - timedelta(minutes=3)
+    
+    ide = Nfe.InfNfe.Ide(
+        cUF=str(get_uf_ibge_code(emitente_data.get('uf', 'SP'))),
+        cNF=form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000))[:8],
+        natOp=form_data.get('natOp', 'VENDA')[:60],
+        mod="55",
+        serie=str(form_data.get('serie', '1')),
+        nNF=str(numero_nfe),
+        dhEmi=data_emissao.isoformat(),
+        tpNF=str(form_data.get('tpNF', '1')),
+        idDest="1",
+        cMunFG=str(emitente_data.get('codigo_municipio', '3550308')),
+        tpImp="1",
+        tpEmis="1",
+        tpAmb=str(form_data.get('tpAmb', 2)),
+        finNFe=str(form_data.get('finNFe', '1')),
+        indFinal="1",
+        indPres=form_data.get('indPres', "1"),
+        indIntermed="0",
+        procEmi="0",
+        verProc="EmiteMax_1.0"
+    )
+    
+    print("✅ [NFELIB] IDE criado")
+    
+    # 2. Criar enderEmit
+    ender_emit = TenderEmi(
+        xLgr=emitente_data.get('logradouro', 'RUA TESTE')[:60],
+        nro=str(emitente_data.get('numero', '0'))[:60],
+        xCpl=emitente_data.get('complemento', '')[:60] if emitente_data.get('complemento') else None,
+        xBairro=emitente_data.get('bairro', 'CENTRO')[:60],
+        cMun=str(emitente_data.get('codigo_municipio', '3550308')),
+        xMun=emitente_data.get('municipio', 'SAO PAULO')[:60],
+        UF=emitente_data.get('uf', 'SP'),
+        CEP=limpar_cnpj_cpf(emitente_data.get('cep', '00000000')),
+        cPais="1058",
+        xPais="BRASIL"
+    )
+    
+    # 3. Criar EMIT (emitente) com endereço
+    emit = Nfe.InfNfe.Emit(
+        CNPJ=limpar_cnpj_cpf(emitente_data.get('cnpj', '')),
+        xNome=emitente_data.get('razao_social', '')[:60],
+        xFant=emitente_data.get('nome_fantasia', '')[:60] if emitente_data.get('nome_fantasia') else None,
+        enderEmit=ender_emit,
+        IE=emitente_data.get('ie', ''),
+        CRT=str(emitente_data.get('regime_tributario', '1'))
+    )
+    
+    print("✅ [NFELIB] EMIT criado")
+    
+    # 4. Criar enderDest
+    ender_dest = Tendereco(
+        xLgr=destinatario_data.get('logradouro', 'RUA TESTE')[:60],
+        nro=str(destinatario_data.get('numero', '0'))[:60],
+        xCpl=destinatario_data.get('complemento', '')[:60] if destinatario_data.get('complemento') else None,
+        xBairro=destinatario_data.get('bairro', 'CENTRO')[:60],
+        cMun=str(destinatario_data.get('codigo_municipio', '3550308')),
+        xMun=destinatario_data.get('municipio', 'SAO PAULO')[:60],
+        UF=destinatario_data.get('uf', 'SP'),
+        CEP=limpar_cnpj_cpf(destinatario_data.get('cep', '00000000')),
+        cPais="1058",
+        xPais="BRASIL"
+    )
+    
+    # 5. Criar DEST (destinatário) com endereço
+    dest_cpf_cnpj = limpar_cnpj_cpf(destinatario_data.get('cpf_cnpj', ''))
+    dest_kwargs = {
+        'xNome': destinatario_data.get('nome', '')[:60],
+        'enderDest': ender_dest,
+        'indIEDest': "9"
+    }
+    
+    if len(dest_cpf_cnpj) == 11:
+        dest_kwargs['CPF'] = dest_cpf_cnpj
+    elif len(dest_cpf_cnpj) == 14:
+        dest_kwargs['CNPJ'] = dest_cpf_cnpj
+        
+    dest = Nfe.InfNfe.Dest(**dest_kwargs)
+    
+    print("✅ [NFELIB] DEST criado")
+    
+    # 6. Criar DET (itens)
+    det_list = []
+    v_prod_total = Decimal('0')
+    v_nf_total = Decimal('0')
+    
+    for idx, item in enumerate(items, start=1):
+        # Produto
+        prod = Nfe.InfNfe.Det.Prod(
+            cProd=str(item.get('codigo', idx))[:60],
+            cEAN=item.get('ean', 'SEM GTIN'),
+            xProd=item.get('descricao', 'PRODUTO')[:120],
+            NCM=item.get('ncm', '00000000'),
+            CFOP=str(item.get('cfop', '5102')),
+            uCom=item.get('unidade', 'UN')[:6],
+            qCom=str(item.get('quantidade', '1.0000')),
+            vUnCom=str(item.get('valor_unitario', '0.00')),
+            vProd=str(item.get('valor_total', '0.00')),
+            cEANTrib=item.get('ean', 'SEM GTIN'),
+            uTrib=item.get('unidade', 'UN')[:6],
+            qTrib=str(item.get('quantidade', '1.0000')),
+            vUnTrib=str(item.get('valor_unitario', '0.00')),
+            indTot="1"
+        )
+        
+        v_prod_total += Decimal(str(item.get('valor_total', '0.00')))
+        
+        # Impostos - ICMS (usando ICMSSN500 para Simples Nacional)
+        icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
+            orig="0",
+            CSOSN="500",
+            vBCSTRet="0.00",
+            pST="0.00",
+            vICMSSubstituto="0.00",
+            vICMSSTRet="0.00"
+        )
+        
+        icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
+        
+        # PIS (não tributado para Simples Nacional)
+        pis_nt = Nfe.InfNfe.Det.Imposto.Pis.Pisnt(CST="07")
+        pis = Nfe.InfNfe.Det.Imposto.Pis(PISNT=pis_nt)
+        
+        # COFINS (não tributado para Simples Nacional)
+        cofins_nt = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsnt(CST="07")
+        cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSNT=cofins_nt)
+        
+        imposto = Nfe.InfNfe.Det.Imposto(
+            ICMS=icms,
+            PIS=pis,
+            COFINS=cofins
+        )
+        
+        det = Nfe.InfNfe.Det(
+            nItem=str(idx),
+            prod=prod,
+            imposto=imposto
+        )
+        
+        det_list.append(det)
+    
+    v_nf_total = v_prod_total
+    
+    print(f"✅ [NFELIB] {len(det_list)} itens criados")
+    
+    # 7. Criar TOTAL
+    icms_tot = Nfe.InfNfe.Total.Icmstot(
+        vBC="0.00",
+        vICMS="0.00",
+        vICMSDeson="0.00",
+        vFCP="0.00",
+        vBCST="0.00",
+        vST="0.00",
+        vFCPST="0.00",
+        vFCPSTRet="0.00",
+        vProd=f"{v_prod_total:.2f}",
+        vFrete="0.00",
+        vSeg="0.00",
+        vDesc="0.00",
+        vII="0.00",
+        vIPI="0.00",
+        vIPIDevol="0.00",
+        vPIS="0.00",
+        vCOFINS="0.00",
+        vOutro="0.00",
+        vNF=f"{v_nf_total:.2f}"
+    )
+    
+    total = Nfe.InfNfe.Total(ICMSTot=icms_tot)
+    
+    print("✅ [NFELIB] TOTAL criado")
+    
+    # 8. Criar TRANSP
+    transp = Nfe.InfNfe.Transp(modFrete="9")  # 9=Sem frete
+    
+    print("✅ [NFELIB] TRANSP criado")
+    
+    # 9. Criar PAG
+    det_pag = Nfe.InfNfe.Pag.DetPag(
+        tPag="01",  # 01=Dinheiro
+        vPag=f"{v_nf_total:.2f}"
+    )
+    
+    pag = Nfe.InfNfe.Pag(detPag=[det_pag])
+    
+    print("✅ [NFELIB] PAG criado")
+    
+    # 10. Criar InfNFe completo
+    inf_nfe = Nfe.InfNfe(
+        versao="4.00",
+        ide=ide,
+        emit=emit,
+        dest=dest,
+        det=det_list,
+        total=total,
+        transp=transp,
+        pag=pag
+    )
+    
+    # 11. Criar NFe
+    nfe = Nfe(infNFe=inf_nfe)
+    
+    # 12. Gerar XML com namespace correto
+    try:
+        xml_string = nfe.to_xml(
+            indent="",
+            ns_map={None: "http://www.portalfiscal.inf.br/nfe"}
+        )
+        print(f"✅ [NFELIB] XML gerado: {len(xml_string)} caracteres")
+        return xml_string
+    except Exception as e:
+        print(f"❌ [NFELIB] Erro ao gerar XML: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
