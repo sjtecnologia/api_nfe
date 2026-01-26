@@ -167,12 +167,25 @@ def generate_nfe_xml_nfelib(
     if not cnpj_emitente or cnpj_emitente == '0' * 14:
         raise ValueError(f"CNPJ do emitente inválido ou vazio: {emitente_data.get('cnpj', 'N/A')}")
     cnpj_emitente = cnpj_emitente.zfill(14)
-    print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
+    
+    # HOMOLOGAÇÃO: Substituir CNPJ real por CNPJ de teste da SEFAZ
+    if tp_amb == 2:
+        cnpj_original = cnpj_emitente
+        cnpj_emitente = '99999999000191'  # CNPJ de teste homologação SEFAZ
+        print(f"⚠️  [HOMOLOGAÇÃO] CNPJ Emitente substituído: {cnpj_original} → {cnpj_emitente}")
+    else:
+        print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
     
     # Buscar IE (pode estar como 'ie' ou 'inscricao_estadual')
     ie_emitente = emitente_data.get('ie') or emitente_data.get('inscricao_estadual', '')
     if not ie_emitente:
         raise ValueError("Inscrição Estadual do emitente é obrigatória")
+    
+    # HOMOLOGAÇÃO: IE de teste
+    if tp_amb == 2:
+        ie_original = ie_emitente
+        ie_emitente = 'ISENTO'  # IE de teste para homologação
+        print(f"⚠️  [HOMOLOGAÇÃO] IE Emitente substituída: {ie_original} → {ie_emitente}")
     
     # Buscar regime tributário (pode estar em diferentes campos)
     crt_emitente = str(emitente_data.get('regime_tributario') or 
@@ -214,7 +227,13 @@ def generate_nfe_xml_nfelib(
     else:
         dest_cpf_cnpj = dest_cpf_cnpj.zfill(14)
     
-    print(f"✅ [NFELIB] CPF/CNPJ Destinatário: {dest_cpf_cnpj} ({len(dest_cpf_cnpj)} dígitos)")
+    # HOMOLOGAÇÃO: Substituir CPF/CNPJ real por CNPJ de teste
+    if tp_amb == 2:
+        dest_original = dest_cpf_cnpj
+        dest_cpf_cnpj = '99999999000191'  # CNPJ de teste homologação SEFAZ
+        print(f"⚠️  [HOMOLOGAÇÃO] CPF/CNPJ Destinatário substituído: {dest_original} → {dest_cpf_cnpj}")
+    else:
+        print(f"✅ [NFELIB] CPF/CNPJ Destinatário: {dest_cpf_cnpj} ({len(dest_cpf_cnpj)} dígitos)")
     
     # Nome pode estar em 'nome' ou 'nome_razao_social'
     nome_dest = (destinatario_data.get('nome') or 
