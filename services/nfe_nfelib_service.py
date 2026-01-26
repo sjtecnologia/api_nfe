@@ -12,6 +12,38 @@ from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
 import re
 
 
+# Mapeamento de códigos IBGE mais comuns → nome do município
+MUNICIPIOS_IBGE = {
+    '3550308': 'SAO PAULO',
+    '3549805': 'SAO JOSE DO RIO PRETO',
+    '3304557': 'RIO DE JANEIRO',
+    '4106902': 'CURITIBA',
+    '2927408': 'SALVADOR',
+    '2611606': 'RECIFE',
+    '2304400': 'FORTALEZA',
+    '1302603': 'MANAUS',
+    '5300108': 'BRASILIA',
+}
+
+
+def normalizar_municipio(codigo_ibge: str, nome_municipio: str) -> str:
+    """
+    Valida e corrige nome do município baseado no código IBGE
+    para evitar Erro 225 - Schema XML
+    """
+    codigo_ibge = str(codigo_ibge).strip()
+    
+    # Se temos o código no mapeamento, usar o nome correto
+    if codigo_ibge in MUNICIPIOS_IBGE:
+        nome_correto = MUNICIPIOS_IBGE[codigo_ibge]
+        if nome_municipio.upper() != nome_correto:
+            print(f"⚠️ [CORREÇÃO] Município '{nome_municipio}' corrigido para '{nome_correto}' (código {codigo_ibge})")
+        return nome_correto
+    
+    # Se não está no mapeamento, retornar o nome fornecido em maiúsculas
+    return nome_municipio.upper()[:60]
+
+
 def calcular_dv_chave_acesso(chave_sem_dv: str) -> str:
     """Calcula o dígito verificador da chave de acesso da NFe"""
     multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9]
@@ -170,13 +202,16 @@ def generate_nfe_xml_nfelib(
     print("✅ [NFELIB] IDE criado")
     
     # 5. Criar enderEmit
+    cod_mun_emit = str(emitente_data.get('codigo_municipio', '3550308'))
+    nome_mun_emit = normalizar_municipio(cod_mun_emit, emitente_data.get('municipio', 'SAO PAULO'))
+    
     ender_emit = TenderEmi(
         xLgr=emitente_data.get('logradouro', 'RUA TESTE')[:60],
         nro=str(emitente_data.get('numero', '0'))[:60],
         xCpl=emitente_data.get('complemento', '')[:60] if emitente_data.get('complemento') else None,
         xBairro=emitente_data.get('bairro', 'CENTRO')[:60],
-        cMun=str(emitente_data.get('codigo_municipio', '3550308')),
-        xMun=emitente_data.get('municipio', 'SAO PAULO')[:60],
+        cMun=cod_mun_emit,
+        xMun=nome_mun_emit,
         UF=emitente_data.get('uf', 'SP'),
         CEP=limpar_cnpj_cpf(emitente_data.get('cep', '00000000')),
         cPais="1058",
@@ -224,13 +259,16 @@ def generate_nfe_xml_nfelib(
     print("✅ [NFELIB] EMIT criado")
     
     # 7. Criar enderDest
+    cod_mun_dest = str(destinatario_data.get('codigo_municipio', '3550308'))
+    nome_mun_dest = normalizar_municipio(cod_mun_dest, destinatario_data.get('municipio', 'SAO PAULO'))
+    
     ender_dest = Tendereco(
         xLgr=destinatario_data.get('logradouro', 'RUA TESTE')[:60],
         nro=str(destinatario_data.get('numero', '0'))[:60],
         xCpl=destinatario_data.get('complemento', '')[:60] if destinatario_data.get('complemento') else None,
         xBairro=destinatario_data.get('bairro', 'CENTRO')[:60],
-        cMun=str(destinatario_data.get('codigo_municipio', '3550308')),
-        xMun=destinatario_data.get('municipio', 'SAO PAULO')[:60],
+        cMun=cod_mun_dest,
+        xMun=nome_mun_dest,
         UF=destinatario_data.get('uf', 'SP'),
         CEP=limpar_cnpj_cpf(destinatario_data.get('cep', '00000000')),
         cPais="1058",
