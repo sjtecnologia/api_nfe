@@ -96,8 +96,12 @@ def generate_nfe_xml_nfelib(
     
     print("🚀 [NFELIB] Iniciando geração de XML com biblioteca nfelib")
     
-    # 1. Gerar data de emissão (usar antes de criar IDE)
-    data_emissao = datetime.now(timezone.utc) - timedelta(minutes=3)
+    # 1. Gerar data de emissão (usar timezone brasileiro BRT = UTC-3)
+    from datetime import timezone as tz
+    brt = tz(timedelta(hours=-3))
+    data_emissao = datetime.now(brt)
+    
+    print(f"✅ [NFELIB] Data de emissão (BRT): {data_emissao.isoformat()}")
     
     # 2. Gerar chave de acesso (44 dígitos)
     chave_acesso = gerar_chave_acesso(emitente_data, form_data, numero_nfe, data_emissao)
@@ -124,7 +128,7 @@ def generate_nfe_xml_nfelib(
         indFinal="1",
         indPres=form_data.get('indPres', "1"),
         indIntermed="0",
-        procEmi="0",
+        procEmi="1",  # 1=Aplicação do contribuinte (NFe emitida em produção)
         verProc="EmiteMax_1.0"
     )
     
@@ -213,17 +217,42 @@ def generate_nfe_xml_nfelib(
         
         v_prod_total += Decimal(str(item.get('valor_total', '0.00')))
         
-        # Impostos - ICMS (usando ICMSSN500 para Simples Nacional)
-        icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
-            orig="0",
-            CSOSN="500",
-            vBCSTRet="0.00",
-            pST="0.00",
-            vICMSSubstituto="0.00",
-            vICMSSTRet="0.00"
-        )
+        # Determinar CSOSN baseado no CFOP
+        cfop = str(item.get('cfop', '5102'))
+        csosn_item = item.get('csosn', None)
         
-        icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
+        # Se não fornecido, determinar automaticamente
+        if not csosn_item:
+            # CFOP 5.4xx e 6.4xx = Substituição Tributária (CSOSN 500)
+            if cfop.startswith('54') or cfop.startswith('64'):
+                csosn_item = '500'
+            # CFOP 5.102, 5.103, 6.102, 6.103 = Tributada ou Isenta (CSOSN 102)
+            elif cfop in ('5102', '5103', '6102', '6103'):
+                csosn_item = '102'
+            else:
+                csosn_item = '102'  # Padrão: Simples Nacional sem permissão de crédito
+        
+        print(f"  [NFELIB] Item {idx} - CFOP {cfop} → CSOSN {csosn_item}")
+        
+        # Impostos - ICMS baseado no CSOSN
+        if csosn_item == '500':
+            # CSOSN 500 - ICMS cobrado anteriormente por ST
+            icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
+                orig="0",
+                CSOSN="500",
+                vBCSTRet="0.00",
+                pST="0.00",
+                vICMSSubstituto="0.00",
+                vICMSSTRet="0.00"
+            )
+            icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
+        else:
+            # CSOSN 102 - Tributada pelo Simples Nacional sem permissão de crédito
+            icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
+                orig="0",
+                CSOSN="102"
+            )
+            icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
         
         # PIS (não tributado para Simples Nacional)
         pis_nt = Nfe.InfNfe.Det.Imposto.Pis.Pisnt(CST="07")
