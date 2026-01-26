@@ -95,6 +95,11 @@ def generate_nfe_xml_nfelib(
     """
     
     print("🚀 [NFELIB] Iniciando geração de XML com biblioteca nfelib")
+    print(f"📋 [DEBUG] Emitente CNPJ: {emitente_data.get('cnpj', 'N/A')}")
+    print(f"📋 [DEBUG] Emitente Razão: {emitente_data.get('razao_social', 'N/A')}")
+    print(f"📋 [DEBUG] Destinatário CPF/CNPJ: {destinatario_data.get('cpf_cnpj', 'N/A')}")
+    print(f"📋 [DEBUG] Destinatário Nome: {destinatario_data.get('nome', destinatario_data.get('nome_razao_social', 'N/A'))}")
+    print(f"📋 [DEBUG] Número de itens: {len(items)}")
     
     # 1. Gerar data de emissão (usar timezone brasileiro BRT = UTC-3)
     # Subtrair 1 minuto para garantir que não seja futura
