@@ -150,16 +150,28 @@ def generate_nfe_xml_nfelib(
     )
     
     # 6. Criar EMIT (emitente) com endereço
-    cnpj_emitente = limpar_cnpj_cpf(emitente_data.get('cnpj', '')).zfill(14)
+    cnpj_emitente = limpar_cnpj_cpf(emitente_data.get('cnpj', ''))
+    if not cnpj_emitente or cnpj_emitente == '0' * 14:
+        raise ValueError(f"CNPJ do emitente inválido ou vazio: {emitente_data.get('cnpj', 'N/A')}")
+    cnpj_emitente = cnpj_emitente.zfill(14)
     print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
+    
+    # Buscar IE (pode estar como 'ie' ou 'inscricao_estadual')
+    ie_emitente = emitente_data.get('ie') or emitente_data.get('inscricao_estadual', '')
+    if not ie_emitente:
+        raise ValueError("Inscrição Estadual do emitente é obrigatória")
+    
+    # Buscar regime tributário (pode estar em diferentes campos)
+    crt_emitente = str(emitente_data.get('regime_tributario') or 
+                      emitente_data.get('regime_tributario_id') or '1')
     
     emit = Nfe.InfNfe.Emit(
         CNPJ=cnpj_emitente,
         xNome=emitente_data.get('razao_social', '')[:60],
         xFant=emitente_data.get('nome_fantasia', '')[:60] if emitente_data.get('nome_fantasia') else None,
         enderEmit=ender_emit,
-        IE=emitente_data.get('ie', ''),
-        CRT=str(emitente_data.get('regime_tributario', '1'))
+        IE=ie_emitente,
+        CRT=crt_emitente
     )
     
     print("✅ [NFELIB] EMIT criado")
@@ -180,6 +192,8 @@ def generate_nfe_xml_nfelib(
     
     # 8. Criar DEST (destinatário) com endereço
     dest_cpf_cnpj = limpar_cnpj_cpf(destinatario_data.get('cpf_cnpj', ''))
+    if not dest_cpf_cnpj or dest_cpf_cnpj == '0' * 11:
+        raise ValueError(f"CPF/CNPJ do destinatário inválido ou vazio: {destinatario_data.get('cpf_cnpj', 'N/A')}")
     
     # Garantir 14 dígitos para CNPJ ou 11 para CPF
     if len(dest_cpf_cnpj) <= 11:
@@ -189,11 +203,35 @@ def generate_nfe_xml_nfelib(
     
     print(f"✅ [NFELIB] CPF/CNPJ Destinatário: {dest_cpf_cnpj} ({len(dest_cpf_cnpj)} dígitos)")
     
+    # Nome pode estar em 'nome' ou 'nome_razao_social'
+    nome_dest = (destinatario_data.get('nome') or 
+                destinatario_data.get('nome_razao_social') or '')
+    if not nome_dest:
+        raise ValueError("Nome do destinatário é obrigatório")
+    
+    # Determinar indIEDest baseado em IE e tipo de documento
+    # 1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte
+    ie_dest = destinatario_data.get('ie') or destinatario_data.get('inscricao_estadual', '')
+    if len(dest_cpf_cnpj) == 11:  # CPF = pessoa física = não contribuinte
+        ind_ie_dest = "9"
+    elif ie_dest and ie_dest.upper() not in ('', 'ISENTO'):
+        ind_ie_dest = "1"  # Contribuinte ICMS
+    elif ie_dest and ie_dest.upper() == 'ISENTO':
+        ind_ie_dest = "2"  # Contribuinte isento
+    else:
+        ind_ie_dest = "9"  # Não contribuinte
+    
+    print(f"✅ [NFELIB] Nome Destinatário: {nome_dest}, indIEDest: {ind_ie_dest}")
+    
     dest_kwargs = {
-        'xNome': destinatario_data.get('nome', '')[:60],
+        'xNome': nome_dest[:60],
         'enderDest': ender_dest,
-        'indIEDest': "9"
+        'indIEDest': ind_ie_dest
     }
+    
+    # Adicionar IE se for contribuinte
+    if ind_ie_dest == "1":
+        dest_kwargs['IE'] = ie_dest
     
     if len(dest_cpf_cnpj) == 11:
         dest_kwargs['CPF'] = dest_cpf_cnpj
