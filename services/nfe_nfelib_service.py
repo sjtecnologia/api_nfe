@@ -12,6 +12,65 @@ from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
 import re
 
 
+def calcular_dv_chave_acesso(chave_sem_dv: str) -> str:
+    """Calcula o dígito verificador da chave de acesso da NFe"""
+    multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9]
+    soma = 0
+    pos = 0
+    
+    # Percorre a chave de trás para frente
+    for i in range(len(chave_sem_dv) - 1, -1, -1):
+        soma += int(chave_sem_dv[i]) * multiplicadores[pos % 8]
+        pos += 1
+    
+    resto = soma % 11
+    dv = 0 if resto in (0, 1) else (11 - resto)
+    
+    return str(dv)
+
+
+def gerar_chave_acesso(emitente_data: Dict[str, Any], form_data: Dict[str, Any], 
+                       numero_nfe: int, data_emissao: datetime) -> str:
+    """Gera a chave de acesso de 44 dígitos da NFe"""
+    
+    # 1. cUF (2 dígitos)
+    cuf = str(get_uf_ibge_code(emitente_data.get('uf', 'SP'))).zfill(2)
+    
+    # 2. AAMM (4 dígitos)
+    aamm = data_emissao.strftime('%y%m')
+    
+    # 3. CNPJ (14 dígitos)
+    cnpj = limpar_cnpj_cpf(emitente_data.get('cnpj', '')).zfill(14)
+    
+    # 4. mod (2 dígitos)
+    mod = "55"
+    
+    # 5. serie (3 dígitos)
+    serie = str(form_data.get('serie', '1')).zfill(3)
+    
+    # 6. nNF (9 dígitos)
+    nnf = str(numero_nfe).zfill(9)
+    
+    # 7. tpEmis (1 dígito)
+    tp_emis = "1"  # Emissão normal
+    
+    # 8. cNF (8 dígitos)
+    cnf = form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000)).zfill(8)
+    
+    # Monta chave sem DV (43 dígitos)
+    chave_sem_dv = cuf + aamm + cnpj + mod + serie + nnf + tp_emis + cnf
+    
+    # 9. Calcula DV (1 dígito)
+    dv = calcular_dv_chave_acesso(chave_sem_dv)
+    
+    # Chave completa (44 dígitos)
+    chave_acesso = chave_sem_dv + dv
+    
+    print(f"✅ [NFELIB] Chave de acesso gerada: {chave_acesso}")
+    
+    return chave_acesso
+
+
 def generate_nfe_xml_nfelib(
     emitente_data: Dict[str, Any],
     destinatario_data: Dict[str, Any],
@@ -37,9 +96,16 @@ def generate_nfe_xml_nfelib(
     
     print("🚀 [NFELIB] Iniciando geração de XML com biblioteca nfelib")
     
-    # 1. Criar IDE (identificação)
+    # 1. Gerar data de emissão (usar antes de criar IDE)
     data_emissao = datetime.now(timezone.utc) - timedelta(minutes=3)
     
+    # 2. Gerar chave de acesso (44 dígitos)
+    chave_acesso = gerar_chave_acesso(emitente_data, form_data, numero_nfe, data_emissao)
+    
+    # 3. Gerar Id do infNFe (formato: "NFe" + chave de 44 dígitos)
+    id_nfe = f"NFe{chave_acesso}"
+    
+    # 4. Criar IDE (identificação)
     ide = Nfe.InfNfe.Ide(
         cUF=str(get_uf_ibge_code(emitente_data.get('uf', 'SP'))),
         cNF=form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000))[:8],
@@ -64,7 +130,7 @@ def generate_nfe_xml_nfelib(
     
     print("✅ [NFELIB] IDE criado")
     
-    # 2. Criar enderEmit
+    # 5. Criar enderEmit
     ender_emit = TenderEmi(
         xLgr=emitente_data.get('logradouro', 'RUA TESTE')[:60],
         nro=str(emitente_data.get('numero', '0'))[:60],
@@ -78,7 +144,7 @@ def generate_nfe_xml_nfelib(
         xPais="BRASIL"
     )
     
-    # 3. Criar EMIT (emitente) com endereço
+    # 6. Criar EMIT (emitente) com endereço
     emit = Nfe.InfNfe.Emit(
         CNPJ=limpar_cnpj_cpf(emitente_data.get('cnpj', '')),
         xNome=emitente_data.get('razao_social', '')[:60],
@@ -90,7 +156,7 @@ def generate_nfe_xml_nfelib(
     
     print("✅ [NFELIB] EMIT criado")
     
-    # 4. Criar enderDest
+    # 7. Criar enderDest
     ender_dest = Tendereco(
         xLgr=destinatario_data.get('logradouro', 'RUA TESTE')[:60],
         nro=str(destinatario_data.get('numero', '0'))[:60],
@@ -104,7 +170,7 @@ def generate_nfe_xml_nfelib(
         xPais="BRASIL"
     )
     
-    # 5. Criar DEST (destinatário) com endereço
+    # 8. Criar DEST (destinatário) com endereço
     dest_cpf_cnpj = limpar_cnpj_cpf(destinatario_data.get('cpf_cnpj', ''))
     dest_kwargs = {
         'xNome': destinatario_data.get('nome', '')[:60],
@@ -121,7 +187,7 @@ def generate_nfe_xml_nfelib(
     
     print("✅ [NFELIB] DEST criado")
     
-    # 6. Criar DET (itens)
+    # 9. Criar DET (itens)
     det_list = []
     v_prod_total = Decimal('0')
     v_nf_total = Decimal('0')
@@ -185,7 +251,7 @@ def generate_nfe_xml_nfelib(
     
     print(f"✅ [NFELIB] {len(det_list)} itens criados")
     
-    # 7. Criar TOTAL
+    # 10. Criar TOTAL
     icms_tot = Nfe.InfNfe.Total.Icmstot(
         vBC="0.00",
         vICMS="0.00",
@@ -212,12 +278,12 @@ def generate_nfe_xml_nfelib(
     
     print("✅ [NFELIB] TOTAL criado")
     
-    # 8. Criar TRANSP
+    # 11. Criar TRANSP
     transp = Nfe.InfNfe.Transp(modFrete="9")  # 9=Sem frete
     
     print("✅ [NFELIB] TRANSP criado")
     
-    # 9. Criar PAG
+    # 12. Criar PAG
     det_pag = Nfe.InfNfe.Pag.DetPag(
         tPag="01",  # 01=Dinheiro
         vPag=f"{v_nf_total:.2f}"
@@ -227,9 +293,10 @@ def generate_nfe_xml_nfelib(
     
     print("✅ [NFELIB] PAG criado")
     
-    # 10. Criar InfNFe completo
+    # 13. Criar InfNFe completo com atributo Id
     inf_nfe = Nfe.InfNfe(
         versao="4.00",
+        Id=id_nfe,
         ide=ide,
         emit=emit,
         dest=dest,
@@ -239,10 +306,12 @@ def generate_nfe_xml_nfelib(
         pag=pag
     )
     
-    # 11. Criar NFe
+    print(f"✅ [NFELIB] InfNFe criado com Id={id_nfe}")
+    
+    # 14. Criar NFe
     nfe = Nfe(infNFe=inf_nfe)
     
-    # 12. Gerar XML com namespace correto
+    # 15. Gerar XML com namespace correto
     try:
         xml_string = nfe.to_xml(
             indent="",
