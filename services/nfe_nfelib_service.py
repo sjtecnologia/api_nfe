@@ -131,10 +131,24 @@ def generate_nfe_xml_nfelib(
     id_nfe = f"NFe{chave_acesso}"
     
     # 4. Criar IDE (identificação)
+    # Determinar natureza da operação baseado no CFOP se não informada
+    nat_op = form_data.get('natOp', '').strip()
+    if not nat_op:
+        # Mapear CFOP comum para natureza da operação
+        cfop_primeiro_item = items[0].get('cfop', '') if items else ''
+        if cfop_primeiro_item.startswith('5'):
+            nat_op = 'VENDA DE MERCADORIA'
+        elif cfop_primeiro_item.startswith('6'):
+            nat_op = 'VENDA DE MERCADORIA PARA FORA DO ESTADO'
+        else:
+            nat_op = 'VENDA'
+    
+    print(f"📋 [DEBUG] Natureza Operação: '{nat_op}'")
+    
     ide = Nfe.InfNfe.Ide(
         cUF=str(get_uf_ibge_code(emitente_data.get('uf', 'SP'))),
         cNF=form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000))[:8],
-        natOp=form_data.get('natOp', 'VENDA')[:60],
+        natOp=nat_op[:60],
         mod="55",
         serie=str(form_data.get('serie', '1')),
         nNF=str(numero_nfe),
