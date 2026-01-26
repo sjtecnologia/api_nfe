@@ -97,9 +97,10 @@ def generate_nfe_xml_nfelib(
     print("🚀 [NFELIB] Iniciando geração de XML com biblioteca nfelib")
     
     # 1. Gerar data de emissão (usar timezone brasileiro BRT = UTC-3)
+    # Subtrair 1 minuto para garantir que não seja futura
     from datetime import timezone as tz
     brt = tz(timedelta(hours=-3))
-    data_emissao = datetime.now(brt)
+    data_emissao = datetime.now(brt) - timedelta(minutes=1)
     
     print(f"✅ [NFELIB] Data de emissão (BRT): {data_emissao.isoformat()}")
     
@@ -149,8 +150,11 @@ def generate_nfe_xml_nfelib(
     )
     
     # 6. Criar EMIT (emitente) com endereço
+    cnpj_emitente = limpar_cnpj_cpf(emitente_data.get('cnpj', '')).zfill(14)
+    print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
+    
     emit = Nfe.InfNfe.Emit(
-        CNPJ=limpar_cnpj_cpf(emitente_data.get('cnpj', '')),
+        CNPJ=cnpj_emitente,
         xNome=emitente_data.get('razao_social', '')[:60],
         xFant=emitente_data.get('nome_fantasia', '')[:60] if emitente_data.get('nome_fantasia') else None,
         enderEmit=ender_emit,
@@ -176,6 +180,15 @@ def generate_nfe_xml_nfelib(
     
     # 8. Criar DEST (destinatário) com endereço
     dest_cpf_cnpj = limpar_cnpj_cpf(destinatario_data.get('cpf_cnpj', ''))
+    
+    # Garantir 14 dígitos para CNPJ ou 11 para CPF
+    if len(dest_cpf_cnpj) <= 11:
+        dest_cpf_cnpj = dest_cpf_cnpj.zfill(11)
+    else:
+        dest_cpf_cnpj = dest_cpf_cnpj.zfill(14)
+    
+    print(f"✅ [NFELIB] CPF/CNPJ Destinatário: {dest_cpf_cnpj} ({len(dest_cpf_cnpj)} dígitos)")
+    
     dest_kwargs = {
         'xNome': destinatario_data.get('nome', '')[:60],
         'enderDest': ender_dest,
@@ -223,12 +236,12 @@ def generate_nfe_xml_nfelib(
         
         # Se não fornecido, determinar automaticamente
         if not csosn_item:
-            # CFOP 5.4xx e 6.4xx = Substituição Tributária (CSOSN 500)
-            if cfop.startswith('54') or cfop.startswith('64'):
-                csosn_item = '500'
-            # CFOP 5.102, 5.103, 6.102, 6.103 = Tributada ou Isenta (CSOSN 102)
-            elif cfop in ('5102', '5103', '6102', '6103'):
+            # CFOP 5405/6405 = Remessa (CSOSN 102 - Tributada pelo SN sem permissão de crédito)
+            if cfop in ('5405', '6405', '5102', '5103', '6102', '6103'):
                 csosn_item = '102'
+            # CFOP 5403/6403 = Retorno de remessa ST (CSOSN 500)
+            elif cfop in ('5403', '6403'):
+                csosn_item = '500'
             else:
                 csosn_item = '102'  # Padrão: Simples Nacional sem permissão de crédito
         
