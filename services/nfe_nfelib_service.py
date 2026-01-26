@@ -102,12 +102,12 @@ def generate_nfe_xml_nfelib(
     print(f"📋 [DEBUG] Número de itens: {len(items)}")
     
     # 1. Gerar data de emissão (usar timezone brasileiro BRT = UTC-3)
-    # Subtrair 1 minuto para garantir que não seja futura
+    # Subtrair 3 minutos para garantir que não seja futura (margem de segurança)
     from datetime import timezone as tz
     brt = tz(timedelta(hours=-3))
-    data_emissao = datetime.now(brt) - timedelta(minutes=1)
+    data_emissao = datetime.now(brt) - timedelta(minutes=3)
     
-    print(f"✅ [NFELIB] Data de emissão (BRT): {data_emissao.isoformat()}")
+    print(f"✅ [NFELIB] Data de emissão (BRT -3min): {data_emissao.isoformat()}")
     
     # 2. Gerar chave de acesso (44 dígitos)
     chave_acesso = gerar_chave_acesso(emitente_data, form_data, numero_nfe, data_emissao)
@@ -279,9 +279,15 @@ def generate_nfe_xml_nfelib(
         
         # Se não fornecido, determinar automaticamente
         if not csosn_item:
-            # CFOP 5405/6405 = Remessa (CSOSN 102 - Tributada pelo SN sem permissão de crédito)
-            if cfop in ('5405', '6405', '5102', '5103', '6102', '6103'):
+            # CFOP 5102/6102 = Venda de mercadoria (CSOSN 102 - SN sem crédito)
+            if cfop in ('5102', '6102'):
                 csosn_item = '102'
+            # CFOP 5103/6103 = Venda com ICMS ST (CSOSN 500)
+            elif cfop in ('5103', '6103'):
+                csosn_item = '500'
+            # CFOP 5405/6405 = Venda de bem do ativo imobilizado (CSOSN 900 - Outros)
+            elif cfop in ('5405', '6405'):
+                csosn_item = '900'
             # CFOP 5403/6403 = Retorno de remessa ST (CSOSN 500)
             elif cfop in ('5403', '6403'):
                 csosn_item = '500'
@@ -302,6 +308,20 @@ def generate_nfe_xml_nfelib(
                 vICMSSTRet="0.00"
             )
             icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
+        elif csosn_item == '900':
+            # CSOSN 900 - Outros (Venda de ativo, sucata, etc)
+            icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn900(
+                orig="0",
+                CSOSN="900"
+            )
+            icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN900=icms_sn)
+        elif csosn_item == '103':
+            # CSOSN 103 - Isenção do ICMS para faixa de receita bruta
+            icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
+                orig="0",
+                CSOSN="103"
+            )
+            icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
         else:
             # CSOSN 102 - Tributada pelo Simples Nacional sem permissão de crédito
             icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
