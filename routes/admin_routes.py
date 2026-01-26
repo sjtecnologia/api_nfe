@@ -3331,15 +3331,16 @@ def list_produtos():
             flash('Nenhum cliente selecionado.', 'error')
             return render_template('admin/produtos/list.html', produtos=[])
         rows = db.execute(text("""
-            SELECT produto_id, codigo_interno, descricao, unidade_comercial, preco_unitario_padrao,
-                   ncm_id, cfop_id, ativo
-            FROM produtos
-            WHERE cliente_id = :cliente_id
-            ORDER BY descricao
+            SELECT p.produto_id, p.codigo_interno, p.descricao, p.unidade_comercial, p.preco_unitario_padrao,
+                   p.ncm_id, p.cfop_id, p.ativo, n.codigo as ncm_codigo
+            FROM produtos p
+            LEFT JOIN ncms n ON n.ncm_id = p.ncm_id
+            WHERE p.cliente_id = :cliente_id
+            ORDER BY p.descricao
         """), {'cliente_id': cliente_id}).fetchall()
         produtos = [_safe_row_to_dict(r, [
             'produto_id','codigo_interno','descricao','unidade_comercial',
-            'preco_unitario_padrao','ncm_id','cfop_id','ativo'
+            'preco_unitario_padrao','ncm_id','cfop_id','ativo','ncm_codigo'
         ]) for r in rows]
         return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id)
     except Exception as e:

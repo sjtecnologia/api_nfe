@@ -279,3 +279,177 @@ def get_proximo_numero_nfe():
     except Exception as e:
         print(f"[ERROR] Erro ao buscar próximo número: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@api_bp.route('/validar-regra-ia', methods=['POST'])
+@login_required
+def validar_regra_ia():
+    """
+    Proxy para validação de regra tributária com IA.
+    Evita problemas de CORS ao fazer requisição server-side.
+    """
+    import requests
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "Dados não fornecidos"}), 400
+        
+        print(f"[IA VALIDAÇÃO] Proxy recebeu dados: {data}")
+        
+        # Chamar serviço de IA internamente (server-side)
+        response = requests.post(
+            'http://localhost:8081/valida/regra',
+            json=data,
+            timeout=20
+        )
+        
+        print(f"[IA VALIDAÇÃO] Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            resultado = response.json()
+            print(f"[IA VALIDAÇÃO] Resultado: {resultado}")
+            return jsonify(resultado), 200
+        else:
+            print(f"[IA VALIDAÇÃO] Erro: {response.text}")
+            return jsonify({
+                "error": "Erro ao validar com IA",
+                "details": response.text
+            }), response.status_code
+            
+    except requests.exceptions.Timeout:
+        print(f"[IA VALIDAÇÃO] Timeout ao conectar serviço IA")
+        return jsonify({
+            "error": "Timeout ao validar com IA",
+            "details": "Serviço demorou mais de 20 segundos"
+        }), 504
+        
+    except requests.exceptions.ConnectionError:
+        print(f"[IA VALIDAÇÃO] Erro de conexão com serviço IA")
+        return jsonify({
+            "error": "Serviço de IA indisponível",
+            "details": "Não foi possível conectar ao serviço de IA na porta 8081"
+        }), 503
+        
+    except Exception as e:
+        print(f"[IA VALIDAÇÃO] Erro inesperado: {e}")
+        return jsonify({
+            "error": "Erro inesperado",
+            "details": str(e)
+        }), 500
+
+@api_bp.route('/sugestao-produto-ia', methods=['POST'])
+@login_required
+def sugestao_produto_ia():
+    """
+    Proxy para sugestão de tributação de produto com IA.
+    Evita problemas de CORS ao fazer requisição server-side.
+    """
+    import requests
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "Dados não fornecidos"}), 400
+        
+        print(f"[IA SUGESTÃO] Proxy recebeu dados: {data}")
+        
+        # Chamar serviço de IA internamente (server-side)
+        response = requests.post(
+            'http://localhost:8081/sugestao',
+            json=data,
+            timeout=30
+        )
+        
+        print(f"[IA SUGESTÃO] Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            resultado = response.json()
+            print(f"[IA SUGESTÃO] Resultado: {resultado}")
+            return jsonify(resultado), 200
+        else:
+            print(f"[IA SUGESTÃO] Erro: {response.text}")
+            return jsonify({
+                "error": "Erro ao obter sugestão da IA",
+                "details": response.text
+            }), response.status_code
+            
+    except requests.exceptions.Timeout:
+        print(f"[IA SUGESTÃO] Timeout ao conectar serviço IA")
+        return jsonify({
+            "error": "Timeout ao obter sugestão da IA",
+            "details": "Serviço demorou mais de 30 segundos"
+        }), 504
+        
+    except requests.exceptions.ConnectionError:
+        print(f"[IA SUGESTÃO] Erro de conexão com serviço IA")
+        return jsonify({
+            "error": "Serviço de IA indisponível",
+            "details": "Não foi possível conectar ao serviço de IA na porta 8081"
+        }), 503
+        
+    except Exception as e:
+        print(f"[IA SUGESTÃO] Erro inesperado: {e}")
+        return jsonify({
+            "error": "Erro inesperado",
+            "details": str(e)
+        }), 500
+
+@api_bp.route('/validar-produto-ia', methods=['POST'])
+@login_required
+def validar_produto_ia():
+    """
+    Proxy para validação final de produto com IA antes de salvar.
+    Valida todos os campos tributários estão corretos.
+    """
+    import requests
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "Dados não fornecidos"}), 400
+        
+        print(f"[IA VALIDAÇÃO PRODUTO] Proxy recebeu dados: {data}")
+        
+        # Chamar serviço de IA para validar produto (usa o endpoint de validação de regra)
+        response = requests.post(
+            'http://localhost:8081/valida/regra',
+            json=data,
+            timeout=20
+        )
+        
+        print(f"[IA VALIDAÇÃO PRODUTO] Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            resultado = response.json()
+            print(f"[IA VALIDAÇÃO PRODUTO] Resultado: {resultado}")
+            return jsonify(resultado), 200
+        else:
+            print(f"[IA VALIDAÇÃO PRODUTO] Erro: {response.text}")
+            return jsonify({
+                "error": "Erro ao validar com IA",
+                "details": response.text
+            }), response.status_code
+            
+    except requests.exceptions.Timeout:
+        print(f"[IA VALIDAÇÃO PRODUTO] Timeout")
+        return jsonify({
+            "error": "Timeout ao validar com IA",
+            "details": "Serviço demorou mais de 20 segundos"
+        }), 504
+        
+    except requests.exceptions.ConnectionError:
+        print(f"[IA VALIDAÇÃO PRODUTO] Erro de conexão")
+        return jsonify({
+            "error": "Serviço de IA indisponível",
+            "details": "Não foi possível conectar ao serviço de IA na porta 8081"
+        }), 503
+        
+    except Exception as e:
+        print(f"[IA VALIDAÇÃO PRODUTO] Erro inesperado: {e}")
+        return jsonify({
+            "error": "Erro inesperado",
+            "details": str(e)
+        }), 500

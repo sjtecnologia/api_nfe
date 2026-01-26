@@ -5,7 +5,7 @@ from typing import Dict, Any
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from database.connection import get_db
 from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
 from auth.decorators import (
@@ -16,8 +16,9 @@ from auth.decorators import (
 )
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
-from services.nfe_service import NFeService, generate_nfe_xml, sign_xml, send_to_sefaz
+from services.nfe_service import NFeService, generate_nfe_xml, sign_xml, send_to_sefaz, validar_tributacao_nfe
 from utils.helpers import produto_to_dict_for_template, get_uf_ibge_code
+from utils.nfe_validators import validar_cpf, validar_cnpj
 from utils.nfe_validators import validar_dados_nfe, validar_xml_nfe
 from config.settings import SEFAZ_AMBIENTE_HOMOLOGACAO
 
@@ -84,6 +85,15 @@ def emitir_nfe():
             return redirect(url_for('home.home'))
         
         print(f"OK: Emitente encontrado: {emitente_data.razao_social}")
+        
+        # VALIDAR CNPJ DO EMITENTE
+        cnpj_emitente_limpo = emitente_data.cnpj.replace('.', '').replace('/', '').replace('-', '').strip()
+        print(f"🔍 [VALIDAÇÃO] CNPJ emitente: {cnpj_emitente_limpo}")
+        if not validar_cnpj(cnpj_emitente_limpo):
+            print(f"❌ [VALIDAÇÃO] CNPJ EMITENTE INVÁLIDO: {cnpj_emitente_limpo}")
+            flash(f'CNPJ do emitente é inválido: {emitente_data.cnpj}. Corrija o cadastro do cliente antes de emitir NFe.', 'danger')
+            return redirect(url_for('home.home'))
+        print(f"✅ [VALIDAÇÃO] CNPJ emitente válido")
         
         # Buscar regime tributário
         regime_tributario_nome = 'Regime Normal'
@@ -153,15 +163,87 @@ def emitir_nfe():
             
             # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
             action = request.form.get('action')
+            preview_only = request.form.get('preview_only') == 'true'
+            
             # Usar ambiente do cliente (1=Homologação, 2=Produção)
             ambiente_cliente = emitente_data.ambiente
             ambiente = 'producao' if ambiente_cliente == 2 else 'homologacao'
             
-            print(f" DEBUG - Ação recebida: {action}, Ambiente do cliente: {ambiente} ({ambiente_cliente})")
+            print(f" DEBUG - Ação recebida: {action}, Preview: {preview_only}, Ambiente do cliente: {ambiente} ({ambiente_cliente})")
             
             # OK: INICIALIZAR VARIÁVEIS OBRIGATÓRIAS
             destinatario_data = {}
             nfe_items = []
+            
+            # MODO PREVIEW: Gerar apenas o XML sem assinar ou enviar
+            if preview_only:
+                print(" === MODO PREVIEW XML ===")
+                try:
+                    # BUSCAR DESTINATÁRIO
+                    destinatario_id = request.form.get('destinatario')
+                    if not destinatario_id:
+                        return jsonify({'success': False, 'message': 'Destinatário é obrigatório'}), 400
+                    
+                    destinatario = db.query(DestinatarioNFe).filter_by(
+                        destinatario_id=destinatario_id,
+                        cliente_id=emitente_cliente_id
+                    ).first()
+                    
+                    if not destinatario:
+                        return jsonify({'success': False, 'message': 'Destinatário não encontrado'}), 404
+                    
+                    destinatario_data = {
+                        'nome_razao_social': destinatario.nome_razao_social,
+                        'cpf_cnpj': destinatario.cpf_cnpj,
+                        'logradouro': destinatario.logradouro,
+                        'numero': destinatario.numero,
+                        'bairro': destinatario.bairro,
+                        'cep': destinatario.cep,
+                        'codigo_municipio': destinatario.codigo_municipio,
+                        'nome_municipio': destinatario.nome_municipio,
+                        'uf': destinatario.uf
+                    }
+                    
+                    # PROCESSAR ITENS
+                    item_index = 0
+                    while f'items[{item_index}][json]' in request.form:
+                        item_json = request.form[f'items[{item_index}][json]']
+                        if item_json:
+                            item_data = json.loads(item_json)
+                            nfe_items.append(item_data)
+                        item_index += 1
+                    
+                    if not nfe_items:
+                        return jsonify({'success': False, 'message': 'Adicione pelo menos um item'}), 400
+                    
+                    # GERAR XML (sem assinatura)
+                    tp_amb = 1 if ambiente == 'producao' else 2
+                    xml_nfe = generate_nfe_xml(
+                        form_data_initial,
+                        emitente_data_for_template,
+                        destinatario_data,
+                        nfe_items,
+                        tp_amb,
+                        'preview'
+                    )
+                    
+                    print(f"OK: XML preview gerado: {len(xml_nfe)} caracteres")
+                    return jsonify({
+                        'success': True,
+                        'xml_preview': xml_nfe,
+                        'message': 'XML gerado com sucesso (preview)'
+                    })
+                    
+                except ValueError as ve:
+                    # Erros de validação tributária
+                    erro_msg = str(ve)
+                    print(f"ERRO DE VALIDAÇÃO: {erro_msg}")
+                    return jsonify({'success': False, 'message': erro_msg}), 400
+                except Exception as e:
+                    print(f"ERRO: Erro no preview: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return jsonify({'success': False, 'message': f'Erro ao gerar preview: {str(e)}'}), 500
             
             if action == 'emitir':
                 print(" === PROCESSANDO EMISSÃO ===")
@@ -186,6 +268,27 @@ def emitir_nfe():
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     print(f"OK: Destinatário encontrado: {destinatario.nome_razao_social}")
+                    
+                    # VALIDAR CPF/CNPJ DO DESTINATÁRIO
+                    cpf_cnpj_limpo = destinatario.cpf_cnpj.replace('.', '').replace('/', '').replace('-', '').strip()
+                    print(f"🔍 [VALIDAÇÃO] CPF/CNPJ destinatário: {cpf_cnpj_limpo}")
+                    
+                    if len(cpf_cnpj_limpo) == 11:  # CPF
+                        if not validar_cpf(cpf_cnpj_limpo):
+                            print(f"❌ [VALIDAÇÃO] CPF INVÁLIDO: {cpf_cnpj_limpo}")
+                            flash(f'CPF do destinatário é inválido: {destinatario.cpf_cnpj}. Corrija o cadastro antes de emitir a NFe.', 'danger')
+                            return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                        print(f"✅ [VALIDAÇÃO] CPF válido")
+                    elif len(cpf_cnpj_limpo) == 14:  # CNPJ
+                        if not validar_cnpj(cpf_cnpj_limpo):
+                            print(f"❌ [VALIDAÇÃO] CNPJ INVÁLIDO: {cpf_cnpj_limpo}")
+                            flash(f'CNPJ do destinatário é inválido: {destinatario.cpf_cnpj}. Corrija o cadastro antes de emitir a NFe.', 'danger')
+                            return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                        print(f"✅ [VALIDAÇÃO] CNPJ válido")
+                    else:
+                        print(f"❌ [VALIDAÇÃO] CPF/CNPJ com tamanho inválido: {len(cpf_cnpj_limpo)} dígitos")
+                        flash(f'CPF/CNPJ do destinatário tem formato inválido: {destinatario.cpf_cnpj}', 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     # OK: CONVERTER DESTINATÁRIO PARA DICIONÁRIO
                     destinatario_data = {
@@ -247,6 +350,17 @@ def emitir_nfe():
                     
                     print("OK: Validação passou")
                     
+                    # VALIDAR TRIBUTAÇÃO DOS ITENS
+                    print(" === VALIDANDO TRIBUTAÇÃO ===")
+                    sucesso_trib, erros_tributacao = validar_tributacao_nfe(emitente_data_for_template, nfe_items)
+                    if not sucesso_trib:
+                        print(f"❌ [VALIDAÇÃO TRIBUTÁRIA] {len(erros_tributacao)} erro(s) encontrado(s)")
+                        for erro in erros_tributacao:
+                            print(f"  • {erro}")
+                        flash('Erros de tributação encontrados:\n' + '\n'.join(erros_tributacao), 'danger')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+                    print("✅ [VALIDAÇÃO TRIBUTÁRIA] Tributação válida")
+                    
                     # PROCESSAR EMISSÃO DA NFE
                     # tpAmb SEFAZ: 1=Produção, 2=Homologação
                     tp_amb = 1 if ambiente == 'producao' else 2
@@ -263,6 +377,23 @@ def emitir_nfe():
                         )
                         print(f"OK: XML gerado: {len(xml_nfe)} caracteres")
                         print(f" XML preview: {xml_nfe[:200]}...")
+                    except ValueError as ve:
+                        # Erros de validação tributária
+                        erro_msg = str(ve)
+                        print(f"ERRO DE VALIDAÇÃO: {erro_msg}")
+                        
+                        # Dividir mensagem em linhas para flash individual
+                        if "ERROS DE TRIBUTAÇÃO" in erro_msg:
+                            # Remover o cabeçalho
+                            erros_linhas = erro_msg.replace("❌ ERROS DE TRIBUTAÇÃO ENCONTRADOS:", "").strip().split("\n\n")
+                            flash('❌ ERROS DE TRIBUTAÇÃO - Corrija no cadastro de produtos:', 'danger')
+                            for erro_linha in erros_linhas:
+                                if erro_linha.strip():
+                                    flash(erro_linha.strip(), 'warning')
+                        else:
+                            flash(f'Erro de validação: {erro_msg}', 'danger')
+                        
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     except Exception as e:
                         print(f"ERRO: ERRO ao gerar XML: {e}")
                         import traceback
@@ -312,6 +443,45 @@ def emitir_nfe():
                         flash(f'Erro na assinatura do XML: {e}', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))  # OK: CORRIGIDO
                     
+                    # 3.5. VALIDAÇÃO FINAL COM IA (OPCIONAL - NÃO BLOQUEIA)
+                    print("🤖 === VALIDAÇÃO FINAL COM IA ===")
+                    try:
+                        import requests
+                        validacao_ia = requests.post(
+                            "http://localhost:8081/valida/xml",
+                            json={
+                                "xml_content": xml_assinado,
+                                "ambiente": ambiente
+                            },
+                            timeout=20
+                        )
+                        
+                        if validacao_ia.status_code == 200:
+                            resultado_ia = validacao_ia.json()
+                            
+                            if not resultado_ia.get("valido", True):
+                                erros_ia = resultado_ia.get("erros", [])
+                                print(f"⚠️  IA detectou {len(erros_ia)} problema(s):")
+                                for erro in erros_ia:
+                                    print(f"  • {erro.get('campo', '?')}: {erro.get('erro', '')}")
+                                    flash(f"⚠️ Alerta IA: {erro.get('campo', '?')} - {erro.get('erro', '')}", 'warning')
+                            
+                            avisos_ia = resultado_ia.get("avisos", [])
+                            if avisos_ia:
+                                print(f"💡 {len(avisos_ia)} aviso(s) da IA")
+                                for aviso in avisos_ia:
+                                    print(f"  • {aviso}")
+                            
+                            score = resultado_ia.get("score_confianca", 0)
+                            if score > 0:
+                                print(f"✅ Score de confiança IA: {score}/100")
+                        else:
+                            print(f"⚠️  Validação IA não disponível (HTTP {validacao_ia.status_code})")
+                    except requests.exceptions.Timeout:
+                        print("⏱️  Timeout validação IA (continuando)")
+                    except Exception as e:
+                        print(f"⚠️  Erro validação IA: {e} (continuando)")
+                    
                     # 4. ENVIAR PARA SEFAZ
                     print(f" === ENVIANDO PARA SEFAZ ===")
                     try:
@@ -351,14 +521,32 @@ def emitir_nfe():
                         valor_total_nfe = sum(float(item.get('valor_total', 0)) for item in nfe_items)
                         
                         # Preparar data de emissão
+                        # O formulário HTML envia datetime local (BRT), precisamos converter para timezone aware
                         data_emissao_nfe = None
                         if form_data_initial.get('dataEmissao'):
                             try:
-                                data_emissao_nfe = datetime.fromisoformat(form_data_initial['dataEmissao'].replace('T', ' '))
-                            except:
-                                data_emissao_nfe = datetime.now()
+                                # Parse da string ISO (ex: "2026-01-26T09:36")
+                                dt_str = form_data_initial['dataEmissao'].replace('T', ' ')
+                                print(f"📅 [DEBUG] dataEmissao do formulário: '{form_data_initial.get('dataEmissao')}'")
+                                data_emissao_naive = datetime.fromisoformat(dt_str)
+                                print(f"📅 [DEBUG] datetime naive parseado: {data_emissao_naive}")
+                                
+                                # Adicionar timezone de Brasília (BRT = UTC-3)
+                                brasilia_tz = timezone(timedelta(hours=-3))
+                                data_emissao_nfe = data_emissao_naive.replace(tzinfo=brasilia_tz)
+                                print(f"📅 [DEBUG] datetime com timezone BRT: {data_emissao_nfe}")
+                                print(f"📅 [DEBUG] ISO format: {data_emissao_nfe.isoformat()}")
+                            except Exception as e:
+                                print(f"⚠️  [DEBUG] Erro ao parsear data: {e}")
+                                # Fallback: usar horário atual em BRT
+                                brasilia_tz = timezone(timedelta(hours=-3))
+                                data_emissao_nfe = datetime.now(brasilia_tz)
+                                print(f"📅 [DEBUG] Usando fallback: {data_emissao_nfe.isoformat()}")
                         else:
-                            data_emissao_nfe = datetime.now()
+                            # Usar horário atual em BRT
+                            brasilia_tz = timezone(timedelta(hours=-3))
+                            data_emissao_nfe = datetime.now(brasilia_tz)
+                            print(f"📅 [DEBUG] Sem dataEmissao, usando now(): {data_emissao_nfe.isoformat()}")
                         
                         nova_nfe = NFeEmitidas(
                             cliente_id=emitente_cliente_id,
@@ -391,11 +579,13 @@ def emitir_nfe():
                         
                         db.add(nova_nfe)
                         db.commit()
+                        print(f"💾 [DEBUG] NFe salva no banco - data_emissao: {nova_nfe.data_emissao}")
                         
                         # OK: CORREÇÃO: Refresh para obter o ID real após commit
                         db.refresh(nova_nfe)
                         # OK: CORREÇÃO: Acessar o valor do ID corretamente
                         nfe_id_raw = getattr(nova_nfe, 'nfe_emitida_id')
+                        print(f"💾 [DEBUG] Após refresh - data_emissao: {nova_nfe.data_emissao}")
                         
                         # Verificar se o valor pode ser convertido para int
                         if nfe_id_raw is None:
@@ -777,7 +967,7 @@ def list_nfes():
                 FROM nfe_emitidas n
                 JOIN clientes c ON n.cliente_id = c.cliente_id
                 WHERE n.cliente_id = :cliente_id
-                ORDER BY n.data_criacao DESC
+                ORDER BY n.numero DESC, n.serie DESC
                 LIMIT 100
             """)
             result = db.execute(query, {'cliente_id': cliente_id})
@@ -807,7 +997,7 @@ def list_nfes():
                 FROM nfe_emitidas n
                 JOIN clientes c ON n.cliente_id = c.cliente_id
                 WHERE n.cliente_id IN ({placeholders})
-                ORDER BY n.data_criacao DESC
+                ORDER BY n.numero DESC, n.serie DESC
                 LIMIT 100
             """)
             result = db.execute(query, params)

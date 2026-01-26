@@ -3,11 +3,17 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import JSONB 
 
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
 import os
 import base64 
 from decimal import Decimal 
 from flask_login import UserMixin
+
+# Timezone de Brasília para defaults
+def datetime_now_brt():
+    """Retorna datetime atual em BRT (America/Sao_Paulo)"""
+    brasilia_tz = timezone(timedelta(hours=-3))
+    return datetime.now(brasilia_tz)
 from sqlalchemy import text
 
 Base = declarative_base()
@@ -542,7 +548,7 @@ class NFeEmitidas(Base):
     destinatario_razao_social = Column(String(255), nullable=True)
     destinatario_cnpj_cpf = Column(String(14), nullable=True)
     json_nfe = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True) 
-    data_criacao = Column(DateTime, default=datetime.now, nullable=False) 
+    data_criacao = Column(DateTime, default=datetime_now_brt, nullable=False)  # Usando timezone BRT
     data_emissao = Column(DateTime, nullable=True)  # Data de emissão da NFe
     valor_total = Column(Numeric(15, 2), nullable=True)  # Valor total da NFe
     created_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True)
@@ -685,7 +691,7 @@ class RegraTributacao(Base):
     cst_ipi = Column(String(3), nullable=True)
     aliquota_ipi = Column(Numeric(5, 2), nullable=True)
     descricao_regra = Column(Text, nullable=True)
-    data_criacao = Column(DateTime, nullable=False, default=datetime.now) 
+    data_criacao = Column(DateTime, nullable=False, default=datetime_now_brt)  # Usando timezone BRT
     ativo = Column(Boolean, nullable=False, default=True) 
     created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
 

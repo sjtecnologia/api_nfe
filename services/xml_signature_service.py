@@ -64,10 +64,42 @@ class XMLSignatureService:
             # Parsear XML
             xml_tree = etree.fromstring(xml_content.encode('utf-8'))
             
-            # Encontrar elemento infNFe para assinar
-            inf_nfe = xml_tree.find('.//{http://www.portalfiscal.inf.br/nfe}infNFe')
+            print(f"[DEBUG] Root element: {xml_tree.tag}")
+            
+            # Encontrar elemento NFe (pode ser o próprio root ou um filho)
+            # Primeiro, verificar se o root já é o NFe
+            if xml_tree.tag.endswith('NFe') or xml_tree.tag == 'NFe':
+                nfe_element = xml_tree
+                print(f"[OK] Root é NFe")
+            else:
+                # Buscar NFe como descendente
+                nfe_element = xml_tree.find('.//{http://www.portalfiscal.inf.br/nfe}NFe')
+                if nfe_element is None:
+                    nfe_element = xml_tree.find('.//NFe')
+                if nfe_element is None:
+                    # Última tentativa: buscar qualquer elemento que termine com NFe
+                    for elem in xml_tree.iter():
+                        if elem.tag.endswith('NFe'):
+                            nfe_element = elem
+                            break
+            
+            if nfe_element is None:
+                print(f"[ERRO] Estrutura do XML:")
+                print(etree.tostring(xml_tree, encoding='unicode', pretty_print=True)[:500])
+                raise Exception("Elemento NFe não encontrado no XML")
+            
+            print(f"[OK] Elemento NFe encontrado: {nfe_element.tag}")
+            
+            # Encontrar elemento infNFe para assinar (filho direto de NFe)
+            inf_nfe = nfe_element.find('{http://www.portalfiscal.inf.br/nfe}infNFe')
             if inf_nfe is None:
-                inf_nfe = xml_tree.find('.//infNFe')
+                inf_nfe = nfe_element.find('infNFe')
+            if inf_nfe is None:
+                # Buscar em qualquer nível
+                for elem in nfe_element.iter():
+                    if elem.tag.endswith('infNFe'):
+                        inf_nfe = elem
+                        break
             
             if inf_nfe is None:
                 raise Exception("Elemento infNFe não encontrado no XML")
@@ -78,27 +110,55 @@ class XMLSignatureService:
             
             print(f"[OK] Elemento infNFe encontrado: {inf_nfe_id}")
             
-            # Configurar XMLSigner com parâmetros corretos para NFe
-            signer = XMLSigner(
-                method='enveloped',
-                signature_algorithm='rsa-sha1',
-                digest_algorithm='sha1',
-                c14n_algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315'
-            )
+            # ========================================================================
+            # ASSINATURA MANUAL - signxml não permite SHA1 por padrão
+            # NFe exige SHA1 conforme padrão da SEFAZ
+            # ========================================================================
             
-            # Assinar o XML
-            signed_root = signer.sign(
-                xml_tree,
-                key=private_key,
-                cert=certificate,
-                reference_uri=f'#{inf_nfe_id}'
-            )
+            # 1. Canonicalizar o elemento infNFe usando tostring com method='c14n'
+            inf_nfe_c14n = etree.tostring(inf_nfe, method='c14n', exclusive=False, with_comments=False)
             
-            # Serializar XML assinado
-            signed_xml = etree.tostring(signed_root, encoding='unicode')
+            print(f"[OK] infNFe canonicalizado: {len(inf_nfe_c14n)} bytes")
+            
+            # 2. Calcular digest SHA1
+            digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
+            print(f"[OK] Digest calculado: {digest_value[:20]}...")
+            
+            # 3. Criar SignedInfo (formato compacto SEM quebras de linha para SEFAZ)
+            signed_info = f'<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
+            
+            # Canonicalizar SignedInfo
+            signed_info_tree = etree.fromstring(signed_info.encode())
+            signed_info_c14n = etree.tostring(signed_info_tree, method='c14n', exclusive=False, with_comments=False)
+            
+            # 4. Assinar SignedInfo com a chave privada
+            from cryptography.hazmat.primitives import hashes
+            from cryptography.hazmat.primitives.asymmetric import padding
+            
+            signature = private_key.sign(
+                signed_info_c14n,
+                padding.PKCS1v15(),
+                hashes.SHA1()
+            )
+            signature_value = base64.b64encode(signature).decode()
+            print(f"[OK] Assinatura gerada: {len(signature_value)} caracteres")
+            
+            # 5. Obter certificado X509 em base64
+            cert_der = certificate.public_bytes(serialization.Encoding.DER)
+            cert_base64 = base64.b64encode(cert_der).decode()
+            
+            # 6. Construir elemento Signature (formato compacto SEM quebras de linha)
+            signature_xml = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info}<SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'
+            
+            # 7. Inserir assinatura no XML (como irmão de infNFe, dentro de NFe)
+            signature_element = etree.fromstring(signature_xml.encode())
+            nfe_element.append(signature_element)
+            
+            # 8. Serializar XML assinado
+            signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
             signed_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + signed_xml
             
-            print(f"[OK] XML assinado com sucesso usando signxml: {len(signed_xml)} caracteres")
+            print(f"[OK] XML assinado com sucesso manualmente: {len(signed_xml)} caracteres")
             return signed_xml
             
         except Exception as e:

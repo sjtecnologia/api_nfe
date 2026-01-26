@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 ## Removido: função duplicada gerar_prompt_sugestao
 from fastapi import Body
 
@@ -112,20 +113,40 @@ def gerar_prompt_sugestao(req: SugestaoTributariaRequest) -> str:
 @app.post('/sugestao')
 async def sugestao_tributaria(req: SugestaoTributariaRequest):
     prompt = gerar_prompt_sugestao(req)
-    import json
     try:
-        # Exemplo: chamada para Ollama/Mistral/HuggingFace local
-        # Ajuste o endpoint conforme o modelo instalado
-        llm_url = "http://177.189.240.158:1234/v1/chat/completions"
-        payload = {
-            "model": "codellama-7b-instruct",
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 512,
-            "temperature": 0.2
-        }   
-        resp = requests.post(llm_url, json=payload, timeout=60)
+        # Usar GitHub Models API (muito mais rápido!)
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        
+        if github_token:
+            # GitHub Models API (GPT-4o mini - rápido e preciso)
+            llm_url = "https://models.inference.ai.azure.com/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {github_token}"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Especialista em classificação fiscal brasileira. Responda APENAS JSON puro, sem markdown."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 512,
+                "temperature": 0.2
+            }
+            resp = requests.post(llm_url, json=payload, headers=headers, timeout=15)
+        else:
+            # Fallback: LM Studio local
+            llm_url = "http://177.189.240.158:1234/v1/chat/completions"
+            payload = {
+                "model": "codellama-7b-instruct",
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 512,
+                "temperature": 0.2
+            }   
+            resp = requests.post(llm_url, json=payload, timeout=60)
+            
         if resp.status_code == 200:
             # Para /v1/chat/completions, a resposta vem em choices[0].message.content
             resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content")
@@ -155,7 +176,384 @@ async def explicacao_tributaria(data: Dict[str, Any]):
     # Gera explicação didática baseada nos dados recebidos
     return {'explicacao': 'Sugestão baseada em operações similares anteriores e perfil do cliente.'}
 
+# ========== VALIDAÇÃO DE XML COMPLETO ==========
+class ValidacaoXMLRequest(BaseModel):
+    xml_content: str
+    ambiente: str  # "producao" ou "homologacao"
+
+@app.post('/valida/xml')
+async def validar_xml_completo(req: ValidacaoXMLRequest):
+    """Valida XML completo da NFe antes de enviar para SEFAZ"""
+    
+    try:
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        
+        prompt = f"""Você é um especialista em NFe 4.0. Analise o XML abaixo e identifique problemas que causariam rejeição no SEFAZ.
+
+AMBIENTE: {req.ambiente}
+
+VERIFIQUE:
+1. Estrutura do XML (ordem de elementos, namespaces)
+2. Compatibilidade CFOP x CST/CSOSN x Regime Tributário
+3. Campos obrigatórios (procEmi, verProc, indPag, etc)
+4. Valores tributários (vBC, vICMS, vNF)
+5. CPF/CNPJ válidos
+6. Datas no formato correto
+7. Totalizadores batendo com itens
+
+XML:
+{req.xml_content[:3000]}...
+
+RESPONDA JSON:
+{{
+  "valido": true/false,
+  "erros": [{{"campo": "nome", "erro": "descrição", "linha": "aproximada"}}],
+  "avisos": ["avisos não críticos"],
+  "score_confianca": 0-100
+}}
+
+SEM markdown, APENAS JSON."""
+
+        if github_token:
+            llm_url = "https://models.inference.ai.azure.com/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {github_token}"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Especialista NFe 4.0 Brasil. Responda JSON puro."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 1024,
+                "temperature": 0.1
+            }
+            resp = requests.post(llm_url, json=payload, headers=headers, timeout=20)
+        else:
+            return JSONResponse(content={
+                "valido": True,
+                "erros": [],
+                "avisos": ["Validação IA não disponível - token GitHub não configurado"],
+                "score_confianca": 0
+            })
+        
+        if resp.status_code == 200:
+            resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            try:
+                resposta_limpa = resposta.strip()
+                if resposta_limpa.startswith("```json"):
+                    resposta_limpa = resposta_limpa.replace("```json", "", 1)
+                if resposta_limpa.endswith("```"):
+                    resposta_limpa = resposta_limpa.rsplit("```", 1)[0]
+                resposta_limpa = resposta_limpa.strip()
+                
+                resultado = json.loads(resposta_limpa)
+                return JSONResponse(content=resultado)
+            except Exception as e:
+                return JSONResponse(content={
+                    "valido": True,
+                    "erros": [],
+                    "avisos": [f"Erro ao processar resposta IA: {str(e)}"],
+                    "score_confianca": 0
+                })
+        else:
+            return JSONResponse(content={
+                "valido": True,
+                "erros": [],
+                "avisos": [f"IA indisponível: {resp.status_code}"],
+                "score_confianca": 0
+            })
+            
+    except Exception as e:
+        return JSONResponse(content={
+            "valido": True,
+            "erros": [],
+            "avisos": [f"Erro validação XML: {str(e)}"],
+            "score_confianca": 0
+        })
+
+# ========== VALIDAÇÃO DE REGRA TRIBUTÁRIA ==========
+class ValidacaoRegraRequest(BaseModel):
+    regime_tributario: str  # "Simples Nacional" ou "Regime Normal"
+    cfop: str
+    cst_icms: Optional[str] = None
+    csosn_icms: Optional[str] = None
+    ncm: Optional[str] = None
+    descricao: Optional[str] = None
+
+@app.post('/valida/regra')
+async def validar_regra_tributaria(req: ValidacaoRegraRequest):
+    """Valida regra tributária no cadastro - TODOS OS REGIMES"""
+    
+    try:
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        is_simples = "simples" in req.regime_tributario.lower()
+        is_presumido = "presumido" in req.regime_tributario.lower()
+        is_real = "real" in req.regime_tributario.lower()
+        
+        # Determinar qual tributação foi informada
+        tributacao_informada = ""
+        if req.csosn_icms:
+            tributacao_informada = f"CSOSN: {req.csosn_icms}"
+        elif req.cst_icms:
+            tributacao_informada = f"CST: {req.cst_icms}"
+        else:
+            tributacao_informada = "CST/CSOSN: não informado"
+        
+        prompt = f"""Você é um especialista em tributação brasileira. Analise se esta regra tributária está CORRETA ou INCORRETA:
+
+DADOS:
+- Regime: {req.regime_tributario}
+- CFOP: {req.cfop}
+- {tributacao_informada}
+- NCM: {req.ncm or 'não informado'}
+
+REGRAS TRIBUTÁRIAS:
+
+🔹 SIMPLES NACIONAL:
+• CFOP 5401/6401 → ❌ PROIBIDO (Simples não pode ser substituto)
+• CFOP 5405/6405 → ✅ CSOSN 500 (ST substituído)
+• CFOP 5102/6102 → ✅ CSOSN 102, 103, 300, 400 ou 900
+• CFOP 5101/6101 → ✅ CSOSN 101, 102, 103, 201, 202, 203 ou 900
+
+🔹 LUCRO PRESUMIDO / LUCRO REAL:
+• CFOP 5405/6405 → ✅ CST 10 ou 60 (ambos válidos)
+• CFOP 5401/6401 → ✅ CST 10 (substituto)
+• CFOP 5403/6403 → ✅ CST 60 (já retido)
+• CFOP 5102/6102 → ✅ CST 00, 10, 20, 30, 40, 41, 50, 51, 60, 70 ou 90
+• CFOP 5101/6101 → ✅ CST 00, 20, 40, 41, 50 ou 51
+
+Responda em JSON puro:
+{{
+  "valido": true ou false,
+  "erros": ["liste APENAS se encontrar erros"],
+  "sugestoes": ["correções específicas"],
+  "explicacao": "explicação técnica"
+}}
+
+IMPORTANTE: Se a combinação CFOP + CST/CSOSN estiver CORRETA segundo as regras acima, retorne "valido": true."""
+
+        if github_token:
+            llm_url = "https://models.inference.ai.azure.com/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {github_token}"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Especialista tributação brasileira. Responda APENAS JSON puro, sem markdown."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 800,
+                "temperature": 0.1
+            }
+            resp = requests.post(llm_url, json=payload, headers=headers, timeout=20)
+        else:
+            # Validação básica por regras sem IA (fallback)
+            erros = []
+            sugestoes = []
+            
+            if is_simples:
+                # SIMPLES NACIONAL
+                if req.cfop in ['5401', '6401', '5402', '6402']:
+                    erros.append(f"CFOP {req.cfop} incompatível com Simples Nacional (não pode ser substituto tributário)")
+                    sugestoes.append("Use CFOP 5102/6102 (venda normal) ou 5405/6405 (ST substituído)")
+                elif req.cfop in ['5405', '6405', '5403', '6403'] and req.csosn_icms != '500':
+                    erros.append(f"CFOP {req.cfop} exige CSOSN 500, mas foi informado CSOSN {req.csosn_icms}")
+                    sugestoes.append("Alterar CSOSN para 500 (ICMS cobrado anteriormente por ST)")
+                elif req.cfop in ['5102', '6102'] and req.csosn_icms == '500':
+                    erros.append(f"CFOP {req.cfop} não deve usar CSOSN 500 (use 102, 103, 300, 400 ou 900)")
+                    sugestoes.append("Alterar CSOSN para 102 (tributada SN sem permissão de crédito)")
+                
+                if not req.csosn_icms and not erros:
+                    erros.append("Simples Nacional requer CSOSN ICMS")
+                    sugestoes.append("Informar CSOSN compatível com o CFOP")
+            else:
+                # REGIME NORMAL (Lucro Presumido ou Lucro Real)
+                if req.cfop in ['5405', '6405'] and req.cst_icms not in ['10', '60']:
+                    erros.append(f"CFOP {req.cfop} exige CST 10 ou 60, mas foi informado CST {req.cst_icms}")
+                    sugestoes.append("Alterar CST para 10 (tributada + ST) ou 60 (ST cobrado anteriormente)")
+                elif req.cfop in ['5401', '6401', '5402', '6402'] and req.cst_icms != '10':
+                    erros.append(f"CFOP {req.cfop} (substituto ST) exige CST 10")
+                    sugestoes.append("Alterar CST para 10 (tributada com cobrança do ICMS por ST)")
+                elif req.cfop in ['5403', '6403'] and req.cst_icms != '60':
+                    erros.append(f"CFOP {req.cfop} exige CST 60 (ICMS cobrado anteriormente por ST)")
+                    sugestoes.append("Alterar CST para 60")
+                
+                if not req.cst_icms and not erros:
+                    erros.append(f"{req.regime_tributario} requer CST ICMS")
+                    sugestoes.append("Informar CST compatível com o CFOP")
+            
+            return JSONResponse(content={
+                "valido": len(erros) == 0,
+                "erros": erros,
+                "sugestoes": sugestoes,
+                "explicacao": f"Validação por regras (IA não disponível). {len(erros)} erro(s) encontrado(s)." if erros else "Regra válida conforme legislação tributária."
+            })
+        
+        if resp.status_code == 200:
+            resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            try:
+                resposta_limpa = resposta.strip()
+                if resposta_limpa.startswith("```json"):
+                    resposta_limpa = resposta_limpa.replace("```json", "", 1)
+                if resposta_limpa.endswith("```"):
+                    resposta_limpa = resposta_limpa.rsplit("```", 1)[0]
+                resposta_limpa = resposta_limpa.strip()
+                
+                resultado = json.loads(resposta_limpa)
+                return JSONResponse(content=resultado)
+            except Exception as e:
+                return JSONResponse(content={
+                    "valido": True,
+                    "erros": [],
+                    "sugestoes": [],
+                    "explicacao": f"Erro ao processar IA: {str(e)}"
+                })
+        else:
+            return JSONResponse(content={
+                "valido": True,
+                "erros": [],
+                "sugestoes": [],
+                "explicacao": f"IA indisponível: {resp.status_code}"
+            })
+            
+    except Exception as e:
+        return JSONResponse(content={
+            "valido": True,
+            "erros": [],
+            "sugestoes": [],
+            "explicacao": f"Erro: {str(e)}"
+        })
+
 @app.post('/valida')
 async def valida_tributaria(data: Dict[str, Any]):
     # Validação de riscos e inconsistências
     return {'alerta': 'Nenhum risco fiscal detectado.'}
+
+# ========== VALIDAÇÃO TRIBUTÁRIA COM IA ==========
+class ValidacaoTributariaRequest(BaseModel):
+    crt: str  # "1" = Simples Nacional, "3" = Regime Normal
+    itens: list  # Lista de itens com cfop, cst/csosn
+
+def gerar_prompt_validacao_tributaria(req: ValidacaoTributariaRequest) -> str:
+    regime = "Simples Nacional" if req.crt == "1" else "Regime Normal"
+    
+    prompt = f"""Especialista tributário brasileiro. Valide a tributação.
+
+REGIME: {regime} (CRT={req.crt})
+
+REGRAS:
+1. Simples (CRT=1):
+   - CFOP 5401/6401: PROIBIDO (não pode ser substituto)
+   - CFOP 5405/6405: exige CSOSN 500
+   - CFOP 5102/6102: aceita CSOSN 102,103,300,400,900
+
+2. Normal (CRT=3):
+   - CFOP 5405/6405: exige CST 10 ou 60
+
+ITENS:
+"""
+    
+    for idx, item in enumerate(req.itens, 1):
+        cfop = item.get('cfop', '')
+        csosn = item.get('csosn_icms', item.get('csosn', ''))
+        cst = item.get('cst_icms', item.get('cst', ''))
+        desc = item.get('descricao', f'Item {idx}')
+        
+        prompt += f"{idx}. {desc} - CFOP:{cfop}"
+        if req.crt == "1":
+            prompt += f" CSOSN:{csosn}\n"
+        else:
+            prompt += f" CST:{cst}\n"
+    
+    prompt += """
+JSON:
+{"valido":true/false,"erros":[{"item":"1","erro":"descrição","sugestao":"correção"}],"alertas":[]}
+
+SEM markdown, APENAS JSON."""
+    return prompt
+
+@app.post('/valida/tributacao')
+async def validar_tributacao_ia(req: ValidacaoTributariaRequest):
+    """Valida tributação dos itens usando IA"""
+    prompt = gerar_prompt_validacao_tributaria(req)
+    
+    try:
+        # Usar GitHub Models API (muito mais rápido!)
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        
+        print(f"[DEBUG] GitHub Token presente: {'Sim' if github_token else 'Não'}")
+        
+        if github_token:
+            # GitHub Models API (GPT-4o mini - rápido e preciso)
+            print("[DEBUG] Usando GitHub Models API")
+            llm_url = "https://models.inference.ai.azure.com/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {github_token}"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Especialista tributação BR. Responda JSON puro."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 512,
+                "temperature": 0.1
+            }
+            resp = requests.post(llm_url, json=payload, headers=headers, timeout=15)
+            print(f"[DEBUG] GitHub Models resposta: {resp.status_code}")
+        else:
+            # Fallback: LM Studio local
+            print("[DEBUG] Usando LM Studio local (fallback)")
+            llm_url = "http://177.189.240.158:1234/v1/chat/completions"
+            payload = {
+                "model": "codellama-7b-instruct",
+                "messages": [
+                    {"role": "system", "content": "Especialista tributação BR. Responda JSON puro."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 512,
+                "temperature": 0.1
+            }
+            resp = requests.post(llm_url, json=payload, timeout=60)
+        
+        if resp.status_code == 200:
+            resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            try:
+                # Limpar markdown se presente
+                resposta_limpa = resposta.strip()
+                if resposta_limpa.startswith("```json"):
+                    resposta_limpa = resposta_limpa.replace("```json", "", 1)
+                if resposta_limpa.endswith("```"):
+                    resposta_limpa = resposta_limpa.rsplit("```", 1)[0]
+                resposta_limpa = resposta_limpa.strip()
+                
+                resultado = json.loads(resposta_limpa)
+                return JSONResponse(content=resultado)
+            except Exception as e:
+                # Fallback: retornar resposta raw
+                return JSONResponse(content={
+                    "valido": False,
+                    "erros": [{"erro": f"Erro ao processar resposta da IA: {str(e)}", "resposta_raw": resposta}],
+                    "alertas": []
+                })
+        else:
+            return JSONResponse(content={
+                "valido": False,
+                "erros": [{"erro": f"Erro na comunicação com IA: {resp.status_code}"}],
+                "alertas": []
+            })
+            
+    except Exception as e:
+        return JSONResponse(content={
+            "valido": False,
+            "erros": [{"erro": f"Erro no serviço de validação: {str(e)}"}],
+            "alertas": []
+        })

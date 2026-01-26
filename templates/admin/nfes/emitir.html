@@ -113,6 +113,19 @@ input[readonly] {
                             </select>
                         </div>
                     </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="indPres">Indicador de Presença *</label>
+                            <select class="form-control" name="indPres" id="indPres" required>
+                                <option value="0">0 - Não se aplica</option>
+                                <option value="1" selected>1 - Presencial</option>
+                                <option value="2">2 - Internet</option>
+                                <option value="3">3 - Teleatendimento</option>
+                                <option value="4">4 - Entrega a domicílio</option>
+                                <option value="5">5 - Presencial fora do estabelecimento</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="row">
@@ -121,20 +134,6 @@ input[readonly] {
                             <label for="natOp">Natureza da Operação *</label>
                             <input type="text" class="form-control" name="natOp" id="natOp" 
                                    placeholder="Ex: Venda de mercadoria" maxlength="60" required>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="indPres">Indicador de Presença *</label>
-                            <select class="form-control" name="indPres" id="indPres" required>
-                                <option value="0">0 - Não se aplica</option>
-                                <option value="1" selected>1 - Operação presencial</option>
-                                <option value="2">2 - Operação não presencial, pela Internet</option>
-                                <option value="3">3 - Operação não presencial, Teleatendimento</option>
-                                <option value="4">4 - NFCe em operação com entrega a domicílio</option>
-                                <option value="5">5 - Operação presencial, fora do estabelecimento</option>
-                                <option value="9">9 - Operação não presencial, outros</option>
-                            </select>
                         </div>
                     </div>
                 </div>
@@ -726,8 +725,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 10000);
     
-    // Definir data/hora atual
+    // Definir data/hora atual COM MARGEM DE SEGURANÇA (3 minutos antes)
+    // Isso evita rejeição por "data futura" no SEFAZ
     const now = new Date();
+    now.setMinutes(now.getMinutes() - 3); // Subtrair 3 minutos
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     document.getElementById('dataEmissao').value = now.toISOString().slice(0, 16);
     
@@ -1427,49 +1428,10 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             }
             
             // ============================================
-            // ✅ MOSTRAR MENSAGEM DE SUCESSO COM DETALHES
+            // NOTA: Mensagem de sucesso removida - só mostrar se houver erro
             // ============================================
-            
-            const detalhes = [];
-            
-            // ICMS
-            if (result.regra.csosn_icms) detalhes.push(`CSOSN: ${result.regra.csosn_icms}`);
-            if (result.regra.cst_icms) detalhes.push(`CST ICMS: ${result.regra.cst_icms}`);
-            if (result.regra.aliquota_icms) detalhes.push(`ICMS: ${result.regra.aliquota_icms}%`);
-            
-            // PIS
-            if (result.regra.cst_pis) detalhes.push(`CST PIS: ${result.regra.cst_pis}`);
-            if (result.regra.aliquota_pis) detalhes.push(`PIS: ${result.regra.aliquota_pis}%`);
-            
-            // COFINS
-            if (result.regra.cst_cofins) detalhes.push(`CST COFINS: ${result.regra.cst_cofins}`);
-            if (result.regra.aliquota_cofins) detalhes.push(`COFINS: ${result.regra.aliquota_cofins}%`);
-            
-            // IPI
-            if (result.regra.cst_ipi) detalhes.push(`CST IPI: ${result.regra.cst_ipi}`);
-            if (result.regra.aliquota_ipi) detalhes.push(`IPI: ${result.regra.aliquota_ipi}%`);
-            
-            const detalhesTexto = detalhes.length > 0 ? `<br><small>${detalhes.join(' | ')}</small>` : '';
-            
-            const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-success alert-dismissible fade show';
-            alertDiv.innerHTML = `
-                <strong>✅ Regra tributária aplicada</strong><br>
-                ${result.regra.descricao_regra || 'Regra automática'}${detalhesTexto}
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-            `;
-            const container = document.getElementById('itensContainer');
-            if (container && container.parentElement) {
-                container.parentElement.insertBefore(alertDiv, container);
-            }
-            
-            console.log('✅ Alerta de sucesso exibido');
-            
-            // Remover alerta após 8 segundos (mais tempo para ler os detalhes)
-            setTimeout(() => {
-                alertDiv.remove();
-                console.log('Alerta removido');
-            }, 8000);
+            console.log('✅ Regra tributária aplicada com sucesso');
+            console.log('Detalhes:', result.regra);
             
             // Recalcular totais
             calcularTotal(itemId);
@@ -1701,9 +1663,194 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Visualizar XML (funcionalidade futura)
+// Visualizar XML - Gera preview do XML da NFe sem enviar ao SEFAZ
 function previewXML() {
-    alert('Funcionalidade de visualização XML em desenvolvimento');
+    // Validar campos obrigatórios antes de gerar XML
+    const errors = [];
+    
+    // Validar destinatário
+    const destinatarioSelect = document.getElementById('destinatario_id');
+    if (!destinatarioSelect || !destinatarioSelect.value) {
+        errors.push('Destinatário é obrigatório');
+    }
+    
+    // Validar produtos
+    const produtosTableBody = document.querySelector('#tabelaProdutos tbody');
+    if (!produtosTableBody || produtosTableBody.children.length === 0) {
+        errors.push('Adicione pelo menos um produto');
+    }
+    
+    // Validar pagamento
+    const pagamentoTableBody = document.querySelector('#tabelaPagamentos tbody');
+    if (!pagamentoTableBody || pagamentoTableBody.children.length === 0) {
+        errors.push('Adicione pelo menos uma forma de pagamento');
+    }
+    
+    if (errors.length > 0) {
+        alert('Corrija os seguintes erros antes de visualizar o XML:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+        return;
+    }
+    
+    // Mostrar loading
+    const btnPreview = document.querySelector('button[onclick="previewXML()"]');
+    if (btnPreview) {
+        btnPreview.disabled = true;
+        btnPreview.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando XML...';
+    }
+    
+    // Coletar dados do formulário
+    const formData = new FormData(document.getElementById('formEmitirNFe'));
+    formData.append('preview_only', 'true'); // Flag para indicar que é apenas preview
+    
+    // Fazer requisição para gerar XML
+    fetch('{{ url_for("nfe.emitir_nfe") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.xml_preview) {
+            // Criar modal para exibir XML
+            mostrarModalXML(data.xml_preview);
+        } else {
+            alert('Erro ao gerar XML: ' + (data.message || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao gerar preview do XML. Verifique o console para mais detalhes.');
+    })
+    .finally(() => {
+        // Restaurar botão
+        if (btnPreview) {
+            btnPreview.disabled = false;
+            btnPreview.innerHTML = '<i class="fas fa-file-code"></i> Visualizar XML';
+        }
+    });
+}
+
+// Função auxiliar para mostrar modal com XML formatado
+function mostrarModalXML(xmlString) {
+    // Formatar XML com indentação
+    const formatted = formatXML(xmlString);
+    
+    // Criar modal
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 1000px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    `;
+    
+    modalContent.innerHTML = `
+        <div style="padding: 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">Preview do XML da NFe</h3>
+            <div>
+                <button onclick="copiarXML()" style="padding: 8px 16px; margin-right: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    <i class="fas fa-copy"></i> Copiar
+                </button>
+                <button onclick="fecharModalXML()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+        <div style="padding: 20px; overflow: auto; flex: 1;">
+            <pre id="xmlContent" style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow: auto; margin: 0; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4;">${escapeHtml(formatted)}</pre>
+        </div>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // Fechar ao clicar fora
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            fecharModalXML();
+        }
+    });
+}
+
+// Função para formatar XML com indentação
+function formatXML(xml) {
+    const PADDING = '  ';
+    const reg = /(>)(<)(\/*)/g;
+    let formatted = '';
+    let pad = 0;
+    
+    xml = xml.replace(reg, '$1\n$2$3');
+    
+    xml.split('\n').forEach(function(node) {
+        let indent = 0;
+        if (node.match(/.+<\/\w[^>]*>$/)) {
+            indent = 0;
+        } else if (node.match(/^<\/\w/)) {
+            if (pad !== 0) {
+                pad -= 1;
+            }
+        } else if (node.match(/^<\w([^>]*[^\/])?>.*$/)) {
+            indent = 1;
+        } else {
+            indent = 0;
+        }
+        
+        formatted += PADDING.repeat(pad) + node + '\n';
+        pad += indent;
+    });
+    
+    return formatted.trim();
+}
+
+// Função para escapar HTML
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Função para copiar XML para clipboard
+function copiarXML() {
+    const xmlContent = document.getElementById('xmlContent');
+    if (xmlContent) {
+        const text = xmlContent.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            alert('XML copiado para a área de transferência!');
+        }).catch(err => {
+            console.error('Erro ao copiar:', err);
+            alert('Erro ao copiar XML. Tente selecionar e copiar manualmente.');
+        });
+    }
+}
+
+// Função para fechar modal XML
+function fecharModalXML() {
+    const modal = document.querySelector('div[style*="position: fixed"]');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 // Mostrar/ocultar campos da transportadora baseado na modalidade de frete
@@ -1974,104 +2121,74 @@ document.addEventListener('DOMContentLoaded', function() {
             // 1. VALIDAR CAMPOS OBRIGATÓRIOS
             const erros = [];
             
-            // Validar destinatário
-            const tipoDestinatario = document.querySelector('input[name="tipo_destinatario"]:checked')?.value;
-            if (!tipoDestinatario) {
-                erros.push('Selecione o tipo de destinatário (Pessoa Física ou Jurídica)');
+            // Validar destinatário pelo select
+            const destinatarioSelect = document.getElementById('destinatario');
+            if (!destinatarioSelect || !destinatarioSelect.value) {
+                erros.push('Selecione um destinatário');
             }
             
-            // Validar documento do destinatário
-            const cpfCnpj = document.getElementById('input-cpf-cnpj')?.value;
-            if (!cpfCnpj || cpfCnpj.trim() === '') {
-                erros.push('Informe o CPF/CNPJ do destinatário');
-            }
+            // Pegar nome do destinatário selecionado
+            const destinatarioOption = destinatarioSelect?.options[destinatarioSelect.selectedIndex];
+            const nomeDestinatario = destinatarioOption?.dataset.nome || destinatarioOption?.text || 'Destinatário';
+            const cpfCnpj = destinatarioOption?.dataset.documento || 'N/A';
             
-            // Validar nome do destinatário
-            const nomeDestinatario = document.getElementById('input-nome-razao')?.value;
-            if (!nomeDestinatario || nomeDestinatario.trim() === '') {
-                erros.push('Informe o nome/razão social do destinatário');
-            }
-            
-            // Validar endereço
-            const logradouro = document.getElementById('input-logradouro')?.value;
-            const numero = document.getElementById('input-numero')?.value;
-            const bairro = document.getElementById('input-bairro')?.value;
-            const municipio = document.getElementById('input-municipio')?.value;
-            const uf = document.getElementById('input-uf')?.value;
-            const cep = document.getElementById('input-cep')?.value;
-            
-            if (!logradouro || logradouro.trim() === '') erros.push('Informe o logradouro');
-            if (!numero || numero.trim() === '') erros.push('Informe o número do endereço');
-            if (!bairro || bairro.trim() === '') erros.push('Informe o bairro');
-            if (!municipio || municipio.trim() === '') erros.push('Informe o município');
-            if (!uf || uf.trim() === '') erros.push('Informe a UF');
-            if (!cep || cep.trim() === '') erros.push('Informe o CEP');
-            
-            // Validar produtos
-            const produtosTable = document.getElementById('produtosTable');
-            const produtosRows = produtosTable?.querySelectorAll('tbody tr');
-            if (!produtosRows || produtosRows.length === 0) {
+            // Validar produtos (verificar se tem itens adicionados no container)
+            const itensContainer = document.getElementById('itensContainer');
+            const itensCards = itensContainer?.querySelectorAll('.card');
+            if (!itensCards || itensCards.length === 0) {
                 erros.push('Adicione pelo menos um produto à nota fiscal');
             }
             
-            // Validar forma de pagamento
-            const formaPagamento = document.getElementById('forma_pagamento')?.value;
+            // Validar forma de pagamento (ID correto é formaPagamento)
+            const formaPagamento = document.getElementById('formaPagamento')?.value;
             if (!formaPagamento || formaPagamento.trim() === '') {
                 erros.push('Selecione a forma de pagamento');
             }
             
             // Se houver erros, mostrar e não prosseguir
             if (erros.length > 0) {
-                let mensagemErro = '<strong>Corrija os seguintes erros antes de emitir:</strong><ul>';
-                erros.forEach(erro => {
-                    mensagemErro += `<li>${erro}</li>`;
+                let mensagemErro = 'CAMPOS OBRIGATÓRIOS NÃO PREENCHIDOS:\n\n';
+                erros.forEach((erro, index) => {
+                    mensagemErro += `${index + 1}. ${erro}\n`;
                 });
-                mensagemErro += '</ul>';
                 
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Campos obrigatórios não preenchidos',
-                    html: mensagemErro,
-                    confirmButtonText: 'OK',
-                    confirmButtonColor: '#d33'
-                });
+                alert(mensagemErro);
                 return;
             }
             
             // 2. CONFIRMAR EMISSÃO
-            Swal.fire({
-                title: 'Confirmar emissão de NFe?',
-                html: `
-                    <p><strong>Destinatário:</strong> ${nomeDestinatario}</p>
-                    <p><strong>Documento:</strong> ${cpfCnpj}</p>
-                    <p><strong>Produtos:</strong> ${produtosRows.length} item(ns)</p>
-                    <br>
-                    <p class="text-danger"><strong>ATENÇÃO:</strong> Esta ação irá transmitir a nota fiscal para a SEFAZ e não poderá ser desfeita!</p>
-                `,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#28a745',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: '<i class="fas fa-paper-plane"></i> Sim, emitir NFe',
-                cancelButtonText: '<i class="fas fa-times"></i> Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Mostrar loading
-                    Swal.fire({
-                        title: 'Emitindo NFe...',
-                        html: 'Aguarde enquanto a nota fiscal está sendo transmitida para a SEFAZ.',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false,
-                        showConfirmButton: false,
-                        didOpen: () => {
-                            Swal.showLoading();
-                        }
-                    });
-                    
-                    // Submeter o formulário
-                    form.submit();
-                }
-            });
+            const mensagemConfirmacao = 
+                `CONFIRMAR EMISSÃO DE NFE?\n\n` +
+                `Destinatário: ${nomeDestinatario}\n` +
+                `Documento: ${cpfCnpj}\n` +
+                `Produtos: ${itensCards.length} item(ns)\n\n` +
+                `⚠️ ATENÇÃO: Esta ação irá transmitir a nota fiscal para a SEFAZ e não poderá ser desfeita!\n\n` +
+                `Deseja realmente continuar?`;
+            
+            if (confirm(mensagemConfirmacao)) {
+                // Atualizar JSON de todos os itens antes de submeter
+                const itens = document.querySelectorAll('[id^="item-"]');
+                itens.forEach(item => {
+                    const itemId = item.id.split('-')[1];
+                    atualizarItemJSON(itemId);
+                });
+                
+                // Submeter o formulário
+                btnEmitir.disabled = true;
+                btnEmitir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
+                
+                // Usar o submit nativo sem disparar validação do onsubmit
+                // Adicionar o campo action antes de submeter
+                const inputAction = document.createElement('input');
+                inputAction.type = 'hidden';
+                inputAction.name = 'action';
+                inputAction.value = 'emitir';
+                form.appendChild(inputAction);
+                
+                // Submit usando requestSubmit para manter o comportamento nativo
+                // mas sem disparar validação duplicada
+                HTMLFormElement.prototype.submit.call(form);
+            }
         });
     }
 });

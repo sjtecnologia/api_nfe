@@ -449,6 +449,16 @@ def generate_nfe_xml_nfelib(
             ns_map={None: "http://www.portalfiscal.inf.br/nfe"}
         )
         print(f"✅ [NFELIB] XML gerado: {len(xml_string)} caracteres")
+        
+        # Salvar XML para análise offline
+        try:
+            xml_debug_path = f"/tmp/nfe_debug_{numero_nfe}.xml"
+            with open(xml_debug_path, 'w', encoding='utf-8') as f:
+                f.write(xml_string)
+            print(f"📁 [DEBUG] XML salvo em: {xml_debug_path}")
+        except Exception as e2:
+            print(f"⚠️ [DEBUG] Erro ao salvar XML: {str(e2)}")
+        
         return xml_string
     except Exception as e:
         print(f"❌ [NFELIB] Erro ao gerar XML: {e}")
