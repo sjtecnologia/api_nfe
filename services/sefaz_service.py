@@ -144,9 +144,11 @@ class SefazService:
         print(f"[ENVELOPE-DEBUG] Após remover declaração: {len(xml_nfe_limpo)} caracteres")
         print(f"[ENVELOPE-DEBUG] Ainda tem Signature: {'<Signature' in xml_nfe_limpo}")
         
-        # TESTE: Manter xmlns no NFe (não remover) - alguns validadores SEFAZ podem exigir
-        # Mesmo que esteja dentro de enviNFe, o xmlns explícito pode ser necessário
-        print(f"[ENVELOPE-DEBUG] ⚠️ xmlns mantido em NFe (teste para Erro 225)")
+        # CORREÇÃO ERRO 225: Remover xmlns do NFe quando já está no enviNFe
+        # O namespace duplicado pode causar rejeição "Falha no Schema XML"
+        if 'xmlns="http://www.portalfiscal.inf.br/nfe"' in xml_nfe_limpo:
+            xml_nfe_limpo = xml_nfe_limpo.replace(' xmlns="http://www.portalfiscal.inf.br/nfe"', '', 1)
+            print(f"[ENVELOPE-DEBUG] ⚠️ xmlns removido de NFe para evitar duplicação")
         
         envelope = f'''<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
