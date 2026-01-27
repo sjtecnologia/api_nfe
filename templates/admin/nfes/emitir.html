@@ -2208,8 +2208,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // mas sem disparar validação duplicada
                 HTMLFormElement.prototype.submit.call(form);
             }
-            }
         }, true); // Usar capture: true para capturar o evento antes de outros listeners
+    }
 });
 
 // ✅ PREENCHER DADOS EM MODO EDIÇÃO
