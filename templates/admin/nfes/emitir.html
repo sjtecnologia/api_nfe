@@ -82,14 +82,14 @@ input[readonly] {
                         <div class="form-group">
                             <label for="serie">Série *</label>
                             <input type="number" class="form-control" name="serie" id="serie" 
-                                   value="{% if edit_mode and form_data.serie %}{{ form_data.serie }}{% else %}1{% endif %}" min="1" max="999" required {% if not edit_mode %}onchange="buscarProximoNumero()"{% endif %}>
+                                   value="1" min="1" max="999" required onchange="buscarProximoNumero()">
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="form-group">
                             <label for="numero_nfe">Número da NFe *</label>
                             <input type="number" class="form-control" name="numero_nfe" id="numero_nfe" 
-                                   value="{% if edit_mode and form_data.numero_nfe %}{{ form_data.numero_nfe }}{% else %}1{% endif %}" min="1" required {% if not edit_mode %}onchange="confirmarAlteracaoNumero()"{% endif %}>
+                                   value="1" min="1" required onchange="confirmarAlteracaoNumero()">
                             <!-- <small class="form-text text-muted">⚠️ Alteração requer confirmação. Número sugerido aparecerá automaticamente.</small> -->
                         </div>
                     </div>
@@ -733,10 +733,19 @@ document.addEventListener('DOMContentLoaded', function() {
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     document.getElementById('dataEmissao').value = now.toISOString().slice(0, 16);
     
-    // Buscar próximo número da NFe ao carregar página (não em modo edição)
-    {% if not edit_mode %}
+    // Definir data/hora ATUAL (sempre, inclusive em modo edição)
+    const agora = new Date();
+    const ano = agora.getFullYear();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    const dia = String(agora.getDate()).padStart(2, '0');
+    const hora = String(agora.getHours()).padStart(2, '0');
+    const minuto = String(agora.getMinutes()).padStart(2, '0');
+    const dataHoraAtual = `${ano}-${mes}-${dia}T${hora}:${minuto}`;
+    document.getElementById('dataEmissao').value = dataHoraAtual;
+    console.log('📅 Data/hora definida:', dataHoraAtual);
+    
+    // Buscar próximo número da NFe ao carregar página
     buscarProximoNumero();
-    {% endif %}
     
     // Atualizar número quando modelo mudar
     document.getElementById('modelo').addEventListener('change', buscarProximoNumero);
