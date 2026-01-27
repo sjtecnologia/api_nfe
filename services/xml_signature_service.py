@@ -124,8 +124,8 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Criar SignedInfo (formato compacto SEM quebras de linha para SEFAZ)
-            signed_info = f'<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
+            # 3. Criar SignedInfo (COM espaços antes de /> como XML padrão SEFAZ)
+            signed_info = f'<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
             
             # Canonicalizar SignedInfo
             signed_info_tree = etree.fromstring(signed_info.encode())
