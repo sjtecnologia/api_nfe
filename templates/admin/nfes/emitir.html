@@ -2350,6 +2350,10 @@ function adicionarItemComDados(itemData) {
                         if (option.value === itemData.ncm) {
                             option.selected = true;
                             campo.value = itemData.ncm;
+                            // Atualizar Select2 se estiver inicializado
+                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
+                                $(campo).val(itemData.ncm).trigger('change');
+                            }
                             console.log('✅ NCM selecionado:', itemData.ncm);
                             break;
                         }
@@ -2364,6 +2368,10 @@ function adicionarItemComDados(itemData) {
                         if (option.value === itemData.cfop) {
                             option.selected = true;
                             campo.value = itemData.cfop;
+                            // Atualizar Select2 se estiver inicializado
+                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
+                                $(campo).val(itemData.cfop).trigger('change');
+                            }
                             console.log('✅ CFOP selecionado:', itemData.cfop);
                             break;
                         }
@@ -2385,6 +2393,10 @@ function adicionarItemComDados(itemData) {
                         if (option.value === itemData.csosn_icms) {
                             option.selected = true;
                             campo.value = itemData.csosn_icms;
+                            // Atualizar Select2 se estiver inicializado
+                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
+                                $(campo).val(itemData.csosn_icms).trigger('change');
+                            }
                             console.log('✅ CSOSN selecionado:', itemData.csosn_icms);
                             break;
                         }
