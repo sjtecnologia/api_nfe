@@ -82,14 +82,14 @@ input[readonly] {
                         <div class="form-group">
                             <label for="serie">Série *</label>
                             <input type="number" class="form-control" name="serie" id="serie" 
-                                   value="{% if edit_mode and form_data.serie %}{{ form_data.serie }}{% else %}1{% endif %}" min="1" max="999" required onchange="buscarProximoNumero()">
+                                   value="{% if edit_mode and form_data.serie %}{{ form_data.serie }}{% else %}1{% endif %}" min="1" max="999" required {% if not edit_mode %}onchange="buscarProximoNumero()"{% endif %}>
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="form-group">
                             <label for="numero_nfe">Número da NFe *</label>
                             <input type="number" class="form-control" name="numero_nfe" id="numero_nfe" 
-                                   value="{% if edit_mode and form_data.numero_nfe %}{{ form_data.numero_nfe }}{% else %}1{% endif %}" min="1" required onchange="confirmarAlteracaoNumero()">
+                                   value="{% if edit_mode and form_data.numero_nfe %}{{ form_data.numero_nfe }}{% else %}1{% endif %}" min="1" required {% if not edit_mode %}onchange="confirmarAlteracaoNumero()"{% endif %}>
                             <!-- <small class="form-text text-muted">⚠️ Alteração requer confirmação. Número sugerido aparecerá automaticamente.</small> -->
                         </div>
                     </div>
@@ -2198,6 +2198,28 @@ document.addEventListener('DOMContentLoaded', function() {
 {% if edit_mode and form_data %}
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🔧 Modo edição ativo - preenchendo dados...');
+    console.log('📋 Form data:', {{ form_data|tojson }});
+    console.log('📦 Initial items:', {{ initial_nfe_items|tojson }});
+    
+    // Preencher destinatário (do campo destinatario_cnpj_cpf da NFe)
+    {% if form_data.destinatario_cnpj_cpf or form_data.destinatario_id %}
+    setTimeout(function() {
+        const destinatarioSelect = document.getElementById('destinatario');
+        const destinatarioValue = '{{ form_data.destinatario_cnpj_cpf or form_data.destinatario_id }}';
+        console.log('👤 Tentando selecionar destinatário:', destinatarioValue);
+        
+        // Procurar option com esse valor
+        for (let option of destinatarioSelect.options) {
+            if (option.value === destinatarioValue || option.text.includes(destinatarioValue)) {
+                option.selected = true;
+                destinatarioSelect.value = option.value;
+                $(destinatarioSelect).trigger('change'); // Se usar select2
+                console.log('✅ Destinatário selecionado:', option.value);
+                break;
+            }
+        }
+    }, 200);
+    {% endif %}
     
     // Preencher campos do formulário
     {% if form_data.numero_nfe %}

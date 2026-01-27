@@ -1475,6 +1475,12 @@ def edit(nfe_id):
                         form_data = json_data.get('form_data', {})
                         items_data = json_data.get('items', [])
                         
+                        # Adicionar dados do destinatário ao form_data (necessário para preencher select)
+                        if nfe_data.get('destinatario_cnpj_cpf'):
+                            form_data['destinatario_cnpj_cpf'] = nfe_data['destinatario_cnpj_cpf']
+                        if nfe_data.get('destinatario_razao_social'):
+                            form_data['destinatario_razao_social'] = nfe_data['destinatario_razao_social']
+                        
                         print(f" Form data extraído: {len(form_data)} campos")
                         print(f" Items extraídos: {len(items_data)} itens")
                         
