@@ -2147,10 +2147,15 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             # xml.etree.ElementTree não suporta xml_declaration
             xml_bytes_no_decl = etree.tostring(root, encoding='utf-8')
             if not xml_bytes_no_decl.startswith(b'<?xml'):
-                xml_bytes = b'<?xml version="1.0" encoding="UTF-8"?>\n' + xml_bytes_no_decl
+                xml_bytes = b'<?xml version="1.0" encoding="UTF-8"?>' + xml_bytes_no_decl
             else:
                 xml_bytes = xml_bytes_no_decl
         xml_string = xml_bytes.decode('utf-8')
+        
+        # CRÍTICO: Remover TODAS as quebras de linha e espaços extras entre tags
+        # O erro 588 ocorre quando há \n, \r, espaços no início/fim de valores
+        xml_string = xml_string.replace('\n', '').replace('\r', '').replace('\t', '')
+        print("✅ Quebras de linha removidas do XML")
         
         # CRÍTICO: Adicionar xmlns no elemento NFe se não estiver presente
         # O Schema da SEFAZ exige xmlns="http://www.portalfiscal.inf.br/nfe" no elemento NFe
