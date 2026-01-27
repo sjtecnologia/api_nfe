@@ -3834,7 +3834,12 @@ def edit_destinatario(destinatario_id: int):
             else:
                 return redirect(url_for('admin.list_clientes'))
         
-        return render_template('admin/destinatarios/form.html', destinatario=destinatario)
+        # Obter cliente_id do destinatário
+        cliente_id = destinatario.get('cliente_id')
+        
+        return render_template('admin/destinatarios/form.html', 
+                             destinatario=destinatario,
+                             cliente_id=cliente_id)
     except Exception as e:
         import traceback
         print(f"ERRO: Erro edit_destinatario: {e}")
