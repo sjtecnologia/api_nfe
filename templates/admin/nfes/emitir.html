@@ -2239,9 +2239,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Criar FormData com todos os dados do form
                 const formData = new FormData(form);
                 
-                // IMPORTANTE: Adicionar action=emit (backend espera 'emit', não 'emitir')
-                formData.append('action', 'emit');
-                console.log('✅ Campo action=emit adicionado ao FormData');
+                // IMPORTANTE: Verificar se está em modo edição
+                // Modo edição: action=emit (rota /admin/nfe/edit/X)
+                // Modo novo: usar o value do botão original (emitir)
+                const isEditMode = window.location.pathname.includes('/edit/');
+                const actionValue = isEditMode ? 'emit' : submitter.value;
+                
+                formData.append('action', actionValue);
+                console.log(`✅ Campo action=${actionValue} adicionado (modo: ${isEditMode ? 'edição' : 'novo'})`);
                 
                 // Determinar URL correta
                 const actionUrl = form.getAttribute('action') || window.location.href;
