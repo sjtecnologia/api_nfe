@@ -2239,9 +2239,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Criar FormData com todos os dados do form
                 const formData = new FormData(form);
                 
-                // IMPORTANTE: Adicionar o campo action=emitir manualmente
-                formData.append('action', 'emitir');
-                console.log('✅ Campo action=emitir adicionado ao FormData');
+                // IMPORTANTE: Adicionar action=emit (backend espera 'emit', não 'emitir')
+                formData.append('action', 'emit');
+                console.log('✅ Campo action=emit adicionado ao FormData');
                 
                 // Determinar URL correta
                 const actionUrl = form.getAttribute('action') || window.location.href;
