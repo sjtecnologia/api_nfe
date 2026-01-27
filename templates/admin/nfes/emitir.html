@@ -783,8 +783,10 @@ function initSelect2() {
             
             console.log('🎉 Select2 inicialização concluída!');
             
-            // Adicionar primeiro item automaticamente
+            // Adicionar primeiro item automaticamente (não em modo edição)
+            {% if not edit_mode %}
             adicionarItem();
+            {% endif %}
         }
     }, 100);
 }
@@ -2344,8 +2346,7 @@ function adicionarItemComDados(itemData) {
             
             console.log('✅ Item preenchido');
             
-            // Calcular valor total
-            calcularValorItem(itemId);
+            // Atualizar JSON do item
             atualizarItemJSON(itemId);
         } catch (error) {
             console.error('❌ Erro ao preencher item:', error);
