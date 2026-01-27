@@ -2122,10 +2122,33 @@ document.addEventListener('DOMContentLoaded', function() {
     if (form) {
         console.log('✅ Registrando listener de SUBMIT no form');
         
-        // Remover required de todos os campos IMEDIATAMENTE
-        const camposRequired = form.querySelectorAll('[required]');
-        camposRequired.forEach(campo => campo.removeAttribute('required'));
-        console.log(`🔧 ${camposRequired.length} campos required removidos preventivamente`);
+        // Função para remover required de todos os campos
+        function removerRequired() {
+            const camposRequired = form.querySelectorAll('[required]');
+            camposRequired.forEach(campo => campo.removeAttribute('required'));
+            return camposRequired.length;
+        }
+        
+        // Remover required inicial
+        const qtd = removerRequired();
+        console.log(`🔧 ${qtd} campos required removidos preventivamente`);
+        
+        // Observar mudanças no DOM para remover required de campos novos
+        const observer = new MutationObserver(function() {
+            const qtdNovos = removerRequired();
+            if (qtdNovos > 0) {
+                console.log(`🔧 ${qtdNovos} campos required removidos dinamicamente`);
+            }
+        });
+        observer.observe(form, { childList: true, subtree: true, attributes: true, attributeFilter: ['required'] });
+        
+        // Também interceptar evento "invalid" de qualquer campo
+        form.addEventListener('invalid', function(e) {
+            console.log('⚠️ Evento invalid capturado:', e.target);
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }, true);
         
         form.addEventListener('submit', function(e) {
             console.log('🎯 SUBMIT INTERCEPTADO!', e);
