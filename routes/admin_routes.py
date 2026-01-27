@@ -3803,12 +3803,116 @@ def salvar_destinatario():
     finally:
         db.close()
 
-@admin_bp.route('/destinatarios/<int:destinatario_id>/edit')
+@admin_bp.route('/destinatarios/<int:destinatario_id>/edit', methods=['GET', 'POST'])
 @login_required
 @permission_required('destinatarios_nfe.edit')
 def edit_destinatario(destinatario_id: int):
     db = _get_db()
     destinatario = None  # Inicializar variável
+    
+    # POST - Atualizar destinatário
+    if request.method == 'POST':
+        try:
+            # Limpar CEP (remover formatação)
+            cep_raw = request.form.get('cep', '')
+            cep_limpo = ''.join(filter(str.isdigit, cep_raw))
+            
+            # Limpar CPF/CNPJ (remover formatação)
+            cpf_cnpj_raw = request.form.get('cpf_cnpj', '')
+            cpf_cnpj_limpo = ''.join(filter(str.isdigit, cpf_cnpj_raw))
+            
+            # Garantir codigo_uf (campo obrigatório)
+            codigo_uf = request.form.get('codigo_uf')
+            if not codigo_uf or codigo_uf == 'None':
+                uf = request.form.get('uf', '')
+                uf_map = {
+                    'AC': '12', 'AL': '27', 'AP': '16', 'AM': '13', 'BA': '29',
+                    'CE': '23', 'DF': '53', 'ES': '32', 'GO': '52', 'MA': '21',
+                    'MT': '51', 'MS': '50', 'MG': '31', 'PA': '15', 'PB': '25',
+                    'PR': '41', 'PE': '26', 'PI': '22', 'RJ': '33', 'RN': '24',
+                    'RS': '43', 'RO': '11', 'RR': '14', 'SC': '42', 'SP': '35',
+                    'SE': '28', 'TO': '17'
+                }
+                codigo_uf = uf_map.get(uf, '99')
+            
+            data = {
+                'tipo_pessoa': request.form.get('tipo_pessoa'),
+                'nome_razao_social': request.form.get('nome_razao_social'),
+                'cpf_cnpj': cpf_cnpj_limpo,
+                'ie': request.form.get('ie'),
+                'ie_indicador_nfe': request.form.get('ie_indicador_nfe', '9'),
+                'email': request.form.get('email'),
+                'telefone': request.form.get('telefone'),
+                'logradouro': request.form.get('logradouro'),
+                'numero': request.form.get('numero'),
+                'complemento': request.form.get('complemento'),
+                'bairro': request.form.get('bairro'),
+                'cep': cep_limpo,
+                'codigo_municipio': request.form.get('codigo_municipio'),
+                'nome_municipio': request.form.get('nome_municipio'),
+                'uf': request.form.get('uf'),
+                'codigo_uf': codigo_uf,
+                'codigo_pais': request.form.get('codigo_pais', '1058'),
+                'nome_pais': request.form.get('nome_pais', 'Brasil'),
+                'data_atualizacao': datetime.now(),
+                'destinatario_id': destinatario_id
+            }
+            
+            db.execute(text("""
+                UPDATE destinatarios_nfe SET
+                    tipo_pessoa = :tipo_pessoa,
+                    nome_razao_social = :nome_razao_social,
+                    cpf_cnpj = :cpf_cnpj,
+                    ie = :ie,
+                    ie_indicador_nfe = :ie_indicador_nfe,
+                    email = :email,
+                    telefone = :telefone,
+                    logradouro = :logradouro,
+                    numero = :numero,
+                    complemento = :complemento,
+                    bairro = :bairro,
+                    cep = :cep,
+                    codigo_municipio = :codigo_municipio,
+                    nome_municipio = :nome_municipio,
+                    uf = :uf,
+                    codigo_uf = :codigo_uf,
+                    codigo_pais = :codigo_pais,
+                    nome_pais = :nome_pais,
+                    data_atualizacao = :data_atualizacao
+                WHERE destinatario_id = :destinatario_id
+            """), data)
+            db.commit()
+            
+            # Obter cliente_id para redirect
+            row = db.execute(text("SELECT cliente_id FROM destinatarios_nfe WHERE destinatario_id = :did"),
+                           {'did': destinatario_id}).fetchone()
+            cliente_id = row[0] if row else None
+            
+            flash('Destinatário atualizado com sucesso', 'success')
+            if cliente_id:
+                return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
+            else:
+                return redirect(url_for('admin.list_clientes'))
+        except Exception as e:
+            db.rollback()
+            import traceback
+            print(f"ERRO: Erro ao atualizar destinatário: {e}")
+            traceback.print_exc()
+            flash('Erro ao atualizar destinatário', 'error')
+            # Tentar obter cliente_id mesmo com erro
+            try:
+                row = db.execute(text("SELECT cliente_id FROM destinatarios_nfe WHERE destinatario_id = :did"),
+                               {'did': destinatario_id}).fetchone()
+                cliente_id = row[0] if row else None
+                if cliente_id:
+                    return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
+            except:
+                pass
+            return redirect(url_for('admin.list_clientes'))
+        finally:
+            db.close()
+    
+    # GET - Exibir formulário de edição
     try:
         row = db.execute(text("""
             SELECT cliente_id, nome_razao_social, cpf_cnpj, ie, ie_indicador_nfe,
