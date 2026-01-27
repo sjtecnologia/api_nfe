@@ -1940,7 +1940,7 @@ def edit(nfe_id):
                     flash('Destinatário não selecionado', 'error')
                     return redirect(url_for('nfe.edit', nfe_id=nfe_id))
                 
-                destinatario_query = text("SELECT destinatario_id, razao_social, cnpj_cpf FROM destinatarios WHERE destinatario_id = :dest_id")
+                destinatario_query = text("SELECT destinatario_id, nome_razao_social, cpf_cnpj FROM destinatarios_nfe WHERE destinatario_id = :dest_id")
                 destinatario_result = db.execute(destinatario_query, {'dest_id': destinatario_id}).fetchone()
                 
                 if not destinatario_result:
@@ -1986,8 +1986,8 @@ def edit(nfe_id):
                 try:
                     if hasattr(destinatario_result, '_asdict'):
                         dest_data = destinatario_result._asdict()
-                        dest_razao = dest_data.get('razao_social', '')
-                        dest_cnpj = dest_data.get('cnpj_cpf') or dest_data.get('cnpj', '')
+                        dest_razao = dest_data.get('nome_razao_social', '')
+                        dest_cnpj = dest_data.get('cpf_cnpj', '')
                     else:
                         # Acessar por índice - assumindo ordem específica da query
                         dest_razao = destinatario_result[1] if len(destinatario_result) > 1 else ''
