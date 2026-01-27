@@ -2259,9 +2259,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('natOp').value = '{{ form_data.natOp }}';
     {% endif %}
     
-    {% if form_data.dataEmissao %}
-    document.getElementById('dataEmissao').value = '{{ form_data.dataEmissao }}';
-    {% endif %}
+    // Data/hora sempre ATUAL (não preencher do banco)
+    // A data já foi definida no DOMContentLoaded principal
     
     {% if form_data.formaPagamento %}
     document.getElementById('formaPagamento').value = '{{ form_data.formaPagamento }}';
