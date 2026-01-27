@@ -152,13 +152,10 @@ class XMLSignatureService:
             cert_base64 = base64.b64encode(cert_der).decode()
             
             # 6. Construir elemento Signature como elemento lxml (não string)
-            # Namespace xmldsig
-            nsmap_sig = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
+            # Criar Signature element COM namespace default
+            sig_elem = etree.Element('{http://www.w3.org/2000/09/xmldsig#}Signature', nsmap={None: 'http://www.w3.org/2000/09/xmldsig#'})
             
-            # Criar Signature element
-            sig_elem = etree.Element('{http://www.w3.org/2000/09/xmldsig#}Signature', nsmap={'': 'http://www.w3.org/2000/09/xmldsig#'})
-            
-            # SignedInfo
+            # SignedInfo (sem namespace, herda do pai)
             signed_info_elem = etree.SubElement(sig_elem, 'SignedInfo')
             etree.SubElement(signed_info_elem, 'CanonicalizationMethod', Algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315')
             etree.SubElement(signed_info_elem, 'SignatureMethod', Algorithm='http://www.w3.org/2000/09/xmldsig#rsa-sha1')
