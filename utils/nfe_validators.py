@@ -169,9 +169,8 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
             # if not item.get('descricao'):
             #     erros.append(f"{item_prefix}Descrição é obrigatória")
             
-            if not item.get('quantidade'):
-                erros.append(f"{item_prefix}Quantidade é obrigatória")
-            else:
+            # Quantidade é opcional - usar 1 se não fornecida
+            if item.get('quantidade'):
                 try:
                     qtd = float(item.get('quantidade'))
                     if qtd <= 0:
@@ -211,9 +210,8 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     if not form_data.get('formaPagamento'):
         erros.append("Forma de pagamento é obrigatória")
     
-    if not form_data.get('valorPagamento'):
-        erros.append("Valor do pagamento é obrigatório")
-    else:
+    # Valor pagamento opcional - será calculado do total se não fornecido
+    if form_data.get('valorPagamento'):
         try:
             valor_pag = float(form_data.get('valorPagamento'))
             if valor_pag <= 0:
