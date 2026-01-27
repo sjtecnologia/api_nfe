@@ -1486,18 +1486,17 @@ function calcularTotal(itemId) {
 // Atualizar JSON do item
 function atualizarItemJSON(itemId) {
     const itemData = {
-        codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`).value,
-        descricao: document.querySelector(`input[name="descricao_${itemId}"]`).value,
-        unidade: document.querySelector(`input[name="unidade_${itemId}"]`).value,
-        quantidade: document.querySelector(`input[name="quantidade_${itemId}"]`).value,
-        valor_unitario: document.querySelector(`input[name="valor_unitario_${itemId}"]`).value,
-        valor_total: document.querySelector(`input[name="valor_total_${itemId}"]`).value,
-        ncm: document.querySelector(`select[name="ncm_${itemId}"]`).value,
-        cfop: document.querySelector(`select[name="cfop_${itemId}"]`).value,
-        origem: document.querySelector(`select[name="origem_${itemId}"]`).value,
-        aliquota_icms: document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value,
-        bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`).value,
-        valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`).value
+        codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`)?.value || '',
+        unidade: document.querySelector(`input[name="unidade_${itemId}"]`)?.value || '',
+        quantidade: document.querySelector(`input[name="quantidade_${itemId}"]`)?.value || '',
+        valor_unitario: document.querySelector(`input[name="valor_unitario_${itemId}"]`)?.value || '',
+        valor_total: document.querySelector(`input[name="valor_total_${itemId}"]`)?.value || '',
+        ncm: document.querySelector(`select[name="ncm_${itemId}"]`)?.value || '',
+        cfop: document.querySelector(`select[name="cfop_${itemId}"]`)?.value || '',
+        origem: document.querySelector(`select[name="origem_${itemId}"]`)?.value || '',
+        aliquota_icms: document.querySelector(`input[name="aliquota_icms_${itemId}"]`)?.value || '0.00',
+        bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`)?.value || '0.00',
+        valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00'
     };
     
     // ⭐ CORREÇÃO: Capturar SEMPRE os valores que estão na tela (editados pelo usuário)
