@@ -184,10 +184,10 @@ def generate_nfe_xml_nfelib(
     
     # 4. Criar IDE (identificação)
     # Determinar natureza da operação baseado no CFOP se não informada
-    nat_op = form_data.get('natOp', '').strip()
+    nat_op = (form_data.get('natOp') or '').strip()
     if not nat_op:
         # Mapear CFOP comum para natureza da operação
-        cfop_primeiro_item = items[0].get('cfop', '') if items else ''
+        cfop_primeiro_item = (items[0].get('cfop') or '') if items else ''
         if cfop_primeiro_item.startswith('5'):
             nat_op = 'VENDA DE MERCADORIA'
         elif cfop_primeiro_item.startswith('6'):
@@ -230,14 +230,14 @@ def generate_nfe_xml_nfelib(
     nome_mun_emit = normalizar_municipio(cod_mun_emit, emitente_data.get('municipio', 'SAO PAULO'))
     
     ender_emit = TenderEmi(
-        xLgr=emitente_data.get('logradouro', 'RUA TESTE')[:60],
-        nro=str(emitente_data.get('numero', '0'))[:60],
-        xCpl=emitente_data.get('complemento', '')[:60] if emitente_data.get('complemento') else None,
-        xBairro=emitente_data.get('bairro', 'CENTRO')[:60],
+        xLgr=(emitente_data.get('logradouro') or 'RUA TESTE').strip()[:60],
+        nro=str(emitente_data.get('numero') or '0').strip()[:60],
+        xCpl=(emitente_data.get('complemento') or '').strip()[:60] if emitente_data.get('complemento') else None,
+        xBairro=(emitente_data.get('bairro') or 'CENTRO').strip()[:60],
         cMun=cod_mun_emit,
         xMun=nome_mun_emit,
-        UF=emitente_data.get('uf', 'SP'),
-        CEP=limpar_cnpj_cpf(emitente_data.get('cep', '00000000')),
+        UF=(emitente_data.get('uf') or 'SP').strip(),
+        CEP=limpar_cnpj_cpf(emitente_data.get('cep') or '00000000'),
         cPais="1058",
         xPais="BRASIL"
     )
@@ -257,7 +257,7 @@ def generate_nfe_xml_nfelib(
         print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
     
     # Buscar IE (pode estar como 'ie' ou 'inscricao_estadual')
-    ie_emitente = emitente_data.get('ie') or emitente_data.get('inscricao_estadual', '')
+    ie_emitente = (emitente_data.get('ie') or emitente_data.get('inscricao_estadual') or '').strip()
     if not ie_emitente:
         raise ValueError("Inscrição Estadual do emitente é obrigatória")
     
@@ -320,12 +320,12 @@ def generate_nfe_xml_nfelib(
     
     # Nome pode estar em 'nome' ou 'nome_razao_social'
     nome_dest = (destinatario_data.get('nome') or 
-                destinatario_data.get('nome_razao_social') or '')
+                destinatario_data.get('nome_razao_social') or '').strip()
     if not nome_dest:
         raise ValueError("Nome do destinatário é obrigatório")
     
     # Remover acentos e caracteres especiais (ASSOCIAÇÃO → ASSOCIACAO)
-    nome_dest = remover_acentos(nome_dest)
+    nome_dest = remover_acentos(nome_dest).strip()
     
     # Determinar indIEDest baseado em IE e tipo de documento
     # 1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte
@@ -380,12 +380,12 @@ def generate_nfe_xml_nfelib(
         
         # Produto
         prod = Nfe.InfNfe.Det.Prod(
-            cProd=str(item.get('codigo', idx))[:60],
-            cEAN=item.get('ean', 'SEM GTIN'),
-            xProd=item.get('descricao', 'PRODUTO')[:120],
-            NCM=item.get('ncm', '00000000'),
-            CFOP=str(item.get('cfop', '5102')),
-            uCom=item.get('unidade', 'UN')[:6],
+            cProd=str(item.get('codigo', idx)).strip()[:60],
+            cEAN=(item.get('ean') or 'SEM GTIN').strip(),
+            xProd=(item.get('descricao') or 'PRODUTO').strip()[:120],
+            NCM=(item.get('ncm') or '00000000').strip(),
+            CFOP=str(item.get('cfop') or '5102').strip(),
+            uCom=(item.get('unidade') or 'UN').strip()[:6],
             qCom=qcom_str,
             vUnCom=vuncom_str,
             vProd=vprod_str,
