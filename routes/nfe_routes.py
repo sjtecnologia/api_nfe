@@ -1899,24 +1899,28 @@ def edit(nfe_id):
                     print(f" Item {i+1} processado - CFOP: {item['cfop']}, Produto: {item['codigo_produto']}")
                     itens.append(item)
                 
-                cliente_id = request.form.get('cliente_id')
-                
-                # Validações básicas
-                if not cliente_id or not dados_nfe['natOp'] or not itens:
-                    flash('Preencha todos os campos obrigatórios', 'error')
-                    return redirect(url_for('nfe.edit', nfe_id=nfe_id))
-                
-                # Buscar NFe atual
-                nfe_query = text("SELECT status FROM nfe_emitidas WHERE nfe_emitida_id = :nfe_id")
+                # Buscar NFe atual para pegar cliente_id
+                nfe_query = text("SELECT cliente_id, status FROM nfe_emitidas WHERE nfe_emitida_id = :nfe_id")
                 nfe_result = db.execute(nfe_query, {'nfe_id': nfe_id}).fetchone()
                 
                 if not nfe_result:
                     flash('NF-e não encontrada', 'error')
                     return redirect(url_for('nfe.list_nfes'))
                 
+                # Pegar cliente_id da NFe
+                cliente_id = nfe_result[0]
+                current_status = nfe_result[1]
+                
+                print(f"🔍 [EDIT NFe {nfe_id}] Cliente ID: {cliente_id}, Status: {current_status}")
+                
+                # Validações básicas
+                if not cliente_id or not dados_nfe['natOp'] or not itens:
+                    print(f"❌ [EDIT NFe {nfe_id}] Validação falhou - cliente_id: {cliente_id}, natOp: {dados_nfe.get('natOp')}, itens: {len(itens)}")
+                    flash('Preencha todos os campos obrigatórios', 'error')
+                    return redirect(url_for('nfe.edit', nfe_id=nfe_id))
+                
                 # Verificar se pode ser editada
                 status_editaveis = ['RASCUNHO', 'REJEITADA', 'ERRO']
-                current_status = nfe_result[0] if nfe_result else ''  # Acessar por índice
                 if current_status.upper() not in status_editaveis:
                     flash('Esta NF-e não pode ser editada', 'error')
                     return redirect(url_for('nfe.view', nfe_id=nfe_id))
