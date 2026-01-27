@@ -2230,13 +2230,39 @@ document.addEventListener('DOMContentLoaded', function() {
                     atualizarItemJSON(itemId);
                 });
                 
-                // Submeter o formulário
+                // Desabilitar botão
                 submitter.disabled = true;
                 submitter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
                 
-                console.log('🚀 Submetendo formulário...');
-                // Submit direto usando o método nativo
-                HTMLFormElement.prototype.submit.call(form);
+                console.log('🚀 Criando FormData e enviando via fetch...');
+                
+                // Criar FormData com todos os dados do form
+                const formData = new FormData(form);
+                
+                // Enviar via fetch (sem validação HTML5)
+                fetch(form.action || window.location.href, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    console.log('✅ Resposta recebida:', response.status);
+                    // Redirecionar para a resposta
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        return response.text().then(html => {
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Erro ao enviar:', error);
+                    alert('Erro ao enviar NFe: ' + error.message);
+                    submitter.disabled = false;
+                    submitter.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
+                });
             }
         }, true); // Usar capture phase
     }
