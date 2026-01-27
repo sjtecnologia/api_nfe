@@ -148,18 +148,19 @@ class XMLSignatureService:
             cert_der = certificate.public_bytes(serialization.Encoding.DER)
             cert_base64 = base64.b64encode(cert_der).decode()
             
-            # 7. Construir Signature completa como string (com espaços antes de />)
-            signature_xml = f'''<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info_xml.replace('<SignedInfo>', '<SignedInfo>').replace('</SignedInfo>', f'</SignedInfo><SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo>')}</Signature>'''
+            # 7. Serializar XML SEM assinatura primeiro
+            xml_without_sig = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
             
-            # Corrigir: remover SignedInfo duplicado
-            signature_xml = f'''<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo><SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'''
+            # 8. Construir Signature como STRING com espaços (NÃO parsear com lxml!)
+            signature_xml = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo><SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'
             
-            # 8. Parsear e inserir Signature no XML
-            sig_elem = etree.fromstring(signature_xml.encode('utf-8'))
-            nfe_element.append(sig_elem)
+            # 9. Inserir Signature como STRING no XML (antes da tag </infNFe>)
+            # Localizar posição para inserir (antes de </infNFe>)
+            insert_pos = xml_without_sig.find('</infNFe>')
+            if insert_pos == -1:
+                raise Exception("Tag </infNFe> não encontrada no XML")
             
-            # 9. Serializar XML completo COM assinatura (compacto, sem pretty_print)
-            signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
+            signed_xml = xml_without_sig[:insert_pos] + signature_xml + xml_without_sig[insert_pos:]
             signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + signed_xml
             
             # DEBUG: Salvar XML em arquivo para análise
