@@ -124,31 +124,15 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Construir Signature SEM SignatureValue primeiro
-            sig_elem = etree.Element('{http://www.w3.org/2000/09/xmldsig#}Signature', nsmap={None: 'http://www.w3.org/2000/09/xmldsig#'})
+            # 3. Construir SignedInfo como STRING com espaços antes de /> (formato que SEFAZ espera)
+            signed_info_xml = f'''<SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'''
             
-            # SignedInfo
-            signed_info_elem = etree.SubElement(sig_elem, 'SignedInfo')
-            etree.SubElement(signed_info_elem, 'CanonicalizationMethod', Algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315')
-            etree.SubElement(signed_info_elem, 'SignatureMethod', Algorithm='http://www.w3.org/2000/09/xmldsig#rsa-sha1')
-            
-            # Reference
-            ref_elem = etree.SubElement(signed_info_elem, 'Reference', URI=f'#{inf_nfe_id}')
-            transforms_elem = etree.SubElement(ref_elem, 'Transforms')
-            etree.SubElement(transforms_elem, 'Transform', Algorithm='http://www.w3.org/2000/09/xmldsig#enveloped-signature')
-            etree.SubElement(transforms_elem, 'Transform', Algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315')
-            etree.SubElement(ref_elem, 'DigestMethod', Algorithm='http://www.w3.org/2000/09/xmldsig#sha1')
-            digest_elem = etree.SubElement(ref_elem, 'DigestValue')
-            digest_elem.text = digest_value
-            
-            # 4. Inserir Signature no XML ANTES de assinar
-            nfe_element.append(sig_elem)
-            
-            # 5. AGORA canonicalizar o SignedInfo do XML final (como SEFAZ verá)
+            # 4. Canonicalizar o SignedInfo string (C14N vai processar corretamente)
+            signed_info_elem = etree.fromstring(signed_info_xml.encode('utf-8'))
             signed_info_c14n = etree.tostring(signed_info_elem, method='c14n', exclusive=False, with_comments=False)
             print(f"[DEBUG] SignedInfo canonicalizado: {len(signed_info_c14n)} bytes")
             
-            # 6. Assinar SignedInfo
+            # 5. Assinar o SignedInfo canonicalizado
             from cryptography.hazmat.primitives import hashes
             from cryptography.hazmat.primitives.asymmetric import padding
             
@@ -160,18 +144,19 @@ class XMLSignatureService:
             signature_value = base64.b64encode(signature).decode()
             print(f"[OK] Assinatura gerada: {len(signature_value)} caracteres")
             
-            # 7. Obter certificado X509 em base64
+            # 6. Obter certificado X509 em base64
             cert_der = certificate.public_bytes(serialization.Encoding.DER)
             cert_base64 = base64.b64encode(cert_der).decode()
             
-            # 8. Adicionar SignatureValue e KeyInfo à Signature
-            sig_value_elem = etree.SubElement(sig_elem, 'SignatureValue')
-            sig_value_elem.text = signature_value
+            # 7. Construir Signature completa como string (com espaços antes de />)
+            signature_xml = f'''<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info_xml.replace('<SignedInfo>', '<SignedInfo>').replace('</SignedInfo>', f'</SignedInfo><SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo>')}</Signature>'''
             
-            key_info_elem = etree.SubElement(sig_elem, 'KeyInfo')
-            x509_data_elem = etree.SubElement(key_info_elem, 'X509Data')
-            x509_cert_elem = etree.SubElement(x509_data_elem, 'X509Certificate')
-            x509_cert_elem.text = cert_base64
+            # Corrigir: remover SignedInfo duplicado
+            signature_xml = f'''<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo><SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'''
+            
+            # 8. Parsear e inserir Signature no XML
+            sig_elem = etree.fromstring(signature_xml.encode('utf-8'))
+            nfe_element.append(sig_elem)
             
             # 9. Serializar XML completo COM assinatura (compacto, sem pretty_print)
             signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
