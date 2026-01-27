@@ -168,6 +168,14 @@ class XMLSignatureService:
             # 8. Adicionar declaração XML
             signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + xml_sem_assinatura
             
+            # DEBUG: Salvar XML em arquivo para análise
+            try:
+                with open('/tmp/last_signed_nfe.xml', 'w', encoding='utf-8') as f:
+                    f.write(signed_xml)
+                print(f"[DEBUG] XML salvo em /tmp/last_signed_nfe.xml para análise")
+            except:
+                pass
+            
             print(f"[OK] XML assinado com sucesso manualmente: {len(signed_xml)} caracteres (compacto)")
             return signed_xml
             
