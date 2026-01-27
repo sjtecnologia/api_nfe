@@ -3808,6 +3808,7 @@ def salvar_destinatario():
 @permission_required('destinatarios_nfe.edit')
 def edit_destinatario(destinatario_id: int):
     db = _get_db()
+    destinatario = None  # Inicializar variável
     try:
         row = db.execute(text("""
             SELECT cliente_id, nome_razao_social, cpf_cnpj, ie, ie_indicador_nfe,
@@ -3817,12 +3818,14 @@ def edit_destinatario(destinatario_id: int):
             FROM destinatarios_nfe
             WHERE destinatario_id = :cid
         """), {'cid': destinatario_id}).fetchone()
+        
         destinatario = _safe_row_to_dict(row, [
             'cliente_id', 'nome_razao_social', 'cpf_cnpj', 'ie', 'ie_indicador_nfe',
             'email', 'telefone', 'logradouro', 'numero', 'complemento', 'bairro',
             'cep', 'codigo_municipio', 'nome_municipio', 'uf', 'codigo_uf', 'codigo_pais', 'nome_pais',
             'data_cadastro', 'data_atualizacao', 'created_by_user_id'
         ])
+        
         if not destinatario:
             flash('Destinatário não encontrado', 'warning')
             cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
@@ -3830,14 +3833,20 @@ def edit_destinatario(destinatario_id: int):
                 return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
             else:
                 return redirect(url_for('admin.list_clientes'))
+        
         return render_template('admin/destinatarios/form.html', destinatario=destinatario)
     except Exception as e:
+        import traceback
         print(f"ERRO: Erro edit_destinatario: {e}")
+        traceback.print_exc()  # Log completo do erro
         flash('Erro ao carregar destinatário', 'error')
-        cliente_id = request.args.get('cliente_id') or session.get('current_client_id') or (destinatario.get('cliente_id') if destinatario else None)
+        cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
+        if not cliente_id and destinatario:
+            cliente_id = destinatario.get('cliente_id')
         if cliente_id:
             return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         else:
+            return redirect(url_for('admin.list_clientes'))
             return redirect(url_for('admin.list_clientes'))
     finally:
         db.close()
