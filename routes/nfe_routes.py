@@ -1631,17 +1631,136 @@ def edit(nfe_id):
                     print(f"AVISO: Erro ao buscar produtos: {e}")
                     produtos = []
                 
-                print(f" Dados auxiliares carregados: {len(clientes)} clientes, {len(cfops)} CFOPs, {len(ncms)} NCMs, {len(produtos)} produtos")
+                # BUSCAR DADOS DO EMITENTE (CLIENTE)
+                try:
+                    cliente_id = nfe_data.get('cliente_id')
+                    emitente_query = text("""
+                        SELECT cliente_id, razao_social, cnpj, nome_fantasia, logradouro, numero, 
+                               bairro, cep, codigo_municipio, nome_municipio, uf, inscricao_estadual, 
+                               regime_tributario_id, ambiente, complemento
+                        FROM clientes WHERE cliente_id = :cliente_id
+                    """)
+                    emitente_result = db.execute(emitente_query, {'cliente_id': cliente_id}).fetchone()
+                    
+                    if emitente_result:
+                        if hasattr(emitente_result, '_asdict'):
+                            emitente_data_for_template = emitente_result._asdict()
+                        elif hasattr(emitente_result, '_mapping'):
+                            mapping = emitente_result._mapping
+                            emitente_data_for_template = dict(mapping() if callable(mapping) else mapping)
+                        else:
+                            emitente_data_for_template = {
+                                'cliente_id': emitente_result[0],
+                                'razao_social': emitente_result[1],
+                                'cnpj': emitente_result[2],
+                                'nome_fantasia': emitente_result[3],
+                                'logradouro': emitente_result[4],
+                                'numero': emitente_result[5],
+                                'bairro': emitente_result[6],
+                                'cep': emitente_result[7],
+                                'codigo_municipio': emitente_result[8],
+                                'nome_municipio': emitente_result[9],
+                                'uf': emitente_result[10],
+                                'inscricao_estadual': emitente_result[11],
+                                'regime_tributario_id': emitente_result[12],
+                                'ambiente': emitente_result[13],
+                                'complemento': emitente_result[14] if len(emitente_result) > 14 else None
+                            }
+                    else:
+                        emitente_data_for_template = {}
+                        print(f"AVISO: Emitente não encontrado para cliente_id: {cliente_id}")
+                except Exception as e:
+                    print(f"AVISO: Erro ao buscar dados do emitente: {e}")
+                    emitente_data_for_template = {}
                 
-                return render_template('admin/nfes/edit.html',
-                                     nfe=nfe_data,
-                                     form_data=form_data,
-                                     items_data=items_data,
-                                     clientes=clientes,
-                                     cfops=cfops,
-                                     ncms=ncms,
-                                     csts=csts,
+                # BUSCAR DESTINATÁRIOS DO CLIENTE
+                try:
+                    destinatarios_query = text("""
+                        SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
+                               bairro, cep, codigo_municipio, nome_municipio, uf
+                        FROM destinatarios_nfe WHERE cliente_id = :cliente_id
+                    """)
+                    destinatarios_result = db.execute(destinatarios_query, {'cliente_id': cliente_id}).fetchall()
+                    destinatarios = []
+                    for dest_row in destinatarios_result:
+                        try:
+                            if hasattr(dest_row, '_asdict'):
+                                destinatarios.append(dest_row._asdict())
+                            elif hasattr(dest_row, '_mapping'):
+                                mapping = dest_row._mapping
+                                destinatarios.append(dict(mapping() if callable(mapping) else mapping))
+                            else:
+                                destinatarios.append({
+                                    'destinatario_id': dest_row[0],
+                                    'nome_razao_social': dest_row[1],
+                                    'cpf_cnpj': dest_row[2],
+                                    'logradouro': dest_row[3],
+                                    'numero': dest_row[4],
+                                    'bairro': dest_row[5],
+                                    'cep': dest_row[6],
+                                    'codigo_municipio': dest_row[7],
+                                    'nome_municipio': dest_row[8],
+                                    'uf': dest_row[9]
+                                })
+                        except Exception as e:
+                            print(f"AVISO: Erro ao processar destinatário: {e}")
+                            continue
+                except Exception as e:
+                    print(f"AVISO: Erro ao buscar destinatários: {e}")
+                    destinatarios = []
+                
+                # BUSCAR CSOSNs
+                try:
+                    csosns_query = text("SELECT codigo, descricao FROM csosn_icms ORDER BY codigo")
+                    csosns_result = db.execute(csosns_query).fetchall()
+                    csosns = []
+                    for csosn_row in csosns_result:
+                        try:
+                            if hasattr(csosn_row, '_asdict'):
+                                csosns.append(csosn_row._asdict())
+                            elif hasattr(csosn_row, '_mapping'):
+                                mapping = csosn_row._mapping
+                                csosns.append(dict(mapping() if callable(mapping) else mapping))
+                            else:
+                                csosns.append({
+                                    'codigo': csosn_row[0],
+                                    'descricao': csosn_row[1]
+                                })
+                        except Exception as e:
+                            print(f"AVISO: Erro ao processar CSOSN: {e}")
+                            continue
+                except Exception as e:
+                    print(f"AVISO: Erro ao buscar CSOSNs: {e}")
+                    csosns = []
+                
+                # BUSCAR REGIME TRIBUTÁRIO
+                regime_tributario_nome = 'Regime Normal'
+                try:
+                    if emitente_data_for_template.get('regime_tributario_id'):
+                        regime_query = text("SELECT nome FROM regimes_tributarios WHERE regime_tributario_id = :regime_id")
+                        regime_result = db.execute(regime_query, {'regime_id': emitente_data_for_template['regime_tributario_id']}).fetchone()
+                        if regime_result:
+                            regime_tributario_nome = regime_result[0] if hasattr(regime_result, '__getitem__') else regime_result.nome
+                except Exception as e:
+                    print(f"AVISO: Erro ao buscar regime tributário: {e}")
+                
+                print(f" Dados auxiliares carregados: {len(clientes)} clientes, {len(cfops)} CFOPs, {len(ncms)} NCMs, {len(produtos)} produtos")
+                print(f" Destinatários: {len(destinatarios)}, CSOSNs: {len(csosns)}, Regime: {regime_tributario_nome}")
+                
+                # USAR O MESMO TEMPLATE DE EMISSÃO MAS EM MODO EDIÇÃO
+                return render_template('admin/nfes/emitir.html',
+                                     emitente_data=emitente_data_for_template,
+                                     destinatarios=destinatarios,
                                      produtos=produtos,
+                                     all_cfops=cfops,
+                                     all_csts=csts,
+                                     all_csosns=csosns,
+                                     all_ncms=ncms,
+                                     regime_tributario=regime_tributario_nome,
+                                     initial_nfe_items=items_data,
+                                     form_data=form_data,
+                                     nfe_id=nfe_id,
+                                     edit_mode=True,
                                      from_rejected=request.args.get('from') == 'rejected')
                 
             except Exception as e:
