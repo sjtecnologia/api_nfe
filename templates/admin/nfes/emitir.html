@@ -2303,45 +2303,93 @@ function adicionarItemComDados(itemData) {
         const itemId = ultimoItem.id.split('-')[1];
         console.log('📝 Preenchendo item ID:', itemId);
         
-        // Preencher campos do item (usando nomes corretos do banco)
+        // Preencher campos do item (usando os nomes corretos do HTML)
         try {
             if (itemData.codigo_produto || itemData.codigo) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][codigo]"]`);
-                if (campo) campo.value = itemData.codigo_produto || itemData.codigo;
+                const campo = document.querySelector(`input[name="codigo_produto_${itemId}"]`);
+                if (campo) {
+                    campo.value = itemData.codigo_produto || itemData.codigo;
+                    console.log('✅ Código preenchido:', campo.value);
+                }
             }
             if (itemData.descricao) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][descricao]"]`);
-                if (campo) campo.value = itemData.descricao;
-            }
-            if (itemData.ncm) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][ncm]"]`);
-                if (campo) campo.value = itemData.ncm;
-            }
-            if (itemData.cfop) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][cfop]"]`);
-                if (campo) campo.value = itemData.cfop;
+                const campo = document.querySelector(`input[name="descricao_${itemId}"]`);
+                if (campo) {
+                    campo.value = itemData.descricao;
+                    console.log('✅ Descrição preenchida:', campo.value);
+                }
             }
             if (itemData.unidade) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][unidade]"]`);
-                if (campo) campo.value = itemData.unidade;
+                const campo = document.querySelector(`input[name="unidade_${itemId}"]`);
+                if (campo) {
+                    campo.value = itemData.unidade;
+                    console.log('✅ Unidade preenchida:', campo.value);
+                }
             }
             if (itemData.quantidade) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][quantidade]"]`);
-                if (campo) campo.value = itemData.quantidade;
+                const campo = document.querySelector(`input[name="quantidade_${itemId}"]`);
+                if (campo) {
+                    campo.value = itemData.quantidade;
+                    console.log('✅ Quantidade preenchida:', campo.value);
+                }
             }
             if (itemData.valor_unitario) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][valor_unitario]"]`);
-                if (campo) campo.value = itemData.valor_unitario;
+                const campo = document.querySelector(`input[name="valor_unitario_${itemId}"]`);
+                if (campo) {
+                    campo.value = itemData.valor_unitario;
+                    console.log('✅ Valor unitário preenchido:', campo.value);
+                    // Calcular total
+                    calcularTotal(itemId);
+                }
             }
-            
-            // Preencher campos de imposto (origem, CSOSN)
+            if (itemData.ncm) {
+                const campo = document.querySelector(`select[name="ncm_${itemId}"]`);
+                if (campo) {
+                    // Procurar option com esse NCM
+                    for (let option of campo.options) {
+                        if (option.value === itemData.ncm) {
+                            option.selected = true;
+                            campo.value = itemData.ncm;
+                            console.log('✅ NCM selecionado:', itemData.ncm);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (itemData.cfop) {
+                const campo = document.querySelector(`select[name="cfop_${itemId}"]`);
+                if (campo) {
+                    // Procurar option com esse CFOP
+                    for (let option of campo.options) {
+                        if (option.value === itemData.cfop) {
+                            option.selected = true;
+                            campo.value = itemData.cfop;
+                            console.log('✅ CFOP selecionado:', itemData.cfop);
+                            break;
+                        }
+                    }
+                }
+            }
             if (itemData.origem !== undefined) {
-                const campo = document.querySelector(`#item-${itemId} select[name="items[${itemId}][origem]"]`);
-                if (campo) campo.value = itemData.origem;
+                const campo = document.querySelector(`select[name="origem_${itemId}"]`);
+                if (campo) {
+                    campo.value = itemData.origem;
+                    console.log('✅ Origem selecionada:', itemData.origem);
+                }
             }
             if (itemData.csosn_icms) {
-                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][csosn_icms]"]`);
-                if (campo) campo.value = itemData.csosn_icms;
+                const campo = document.querySelector(`select[name="csosn_${itemId}"]`);
+                if (campo) {
+                    // Procurar option com esse CSOSN
+                    for (let option of campo.options) {
+                        if (option.value === itemData.csosn_icms) {
+                            option.selected = true;
+                            campo.value = itemData.csosn_icms;
+                            console.log('✅ CSOSN selecionado:', itemData.csosn_icms);
+                            break;
+                        }
+                    }
+                }
             }
             
             console.log('✅ Item preenchido');
@@ -2351,7 +2399,7 @@ function adicionarItemComDados(itemData) {
         } catch (error) {
             console.error('❌ Erro ao preencher item:', error);
         }
-    }, 100); // Aumentei o timeout de 50 para 100ms
+    }, 200); // Aumentei para 200ms para garantir que o item foi criado
 }
 {% endif %}
 </script>
