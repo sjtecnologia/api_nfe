@@ -2108,7 +2108,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // FUNCIONALIDADE: Validação e confirmação antes de emitir
     // ========================================================================
     const btnEmitir = form.querySelector('button[name="action"][value="emitir"]');
+    console.log('🔍 Botão Emitir encontrado:', btnEmitir);
     if (btnEmitir) {
+        console.log('✅ Registrando listener no botão Emitir');
         btnEmitir.addEventListener('click', function(e) {
             e.preventDefault(); // Prevenir submit imediato
             
