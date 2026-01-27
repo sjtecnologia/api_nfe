@@ -2116,10 +2116,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================================================
     // FUNCIONALIDADE: Validação e confirmação antes de emitir
     // ========================================================================
-    const btnEmitir = form.querySelector('button[name="action"][value="emitir"]');
+    console.log('🔍 Form nfeForm:', form);
+    console.log('🔍 Procurando botão Emitir...');
+    const btnEmitir = form ? form.querySelector('button[name="action"][value="emitir"]') : null;
     console.log('🔍 Botão Emitir encontrado:', btnEmitir);
     if (btnEmitir) {
         console.log('✅ Registrando listener no botão Emitir');
+        console.log('🔍 Tipo do botão:', btnEmitir.type);
         btnEmitir.addEventListener('click', function(e) {
             console.log('🎯 BOTÃO EMITIR CLICADO!', e);
             e.preventDefault(); // Prevenir submit imediato
