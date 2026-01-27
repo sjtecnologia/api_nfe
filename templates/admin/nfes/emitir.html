@@ -2117,18 +2117,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // FUNCIONALIDADE: Validação e confirmação antes de emitir
     // ========================================================================
     console.log('🔍 Form nfeForm:', form);
-    console.log('🔍 Procurando botão Emitir...');
-    const btnEmitir = form ? form.querySelector('button[name="action"][value="emitir"]') : null;
-    console.log('🔍 Botão Emitir encontrado:', btnEmitir);
-    if (btnEmitir) {
-        console.log('✅ Registrando listener no botão Emitir');
-        console.log('🔍 Tipo do botão:', btnEmitir.type);
-        btnEmitir.addEventListener('click', function(e) {
-            console.log('🎯 BOTÃO EMITIR CLICADO!', e);
-            e.preventDefault(); // Prevenir submit imediato
-            e.stopPropagation(); // Prevenir propagação do evento
-            
-            console.log('🔍 INICIANDO VALIDAÇÃO...');
+    
+    // Usar event delegation no form com capture para garantir que capturamos o evento primeiro
+    if (form) {
+        console.log('✅ Registrando listener de click no FORM (event delegation)');
+        form.addEventListener('click', function(e) {
+            // Verificar se o clique foi no botão Emitir
+            const target = e.target.closest('button[name="action"][value="emitir"]');
+            if (target) {
+                console.log('🎯 BOTÃO EMITIR CLICADO!', e);
+                e.preventDefault(); // Prevenir submit imediato
+                e.stopPropagation(); // Prevenir propagação do evento
+                e.stopImmediatePropagation(); // Prevenir outros listeners
+                
+                console.log('🔍 INICIANDO VALIDAÇÃO...');
             
             // 1. VALIDAR CAMPOS OBRIGATÓRIOS
             const erros = [];
@@ -2191,8 +2193,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 
                 // Submeter o formulário
-                btnEmitir.disabled = true;
-                btnEmitir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
+                target.disabled = true;
+                target.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
                 
                 // Usar o submit nativo sem disparar validação do onsubmit
                 // Adicionar o campo action antes de submeter
@@ -2206,8 +2208,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // mas sem disparar validação duplicada
                 HTMLFormElement.prototype.submit.call(form);
             }
-        });
-    }
+            }
+        }, true); // Usar capture: true para capturar o evento antes de outros listeners
 });
 
 // ✅ PREENCHER DADOS EM MODO EDIÇÃO
