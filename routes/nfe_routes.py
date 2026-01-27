@@ -1958,6 +1958,9 @@ def edit(nfe_id):
                 update_query = text("""
                     UPDATE nfe_emitidas 
                     SET cliente_id = :cliente_id,
+                        numero = :numero,
+                        serie = :serie,
+                        data_emissao = :data_emissao,
                         natureza_operacao = :natureza_operacao,
                         tipo_nfe = :tipo_nfe,
                         finalidade_emissao = :finalidade_emissao,
@@ -2000,6 +2003,9 @@ def edit(nfe_id):
                 db.execute(update_query, {
                     'nfe_id': nfe_id,
                     'cliente_id': cliente_id,
+                    'numero': int(dados_nfe['numero_nfe']),
+                    'serie': int(dados_nfe['serie']),
+                    'data_emissao': dados_nfe['dataEmissao'],
                     'natureza_operacao': dados_nfe['natOp'],
                     'tipo_nfe': dados_nfe['tpNF'],
                     'finalidade_emissao': int(dados_nfe['finNFe']),
