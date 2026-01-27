@@ -1512,21 +1512,23 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         
         print(f" Totais - Produtos: R$ {total_produtos:.2f}, ICMS: R$ {total_icms:.2f}, NFe: R$ {total_nfe:.2f}")
         
-        # OK: CRIAR ESTRUTURA XML
-        # NÃO usar register_namespace com prefixo vazio - causa erro "Invalid tag name ''"
-        # Namespace será adicionado via string replacement após gerar o XML
-        NFE_NS = ""  # Não usar namespace na criação dos elementos
+        # OK: CRIAR ESTRUTURA XML COM NAMESPACE CORRETO DESDE O INÍCIO
+        # CRÍTICO: Namespace deve estar presente ANTES da assinatura
+        NFE_NS = "http://www.portalfiscal.inf.br/nfe"
         
-        # Helper para criar elementos (sem namespace durante criação)
+        # Registrar namespace padrão (sem prefixo)
+        etree.register_namespace('', NFE_NS)
+        
+        # Helper para criar elementos com namespace
         def E(parent, tag, text=None):
-            """Cria elemento XML simples (namespace será adicionado depois via string replacement)"""
-            elem = etree.SubElement(parent, tag)  # Sem namespace
+            """Cria elemento XML com namespace correto"""
+            elem = etree.SubElement(parent, f"{{{NFE_NS}}}{tag}")
             if text is not None:
                 elem.text = str(text)
             return elem
         
-        # Criar elemento NFe (namespace será adicionado depois)
-        root = etree.Element("NFe")  # Sem namespace na criação
+        # Criar elemento NFe COM namespace desde o início
+        root = etree.Element(f"{{{NFE_NS}}}NFe")
         
         # infNFe
         inf_nfe = E(root, "infNFe")
@@ -2155,12 +2157,6 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             # Remover quebras manualmente se c14n não disponível
             xml_string = xml_string.replace('\n', '').replace('\r', '').replace('\t', '')
             print("✅ XML gerado sem pretty_print + quebras removidas")
-        
-        # CRÍTICO: Adicionar xmlns no elemento NFe se não estiver presente
-        # O Schema da SEFAZ exige xmlns="http://www.portalfiscal.inf.br/nfe" no elemento NFe
-        if '<NFe>' in xml_string and 'xmlns=' not in xml_string[:xml_string.index('<NFe>') + 200]:
-            xml_string = xml_string.replace('<NFe>', '<NFe xmlns="http://www.portalfiscal.inf.br/nfe">')
-            print("✅ xmlns adicionado ao elemento NFe")
         
         # Debug: verificar se tem xmlns na tag NFe
         has_xmlns = 'xmlns=' in xml_string[:200]
