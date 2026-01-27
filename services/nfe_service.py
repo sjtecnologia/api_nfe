@@ -1537,7 +1537,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         ide = etree.SubElement(inf_nfe, "ide")
         etree.SubElement(ide, "cUF").text = str(uf_code)
         etree.SubElement(ide, "cNF").text = codigo_numerico
-        etree.SubElement(ide, "natOp").text = nat_op
+        etree.SubElement(ide, "natOp").text = str(nat_op).strip()
         etree.SubElement(ide, "mod").text = "55"
         etree.SubElement(ide, "serie").text = str(serie)
         etree.SubElement(ide, "nNF").text = str(numero_nfe)
@@ -1561,18 +1561,18 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         # emit
         emit = etree.SubElement(inf_nfe, "emit")
         etree.SubElement(emit, "CNPJ").text = cnpj_emit
-        etree.SubElement(emit, "xNome").text = emitente_data.get('razao_social', '')
+        etree.SubElement(emit, "xNome").text = str(emitente_data.get('razao_social', '')).strip()
         if emitente_data.get('nome_fantasia'):
-            etree.SubElement(emit, "xFant").text = emitente_data['nome_fantasia']
+            etree.SubElement(emit, "xFant").text = str(emitente_data['nome_fantasia']).strip()
         
         # Endereço do emitente
         ender_emit = etree.SubElement(emit, "enderEmit")
-        etree.SubElement(ender_emit, "xLgr").text = emitente_data.get('logradouro', '')
-        etree.SubElement(ender_emit, "nro").text = str(emitente_data.get('numero', ''))
-        etree.SubElement(ender_emit, "xBairro").text = emitente_data.get('bairro', '')
+        etree.SubElement(ender_emit, "xLgr").text = str(emitente_data.get('logradouro', '')).strip()
+        etree.SubElement(ender_emit, "nro").text = str(emitente_data.get('numero', '')).strip()
+        etree.SubElement(ender_emit, "xBairro").text = str(emitente_data.get('bairro', '')).strip()
         etree.SubElement(ender_emit, "cMun").text = str(emitente_data.get('codigo_municipio', '3550308'))
-        etree.SubElement(ender_emit, "xMun").text = emitente_data.get('nome_municipio', 'São Paulo')
-        etree.SubElement(ender_emit, "UF").text = emitente_data.get('uf', 'SP')
+        etree.SubElement(ender_emit, "xMun").text = str(emitente_data.get('nome_municipio', 'São Paulo')).strip()
+        etree.SubElement(ender_emit, "UF").text = str(emitente_data.get('uf', 'SP')).strip()
         
         cep_emit = emitente_data.get('cep', '').replace('-', '')
         etree.SubElement(ender_emit, "CEP").text = cep_emit
@@ -1609,16 +1609,16 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             raise ValueError("CRÍTICO: dest_tag está vazio! Verifique a validação CPF/CNPJ")
         
         etree.SubElement(dest, dest_tag).text = dest_cpf_cnpj
-        etree.SubElement(dest, "xNome").text = destinatario_data.get('nome_razao_social', '')
+        etree.SubElement(dest, "xNome").text = str(destinatario_data.get('nome_razao_social', '')).strip()
         
         # Endereço do destinatário
         ender_dest = etree.SubElement(dest, "enderDest")
-        etree.SubElement(ender_dest, "xLgr").text = destinatario_data.get('logradouro', '')
-        etree.SubElement(ender_dest, "nro").text = str(destinatario_data.get('numero', ''))
-        etree.SubElement(ender_dest, "xBairro").text = destinatario_data.get('bairro', '')
+        etree.SubElement(ender_dest, "xLgr").text = str(destinatario_data.get('logradouro', '')).strip()
+        etree.SubElement(ender_dest, "nro").text = str(destinatario_data.get('numero', '')).strip()
+        etree.SubElement(ender_dest, "xBairro").text = str(destinatario_data.get('bairro', '')).strip()
         etree.SubElement(ender_dest, "cMun").text = str(destinatario_data.get('codigo_municipio', '3550308'))
-        etree.SubElement(ender_dest, "xMun").text = destinatario_data.get('nome_municipio', 'São Paulo')
-        etree.SubElement(ender_dest, "UF").text = destinatario_data.get('uf', 'SP')
+        etree.SubElement(ender_dest, "xMun").text = str(destinatario_data.get('nome_municipio', 'São Paulo')).strip()
+        etree.SubElement(ender_dest, "UF").text = str(destinatario_data.get('uf', 'SP')).strip()
         
         cep_dest = destinatario_data.get('cep', '').replace('-', '')
         etree.SubElement(ender_dest, "CEP").text = cep_dest
@@ -1649,7 +1649,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             if '"' in descricao or '"' in descricao or '"' in descricao:
                 print(f"⚠️  Aspas curvas detectadas em '{descricao_original}' - removendo todas as aspas")
                 descricao = descricao.replace('"', '').replace('"', '').replace('"', '').replace("'", '').replace("'", '')
-            etree.SubElement(prod, "xProd").text = descricao
+            etree.SubElement(prod, "xProd").text = descricao.strip()
             print(f" xProd normalizado: '{descricao}'")
             
             etree.SubElement(prod, "NCM").text = str(item.get('ncm', '99999999'))
@@ -2132,10 +2132,10 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             inf_adic = etree.SubElement(inf_nfe, "infAdic")
             
             if inf_compl:
-                etree.SubElement(inf_adic, "infCpl").text = str(inf_compl)[:5000]
+                etree.SubElement(inf_adic, "infCpl").text = str(inf_compl).strip()[:5000]
             
             if inf_fisco:
-                etree.SubElement(inf_adic, "infAdFisco").text = str(inf_fisco)[:2000]
+                etree.SubElement(inf_adic, "infAdFisco").text = str(inf_fisco).strip()[:2000]
         
         # Converter para string XML SEM formatação (SEFAZ prefere XML compacto)
         # pretty_print=True pode causar problemas com assinatura digital e validação de schema
