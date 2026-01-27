@@ -2138,24 +2138,23 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 etree.SubElement(inf_adic, "infAdFisco").text = str(inf_fisco).strip()[:2000]
         
         # Converter para string XML SEM formatação (SEFAZ prefere XML compacto)
-        # pretty_print=True pode causar problemas com assinatura digital e validação de schema
+        # CRÍTICO: método='c14n' garante XML canonicalizado SEM quebras de linha
+        # Isso é essencial para que a assinatura digital seja válida
         try:
-            # Gerar XML sem formatação para garantir compatibilidade com SEFAZ
-            xml_bytes = etree.tostring(root, xml_declaration=True, encoding='UTF-8')  # type: ignore[arg-type]
-            print("✅ XML gerado SEM pretty_print (formato compacto para SEFAZ)")
-        except TypeError:
-            # xml.etree.ElementTree não suporta xml_declaration
-            xml_bytes_no_decl = etree.tostring(root, encoding='utf-8')
-            if not xml_bytes_no_decl.startswith(b'<?xml'):
-                xml_bytes = b'<?xml version="1.0" encoding="UTF-8"?>' + xml_bytes_no_decl
-            else:
-                xml_bytes = xml_bytes_no_decl
-        xml_string = xml_bytes.decode('utf-8')
-        
-        # CRÍTICO: Remover TODAS as quebras de linha e espaços extras entre tags
-        # O erro 588 ocorre quando há \n, \r, espaços no início/fim de valores
-        xml_string = xml_string.replace('\n', '').replace('\r', '').replace('\t', '')
-        print("✅ Quebras de linha removidas do XML")
+            # c14n = Canonical XML - formato padrão para assinatura digital
+            xml_bytes = etree.tostring(root, method='c14n', encoding='UTF-8')  # type: ignore[call-arg]
+            # Adicionar declaração XML manualmente (c14n não inclui)
+            xml_string = '<?xml version="1.0" encoding="UTF-8"?>' + xml_bytes.decode('utf-8')
+            print("✅ XML gerado com método c14n (canonicalizado - sem quebras)")
+        except (TypeError, ValueError):
+            # Fallback para método tradicional
+            xml_bytes = etree.tostring(root, encoding='utf-8')
+            xml_string = xml_bytes.decode('utf-8')
+            if not xml_string.startswith('<?xml'):
+                xml_string = '<?xml version="1.0" encoding="UTF-8"?>' + xml_string
+            # Remover quebras manualmente se c14n não disponível
+            xml_string = xml_string.replace('\n', '').replace('\r', '').replace('\t', '')
+            print("✅ XML gerado sem pretty_print + quebras removidas")
         
         # CRÍTICO: Adicionar xmlns no elemento NFe se não estiver presente
         # O Schema da SEFAZ exige xmlns="http://www.portalfiscal.inf.br/nfe" no elemento NFe
