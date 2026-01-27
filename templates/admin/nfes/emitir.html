@@ -733,8 +733,10 @@ document.addEventListener('DOMContentLoaded', function() {
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     document.getElementById('dataEmissao').value = now.toISOString().slice(0, 16);
     
-    // Buscar próximo número da NFe ao carregar página
+    // Buscar próximo número da NFe ao carregar página (não em modo edição)
+    {% if not edit_mode %}
     buscarProximoNumero();
+    {% endif %}
     
     // Atualizar número quando modelo mudar
     document.getElementById('modelo').addEventListener('change', buscarProximoNumero);
@@ -2282,6 +2284,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Função para adicionar item com dados pré-preenchidos
 function adicionarItemComDados(itemData) {
+    console.log('➕ Adicionando item com dados:', itemData);
+    
     // Adicionar um item vazio primeiro
     adicionarItem();
     
@@ -2289,35 +2293,64 @@ function adicionarItemComDados(itemData) {
     setTimeout(function() {
         const items = document.querySelectorAll('[id^="item-"]');
         const ultimoItem = items[items.length - 1];
+        if (!ultimoItem) {
+            console.error('❌ Item não encontrado!');
+            return;
+        }
+        
         const itemId = ultimoItem.id.split('-')[1];
+        console.log('📝 Preenchendo item ID:', itemId);
         
-        // Preencher campos do item
-        if (itemData.codigo) {
-            document.querySelector(`#item-${itemId} input[name="items[${itemId}][codigo]"]`).value = itemData.codigo;
+        // Preencher campos do item (usando nomes corretos do banco)
+        try {
+            if (itemData.codigo_produto || itemData.codigo) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][codigo]"]`);
+                if (campo) campo.value = itemData.codigo_produto || itemData.codigo;
+            }
+            if (itemData.descricao) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][descricao]"]`);
+                if (campo) campo.value = itemData.descricao;
+            }
+            if (itemData.ncm) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][ncm]"]`);
+                if (campo) campo.value = itemData.ncm;
+            }
+            if (itemData.cfop) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][cfop]"]`);
+                if (campo) campo.value = itemData.cfop;
+            }
+            if (itemData.unidade) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][unidade]"]`);
+                if (campo) campo.value = itemData.unidade;
+            }
+            if (itemData.quantidade) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][quantidade]"]`);
+                if (campo) campo.value = itemData.quantidade;
+            }
+            if (itemData.valor_unitario) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][valor_unitario]"]`);
+                if (campo) campo.value = itemData.valor_unitario;
+            }
+            
+            // Preencher campos de imposto (origem, CSOSN)
+            if (itemData.origem !== undefined) {
+                const campo = document.querySelector(`#item-${itemId} select[name="items[${itemId}][origem]"]`);
+                if (campo) campo.value = itemData.origem;
+            }
+            if (itemData.csosn_icms) {
+                const campo = document.querySelector(`#item-${itemId} input[name="items[${itemId}][csosn_icms]"]`);
+                if (campo) campo.value = itemData.csosn_icms;
+            }
+            
+            console.log('✅ Item preenchido');
+            
+            // Calcular valor total
+            calcularValorItem(itemId);
+            atualizarItemJSON(itemId);
+        } catch (error) {
+            console.error('❌ Erro ao preencher item:', error);
         }
-        if (itemData.descricao) {
-            document.querySelector(`#item-${itemId} input[name="items[${itemId}][descricao]"]`).value = itemData.descricao;
-        }
-        if (itemData.ncm) {
-            document.querySelector(`#item-${itemId} input[name="items[${itemId}][ncm]"]`).value = itemData.ncm;
-        }
-        if (itemData.cfop) {
-            document.querySelector(`#item-${itemId} input[name="items[${itemId}][cfop]"]`).value = itemData.cfop;
-        }
-        if (itemData.unidade) {
-            document.querySelector(`#item-${itemId} input[name="items[${itemId}][unidade]"]`).value = itemData.unidade;
-        }
-        if (itemData.quantidade) {
-            document.querySelector(`#item-${itemId} input[name="items[${itemId}][quantidade]"]`).value = itemData.quantidade;
-        }
-        if (itemData.valor_unitario) {
-            document.querySelector(`#item-${itemId} input[name="items[${itemId}][valor_unitario]"]`).value = itemData.valor_unitario;
-        }
-        
-        // Calcular valor total
-        calcularValorItem(itemId);
-        atualizarItemJSON(itemId);
-    }, 50);
+    }, 100); // Aumentei o timeout de 50 para 100ms
 }
 {% endif %}
 </script>
