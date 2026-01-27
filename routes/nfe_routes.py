@@ -1370,6 +1370,11 @@ def edit(nfe_id):
     """Editar NFe (rascunho ou rejeitada)"""
     db = next(get_db())
     
+    # DEBUG: Log do método HTTP recebido
+    print(f"🔍 [EDIT NFe {nfe_id}] Método: {request.method}")
+    print(f"🔍 [EDIT NFe {nfe_id}] Form data: {dict(request.form)}")
+    print(f"🔍 [EDIT NFe {nfe_id}] Action: {request.form.get('action', 'N/A')}")
+    
     try:
         if request.method == 'GET':
             try:
