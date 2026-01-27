@@ -151,23 +151,43 @@ class XMLSignatureService:
             cert_der = certificate.public_bytes(serialization.Encoding.DER)
             cert_base64 = base64.b64encode(cert_der).decode()
             
-            # 6. Construir elemento Signature USANDO signed_info_for_xml (SEM xmlns)
-            signature_xml = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info_for_xml}<SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'
+            # 6. Construir elemento Signature como elemento lxml (não string)
+            # Namespace xmldsig
+            nsmap_sig = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
             
-            # 7. Inserir assinatura no XML COMO STRING (não usar etree que remove espaços)
-            # Serializar XML sem assinatura primeiro
-            xml_sem_assinatura = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
+            # Criar Signature element
+            sig_elem = etree.Element('{http://www.w3.org/2000/09/xmldsig#}Signature', nsmap={'': 'http://www.w3.org/2000/09/xmldsig#'})
             
-            # Inserir Signature antes do fechamento de </NFe>
-            # Remover </NFe> do final e adicionar Signature + </NFe>
-            if '</NFe>' in xml_sem_assinatura:
-                xml_sem_assinatura = xml_sem_assinatura.replace('</NFe>', f'{signature_xml}</NFe>')
-            else:
-                # Se não tem namespace
-                xml_sem_assinatura = xml_sem_assinatura.replace('</infNFe>', f'</infNFe>{signature_xml}')
+            # SignedInfo
+            signed_info_elem = etree.SubElement(sig_elem, 'SignedInfo')
+            etree.SubElement(signed_info_elem, 'CanonicalizationMethod', Algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315')
+            etree.SubElement(signed_info_elem, 'SignatureMethod', Algorithm='http://www.w3.org/2000/09/xmldsig#rsa-sha1')
             
-            # 8. Adicionar declaração XML
-            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + xml_sem_assinatura
+            # Reference
+            ref_elem = etree.SubElement(signed_info_elem, 'Reference', URI=f'#{inf_nfe_id}')
+            transforms_elem = etree.SubElement(ref_elem, 'Transforms')
+            etree.SubElement(transforms_elem, 'Transform', Algorithm='http://www.w3.org/2000/09/xmldsig#enveloped-signature')
+            etree.SubElement(transforms_elem, 'Transform', Algorithm='http://www.w3.org/TR/2001/REC-xml-c14n-20010315')
+            etree.SubElement(ref_elem, 'DigestMethod', Algorithm='http://www.w3.org/2000/09/xmldsig#sha1')
+            digest_elem = etree.SubElement(ref_elem, 'DigestValue')
+            digest_elem.text = digest_value
+            
+            # SignatureValue
+            sig_value_elem = etree.SubElement(sig_elem, 'SignatureValue')
+            sig_value_elem.text = signature_value
+            
+            # KeyInfo
+            key_info_elem = etree.SubElement(sig_elem, 'KeyInfo')
+            x509_data_elem = etree.SubElement(key_info_elem, 'X509Data')
+            x509_cert_elem = etree.SubElement(x509_data_elem, 'X509Certificate')
+            x509_cert_elem.text = cert_base64
+            
+            # 7. Inserir Signature no XML (após infNFe, dentro de NFe)
+            nfe_element.append(sig_elem)
+            
+            # 8. Serializar XML completo COM assinatura (compacto, sem pretty_print)
+            signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
+            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + signed_xml
             
             # DEBUG: Salvar XML em arquivo para análise
             try:
