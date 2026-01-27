@@ -154,11 +154,11 @@ class XMLSignatureService:
             signature_element = etree.fromstring(signature_xml.encode())
             nfe_element.append(signature_element)
             
-            # 8. Serializar XML assinado
+            # 8. Serializar XML assinado (SEM quebras de linha)
             signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
-            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + signed_xml
+            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + signed_xml
             
-            print(f"[OK] XML assinado com sucesso manualmente: {len(signed_xml)} caracteres")
+            print(f"[OK] XML assinado com sucesso manualmente: {len(signed_xml)} caracteres (compacto)")
             return signed_xml
             
         except Exception as e:
@@ -474,11 +474,11 @@ class XMLSignatureService:
             if nfe_element is not None:
                 nfe_element.append(signature_xml)
             
-            # Serializar XML final
-            signed_xml = etree.tostring(xml_tree, encoding='unicode', pretty_print=True)
-            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + signed_xml
+            # Serializar XML final (SEM pretty_print para manter compacto)
+            signed_xml = etree.tostring(xml_tree, encoding='unicode', pretty_print=False)
+            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + signed_xml
             
-            print(f"[OK] XML assinado com token A3: {len(signed_xml)} caracteres")
+            print(f"[OK] XML assinado com token A3: {len(signed_xml)} caracteres (compacto)")
             return signed_xml
         
         except Exception as e:
