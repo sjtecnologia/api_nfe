@@ -165,8 +165,9 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
         for i, item in enumerate(nfe_items, 1):
             item_prefix = f"Item {i}: "
             
-            if not item.get('descricao'):
-                erros.append(f"{item_prefix}Descrição é obrigatória")
+            # Descrição é opcional - será buscada do produto se não fornecida
+            # if not item.get('descricao'):
+            #     erros.append(f"{item_prefix}Descrição é obrigatória")
             
             if not item.get('quantidade'):
                 erros.append(f"{item_prefix}Quantidade é obrigatória")
