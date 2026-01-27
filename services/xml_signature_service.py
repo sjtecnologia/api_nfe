@@ -150,13 +150,20 @@ class XMLSignatureService:
             # 6. Construir elemento Signature (formato compacto SEM quebras de linha)
             signature_xml = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info}<SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'
             
-            # 7. Inserir assinatura no XML (como irmão de infNFe, dentro de NFe)
-            signature_element = etree.fromstring(signature_xml.encode())
-            nfe_element.append(signature_element)
+            # 7. Inserir assinatura no XML COMO STRING (não usar etree que remove espaços)
+            # Serializar XML sem assinatura primeiro
+            xml_sem_assinatura = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
             
-            # 8. Serializar XML assinado (SEM quebras de linha)
-            signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
-            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + signed_xml
+            # Inserir Signature antes do fechamento de </NFe>
+            # Remover </NFe> do final e adicionar Signature + </NFe>
+            if '</NFe>' in xml_sem_assinatura:
+                xml_sem_assinatura = xml_sem_assinatura.replace('</NFe>', f'{signature_xml}</NFe>')
+            else:
+                # Se não tem namespace
+                xml_sem_assinatura = xml_sem_assinatura.replace('</infNFe>', f'</infNFe>{signature_xml}')
+            
+            # 8. Adicionar declaração XML
+            signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + xml_sem_assinatura
             
             print(f"[OK] XML assinado com sucesso manualmente: {len(signed_xml)} caracteres (compacto)")
             return signed_xml
