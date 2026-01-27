@@ -2303,6 +2303,27 @@ function adicionarItemComDados(itemData) {
         
         // Preencher campos do item (usando os nomes corretos do HTML)
         try {
+            // Preencher select "Produto" com descrição
+            if (itemData.descricao) {
+                const campo = document.querySelector(`select[name="produto_${itemId}"]`);
+                if (campo) {
+                    // Procurar option com essa descrição
+                    for (let option of campo.options) {
+                        if (option.text === itemData.descricao || option.dataset.descricao === itemData.descricao) {
+                            option.selected = true;
+                            campo.value = option.value;
+                            // Atualizar Select2 se estiver inicializado
+                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
+                                $(campo).val(option.value).trigger('change');
+                            }
+                            console.log('✅ Produto selecionado:', itemData.descricao);
+                            // Acionar o carregarProduto para preencher outros campos
+                            carregarProduto(itemId);
+                            break;
+                        }
+                    }
+                }
+            }
             if (itemData.codigo_produto || itemData.codigo) {
                 const campo = document.querySelector(`input[name="codigo_produto_${itemId}"]`);
                 if (campo) {
