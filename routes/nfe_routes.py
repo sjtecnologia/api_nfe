@@ -1603,6 +1603,13 @@ def edit(nfe_id):
                     print(f"AVISO: Erro ao buscar CSTs: {e}")
                     csts = []
                 
+                # OBTER CLIENTE_ID DA NFE (necessário para filtrar produtos)
+                cliente_id = nfe_data.get('cliente_id')
+                if not cliente_id:
+                    print("ERRO: cliente_id não encontrado na NFe")
+                    flash('Erro: Cliente não identificado na NFe', 'error')
+                    return redirect(url_for('nfe.list_nfes'))
+                
                 # OK: PRODUTOS (filtrar por cliente)
                 try:
                     produtos_query = text("""
