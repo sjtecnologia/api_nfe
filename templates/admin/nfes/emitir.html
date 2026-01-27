@@ -2112,11 +2112,14 @@ document.addEventListener('DOMContentLoaded', function() {
         btnEmitir.addEventListener('click', function(e) {
             e.preventDefault(); // Prevenir submit imediato
             
+            console.log('🔍 INICIANDO VALIDAÇÃO...');
+            
             // 1. VALIDAR CAMPOS OBRIGATÓRIOS
             const erros = [];
             
             // Validar destinatário pelo select
             const destinatarioSelect = document.getElementById('destinatario');
+            console.log('🔍 Destinatário:', destinatarioSelect?.value);
             if (!destinatarioSelect || !destinatarioSelect.value) {
                 erros.push('Selecione um destinatário');
             }
@@ -2129,15 +2132,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // Validar produtos (verificar se tem itens adicionados no container)
             const itensContainer = document.getElementById('itensContainer');
             const itensCards = itensContainer?.querySelectorAll('.card');
+            console.log('🔍 Itens encontrados:', itensCards?.length);
             if (!itensCards || itensCards.length === 0) {
                 erros.push('Adicione pelo menos um produto à nota fiscal');
             }
             
             // Validar forma de pagamento (ID correto é formaPagamento)
             const formaPagamento = document.getElementById('formaPagamento')?.value;
+            console.log('🔍 Forma de pagamento:', formaPagamento);
             if (!formaPagamento || formaPagamento.trim() === '') {
                 erros.push('Selecione a forma de pagamento');
             }
+            
+            console.log('🔍 Erros encontrados:', erros);
             
             // Se houver erros, mostrar e não prosseguir
             if (erros.length > 0) {
