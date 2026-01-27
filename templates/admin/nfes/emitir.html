@@ -1175,7 +1175,7 @@ function carregarProduto(itemId) {
     if (option.value) {
         // Dados básicos do produto
         document.querySelector(`input[name="codigo_produto_${itemId}"]`).value = option.dataset.codigo || '';
-        document.querySelector(`input[name="descricao_${itemId}"]`).value = option.dataset.descricao || '';
+        // Campo descricao foi removido
         document.querySelector(`input[name="valor_unitario_${itemId}"]`).value = option.dataset.preco || '0.00';
         document.querySelector(`input[name="unidade_${itemId}"]`).value = option.dataset.unidade || 'UN';
         
