@@ -135,11 +135,15 @@ class SefazService:
         print(f"[ENVELOPE-DEBUG] XML recebido tem {len(xml_nfe)} caracteres")
         print(f"[ENVELOPE-DEBUG] XML tem Signature: {'<Signature' in xml_nfe}")
         
-        # Remover declaração XML do xml_nfe se existir (não pode ter dentro do SOAP)
-        xml_nfe_limpo = xml_nfe.strip()
+        # CRÍTICO: Remover APENAS declaração XML (sem strip que altera canonicalização)
+        # .strip() pode remover espaços que fazem parte da assinatura digital
+        xml_nfe_limpo = xml_nfe
         if xml_nfe_limpo.startswith('<?xml'):
-            # Remove até o final da declaração XML
-            xml_nfe_limpo = xml_nfe_limpo.split('?>', 1)[1].strip()
+            # Remove até o final da declaração XML (sem strip!)
+            xml_nfe_limpo = xml_nfe_limpo.split('?>', 1)[1]
+            # Remover APENAS o primeiro caractere se for quebra de linha após declaração
+            if xml_nfe_limpo and xml_nfe_limpo[0] in ['\n', '\r']:
+                xml_nfe_limpo = xml_nfe_limpo[1:]
         
         print(f"[ENVELOPE-DEBUG] Após remover declaração: {len(xml_nfe_limpo)} caracteres")
         print(f"[ENVELOPE-DEBUG] Ainda tem Signature: {'<Signature' in xml_nfe_limpo}")
