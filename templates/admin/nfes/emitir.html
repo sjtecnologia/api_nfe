@@ -82,14 +82,14 @@ input[readonly] {
                         <div class="form-group">
                             <label for="serie">Série *</label>
                             <input type="number" class="form-control" name="serie" id="serie" 
-                                   value="1" min="1" max="999" required onchange="buscarProximoNumero()">
+                                   value="{% if edit_mode and form_data.serie %}{{ form_data.serie }}{% else %}1{% endif %}" min="1" max="999" required onchange="buscarProximoNumero()">
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="form-group">
                             <label for="numero_nfe">Número da NFe *</label>
                             <input type="number" class="form-control" name="numero_nfe" id="numero_nfe" 
-                                   value="1" min="1" required onchange="confirmarAlteracaoNumero()">
+                                   value="{% if edit_mode and form_data.numero_nfe %}{{ form_data.numero_nfe }}{% else %}1{% endif %}" min="1" required onchange="confirmarAlteracaoNumero()">
                             <!-- <small class="form-text text-muted">⚠️ Alteração requer confirmação. Número sugerido aparecerá automaticamente.</small> -->
                         </div>
                     </div>
@@ -133,6 +133,7 @@ input[readonly] {
                         <div class="form-group">
                             <label for="natOp">Natureza da Operação *</label>
                             <input type="text" class="form-control" name="natOp" id="natOp" 
+                                   value="{% if edit_mode and form_data.natOp %}{{ form_data.natOp }}{% endif %}"
                                    placeholder="Ex: Venda de mercadoria" maxlength="60" required>
                         </div>
                     </div>
