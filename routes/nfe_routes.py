@@ -1935,9 +1935,13 @@ def edit(nfe_id):
                     return redirect(url_for('nfe.view', nfe_id=nfe_id))
                 
                 # Buscar destinatário correto
-                # destinatario_cnpj_cpf = request.form.get('destinatario_cnpj_cpf')  # ou o nome do campo correto do formulário
-                destinatario_query = text("SELECT * FROM nfe_emitidas WHERE WHERE nfe_emitida_id = :nfe_id")
-                destinatario_result = db.execute(destinatario_query, {'nfe_id': nfe_id}).fetchone()
+                destinatario_id = request.form.get('destinatario')
+                if not destinatario_id:
+                    flash('Destinatário não selecionado', 'error')
+                    return redirect(url_for('nfe.edit', nfe_id=nfe_id))
+                
+                destinatario_query = text("SELECT destinatario_id, razao_social, cnpj_cpf FROM destinatarios WHERE destinatario_id = :dest_id")
+                destinatario_result = db.execute(destinatario_query, {'dest_id': destinatario_id}).fetchone()
                 
                 if not destinatario_result:
                     flash('Destinatário não encontrado', 'error')
