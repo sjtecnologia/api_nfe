@@ -3010,7 +3010,7 @@ def edit_cliente(cliente_id: int):
             certificados_existentes=certificados_existentes,
             produtos_existentes=produtos_existentes,
             regras_existentes=regras_existentes,
-            destinatarios=destinatarios
+            destinatarios_existentes=destinatarios  # Nome correto que o template espera
         )
     except Exception as e:
         import traceback
@@ -3810,18 +3810,18 @@ def edit_destinatario(destinatario_id: int):
     db = _get_db()
     try:
         row = db.execute(text("""
-            SELECT cliente_id, nome_razao_social, cpf_cnpj, ie, ie_indicador_nfe
-                              email, telefone, logradouro, numero, complemento, bairro,
+            SELECT cliente_id, nome_razao_social, cpf_cnpj, ie, ie_indicador_nfe,
+                   email, telefone, logradouro, numero, complemento, bairro,
                    cep, codigo_municipio, nome_municipio, uf, codigo_uf, codigo_pais, nome_pais,
-                              data_cadastro, data_atualizacao, created_by_user_id
+                   data_cadastro, data_atualizacao, created_by_user_id
             FROM destinatarios_nfe
             WHERE destinatario_id = :cid
         """), {'cid': destinatario_id}).fetchone()
         destinatario = _safe_row_to_dict(row, [
-            'cliente_id', 'nome_razao_social', 'cpf_cnpj', 'ie', 'ie_indicador_nfe'
-                              'email', 'telefone', 'logradouro', 'numero', 'complemento', 'bairro',
-                   'cep', 'codigo_municipio', 'nome_municipio', 'uf', 'codigo_uf', 'codigo_pais', 'nome_pais',
-                              'data_cadastro', 'data_atualizacao', 'created_by_user_id'
+            'cliente_id', 'nome_razao_social', 'cpf_cnpj', 'ie', 'ie_indicador_nfe',
+            'email', 'telefone', 'logradouro', 'numero', 'complemento', 'bairro',
+            'cep', 'codigo_municipio', 'nome_municipio', 'uf', 'codigo_uf', 'codigo_pais', 'nome_pais',
+            'data_cadastro', 'data_atualizacao', 'created_by_user_id'
         ])
         if not destinatario:
             flash('Destinatário não encontrado', 'warning')
