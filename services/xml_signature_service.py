@@ -124,15 +124,16 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Criar SignedInfo COM xmlns para canonicalizar e assinar
-            signed_info_for_c14n = f'<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
-            
-            # Canonicalizar SignedInfo COM xmlns
-            signed_info_tree = etree.fromstring(signed_info_for_c14n.encode())
-            signed_info_c14n = etree.tostring(signed_info_tree, method='c14n', exclusive=False, with_comments=False)
-            
-            # SignedInfo SEM xmlns para XML final (herda do Signature pai)
+            # 3. Criar SignedInfo SEM xmlns (para herdar do Signature no XML final)
             signed_info_for_xml = f'<SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
+            
+            # Canonicalizar SignedInfo NO CONTEXTO do Signature (como SEFAZ fará)
+            # Criar Signature temporário para contexto correto
+            signature_temp = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info_for_xml}</Signature>'
+            signature_tree_temp = etree.fromstring(signature_temp.encode())
+            signed_info_element = signature_tree_temp[0]  # Pegar SignedInfo dentro do Signature
+            # Canonicalizar o SignedInfo COM o namespace herdado
+            signed_info_c14n = etree.tostring(signed_info_element, method='c14n', exclusive=False, with_comments=False)
             
             # 4. Assinar SignedInfo com a chave privada
             from cryptography.hazmat.primitives import hashes
