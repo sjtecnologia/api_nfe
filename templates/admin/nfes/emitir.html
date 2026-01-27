@@ -2254,16 +2254,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .then(response => {
                     console.log('✅ Resposta recebida:', response.status);
-                    // Redirecionar para a resposta
+                    console.log('🔍 Response redirected?', response.redirected);
+                    console.log('🔍 Response URL:', response.url);
+                    
+                    // Se foi redirecionado, ir para a nova URL
                     if (response.redirected) {
+                        console.log('🔀 Redirecionando para:', response.url);
                         window.location.href = response.url;
-                    } else {
-                        return response.text().then(html => {
+                        return;
+                    }
+                    
+                    // Processar resposta HTML
+                    return response.text().then(html => {
+                        console.log('📄 HTML recebido:', html.substring(0, 500));
+                        
+                        // Se a resposta contém "success" ou "autorizada", é sucesso
+                        if (html.includes('success') || html.includes('autorizada') || html.includes('Autorizada')) {
+                            console.log('✅ NFe emitida com sucesso! Redirecionando...');
+                            // Extrair URL de redirect se houver
+                            const match = html.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/);
+                            if (match) {
+                                window.location.href = match[1];
+                            } else {
+                                // Recarregar para mostrar lista de NFes
+                                window.location.href = '/admin/nfe/list';
+                            }
+                        } else {
+                            // Substituir página com a resposta
+                            console.log('📝 Substituindo conteúdo da página...');
                             document.open();
                             document.write(html);
                             document.close();
-                        });
-                    }
+                        }
+                    });
                 })
                 .catch(error => {
                     console.error('❌ Erro ao enviar:', error);
