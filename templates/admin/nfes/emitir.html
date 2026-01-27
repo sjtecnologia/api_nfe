@@ -61,7 +61,7 @@ input[readonly] {
         </div>
     </div>
 
-    <form method="POST" id="nfeForm" onsubmit="return validarFormulario()" novalidate>
+    <form method="POST" id="nfeForm" novalidate>
         <!-- ✅ IDENTIFICAÇÃO DA NFE -->
         <div class="card">
             <div class="card-header">
@@ -2112,7 +2112,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnEmitir) {
         console.log('✅ Registrando listener no botão Emitir');
         btnEmitir.addEventListener('click', function(e) {
+            console.log('🎯 BOTÃO EMITIR CLICADO!', e);
             e.preventDefault(); // Prevenir submit imediato
+            e.stopPropagation(); // Prevenir propagação do evento
             
             console.log('🔍 INICIANDO VALIDAÇÃO...');
             
