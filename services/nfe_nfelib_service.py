@@ -202,7 +202,7 @@ def generate_nfe_xml_nfelib(
     
     ide = Nfe.InfNfe.Ide(
         cUF=str(get_uf_ibge_code(emitente_data.get('uf', 'SP'))),
-        cNF=form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000))[:8],
+        cNF=form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000)).zfill(8)[:8],
         natOp=nat_op[:60],
         mod="55",
         serie=str(form_data.get('serie', '1')),
