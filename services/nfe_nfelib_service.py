@@ -551,6 +551,11 @@ def generate_nfe_xml_nfelib(
         )
         print(f"✅ [NFELIB] XML gerado: {len(xml_string)} caracteres")
         
+        # CRÍTICO: Remover TODAS as quebras de linha para evitar erro de assinatura
+        # A assinatura deve ser calculada sobre XML compacto (sem \n, \r, \t)
+        xml_string = xml_string.replace('\n', '').replace('\r', '').replace('\t', '')
+        print(f"✅ [NFELIB] Quebras removidas: {len(xml_string)} caracteres (compacto)")
+        
         # Salvar XML para análise offline
         try:
             xml_debug_path = f"/tmp/nfe_debug_{numero_nfe}.xml"
