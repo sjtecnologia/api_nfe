@@ -2239,8 +2239,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Criar FormData com todos os dados do form
                 const formData = new FormData(form);
                 
+                // Determinar URL correta
+                const actionUrl = form.getAttribute('action') || window.location.href;
+                console.log('📍 URL de destino:', actionUrl);
+                
                 // Enviar via fetch (sem validação HTML5)
-                fetch(form.action || window.location.href, {
+                fetch(actionUrl, {
                     method: 'POST',
                     body: formData
                 })
