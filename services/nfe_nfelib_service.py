@@ -166,15 +166,28 @@ def generate_nfe_xml_nfelib(
         print(f"⚠️  [HOMOLOGAÇÃO] CNPJ substituído para chave de acesso: {cnpj_original} → 99999999000191")
     
     # 1. Gerar data de emissão (usar timezone brasileiro BRT = UTC-3)
-    # Subtrair 10 minutos para garantir que não seja futura (margem ampla)
     from datetime import timezone as tz
     brt = tz(timedelta(hours=-3))
-    data_emissao = datetime.now(brt) - timedelta(minutes=10)
+    
+    # USAR data do form_data se fornecida, senão usar agora
+    if form_data.get('dataEmissao'):
+        try:
+            # Parsear data do formulário (formato: 2026-01-27T16:22)
+            data_str = form_data['dataEmissao']
+            data_emissao = datetime.fromisoformat(data_str)
+            # Adicionar timezone BRT se não tiver
+            if data_emissao.tzinfo is None:
+                data_emissao = data_emissao.replace(tzinfo=brt)
+        except Exception as e:
+            print(f"⚠️  Erro ao parsear dataEmissao '{form_data.get('dataEmissao')}': {e}, usando agora")
+            data_emissao = datetime.now(brt)
+    else:
+        data_emissao = datetime.now(brt)
     
     # Remover microsegundos (apenas segundos como no XML aprovado)
     data_emissao = data_emissao.replace(microsecond=0)
     
-    print(f"✅ [NFELIB] Data de emissão (BRT -10min): {data_emissao.isoformat()}")
+    print(f"✅ [NFELIB] Data de emissão: {data_emissao.isoformat()}")
     
     # 2. Gerar chave de acesso (44 dígitos) - USA emitente_data_copy com CNPJ de teste
     chave_acesso = gerar_chave_acesso(emitente_data_copy, form_data, numero_nfe, data_emissao)
