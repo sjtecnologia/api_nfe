@@ -2118,19 +2118,32 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================================================
     console.log('🔍 Form nfeForm:', form);
     
-    // Usar event delegation no form com capture para garantir que capturamos o evento primeiro
+    // Interceptar SUBMIT do form para fazer validação customizada
     if (form) {
-        console.log('✅ Registrando listener de click no FORM (event delegation)');
-        form.addEventListener('click', function(e) {
-            // Verificar se o clique foi no botão Emitir
-            const target = e.target.closest('button[name="action"][value="emitir"]');
-            if (target) {
-                console.log('🎯 BOTÃO EMITIR CLICADO!', e);
-                e.preventDefault(); // Prevenir submit imediato
-                e.stopPropagation(); // Prevenir propagação do evento
-                e.stopImmediatePropagation(); // Prevenir outros listeners
-                
-                console.log('🔍 INICIANDO VALIDAÇÃO...');
+        console.log('✅ Registrando listener de SUBMIT no form');
+        
+        // Remover required de todos os campos IMEDIATAMENTE
+        const camposRequired = form.querySelectorAll('[required]');
+        camposRequired.forEach(campo => campo.removeAttribute('required'));
+        console.log(`🔧 ${camposRequired.length} campos required removidos preventivamente`);
+        
+        form.addEventListener('submit', function(e) {
+            console.log('🎯 SUBMIT INTERCEPTADO!', e);
+            e.preventDefault(); // SEMPRE prevenir submit padrão
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // Verificar qual botão foi clicado
+            const submitter = e.submitter;
+            console.log('🔍 Botão clicado:', submitter);
+            
+            // Se não for o botão Emitir, permitir submit
+            if (!submitter || submitter.value !== 'emitir') {
+                console.log('⚠️ Não é o botão Emitir, permitindo submit...');
+                return;
+            }
+            
+            console.log('🔍 INICIANDO VALIDAÇÃO...');
             
             // 1. VALIDAR CAMPOS OBRIGATÓRIOS
             const erros = [];
@@ -2194,29 +2207,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     atualizarItemJSON(itemId);
                 });
                 
-                // Remover atributo required de TODOS os campos para evitar validação HTML5
-                console.log('🔧 Removendo required de todos os campos...');
-                const camposRequired = form.querySelectorAll('[required]');
-                camposRequired.forEach(campo => campo.removeAttribute('required'));
-                console.log(`✅ ${camposRequired.length} campos required removidos`);
-                
                 // Submeter o formulário
-                target.disabled = true;
-                target.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
-                
-                // Adicionar o campo action antes de submeter
-                const inputAction = document.createElement('input');
-                inputAction.type = 'hidden';
-                inputAction.name = 'action';
-                inputAction.value = 'emitir';
-                form.appendChild(inputAction);
+                submitter.disabled = true;
+                submitter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
                 
                 console.log('🚀 Submetendo formulário...');
-                // Submit direto
-                form.submit();
+                // Submit direto usando o método nativo
+                HTMLFormElement.prototype.submit.call(form);
             }
-            }
-        }, true); // Usar capture: true para capturar o evento antes de outros listeners
+        }, true); // Usar capture phase
     }
 });
 
