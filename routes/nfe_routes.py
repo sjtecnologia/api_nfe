@@ -1603,10 +1603,21 @@ def edit(nfe_id):
                     print(f"AVISO: Erro ao buscar CSTs: {e}")
                     csts = []
                 
-                # OK: PRODUTOS
+                # OK: PRODUTOS (filtrar por cliente)
                 try:
-                    produtos_query = text("SELECT produto_id, codigo_interno, descricao FROM produtos WHERE ativo = true ORDER BY descricao")
-                    produtos_result = db.execute(produtos_query).fetchall()
+                    produtos_query = text("""
+                        SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
+                               p.unidade_comercial, n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
+                               cst.codigo as cst_codigo, cs.codigo as csosn_codigo, p.origem_mercadoria as origem_mercadoria_id
+                        FROM produtos p
+                        LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
+                        LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
+                        LEFT JOIN cst_icms cst ON p.cst_id = cst.cst_id
+                        LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
+                        WHERE p.cliente_id = :cliente_id AND p.ativo = true
+                        ORDER BY p.descricao
+                    """)
+                    produtos_result = db.execute(produtos_query, {'cliente_id': cliente_id}).fetchall()
                     produtos = []
                     for produto_row in produtos_result:
                         try:
@@ -1622,7 +1633,14 @@ def edit(nfe_id):
                                 produtos.append({
                                     'produto_id': produto_row[0],
                                     'codigo_interno': produto_row[1],
-                                    'descricao': produto_row[2]
+                                    'descricao': produto_row[2],
+                                    'preco_unitario_padrao': float(produto_row[3]) if produto_row[3] else 0.0,
+                                    'unidade_comercial': produto_row[4],
+                                    'ncm_codigo': produto_row[5],
+                                    'cfop_codigo': produto_row[6],
+                                    'cst_codigo': produto_row[7],
+                                    'csosn_codigo': produto_row[8],
+                                    'origem_mercadoria_id': produto_row[9]
                                 })
                         except Exception as e:
                             print(f"AVISO: Erro ao processar produto: {e}")

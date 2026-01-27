@@ -2192,5 +2192,110 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ✅ PREENCHER DADOS EM MODO EDIÇÃO
+{% if edit_mode and form_data %}
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔧 Modo edição ativo - preenchendo dados...');
+    
+    // Preencher campos do formulário
+    {% if form_data.numero_nfe %}
+    document.getElementById('numero_nfe').value = '{{ form_data.numero_nfe }}';
+    {% endif %}
+    
+    {% if form_data.serie %}
+    document.getElementById('serie').value = '{{ form_data.serie }}';
+    {% endif %}
+    
+    {% if form_data.tpNF %}
+    document.getElementById('tpNF').value = '{{ form_data.tpNF }}';
+    {% endif %}
+    
+    {% if form_data.finNFe %}
+    document.getElementById('finNFe').value = '{{ form_data.finNFe }}';
+    {% endif %}
+    
+    {% if form_data.indPres %}
+    document.getElementById('indPres').value = '{{ form_data.indPres }}';
+    {% endif %}
+    
+    {% if form_data.natOp %}
+    document.getElementById('natOp').value = '{{ form_data.natOp }}';
+    {% endif %}
+    
+    {% if form_data.dataEmissao %}
+    document.getElementById('dataEmissao').value = '{{ form_data.dataEmissao }}';
+    {% endif %}
+    
+    {% if form_data.formaPagamento %}
+    document.getElementById('formaPagamento').value = '{{ form_data.formaPagamento }}';
+    {% endif %}
+    
+    {% if form_data.valorPagamento %}
+    document.getElementById('valorPagamento').value = '{{ form_data.valorPagamento }}';
+    {% endif %}
+    
+    {% if form_data.modFrete %}
+    document.getElementById('modFrete').value = '{{ form_data.modFrete }}';
+    toggleDadosTransportadora();
+    {% endif %}
+    
+    {% if form_data.infCpl %}
+    document.getElementById('infCpl').value = {{ form_data.infCpl|tojson }};
+    {% endif %}
+    
+    // Preencher itens
+    {% if initial_nfe_items %}
+    console.log('📦 Adicionando {{ initial_nfe_items|length }} item(ns)...');
+    {% for item in initial_nfe_items %}
+    setTimeout(function() {
+        adicionarItemComDados({{ item|tojson }});
+    }, {{ loop.index0 * 100 }});
+    {% endfor %}
+    {% endif %}
+    
+    console.log('✅ Dados carregados em modo edição');
+});
+
+// Função para adicionar item com dados pré-preenchidos
+function adicionarItemComDados(itemData) {
+    // Adicionar um item vazio primeiro
+    adicionarItem();
+    
+    // Aguardar o item ser criado e preencher os dados
+    setTimeout(function() {
+        const items = document.querySelectorAll('[id^="item-"]');
+        const ultimoItem = items[items.length - 1];
+        const itemId = ultimoItem.id.split('-')[1];
+        
+        // Preencher campos do item
+        if (itemData.codigo) {
+            document.querySelector(`#item-${itemId} input[name="items[${itemId}][codigo]"]`).value = itemData.codigo;
+        }
+        if (itemData.descricao) {
+            document.querySelector(`#item-${itemId} input[name="items[${itemId}][descricao]"]`).value = itemData.descricao;
+        }
+        if (itemData.ncm) {
+            document.querySelector(`#item-${itemId} input[name="items[${itemId}][ncm]"]`).value = itemData.ncm;
+        }
+        if (itemData.cfop) {
+            document.querySelector(`#item-${itemId} input[name="items[${itemId}][cfop]"]`).value = itemData.cfop;
+        }
+        if (itemData.unidade) {
+            document.querySelector(`#item-${itemId} input[name="items[${itemId}][unidade]"]`).value = itemData.unidade;
+        }
+        if (itemData.quantidade) {
+            document.querySelector(`#item-${itemId} input[name="items[${itemId}][quantidade]"]`).value = itemData.quantidade;
+        }
+        if (itemData.valor_unitario) {
+            document.querySelector(`#item-${itemId} input[name="items[${itemId}][valor_unitario]"]`).value = itemData.valor_unitario;
+        }
+        
+        // Calcular valor total
+        calcularValorItem(itemId);
+        atualizarItemJSON(itemId);
+    }, 50);
+}
+{% endif %}
 </script>
 {% endblock %}
