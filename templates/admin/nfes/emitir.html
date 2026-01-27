@@ -858,16 +858,6 @@ function adicionarItem() {
                 </div>
             </div>
             
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="form-group">
-                        <label>Descrição *</label>
-                        <input type="text" name="descricao_${itemCounter}" class="form-control" 
-                               maxlength="120" required>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Quantidade e Valores -->
             <div class="row">
                 <div class="col-md-3">
@@ -2310,16 +2300,6 @@ function adicionarItemComDados(itemData) {
                 if (campo) {
                     campo.value = itemData.codigo_produto || itemData.codigo;
                     console.log('✅ Código preenchido:', campo.value);
-                }
-            }
-            if (itemData.descricao) {
-                const campo = document.querySelector(`input[name="descricao_${itemId}"]`);
-                if (campo) {
-                    campo.value = itemData.descricao;
-                    console.log('✅ Descrição preenchida:', campo.value);
-                    // Garantir que o campo está visível
-                    campo.style.backgroundColor = '#ffffcc';
-                    setTimeout(() => campo.style.backgroundColor = '', 2000);
                 }
             }
             if (itemData.unidade) {
