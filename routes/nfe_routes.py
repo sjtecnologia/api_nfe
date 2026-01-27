@@ -1823,9 +1823,18 @@ def edit(nfe_id):
                     'infCpl': request.form.get('infCpl', '')
                 }
                 
-                # OK: CORREÇÃO: Processar itens com CFOP obrigatório
+                # Processar itens - detectar automaticamente pelos campos produto_N
                 itens = []
-                item_indices = request.form.getlist('item_index')
+                
+                # Encontrar todos os índices de produtos no formulário
+                item_indices = []
+                for key in request.form.keys():
+                    if key.startswith('produto_'):
+                        idx = key.split('_')[1]
+                        if idx not in item_indices:
+                            item_indices.append(idx)
+                
+                print(f"🔍 [EDIT NFe {nfe_id}] Índices de itens encontrados: {item_indices}")
                 
                 for i, idx in enumerate(item_indices):
                     # OK: BUSCAR CFOP DO PRODUTO SE NÃO FORNECIDO
