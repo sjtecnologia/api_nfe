@@ -148,22 +148,10 @@ class SefazService:
         # A SEFAZ precisa do namespace explícito no elemento NFe
         print(f"[ENVELOPE-DEBUG] ✅ xmlns mantido em NFe (padrão NFe 4.0)")
         
-        envelope = f'''<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-                xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
-                xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4">
-      <enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-        <idLote>{numero_lote}</idLote>
-        <indSinc>1</indSinc>
-        {xml_nfe_limpo}
-      </enviNFe>
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>'''
+        # CRÍTICO: Envelope SOAP sem formatação (erro 588 causado por \n e espaços)
+        envelope = f'<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"><enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><idLote>{numero_lote}</idLote><indSinc>1</indSinc>{xml_nfe_limpo}</enviNFe></nfeDadosMsg></soap12:Body></soap12:Envelope>'
         
-        print(f"[?] Envelope SOAP criado - Lote: {numero_lote}")
+        print(f"[?] Envelope SOAP criado COMPACTO (sem \\n) - Lote: {numero_lote}")
         return envelope
     
     def _processar_resposta_autorizacao(self, resposta_xml, chave_acesso):
