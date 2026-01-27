@@ -10,38 +10,55 @@ from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe
 from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import TenderEmi, Tendereco
 from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
 import re
+import unicodedata
 
 
 # Mapeamento de códigos IBGE mais comuns → nome do município
+# IMPORTANTE: Usar capitalização mista (Primeira Letra Maiúscula) como aceito pela SEFAZ
 MUNICIPIOS_IBGE = {
-    '3550308': 'SAO PAULO',
-    '3549805': 'SAO JOSE DO RIO PRETO',
-    '3304557': 'RIO DE JANEIRO',
-    '4106902': 'CURITIBA',
-    '2927408': 'SALVADOR',
-    '2611606': 'RECIFE',
-    '2304400': 'FORTALEZA',
-    '1302603': 'MANAUS',
-    '5300108': 'BRASILIA',
+    '3550308': 'Sao Paulo',
+    '3549805': 'Sao Jose do Rio Preto',
+    '3304557': 'Rio de Janeiro',
+    '4106902': 'Curitiba',
+    '2927408': 'Salvador',
+    '2611606': 'Recife',
+    '2304400': 'Fortaleza',
+    '1302603': 'Manaus',
+    '5300108': 'Brasilia',
 }
+
+
+def remover_acentos(texto: str) -> str:
+    """
+    Remove acentos e caracteres especiais de um texto
+    Exemplo: 'ASSOCIAÇÃO' → 'ASSOCIACAO'
+    """
+    if not texto:
+        return texto
+    # Normaliza para NFD (separa caracteres base de acentos)
+    nfd = unicodedata.normalize('NFD', texto)
+    # Remove marcas de acentuação (categoria 'Mn')
+    sem_acentos = ''.join(char for char in nfd if unicodedata.category(char) != 'Mn')
+    return sem_acentos
 
 
 def normalizar_municipio(codigo_ibge: str, nome_municipio: str) -> str:
     """
     Valida e corrige nome do município baseado no código IBGE
     para evitar Erro 225 - Schema XML
+    Usa capitalização mista como aceito pela SEFAZ
     """
     codigo_ibge = str(codigo_ibge).strip()
     
     # Se temos o código no mapeamento, usar o nome correto
     if codigo_ibge in MUNICIPIOS_IBGE:
         nome_correto = MUNICIPIOS_IBGE[codigo_ibge]
-        if nome_municipio.upper() != nome_correto:
+        if nome_municipio.upper() != nome_correto.upper():
             print(f"⚠️ [CORREÇÃO] Município '{nome_municipio}' corrigido para '{nome_correto}' (código {codigo_ibge})")
         return nome_correto
     
-    # Se não está no mapeamento, retornar o nome fornecido em maiúsculas
-    return nome_municipio.upper()[:60]
+    # Se não está no mapeamento, usar capitalização mista
+    return nome_municipio.title()[:60]
 
 
 def calcular_dv_chave_acesso(chave_sem_dv: str) -> str:
@@ -154,6 +171,9 @@ def generate_nfe_xml_nfelib(
     brt = tz(timedelta(hours=-3))
     data_emissao = datetime.now(brt) - timedelta(minutes=10)
     
+    # Remover microsegundos (apenas segundos como no XML aprovado)
+    data_emissao = data_emissao.replace(microsecond=0)
+    
     print(f"✅ [NFELIB] Data de emissão (BRT -10min): {data_emissao.isoformat()}")
     
     # 2. Gerar chave de acesso (44 dígitos) - USA emitente_data_copy com CNPJ de teste
@@ -177,6 +197,9 @@ def generate_nfe_xml_nfelib(
     
     print(f"📋 [DEBUG] Natureza Operação: '{nat_op}'")
     
+    # Extrair cDV (dígito verificador) da chave de acesso
+    cdv = chave_acesso[-1]  # Último dígito da chave
+    
     ide = Nfe.InfNfe.Ide(
         cUF=str(get_uf_ibge_code(emitente_data.get('uf', 'SP'))),
         cNF=form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000))[:8],
@@ -190,12 +213,13 @@ def generate_nfe_xml_nfelib(
         cMunFG=str(emitente_data.get('codigo_municipio', '3550308')),
         tpImp="1",
         tpEmis="1",
+        cDV=cdv,  # Dígito verificador da chave de acesso
         tpAmb=str(form_data.get('tpAmb', 2)),
         finNFe=str(form_data.get('finNFe', '1')),
         indFinal="1",
         indPres=form_data.get('indPres', "1"),
         indIntermed="0",
-        procEmi="1",  # 1=Aplicação do contribuinte (NFe emitida em produção)
+        procEmi="0",  # 0=Aplicação do contribuinte (CORRIGIDO: era 1)
         verProc="EmiteMax_1.0"
     )
     
@@ -300,6 +324,9 @@ def generate_nfe_xml_nfelib(
     if not nome_dest:
         raise ValueError("Nome do destinatário é obrigatório")
     
+    # Remover acentos e caracteres especiais (ASSOCIAÇÃO → ASSOCIACAO)
+    nome_dest = remover_acentos(nome_dest)
+    
     # Determinar indIEDest baseado em IE e tipo de documento
     # 1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte
     ie_dest = destinatario_data.get('ie') or destinatario_data.get('inscricao_estadual', '')
@@ -339,6 +366,18 @@ def generate_nfe_xml_nfelib(
     v_nf_total = Decimal('0')
     
     for idx, item in enumerate(items, start=1):
+        # Formatar valores com casas decimais corretas
+        quantidade = Decimal(str(item.get('quantidade', '1')))
+        valor_unitario = Decimal(str(item.get('valor_unitario', '0')))
+        valor_total = Decimal(str(item.get('valor_total', '0')))
+        
+        # Quantidade: até 4 casas decimais (padrão NFe)
+        qcom_str = f"{quantidade:.4f}"
+        # Valor unitário: até 10 casas decimais (padrão NFe)
+        vuncom_str = f"{valor_unitario:.4f}"
+        # Valor total: 2 casas decimais
+        vprod_str = f"{valor_total:.2f}"
+        
         # Produto
         prod = Nfe.InfNfe.Det.Prod(
             cProd=str(item.get('codigo', idx))[:60],
@@ -347,13 +386,13 @@ def generate_nfe_xml_nfelib(
             NCM=item.get('ncm', '00000000'),
             CFOP=str(item.get('cfop', '5102')),
             uCom=item.get('unidade', 'UN')[:6],
-            qCom=str(item.get('quantidade', '1.0000')),
-            vUnCom=str(item.get('valor_unitario', '0.00')),
-            vProd=str(item.get('valor_total', '0.00')),
+            qCom=qcom_str,
+            vUnCom=vuncom_str,
+            vProd=vprod_str,
             cEANTrib=item.get('ean', 'SEM GTIN'),
             uTrib=item.get('unidade', 'UN')[:6],
-            qTrib=str(item.get('quantidade', '1.0000')),
-            vUnTrib=str(item.get('valor_unitario', '0.00')),
+            qTrib=qcom_str,
+            vUnTrib=vuncom_str,
             indTot="1"
         )
         
@@ -416,7 +455,12 @@ def generate_nfe_xml_nfelib(
         cofins_nt = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsnt(CST="07")
         cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSNT=cofins_nt)
         
+        # vTotTrib - Valor aproximado dos tributos (Lei da Transparência)
+        # Para Simples Nacional geralmente é 0.00
+        v_tot_trib = "0.00"
+        
         imposto = Nfe.InfNfe.Det.Imposto(
+            vTotTrib=v_tot_trib,
             ICMS=icms,
             PIS=pis,
             COFINS=cofins
@@ -439,6 +483,9 @@ def generate_nfe_xml_nfelib(
         vBC="0.00",
         vICMS="0.00",
         vICMSDeson="0.00",
+        vFCPUFDest="0.00",  # ICMS interestadual
+        vICMSUFDest="0.00",  # ICMS interestadual
+        vICMSUFRemet="0.00",  # ICMS interestadual
         vFCP="0.00",
         vBCST="0.00",
         vST="0.00",
@@ -454,7 +501,8 @@ def generate_nfe_xml_nfelib(
         vPIS="0.00",
         vCOFINS="0.00",
         vOutro="0.00",
-        vNF=f"{v_nf_total:.2f}"
+        vNF=f"{v_nf_total:.2f}",
+        vTotTrib="0.00"  # Valor total aproximado dos tributos
     )
     
     total = Nfe.InfNfe.Total(ICMSTot=icms_tot)
@@ -468,6 +516,7 @@ def generate_nfe_xml_nfelib(
     
     # 12. Criar PAG
     det_pag = Nfe.InfNfe.Pag.DetPag(
+        indPag="0",  # 0=Pagamento à vista, 1=Pagamento a prazo
         tPag="01",  # 01=Dinheiro
         vPag=f"{v_nf_total:.2f}"
     )
