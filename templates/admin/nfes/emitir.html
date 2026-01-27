@@ -2185,6 +2185,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 `Deseja realmente continuar?`;
             
             if (confirm(mensagemConfirmacao)) {
+                console.log('✅ Confirmação OK - preparando submissão...');
+                
                 // Atualizar JSON de todos os itens antes de submeter
                 const itens = document.querySelectorAll('[id^="item-"]');
                 itens.forEach(item => {
@@ -2192,11 +2194,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     atualizarItemJSON(itemId);
                 });
                 
+                // Remover atributo required de TODOS os campos para evitar validação HTML5
+                console.log('🔧 Removendo required de todos os campos...');
+                const camposRequired = form.querySelectorAll('[required]');
+                camposRequired.forEach(campo => campo.removeAttribute('required'));
+                console.log(`✅ ${camposRequired.length} campos required removidos`);
+                
                 // Submeter o formulário
                 target.disabled = true;
                 target.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
                 
-                // Usar o submit nativo sem disparar validação do onsubmit
                 // Adicionar o campo action antes de submeter
                 const inputAction = document.createElement('input');
                 inputAction.type = 'hidden';
@@ -2204,9 +2211,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 inputAction.value = 'emitir';
                 form.appendChild(inputAction);
                 
-                // Submit usando requestSubmit para manter o comportamento nativo
-                // mas sem disparar validação duplicada
-                HTMLFormElement.prototype.submit.call(form);
+                console.log('🚀 Submetendo formulário...');
+                // Submit direto
+                form.submit();
             }
             }
         }, true); // Usar capture: true para capturar o evento antes de outros listeners
