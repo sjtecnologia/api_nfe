@@ -590,7 +590,7 @@ input[readonly] {
                         <button type="button" class="btn btn-info" onclick="previewXML()">
                             <i class="fas fa-eye"></i> Visualizar XML
                         </button>
-                        <button type="submit" name="action" value="emitir" class="btn btn-success">
+                        <button type="button" name="action" value="emitir" class="btn btn-success">
                             <i class="fas fa-paper-plane"></i> Emitir NFe
                         </button>
                         <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary">
@@ -2317,8 +2317,7 @@ function adicionarItemComDados(itemData) {
                                 $(campo).val(option.value).trigger('change');
                             }
                             console.log('✅ Produto selecionado:', itemData.descricao);
-                            // Acionar o carregarProduto para preencher outros campos
-                            carregarProduto(itemId);
+                            // Não chamar carregarProduto() aqui - campos já serão preenchidos manualmente
                             break;
                         }
                     }
