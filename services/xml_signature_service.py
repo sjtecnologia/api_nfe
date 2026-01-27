@@ -124,12 +124,14 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Criar SignedInfo (COM espaços antes de /> como XML padrão SEFAZ)
-            signed_info = f'<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
+            # 3. Criar SignedInfo (SEM xmlns - herda do Signature pai)
+            signed_info = f'<SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
             
-            # Canonicalizar SignedInfo
-            signed_info_tree = etree.fromstring(signed_info.encode())
-            signed_info_c14n = etree.tostring(signed_info_tree, method='c14n', exclusive=False, with_comments=False)
+            # Canonicalizar SignedInfo NO CONTEXTO do Signature (para herdar namespace)
+            signature_wrapper = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info}</Signature>'
+            signature_tree = etree.fromstring(signature_wrapper.encode())
+            signed_info_element = signature_tree[0]  # Pegar o SignedInfo dentro do Signature
+            signed_info_c14n = etree.tostring(signed_info_element, method='c14n', exclusive=False, with_comments=False)
             
             # 4. Assinar SignedInfo com a chave privada
             from cryptography.hazmat.primitives import hashes
