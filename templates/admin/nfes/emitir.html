@@ -630,21 +630,19 @@ input[readonly] {
 </div>
 
 <!-- ✅ MODAL DE VALIDAÇÃO COM IA -->
-<div class="modal fade" id="modalValidacaoIA" tabindex="-1" role="dialog" aria-labelledby="modalValidacaoIALabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+<div class="modal fade" id="modalValidacaoIA" tabindex="-1" aria-labelledby="modalValidacaoIALabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header" id="modalValidacaoHeader">
                 <h5 class="modal-title" id="modalValidacaoIALabel">
                     <i class="fas fa-robot"></i> Validação com IA
                 </h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body" id="modalValidacaoBody">
                 <div class="text-center" id="validacaoLoading">
                     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="sr-only">Analisando...</span>
+                        <span class="visually-hidden">Analisando...</span>
                     </div>
                     <p class="mt-3"><strong>🤖 IA analisando dados da NFe...</strong></p>
                     <p class="text-muted">Verificando regras fiscais, CFOPs, CSTs e compatibilidades...</p>
@@ -654,8 +652,8 @@ input[readonly] {
                 </div>
             </div>
             <div class="modal-footer" id="modalValidacaoFooter" style="display: none;">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-success" onclick="$('#modalValidacaoIA').modal('hide')">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" id="btnContinuarEmissao" data-bs-dismiss="modal">
                     <i class="fas fa-check"></i> Continuar para Emissão
                 </button>
             </div>
@@ -1704,13 +1702,21 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ========== VALIDAÇÃO COM IA ==========
+// Instância do modal Bootstrap 5
+let modalValidacaoIA = null;
+
 function validarComIA() {
+    // Inicializar modal Bootstrap 5 se necessário
+    if (!modalValidacaoIA) {
+        modalValidacaoIA = new bootstrap.Modal(document.getElementById('modalValidacaoIA'));
+    }
+    
     // Mostrar modal com loading
-    $('#modalValidacaoIA').modal('show');
-    $('#validacaoLoading').show();
-    $('#validacaoResultado').hide();
-    $('#modalValidacaoFooter').hide();
-    $('#modalValidacaoHeader').removeClass('bg-success bg-danger bg-warning').addClass('bg-primary');
+    modalValidacaoIA.show();
+    document.getElementById('validacaoLoading').style.display = 'block';
+    document.getElementById('validacaoResultado').style.display = 'none';
+    document.getElementById('modalValidacaoFooter').style.display = 'none';
+    document.getElementById('modalValidacaoHeader').className = 'modal-header bg-primary text-white';
     
     // Coletar dados do formulário
     const formData = coletarDadosFormulario();
@@ -1836,12 +1842,12 @@ function coletarDadosFormulario() {
 }
 
 function mostrarResultadoValidacao(data) {
-    $('#validacaoLoading').hide();
-    $('#validacaoResultado').show();
-    $('#modalValidacaoFooter').show();
+    document.getElementById('validacaoLoading').style.display = 'none';
+    document.getElementById('validacaoResultado').style.display = 'block';
+    document.getElementById('modalValidacaoFooter').style.display = 'flex';
     
     let html = '';
-    let headerClass = 'bg-success';
+    let headerClass = 'bg-success text-white';
     
     const errosCriticos = data.erros_criticos || [];
     const alertas = data.alertas || [];
@@ -1851,12 +1857,12 @@ function mostrarResultadoValidacao(data) {
     
     // Determinar cor do header
     if (errosCriticos.length > 0) {
-        headerClass = 'bg-danger';
+        headerClass = 'bg-danger text-white';
     } else if (alertas.length > 0) {
-        headerClass = 'bg-warning';
+        headerClass = 'bg-warning text-dark';
     }
     
-    $('#modalValidacaoHeader').removeClass('bg-primary bg-success bg-danger bg-warning').addClass(headerClass);
+    document.getElementById('modalValidacaoHeader').className = 'modal-header ' + headerClass;
     
     // Score de confiança
     html += `
@@ -1933,7 +1939,7 @@ function mostrarResultadoValidacao(data) {
         `;
     }
     
-    $('#validacaoResultado').html(html);
+    document.getElementById('validacaoResultado').innerHTML = html;
 }
 
 // Visualizar XML - Gera preview do XML da NFe sem enviar ao SEFAZ
