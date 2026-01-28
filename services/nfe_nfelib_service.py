@@ -261,13 +261,11 @@ def generate_nfe_xml_nfelib(
         raise ValueError(f"CNPJ do emitente inválido ou vazio: {emitente_data.get('cnpj', 'N/A')}")
     cnpj_emitente = cnpj_emitente.zfill(14)
     
-    # HOMOLOGAÇÃO: Substituir CNPJ real por CNPJ de teste da SEFAZ
+    # IMPORTANTE: Em homologação, usar o CNPJ REAL para que corresponda ao certificado digital
+    # O CNPJ do certificado DEVE corresponder ao CNPJ do emitente no XML
+    print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
     if tp_amb == 2:
-        cnpj_original = cnpj_emitente
-        cnpj_emitente = '99999999000191'  # CNPJ de teste homologação SEFAZ
-        print(f"⚠️  [HOMOLOGAÇÃO] CNPJ Emitente substituído: {cnpj_original} → {cnpj_emitente}")
-    else:
-        print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
+        print(f"⚠️  [HOMOLOGAÇÃO] Usando CNPJ real para corresponder ao certificado digital")
     
     # Buscar IE (pode estar como 'ie' ou 'inscricao_estadual')
     ie_emitente = (emitente_data.get('ie') or emitente_data.get('inscricao_estadual') or '').strip()
@@ -323,13 +321,10 @@ def generate_nfe_xml_nfelib(
     else:
         dest_cpf_cnpj = dest_cpf_cnpj.zfill(14)
     
-    # HOMOLOGAÇÃO: Substituir CPF/CNPJ real por CNPJ de teste
+    # IMPORTANTE: Em homologação, usar CPF/CNPJ REAIS
+    print(f"✅ [NFELIB] CPF/CNPJ Destinatário: {dest_cpf_cnpj} ({len(dest_cpf_cnpj)} dígitos)")
     if tp_amb == 2:
-        dest_original = dest_cpf_cnpj
-        dest_cpf_cnpj = '99999999000191'  # CNPJ de teste homologação SEFAZ
-        print(f"⚠️  [HOMOLOGAÇÃO] CPF/CNPJ Destinatário substituído: {dest_original} → {dest_cpf_cnpj}")
-    else:
-        print(f"✅ [NFELIB] CPF/CNPJ Destinatário: {dest_cpf_cnpj} ({len(dest_cpf_cnpj)} dígitos)")
+        print(f"⚠️  [HOMOLOGAÇÃO] Usando CPF/CNPJ real do destinatário")
     
     # Nome pode estar em 'nome' ou 'nome_razao_social'
     nome_dest = (destinatario_data.get('nome') or 
