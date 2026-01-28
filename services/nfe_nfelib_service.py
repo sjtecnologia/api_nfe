@@ -158,12 +158,11 @@ def generate_nfe_xml_nfelib(
     print(f"📋 [DEBUG] Destinatário Nome: {destinatario_data.get('nome', destinatario_data.get('nome_razao_social', 'N/A'))}")
     print(f"📋 [DEBUG] Número de itens: {len(items)}")
     
-    # 0. HOMOLOGAÇÃO: Substituir CNPJ ANTES de gerar chave de acesso
+    # IMPORTANTE: NÃO substituir CNPJ em homologação - usar CNPJ real para corresponder ao certificado
+    # A chave de acesso DEVE conter o CNPJ real do emitente (mesmo que seja homologação)
     emitente_data_copy = emitente_data.copy()
     if tp_amb == 2:
-        cnpj_original = emitente_data_copy.get('cnpj', '')
-        emitente_data_copy['cnpj'] = '99.999.999/0001-91'  # CNPJ teste com formatação
-        print(f"⚠️  [HOMOLOGAÇÃO] CNPJ substituído para chave de acesso: {cnpj_original} → 99999999000191")
+        print(f"⚠️  [HOMOLOGAÇÃO] Usando CNPJ real na chave de acesso: {emitente_data_copy.get('cnpj', '')}")
     
     # 1. Gerar data de emissão (usar timezone brasileiro BRT = UTC-3)
     from datetime import timezone as tz
@@ -189,7 +188,7 @@ def generate_nfe_xml_nfelib(
     
     print(f"✅ [NFELIB] Data de emissão: {data_emissao.isoformat()}")
     
-    # 2. Gerar chave de acesso (44 dígitos) - USA emitente_data_copy com CNPJ de teste
+    # 2. Gerar chave de acesso (44 dígitos) - USA CNPJ REAL mesmo em homologação
     chave_acesso = gerar_chave_acesso(emitente_data_copy, form_data, numero_nfe, data_emissao)
     
     # 3. Gerar Id do infNFe (formato: "NFe" + chave de 44 dígitos)
