@@ -558,7 +558,7 @@ def generate_nfe_xml_nfelib(
         )
         print(f"✅ [NFELIB] XML gerado: {len(xml_string)} caracteres")
         
-        # CRÍTICO: Adicionar infRespTec manualmente (nfelib não tem suporte nativo)
+        # CRÍTICO: Adicionar infRespTec e infAdic manualmente (nfelib não tem suporte nativo)
         from lxml import etree
         xml_tree = etree.fromstring(xml_string.encode('utf-8'))
         ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
@@ -566,7 +566,20 @@ def generate_nfe_xml_nfelib(
         # Localizar infNFe
         inf_nfe_elem = xml_tree.find('.//nfe:infNFe', ns)
         if inf_nfe_elem is not None:
-            # Criar infRespTec
+            # IMPORTANTE: Adicionar infAdic ANTES de infRespTec (ordem correta do leiaute)
+            inf_cpl_text = form_data.get('infCpl', '').strip()
+            if inf_cpl_text:
+                # Criar infAdic com infCpl
+                inf_adic = etree.Element('{http://www.portalfiscal.inf.br/nfe}infAdic')
+                
+                inf_cpl = etree.SubElement(inf_adic, '{http://www.portalfiscal.inf.br/nfe}infCpl')
+                inf_cpl.text = inf_cpl_text
+                
+                # Adicionar infAdic ao final do infNFe
+                inf_nfe_elem.append(inf_adic)
+                print(f"✅ [NFELIB] infAdic adicionado: {inf_cpl_text[:50]}...")
+            
+            # Criar infRespTec (após infAdic)
             inf_resp_tec = etree.Element('{http://www.portalfiscal.inf.br/nfe}infRespTec')
             
             cnpj = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}CNPJ')
