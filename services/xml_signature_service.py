@@ -51,7 +51,7 @@ class XMLSignatureService:
                 return self._sign_with_a3_token(xml_content, certificado)
             else:
                 # Assinar com certificado A1 usando signxml
-                private_key, certificate = self._load_certificate(certificado)
+                private_key, certificate, additional_certificates = self._load_certificate(certificado)
                 
                 # VALIDAR que certificado foi carregado corretamente
                 if not private_key or not certificate:
@@ -186,8 +186,23 @@ class XMLSignatureService:
             
             key_info_elem = etree.SubElement(sig_elem, f"{{{DS_NS}}}KeyInfo")
             x509_data_elem = etree.SubElement(key_info_elem, f"{{{DS_NS}}}X509Data")
+            
+            # Incluir certificado do usuário
             x509_cert_elem = etree.SubElement(x509_data_elem, f"{{{DS_NS}}}X509Certificate")
             x509_cert_elem.text = cert_base64
+            print(f"[OK] Certificado do usuário incluído no XML")
+            
+            # Incluir cadeia de certificação (certificados intermediários e raiz)
+            if additional_certificates:
+                for i, add_cert in enumerate(additional_certificates, 1):
+                    add_cert_der = add_cert.public_bytes(serialization.Encoding.DER)
+                    add_cert_base64 = base64.b64encode(add_cert_der).decode()
+                    add_cert_elem = etree.SubElement(x509_data_elem, f"{{{DS_NS}}}X509Certificate")
+                    add_cert_elem.text = add_cert_base64
+                    print(f"[OK] Certificado adicional {i} incluído: {add_cert.subject.rfc4514_string()[:80]}")
+                print(f"[OK] Cadeia de certificação completa: {len(additional_certificates) + 1} certificado(s)")
+            else:
+                print(f"[WARN] Nenhum certificado adicional encontrado na cadeia")
             
             # 9. Serializar XML completo COM assinatura
             signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
@@ -234,8 +249,12 @@ class XMLSignatureService:
             if not private_key or not certificate:
                 raise Exception("Falha ao carregar chave privada ou certificado")
             
+            # Contar certificados na cadeia
+            num_additional = len(additional_certificates) if additional_certificates else 0
             print(f"[OK] Certificado carregado: {certificate.subject}")
-            return private_key, certificate
+            print(f"[OK] Cadeia de certificação: {num_additional} certificado(s) adicional(is)")
+            
+            return private_key, certificate, additional_certificates
             
         except Exception as e:
             print(f"[X] Erro ao carregar certificado: {e}")
