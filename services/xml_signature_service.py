@@ -36,20 +36,49 @@ class XMLSignatureService:
                 raise Exception("❌ ERRO: Certificado em modo simulado")
             
             # 2. Obter dados do certificado
-            cert_arquivo = certificado.get('certificado_arquivo')  # Base64 do .pfx
-            cert_senha = certificado.get('certificado_senha')      # Senha (criptografada)
+            # O dicionário usa: cert_data (bytes), password (str) ou arquivo_certificado/senha_certificado
+            cert_data = certificado.get('cert_data')  # Bytes do .pfx já decodificado
+            cert_senha = certificado.get('password')   # Senha já descriptografada
             
-            if not cert_arquivo or not cert_senha:
+            if not cert_data or not cert_senha:
+                # Fallback: tentar chaves alternativas
+                cert_data = certificado.get('arquivo_certificado')
+                cert_senha = certificado.get('senha_certificado')
+            
+            if not cert_data or not cert_senha:
+                print(f"[PYNFE] Chaves disponíveis: {list(certificado.keys())}")
                 raise Exception("❌ ERRO: Dados do certificado incompletos")
             
-            # 3. USAR PYNFE para assinar
+            # 3. PyNFe precisa do arquivo .pfx em disco temporário
+            print("[PYNFE] Preparando certificado para PyNFe...")
+            
+            import tempfile
+            
+            # Salvar certificado em arquivo temporário
+            with tempfile.NamedTemporaryFile(suffix='.pfx', delete=False) as tmp_file:
+                if isinstance(cert_data, bytes):
+                    tmp_file.write(cert_data)
+                else:
+                    # Se for base64, decodificar
+                    import base64
+                    tmp_file.write(base64.b64decode(cert_data))
+                cert_file_path = tmp_file.name
+            
+            print(f"[PYNFE] Certificado salvo em: {cert_file_path}")
+            
+            # 4. USAR PYNFE para assinar
             print("[PYNFE] Criando assinador PyNFe...")
             
-            # PyNFe espera: arquivo .pfx (base64) e senha
-            assinador = Assinatura(cert_arquivo, cert_senha)
+            # PyNFe espera: caminho do arquivo .pfx e senha
+            assinador = Assinatura(cert_file_path, cert_senha)
             
             print("[PYNFE] Assinando XML com PyNFe...")
             xml_assinado = assinador.assinar(xml_content)
+            
+            # Limpar arquivo temporário
+            import os
+            os.unlink(cert_file_path)
+            print("[PYNFE] Arquivo temporário removido")
             
             print(f"[PYNFE] ✅ Assinatura criada: {len(xml_assinado)} caracteres")
             
