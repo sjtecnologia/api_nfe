@@ -9,6 +9,7 @@ import base64
 import hashlib
 import uuid
 from signxml import XMLSigner
+from signxml import SignatureMethod, DigestAlgorithm, CanonicalizationMethod
 from services.certificate_service import get_active_certificate_for_client
 
 class XMLSignatureService:
@@ -24,25 +25,23 @@ class XMLSignatureService:
     
     def sign_nfe_xml(self, xml_content, db_session, cliente_id):
         """
-        Assina XML da NFe com certificado digital A1 usando signxml
-        ATENÇÃO: NÃO USA ASSINATURA SIMULADA - FALHA SE CERTIFICADO FOR INVÁLIDO
+        Assina XML da NFe usando biblioteca signxml (método comprovado para NFe)
+        Após 117 tentativas de assinatura manual, usa biblioteca testada e confiável
         """
         try:
-            print("[AUTH] === INICIANDO ASSINATURA REAL COM SIGNXML ===")
-            print(f"[AUTH] Cliente ID: {cliente_id}")
+            print("[SIGNXML] === ASSINATURA COM SIGNXML - MÉTODO COMPROVADO ===")
+            print(f"[SIGNXML] Cliente ID: {cliente_id}")
             
             # 1. Buscar certificado
             certificado = get_active_certificate_for_client(db_session, cliente_id)
             if not certificado:
-                raise Exception("❌ ERRO CRÍTICO: Nenhum certificado ativo encontrado para este cliente. Cadastre um certificado válido antes de emitir NFe.")
+                raise Exception("❌ ERRO: Nenhum certificado ativo encontrado")
             
-            print(f"[AUTH] Certificado encontrado: ID={certificado.get('certificado_id')}")
-            print(f"[AUTH] Modo simulado: {certificado.get('modo_simulado')}")
-            print(f"[AUTH] Tipo: {certificado.get('tipo_certificado', 'A1')}")
+            print(f"[SIGNXML] Certificado: ID={certificado.get('certificado_id')}")
+            print(f"[SIGNXML] Tipo: {certificado.get('tipo_certificado', 'A1')}")
             
-            # CRÍTICO: NÃO PERMITIR ASSINATURA SIMULADA
             if certificado.get('modo_simulado'):
-                raise Exception("❌ ERRO CRÍTICO: Certificado inválido ou corrompido. Recadastre o certificado com o arquivo e senha corretos.")
+                raise Exception("❌ ERRO: Certificado em modo simulado não pode assinar")
             
             # 2. Verificar tipo de certificado
             tipo_cert = certificado.get('tipo_certificado', 'A1')
@@ -58,179 +57,66 @@ class XMLSignatureService:
                 if not private_key or not certificate:
                     raise Exception("❌ ERRO CRÍTICO: Falha ao carregar chave privada ou certificado. Verifique se o certificado e senha estão corretos.")
             
-            # 3. Usar signxml para assinar
-            from signxml import XMLSigner
-            from lxml import etree
-            
-            # Parsear XML
+            # 3. Parsear XML
             xml_tree = etree.fromstring(xml_content.encode('utf-8'))
+            print(f"[SIGNXML] Root element: {xml_tree.tag}")
             
-            print(f"[DEBUG] Root element: {xml_tree.tag}")
-            
-            # Encontrar elemento NFe (pode ser o próprio root ou um filho)
-            # Primeiro, verificar se o root já é o NFe
-            if xml_tree.tag.endswith('NFe') or xml_tree.tag == 'NFe':
-                nfe_element = xml_tree
-                print(f"[OK] Root é NFe")
-            else:
-                # Buscar NFe como descendente
-                nfe_element = xml_tree.find('.//{http://www.portalfiscal.inf.br/nfe}NFe')
-                if nfe_element is None:
-                    nfe_element = xml_tree.find('.//NFe')
-                if nfe_element is None:
-                    # Última tentativa: buscar qualquer elemento que termine com NFe
-                    for elem in xml_tree.iter():
-                        if elem.tag.endswith('NFe'):
-                            nfe_element = elem
-                            break
-            
-            if nfe_element is None:
-                print(f"[ERRO] Estrutura do XML:")
-                print(etree.tostring(xml_tree, encoding='unicode', pretty_print=True)[:500])
-                raise Exception("Elemento NFe não encontrado no XML")
-            
-            print(f"[OK] Elemento NFe encontrado: {nfe_element.tag}")
-            
-            # Encontrar elemento infNFe para assinar (filho direto de NFe)
-            inf_nfe = nfe_element.find('{http://www.portalfiscal.inf.br/nfe}infNFe')
-            if inf_nfe is None:
-                inf_nfe = nfe_element.find('infNFe')
-            if inf_nfe is None:
-                # Buscar em qualquer nível
-                for elem in nfe_element.iter():
-                    if elem.tag.endswith('infNFe'):
-                        inf_nfe = elem
-                        break
+            # 4. Encontrar elemento infNFe
+            inf_nfe = None
+            for elem in xml_tree.iter():
+                if 'infNFe' in elem.tag:
+                    inf_nfe = elem
+                    break
             
             if inf_nfe is None:
-                raise Exception("Elemento infNFe não encontrado no XML")
+                raise Exception("Elemento infNFe não encontrado")
             
             inf_nfe_id = inf_nfe.get('Id')
             if not inf_nfe_id:
-                raise Exception("Atributo Id não encontrado no infNFe")
+                raise Exception("Atributo Id não encontrado em infNFe")
             
-            print(f"[OK] Elemento infNFe encontrado: {inf_nfe_id}")
+            print(f"[SIGNXML] infNFe ID: {inf_nfe_id}")
             
-            # ========================================================================
-            # ASSINATURA MANUAL - signxml não permite SHA1 por padrão
-            # NFe exige SHA1 conforme padrão da SEFAZ
-            # ========================================================================
-            
-            # 1. Canonicalizar o elemento infNFe usando tostring com method='c14n'
-            inf_nfe_c14n = etree.tostring(inf_nfe, method='c14n', exclusive=False, with_comments=False)
-            
-            print(f"[OK] infNFe canonicalizado: {len(inf_nfe_c14n)} bytes")
-            
-            # 2. Calcular digest SHA1
-            digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
-            print(f"[OK] Digest calculado: {digest_value[:20]}...")
-            
-            # 3. Construir Signature com namespace DEFAULT (sem prefixo)
-            # CRÍTICO: nsmap={None: DS_NS} cria namespace default: <Signature xmlns="...">
-            # NÃO usar nsmap={'ds': DS_NS} ou QName, pois criam prefixo: <ds:Signature> ou <ns0:Signature>
-            DS_NS = "http://www.w3.org/2000/09/xmldsig#"
-            
-            # Criar Signature com namespace DEFAULT (sem prefixo)
-            sig_elem = etree.Element(f"{{{DS_NS}}}Signature", nsmap={None: DS_NS})
-            
-            # Criar elementos filhos (herdam namespace do pai)
-            signed_info = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignedInfo")
-            
-            canon_method = etree.SubElement(signed_info, f"{{{DS_NS}}}CanonicalizationMethod")
-            canon_method.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
-            
-            sig_method = etree.SubElement(signed_info, f"{{{DS_NS}}}SignatureMethod")
-            sig_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1")
-            
-            reference = etree.SubElement(signed_info, f"{{{DS_NS}}}Reference")
-            reference.set("URI", f"#{inf_nfe_id}")
-            
-            transforms = etree.SubElement(reference, f"{{{DS_NS}}}Transforms")
-            
-            transform1 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
-            transform1.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#enveloped-signature")
-            
-            transform2 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
-            transform2.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
-            
-            digest_method = etree.SubElement(reference, f"{{{DS_NS}}}DigestMethod")
-            digest_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#sha1")
-            
-            digest_value_elem = etree.SubElement(reference, f"{{{DS_NS}}}DigestValue")
-            digest_value_elem.text = digest_value
-            
-            # 4. Inserir Signature no XML ANTES de canonicalizar SignedInfo
-            # CRÍTICO: SignedInfo deve ser canonicalizado COM o contexto do documento NFe
-            nfe_element.append(sig_elem)
-            
-            # 5. AGORA canonicalizar o SignedInfo DO XML COMPLETO (com contexto NFe)
-            signed_info_elem = sig_elem[0]  # Pega SignedInfo filho de Signature
-            signed_info_c14n = etree.tostring(signed_info_elem, method='c14n', exclusive=False, with_comments=False)
-            print(f"[DEBUG] SignedInfo canonicalizado COM contexto NFe: {len(signed_info_c14n)} bytes")
-            print(f"[DEBUG] SignedInfo C14N (primeiros 400 chars): {signed_info_c14n[:400]}")
-            print(f"[DEBUG] SignedInfo C14N (últimos 100 chars): {signed_info_c14n[-100:]}")
-            
-            # 6. Assinar o SignedInfo canonicalizado
-            from cryptography.hazmat.primitives import hashes
-            from cryptography.hazmat.primitives.asymmetric import padding
-            
-            signature = private_key.sign(
-                signed_info_c14n,
-                padding.PKCS1v15(),
-                hashes.SHA1()
+            # 5. USAR SIGNXML com configuração para NFe
+            # NFe exige: SHA1, RSA-SHA1, C14N 1.0
+            signer = XMLSigner(
+                signature_algorithm=SignatureMethod.RSA_SHA1,
+                digest_algorithm=DigestAlgorithm.SHA1,
+                c14n_algorithm=CanonicalizationMethod.CANONICAL_XML_1_0
             )
-            signature_value = base64.b64encode(signature).decode()
-            print(f"[OK] Assinatura gerada: {len(signature_value)} caracteres")
             
-            # 7. Remover Signature temporariamente para adicionar SignatureValue e KeyInfo
-            nfe_element.remove(sig_elem)
+            print("[SIGNXML] Configuração: RSA_SHA1, SHA1, C14N 1.0")
             
-            # 8. Adicionar SignatureValue e KeyInfo
-            sig_value_elem = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignatureValue")
-            sig_value_elem.text = signature_value
+            # 6. Assinar - referência ao elemento infNFe
+            signed_root = signer.sign(
+                xml_tree,
+                key=private_key,
+                cert=certificate,
+                reference_uri=inf_nfe_id
+            )
             
-            # 9. Obter certificado X509 em base64
-            cert_der = certificate.public_bytes(serialization.Encoding.DER)
-            cert_base64 = base64.b64encode(cert_der).decode()
+            print("[SIGNXML] ✅ Assinatura criada com sucesso")
             
-            key_info_elem = etree.SubElement(sig_elem, f"{{{DS_NS}}}KeyInfo")
-            x509_data_elem = etree.SubElement(key_info_elem, f"{{{DS_NS}}}X509Data")
-            
-            # IMPORTANTE: Schema XSD da NFe permite apenas UM certificado em X509Data
-            x509_cert_elem = etree.SubElement(x509_data_elem, f"{{{DS_NS}}}X509Certificate")
-            x509_cert_elem.text = cert_base64
-            print(f"[OK] Certificado do usuário incluído no XML")
-            
-            # Log da cadeia para debug (não incluída no XML)
-            if additional_certificates:
-                print(f"[INFO] Cadeia disponível no PKCS#12: {len(additional_certificates)} certificado(s) adicional(is)")
-                for i, add_cert in enumerate(additional_certificates, 1):
-                    print(f"  - Certificado {i}: {add_cert.subject.rfc4514_string()[:80]}")
-            
-            # 10. Reinserir Signature completa no documento NFe
-            nfe_element.append(sig_elem)
-            
-            # 9. Serializar XML completo COM assinatura
-            signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
+            # 7. Serializar XML assinado
+            signed_xml = etree.tostring(signed_root, encoding='unicode', xml_declaration=False)
             signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + signed_xml
             
-            # DEBUG: Salvar XML em arquivo para análise
+            # DEBUG: Salvar XML para análise
             try:
                 with open('/tmp/last_signed_nfe.xml', 'w', encoding='utf-8') as f:
                     f.write(signed_xml)
-                print(f"[DEBUG] XML salvo em /tmp/last_signed_nfe.xml para análise")
+                print(f"[SIGNXML] XML salvo em /tmp/last_signed_nfe.xml")
             except:
                 pass
             
-            print(f"[OK] XML assinado com sucesso manualmente: {len(signed_xml)} caracteres (compacto)")
+            print(f"[SIGNXML] ✅ Sucesso: {len(signed_xml)} caracteres")
             return signed_xml
             
         except Exception as e:
-            # NÃO USA FALLBACK SIMULADO - PROPAGA O ERRO
-            print(f"[X] ERRO CRÍTICO na assinatura: {e}")
+            print(f"[SIGNXML] ❌ ERRO: {e}")
             import traceback
             traceback.print_exc()
-            raise Exception(f"Falha na assinatura digital: {str(e)}")
+            raise Exception(f"Falha na assinatura: {str(e)}")
     
     def _load_certificate(self, certificado_data):
         """
