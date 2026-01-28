@@ -532,15 +532,6 @@ def generate_nfe_xml_nfelib(
     
     print("✅ [NFELIB] PAG criado")
     
-    # 13. Criar InfRespTec (Responsável Técnico - obrigatório em muitos estados)
-    inf_resp_tec = Nfe.InfNfe.InfRespTec(
-        CNPJ="46840224000102",  # CNPJ do desenvolvedor (EmiteMax)
-        xContato="Carlos Renato",
-        email="contato@emitemax.com.br",
-        fone="1732118981"
-    )
-    print("✅ [NFELIB] InfRespTec criado")
-    
     # 13. Criar InfNFe completo com atributo Id
     inf_nfe = Nfe.InfNfe(
         versao="4.00",
@@ -551,8 +542,7 @@ def generate_nfe_xml_nfelib(
         det=det_list,
         total=total,
         transp=transp,
-        pag=pag,
-        infRespTec=inf_resp_tec
+        pag=pag
     )
     
     print(f"✅ [NFELIB] InfNFe criado com Id={id_nfe}")
@@ -567,6 +557,36 @@ def generate_nfe_xml_nfelib(
             ns_map={None: "http://www.portalfiscal.inf.br/nfe"}
         )
         print(f"✅ [NFELIB] XML gerado: {len(xml_string)} caracteres")
+        
+        # CRÍTICO: Adicionar infRespTec manualmente (nfelib não tem suporte nativo)
+        from lxml import etree
+        xml_tree = etree.fromstring(xml_string.encode('utf-8'))
+        ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+        
+        # Localizar infNFe
+        inf_nfe_elem = xml_tree.find('.//nfe:infNFe', ns)
+        if inf_nfe_elem is not None:
+            # Criar infRespTec
+            inf_resp_tec = etree.Element('{http://www.portalfiscal.inf.br/nfe}infRespTec')
+            
+            cnpj = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}CNPJ')
+            cnpj.text = '46840224000102'
+            
+            x_contato = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}xContato')
+            x_contato.text = 'Carlos Renato'
+            
+            email = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}email')
+            email.text = 'contato@emitemax.com.br'
+            
+            fone = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}fone')
+            fone.text = '1732118981'
+            
+            # Adicionar infRespTec ao final do infNFe (antes da assinatura)
+            inf_nfe_elem.append(inf_resp_tec)
+            
+            # Reconverter para string
+            xml_string = etree.tostring(xml_tree, encoding='unicode')
+            print("✅ [NFELIB] infRespTec adicionado manualmente")
         
         # CRÍTICO: Remover TODAS as quebras de linha para evitar erro de assinatura
         # A assinatura deve ser calculada sobre XML compacto (sem \n, \r, \t)
