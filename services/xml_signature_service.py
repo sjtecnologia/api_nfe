@@ -1,7 +1,7 @@
 import os
 import tempfile
 from lxml import etree
-from pynfe.processamento.assinatura import Assinatura
+from pynfe.processamento.assinatura import AssinaturaA1  # Classe CORRETA para assinar A1!
 from services.certificate_service import get_active_certificate_for_client
 
 class XMLSignatureService:
@@ -66,14 +66,22 @@ class XMLSignatureService:
             
             print(f"[PYNFE] Certificado salvo em: {cert_file_path}")
             
-            # 4. USAR PYNFE para assinar
-            print("[PYNFE] Criando assinador PyNFe...")
+            # 4. USAR AssinaturaA1 para assinar (classe correta para certificado A1!)
+            print("[PYNFE] Criando assinador PyNFe AssinaturaA1...")
             
-            # PyNFe espera: caminho do arquivo .pfx e senha
-            assinador = Assinatura(cert_file_path, cert_senha)
+            # AssinaturaA1 espera: caminho do arquivo .pfx e senha
+            assinador = AssinaturaA1(cert_file_path, cert_senha)
             
-            print("[PYNFE] Assinando XML com PyNFe...")
-            xml_assinado = assinador.assinar(xml_content)
+            # Parsear XML string para Element
+            if isinstance(xml_content, str):
+                xml_element = etree.fromstring(xml_content.encode('utf-8'))
+            elif isinstance(xml_content, bytes):
+                xml_element = etree.fromstring(xml_content)
+            else:
+                xml_element = xml_content
+            
+            print("[PYNFE] Assinando XML com PyNFe AssinaturaA1...")
+            xml_assinado = assinador.assinar(xml_element, retorna_string=True)
             
             # Limpar arquivo temporário
             import os
