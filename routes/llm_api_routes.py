@@ -551,8 +551,8 @@ def validar_nfe_com_ia():
                 'resumo': 'Dados não recebidos'
             })
         
-        # URL do serviço de IA (FastAPI)
-        ia_service_url = os.getenv('IA_SERVICE_URL', 'http://localhost:8001')
+        # URL do serviço de IA (FastAPI rodando na porta 8081)
+        ia_service_url = os.getenv('IA_SERVICE_URL', 'http://localhost:8081')
         
         # Chamar serviço de IA
         response = requests.post(
