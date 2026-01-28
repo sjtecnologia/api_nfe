@@ -557,3 +557,194 @@ async def validar_tributacao_ia(req: ValidacaoTributariaRequest):
             "erros": [{"erro": f"Erro no serviço de validação: {str(e)}"}],
             "alertas": []
         })
+
+# ========== VALIDAÇÃO PRÉ-EMISSÃO NFe COM IA ==========
+class ValidacaoNFeRequest(BaseModel):
+    """Dados da NFe para validação antes da emissão"""
+    # Identificação
+    ambiente: str  # "producao" ou "homologacao"
+    tipo_operacao: str  # "0" entrada, "1" saída
+    natureza_operacao: str
+    
+    # Emitente
+    emitente_cnpj: str
+    emitente_razao_social: str
+    emitente_uf: str
+    emitente_crt: str  # 1=SN, 2=SN Sublimite, 3=Regime Normal
+    emitente_ie: str
+    
+    # Destinatário
+    destinatario_cpf_cnpj: str
+    destinatario_nome: str
+    destinatario_uf: str
+    destinatario_ie: Optional[str] = None
+    
+    # Itens (lista simplificada)
+    itens: list  # [{descricao, ncm, cfop, csosn_cst, valor_unitario, quantidade, valor_total}]
+    
+    # Totais
+    valor_produtos: float
+    valor_total_nfe: float
+    
+    # Pagamento
+    forma_pagamento: str
+    valor_pagamento: float
+
+
+@app.post('/valida/nfe-pre-emissao')
+async def validar_nfe_pre_emissao(req: ValidacaoNFeRequest):
+    """
+    Valida dados da NFe usando IA antes de gerar o XML.
+    Identifica problemas que causariam rejeição no SEFAZ.
+    """
+    
+    try:
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        
+        if not github_token:
+            return JSONResponse(content={
+                "sucesso": False,
+                "validacao_ok": True,
+                "erros_criticos": [],
+                "alertas": ["Token GitHub não configurado - validação IA indisponível"],
+                "sugestoes": [],
+                "score_confianca": 0
+            })
+        
+        # Montar resumo dos itens
+        itens_resumo = ""
+        for i, item in enumerate(req.itens, 1):
+            itens_resumo += f"""
+Item {i}:
+  - Descrição: {item.get('descricao', 'N/A')}
+  - NCM: {item.get('ncm', 'N/A')}
+  - CFOP: {item.get('cfop', 'N/A')}
+  - CST/CSOSN: {item.get('csosn_cst', 'N/A')}
+  - Valor Unit: R$ {item.get('valor_unitario', 0)}
+  - Qtd: {item.get('quantidade', 0)}
+  - Valor Total: R$ {item.get('valor_total', 0)}
+"""
+        
+        prompt = f"""Você é um especialista fiscal brasileiro em NFe 4.0. 
+Analise os dados abaixo e identifique ERROS que causariam rejeição na SEFAZ.
+
+=== DADOS DA NFE ===
+AMBIENTE: {req.ambiente}
+TIPO OPERAÇÃO: {'Saída' if req.tipo_operacao == '1' else 'Entrada'}
+NATUREZA: {req.natureza_operacao}
+
+=== EMITENTE ===
+CNPJ: {req.emitente_cnpj}
+Razão Social: {req.emitente_razao_social}
+UF: {req.emitente_uf}
+IE: {req.emitente_ie}
+CRT: {req.emitente_crt} ({'Simples Nacional' if req.emitente_crt == '1' else 'Lucro Presumido/Real' if req.emitente_crt == '3' else 'SN Sublimite'})
+
+=== DESTINATÁRIO ===
+CPF/CNPJ: {req.destinatario_cpf_cnpj}
+Nome: {req.destinatario_nome}
+UF: {req.destinatario_uf}
+IE: {req.destinatario_ie or 'Não informada'}
+
+=== ITENS ==={itens_resumo}
+
+=== TOTAIS ===
+Valor Produtos: R$ {req.valor_produtos}
+Valor Total NFe: R$ {req.valor_total_nfe}
+
+=== PAGAMENTO ===
+Forma: {req.forma_pagamento}
+Valor: R$ {req.valor_pagamento}
+
+=== ANÁLISE SOLICITADA ===
+1. Verifique se CFOP é compatível com operação (entrada/saída, UF origem/destino)
+2. Verifique se CST/CSOSN é compatível com CRT do emitente
+3. Verifique se NCM é válido (8 dígitos)
+4. Verifique se valores estão coerentes
+5. Verifique se IE é obrigatória e está no formato correto
+6. Verifique compatibilidade PIS/COFINS para o regime
+7. Identifique qualquer outro erro potencial
+
+RESPONDA APENAS JSON (sem markdown):
+{{
+  "validacao_ok": true/false,
+  "erros_criticos": [
+    {{"campo": "nome_campo", "erro": "descrição do erro", "solucao": "como corrigir"}}
+  ],
+  "alertas": [
+    {{"campo": "nome_campo", "alerta": "descrição do alerta", "sugestao": "recomendação"}}
+  ],
+  "sugestoes_melhoria": ["sugestões gerais"],
+  "score_confianca": 0-100,
+  "resumo": "resumo em uma frase"
+}}"""
+
+        llm_url = "https://models.inference.ai.azure.com/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {github_token}"
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "Você é um especialista fiscal brasileiro. Analise NFe e identifique erros. Responda APENAS JSON válido, sem markdown."},
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 1500,
+            "temperature": 0.1
+        }
+        
+        print(f"[IA-VALIDACAO] Enviando requisição para GitHub Models...")
+        resp = requests.post(llm_url, json=payload, headers=headers, timeout=30)
+        print(f"[IA-VALIDACAO] Resposta: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            try:
+                # Limpar markdown se presente
+                resposta_limpa = resposta.strip()
+                if resposta_limpa.startswith("```json"):
+                    resposta_limpa = resposta_limpa.replace("```json", "", 1)
+                if resposta_limpa.startswith("```"):
+                    resposta_limpa = resposta_limpa.replace("```", "", 1)
+                if resposta_limpa.endswith("```"):
+                    resposta_limpa = resposta_limpa.rsplit("```", 1)[0]
+                resposta_limpa = resposta_limpa.strip()
+                
+                resultado = json.loads(resposta_limpa)
+                resultado["sucesso"] = True
+                return JSONResponse(content=resultado)
+            except Exception as e:
+                return JSONResponse(content={
+                    "sucesso": False,
+                    "validacao_ok": True,
+                    "erros_criticos": [],
+                    "alertas": [{"alerta": f"Erro ao processar resposta IA: {str(e)}"}],
+                    "sugestoes_melhoria": [],
+                    "score_confianca": 0,
+                    "resumo": "Não foi possível processar a resposta da IA",
+                    "resposta_raw": resposta[:500]
+                })
+        else:
+            return JSONResponse(content={
+                "sucesso": False,
+                "validacao_ok": True,
+                "erros_criticos": [],
+                "alertas": [{"alerta": f"IA indisponível: HTTP {resp.status_code}"}],
+                "sugestoes_melhoria": [],
+                "score_confianca": 0,
+                "resumo": "Serviço de IA temporariamente indisponível"
+            })
+            
+    except Exception as e:
+        print(f"[IA-VALIDACAO] Erro: {str(e)}")
+        return JSONResponse(content={
+            "sucesso": False,
+            "validacao_ok": True,
+            "erros_criticos": [],
+            "alertas": [{"alerta": f"Erro: {str(e)}"}],
+            "sugestoes_melhoria": [],
+            "score_confianca": 0,
+            "resumo": f"Erro no serviço: {str(e)}"
+        })

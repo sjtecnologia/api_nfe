@@ -587,6 +587,9 @@ input[readonly] {
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-12 text-center">
+                        <button type="button" class="btn btn-primary" onclick="validarComIA()" id="btnValidarIA">
+                            <i class="fas fa-robot"></i> Validar com IA
+                        </button>
                         <button type="button" class="btn btn-info" onclick="previewXML()">
                             <i class="fas fa-eye"></i> Visualizar XML
                         </button>
@@ -621,6 +624,40 @@ input[readonly] {
                 <div id="ncmResults" style="max-height: 400px; overflow-y: auto;">
                     <!-- Resultados da busca NCM -->
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ MODAL DE VALIDAÇÃO COM IA -->
+<div class="modal fade" id="modalValidacaoIA" tabindex="-1" role="dialog" aria-labelledby="modalValidacaoIALabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header" id="modalValidacaoHeader">
+                <h5 class="modal-title" id="modalValidacaoIALabel">
+                    <i class="fas fa-robot"></i> Validação com IA
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modalValidacaoBody">
+                <div class="text-center" id="validacaoLoading">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="sr-only">Analisando...</span>
+                    </div>
+                    <p class="mt-3"><strong>🤖 IA analisando dados da NFe...</strong></p>
+                    <p class="text-muted">Verificando regras fiscais, CFOPs, CSTs e compatibilidades...</p>
+                </div>
+                <div id="validacaoResultado" style="display: none;">
+                    <!-- Resultado será preenchido via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer" id="modalValidacaoFooter" style="display: none;">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" onclick="$('#modalValidacaoIA').modal('hide')">
+                    <i class="fas fa-check"></i> Continuar para Emissão
+                </button>
             </div>
         </div>
     </div>
@@ -1665,6 +1702,239 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ========== VALIDAÇÃO COM IA ==========
+function validarComIA() {
+    // Mostrar modal com loading
+    $('#modalValidacaoIA').modal('show');
+    $('#validacaoLoading').show();
+    $('#validacaoResultado').hide();
+    $('#modalValidacaoFooter').hide();
+    $('#modalValidacaoHeader').removeClass('bg-success bg-danger bg-warning').addClass('bg-primary');
+    
+    // Coletar dados do formulário
+    const formData = coletarDadosFormulario();
+    
+    if (!formData) {
+        mostrarResultadoValidacao({
+            sucesso: false,
+            validacao_ok: false,
+            erros_criticos: [{campo: 'formulário', erro: 'Preencha os campos obrigatórios', solucao: 'Complete destinatário e produtos'}],
+            alertas: [],
+            sugestoes_melhoria: [],
+            score_confianca: 0,
+            resumo: 'Formulário incompleto'
+        });
+        return;
+    }
+    
+    // Enviar para validação IA
+    fetch('/api/llm/validar-nfe', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        mostrarResultadoValidacao(data);
+    })
+    .catch(error => {
+        console.error('Erro validação IA:', error);
+        mostrarResultadoValidacao({
+            sucesso: false,
+            validacao_ok: true,
+            erros_criticos: [],
+            alertas: [{alerta: 'Erro ao conectar com serviço de IA: ' + error.message}],
+            sugestoes_melhoria: [],
+            score_confianca: 0,
+            resumo: 'Erro de conexão'
+        });
+    });
+}
+
+function coletarDadosFormulario() {
+    // Validar campos básicos
+    const destinatarioSelect = document.getElementById('destinatario_id');
+    if (!destinatarioSelect || !destinatarioSelect.value) {
+        return null;
+    }
+    
+    // Coletar itens da tabela de produtos
+    const itens = [];
+    const produtosRows = document.querySelectorAll('#tabelaProdutos tbody tr');
+    
+    if (produtosRows.length === 0) {
+        return null;
+    }
+    
+    produtosRows.forEach((row, index) => {
+        const descricao = row.querySelector('input[name$="[descricao]"]')?.value || 
+                         row.querySelector('td:nth-child(2)')?.textContent?.trim() || '';
+        const ncm = row.querySelector('input[name$="[ncm]"]')?.value || 
+                   row.querySelector('td:nth-child(3)')?.textContent?.trim() || '';
+        const cfop = row.querySelector('select[name$="[cfop]"]')?.value || 
+                    row.querySelector('input[name$="[cfop]"]')?.value || '';
+        const csosn = row.querySelector('select[name$="[csosn]"]')?.value || 
+                     row.querySelector('select[name$="[cst]"]')?.value || '';
+        const valorUnit = parseFloat(row.querySelector('input[name$="[valor_unitario]"]')?.value || 0);
+        const quantidade = parseFloat(row.querySelector('input[name$="[quantidade]"]')?.value || 0);
+        const valorTotal = parseFloat(row.querySelector('input[name$="[valor_total]"]')?.value || 0);
+        
+        itens.push({
+            descricao: descricao,
+            ncm: ncm,
+            cfop: cfop,
+            csosn_cst: csosn,
+            valor_unitario: valorUnit,
+            quantidade: quantidade,
+            valor_total: valorTotal || (valorUnit * quantidade)
+        });
+    });
+    
+    // Calcular totais
+    const valorProdutos = itens.reduce((sum, item) => sum + item.valor_total, 0);
+    
+    // Coletar dados do pagamento
+    let valorPagamento = 0;
+    let formaPagamento = '01';
+    const pagRows = document.querySelectorAll('#tabelaPagamentos tbody tr');
+    if (pagRows.length > 0) {
+        const primeiraForma = pagRows[0].querySelector('select[name$="[forma]"]')?.value || '01';
+        formaPagamento = primeiraForma;
+        pagRows.forEach(row => {
+            valorPagamento += parseFloat(row.querySelector('input[name$="[valor]"]')?.value || 0);
+        });
+    }
+    
+    // Montar objeto de validação
+    return {
+        ambiente: document.querySelector('select[name="ambiente"]')?.value || 'homologacao',
+        tipo_operacao: document.querySelector('select[name="tpNF"]')?.value || '1',
+        natureza_operacao: document.querySelector('input[name="natOp"]')?.value || 'Venda',
+        
+        emitente_cnpj: '{{ emitente_data.cnpj }}',
+        emitente_razao_social: '{{ emitente_data.razao_social }}',
+        emitente_uf: '{{ emitente_data.uf }}',
+        emitente_crt: '{{ emitente_data.regime_tributario_id or emitente_data.crt or "1" }}',
+        emitente_ie: '{{ emitente_data.ie or emitente_data.inscricao_estadual or "" }}',
+        
+        destinatario_cpf_cnpj: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-cpf-cnpj') || '',
+        destinatario_nome: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.text || '',
+        destinatario_uf: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-uf') || 'SP',
+        destinatario_ie: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-ie') || '',
+        
+        itens: itens,
+        
+        valor_produtos: valorProdutos,
+        valor_total_nfe: valorProdutos,
+        
+        forma_pagamento: formaPagamento,
+        valor_pagamento: valorPagamento || valorProdutos
+    };
+}
+
+function mostrarResultadoValidacao(data) {
+    $('#validacaoLoading').hide();
+    $('#validacaoResultado').show();
+    $('#modalValidacaoFooter').show();
+    
+    let html = '';
+    let headerClass = 'bg-success';
+    
+    const errosCriticos = data.erros_criticos || [];
+    const alertas = data.alertas || [];
+    const sugestoes = data.sugestoes_melhoria || [];
+    const score = data.score_confianca || 0;
+    const resumo = data.resumo || '';
+    
+    // Determinar cor do header
+    if (errosCriticos.length > 0) {
+        headerClass = 'bg-danger';
+    } else if (alertas.length > 0) {
+        headerClass = 'bg-warning';
+    }
+    
+    $('#modalValidacaoHeader').removeClass('bg-primary bg-success bg-danger bg-warning').addClass(headerClass);
+    
+    // Score de confiança
+    html += `
+        <div class="text-center mb-4">
+            <h3>
+                <span class="badge ${score >= 80 ? 'bg-success' : score >= 50 ? 'bg-warning' : 'bg-danger'}" style="font-size: 1.5rem;">
+                    ${score}% de Confiança
+                </span>
+            </h3>
+            <p class="text-muted">${resumo}</p>
+        </div>
+    `;
+    
+    // Erros críticos
+    if (errosCriticos.length > 0) {
+        html += `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-times-circle"></i> Erros Críticos (${errosCriticos.length})</h5>
+                <ul class="mb-0">
+        `;
+        errosCriticos.forEach(erro => {
+            html += `
+                <li>
+                    <strong>${erro.campo || 'Campo'}:</strong> ${erro.erro}
+                    ${erro.solucao ? `<br><small class="text-muted">💡 ${erro.solucao}</small>` : ''}
+                </li>
+            `;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Alertas
+    if (alertas.length > 0) {
+        html += `
+            <div class="alert alert-warning">
+                <h5><i class="fas fa-exclamation-triangle"></i> Alertas (${alertas.length})</h5>
+                <ul class="mb-0">
+        `;
+        alertas.forEach(alerta => {
+            if (typeof alerta === 'string') {
+                html += `<li>${alerta}</li>`;
+            } else {
+                html += `
+                    <li>
+                        ${alerta.campo ? `<strong>${alerta.campo}:</strong> ` : ''}${alerta.alerta}
+                        ${alerta.sugestao ? `<br><small class="text-muted">💡 ${alerta.sugestao}</small>` : ''}
+                    </li>
+                `;
+            }
+        });
+        html += '</ul></div>';
+    }
+    
+    // Sugestões de melhoria
+    if (sugestoes.length > 0) {
+        html += `
+            <div class="alert alert-info">
+                <h5><i class="fas fa-lightbulb"></i> Sugestões de Melhoria</h5>
+                <ul class="mb-0">
+        `;
+        sugestoes.forEach(sug => {
+            html += `<li>${sug}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Tudo OK
+    if (errosCriticos.length === 0 && alertas.length === 0) {
+        html += `
+            <div class="alert alert-success text-center">
+                <h4><i class="fas fa-check-circle"></i> NFe pronta para emissão!</h4>
+                <p class="mb-0">A IA não identificou problemas nos dados informados.</p>
+            </div>
+        `;
+    }
+    
+    $('#validacaoResultado').html(html);
+}
 
 // Visualizar XML - Gera preview do XML da NFe sem enviar ao SEFAZ
 function previewXML() {
