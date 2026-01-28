@@ -124,25 +124,12 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Construir Signature como STRING e fazer parse
+            # 3. Construir Signature como STRING COMPACTA e fazer parse
             # IMPORTANTE: Construir exatamente como EmissorSebrae/ferramentas Java fazem
-            # Isso garante que a canonicalização será idêntica ao que SEFAZ espera
+            # XML deve estar COMPACTO (sem quebras de linha) para evitar Erro 218
             DS_NS = "http://www.w3.org/2000/09/xmldsig#"
             
-            signature_xml_str = f'''<Signature xmlns="{DS_NS}">
-<SignedInfo>
-<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
-<Reference URI="#{inf_nfe_id}">
-<Transforms>
-<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
-<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
-</Transforms>
-<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
-<DigestValue>{digest_value}</DigestValue>
-</Reference>
-</SignedInfo>
-</Signature>'''
+            signature_xml_str = f'<Signature xmlns="{DS_NS}"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo></Signature>'
             
             # Parse o XML da Signature
             sig_elem = etree.fromstring(signature_xml_str.encode('utf-8'))
