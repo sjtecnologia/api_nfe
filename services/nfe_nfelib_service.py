@@ -271,11 +271,9 @@ def generate_nfe_xml_nfelib(
     if not ie_emitente:
         raise ValueError("Inscrição Estadual do emitente é obrigatória")
     
-    # HOMOLOGAÇÃO: IE de teste
-    if tp_amb == 2:
-        ie_original = ie_emitente
-        ie_emitente = 'ISENTO'  # IE de teste para homologação
-        print(f"⚠️  [HOMOLOGAÇÃO] IE Emitente substituída: {ie_original} → {ie_emitente}")
+    # IMPORTANTE: Em homologação, usar IE REAL do emitente!
+    # A SEFAZ valida a IE mesmo em ambiente de homologação
+    print(f"📋 [NFELIB] IE Emitente: {ie_emitente}")
     
     # Buscar regime tributário (pode estar em diferentes campos)
     crt_emitente = str(emitente_data.get('regime_tributario') or 
