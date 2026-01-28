@@ -124,13 +124,16 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Construir SignedInfo como STRING com espaços antes de /> (formato que SEFAZ espera)
-            signed_info_xml = f'''<SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'''
+            # 3. Construir SignedInfo SEM espaços (formato compacto que será canonicalizado)
+            signed_info_xml_compact = f'<SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo>'
             
-            # 4. Canonicalizar o SignedInfo string (C14N vai processar corretamente)
-            signed_info_elem = etree.fromstring(signed_info_xml.encode('utf-8'))
+            # 4. Canonicalizar o SignedInfo (normalização C14N)
+            signed_info_elem = etree.fromstring(signed_info_xml_compact.encode('utf-8'))
             signed_info_c14n = etree.tostring(signed_info_elem, method='c14n', exclusive=False, with_comments=False)
             print(f"[DEBUG] SignedInfo canonicalizado: {len(signed_info_c14n)} bytes")
+            
+            # 4b. Converter canonicalizado de volta para string (será usado no XML final)
+            signed_info_for_xml = signed_info_c14n.decode('utf-8')
             
             # 5. Assinar o SignedInfo canonicalizado
             from cryptography.hazmat.primitives import hashes
@@ -151,8 +154,8 @@ class XMLSignatureService:
             # 7. Serializar XML SEM assinatura primeiro
             xml_without_sig = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
             
-            # 8. Construir Signature como STRING com espaços (NÃO parsear com lxml!)
-            signature_xml = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo><SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'
+            # 8. Construir Signature usando SignedInfo CANONICALIZADO (mesmo formato que assinamos)
+            signature_xml = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">{signed_info_for_xml}<SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'
             
             # 9. Inserir Signature como STRING no XML (DEPOIS de </infNFe>, ANTES de </NFe>)
             # Localizar posição para inserir (depois de </infNFe>)
