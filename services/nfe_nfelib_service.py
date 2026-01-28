@@ -332,6 +332,12 @@ def generate_nfe_xml_nfelib(
     # Remover acentos e caracteres especiais (ASSOCIAÇÃO → ASSOCIACAO)
     nome_dest = remover_acentos(nome_dest).strip()
     
+    # HOMOLOGAÇÃO: Nome do destinatário deve ser padronizado pela SEFAZ
+    if tp_amb == 2:
+        nome_dest_original = nome_dest
+        nome_dest = "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL"
+        print(f"⚠️  [HOMOLOGAÇÃO] Nome Destinatário substituído: {nome_dest_original} → {nome_dest}")
+    
     # Determinar indIEDest baseado em IE e tipo de documento
     # 1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte
     ie_dest = destinatario_data.get('ie') or destinatario_data.get('inscricao_estadual', '')
