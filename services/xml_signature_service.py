@@ -68,3 +68,7 @@ class XMLSignatureService:
             import traceback
             traceback.print_exc()
             raise Exception(f"Falha na assinatura: {str(e)}")
+
+
+# Instância singleton para compatibilidade com código existente
+xml_signature_service = XMLSignatureService()
