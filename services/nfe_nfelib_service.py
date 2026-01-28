@@ -532,6 +532,15 @@ def generate_nfe_xml_nfelib(
     
     print("✅ [NFELIB] PAG criado")
     
+    # 13. Criar InfRespTec (Responsável Técnico - obrigatório em muitos estados)
+    inf_resp_tec = Nfe.InfNfe.InfRespTec(
+        CNPJ="07939907000168",  # CNPJ do desenvolvedor (SJ Tecnologia)
+        xContato="Renato Carlos",
+        email="renato@sjtecnologia.com.br",
+        fone="1733019898"
+    )
+    print("✅ [NFELIB] InfRespTec criado")
+    
     # 13. Criar InfNFe completo com atributo Id
     inf_nfe = Nfe.InfNfe(
         versao="4.00",
@@ -542,7 +551,8 @@ def generate_nfe_xml_nfelib(
         det=det_list,
         total=total,
         transp=transp,
-        pag=pag
+        pag=pag,
+        infRespTec=inf_resp_tec
     )
     
     print(f"✅ [NFELIB] InfNFe criado com Id={id_nfe}")
