@@ -124,38 +124,28 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Construir Signature usando etree (para namespace correto)
-            # IMPORTANTE: Usar namespace DEFAULT (sem prefixo), como no XML aprovado do EmissorSebrae
-            # XML Aprovado usa: <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
-            # NÃO usar prefixo ns0: ou ds: - usar xmlns inline
+            # 3. Construir Signature como STRING e fazer parse
+            # IMPORTANTE: Construir exatamente como EmissorSebrae/ferramentas Java fazem
+            # Isso garante que a canonicalização será idêntica ao que SEFAZ espera
             DS_NS = "http://www.w3.org/2000/09/xmldsig#"
             
-            # Criar elemento com namespace DEFAULT (sem prefixo)
-            sig_elem = etree.Element(f"{{{DS_NS}}}Signature", nsmap={None: DS_NS})
-            signed_info = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignedInfo")
+            signature_xml_str = f'''<Signature xmlns="{DS_NS}">
+<SignedInfo>
+<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+<Reference URI="#{inf_nfe_id}">
+<Transforms>
+<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+</Transforms>
+<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+<DigestValue>{digest_value}</DigestValue>
+</Reference>
+</SignedInfo>
+</Signature>'''
             
-            canon_method = etree.SubElement(signed_info, f"{{{DS_NS}}}CanonicalizationMethod")
-            canon_method.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
-            
-            sig_method = etree.SubElement(signed_info, f"{{{DS_NS}}}SignatureMethod")
-            sig_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1")
-            
-            reference = etree.SubElement(signed_info, f"{{{DS_NS}}}Reference")
-            reference.set("URI", f"#{inf_nfe_id}")
-            
-            transforms = etree.SubElement(reference, f"{{{DS_NS}}}Transforms")
-            
-            transform1 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
-            transform1.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#enveloped-signature")
-            
-            transform2 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
-            transform2.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
-            
-            digest_method = etree.SubElement(reference, f"{{{DS_NS}}}DigestMethod")
-            digest_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#sha1")
-            
-            digest_value_elem = etree.SubElement(reference, f"{{{DS_NS}}}DigestValue")
-            digest_value_elem.text = digest_value
+            # Parse o XML da Signature
+            sig_elem = etree.fromstring(signature_xml_str.encode('utf-8'))
             
             # 4. Inserir Signature no XML (para canonicalizar com namespace herdado)
             nfe_element.append(sig_elem)
