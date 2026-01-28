@@ -1764,40 +1764,64 @@ function coletarDadosFormulario() {
     // Validar campos básicos
     const destinatarioSelect = document.getElementById('destinatario_id');
     if (!destinatarioSelect || !destinatarioSelect.value) {
+        console.log('[IA] Destinatário não selecionado');
         return null;
     }
     
-    // Coletar itens da tabela de produtos
+    // Coletar itens do container de itens (cards)
     const itens = [];
-    const produtosRows = document.querySelectorAll('#tabelaProdutos tbody tr');
+    const itensContainer = document.getElementById('itensContainer');
+    const itensCards = itensContainer?.querySelectorAll('.card');
     
-    if (produtosRows.length === 0) {
+    if (!itensCards || itensCards.length === 0) {
+        console.log('[IA] Nenhum item encontrado');
         return null;
     }
     
-    produtosRows.forEach((row, index) => {
-        const descricao = row.querySelector('input[name$="[descricao]"]')?.value || 
-                         row.querySelector('td:nth-child(2)')?.textContent?.trim() || '';
-        const ncm = row.querySelector('input[name$="[ncm]"]')?.value || 
-                   row.querySelector('td:nth-child(3)')?.textContent?.trim() || '';
-        const cfop = row.querySelector('select[name$="[cfop]"]')?.value || 
-                    row.querySelector('input[name$="[cfop]"]')?.value || '';
-        const csosn = row.querySelector('select[name$="[csosn]"]')?.value || 
-                     row.querySelector('select[name$="[cst]"]')?.value || '';
-        const valorUnit = parseFloat(row.querySelector('input[name$="[valor_unitario]"]')?.value || 0);
-        const quantidade = parseFloat(row.querySelector('input[name$="[quantidade]"]')?.value || 0);
-        const valorTotal = parseFloat(row.querySelector('input[name$="[valor_total]"]')?.value || 0);
+    // Iterar sobre os itens adicionados (podem ter IDs como 1, 2, 3...)
+    itensCards.forEach((card, index) => {
+        // Encontrar o índice do item pelo nome dos campos
+        const produtoSelect = card.querySelector('select[name^="produto_"]');
+        const itemIndex = produtoSelect?.name?.match(/produto_(\d+)/)?.[1] || (index + 1);
         
-        itens.push({
-            descricao: descricao,
-            ncm: ncm,
-            cfop: cfop,
-            csosn_cst: csosn,
-            valor_unitario: valorUnit,
-            quantidade: quantidade,
-            valor_total: valorTotal || (valorUnit * quantidade)
-        });
+        // Coletar valores dos campos
+        const descricaoEl = card.querySelector(`input[name="descricao_${itemIndex}"]`) || 
+                           card.querySelector('select[name^="produto_"] option:checked');
+        const ncmEl = card.querySelector(`input[name="ncm_${itemIndex}"]`);
+        const cfopEl = card.querySelector(`select[name="cfop_${itemIndex}"]`);
+        const csosnEl = card.querySelector(`select[name="csosn_${itemIndex}"]`);
+        const cstEl = card.querySelector(`select[name="cst_icms_${itemIndex}"]`);
+        const quantidadeEl = card.querySelector(`input[name="quantidade_${itemIndex}"]`);
+        const valorUnitEl = card.querySelector(`input[name="valor_unitario_${itemIndex}"]`);
+        const valorTotalEl = card.querySelector(`input[name="valor_total_${itemIndex}"]`);
+        
+        const descricao = descricaoEl?.value || descricaoEl?.textContent?.split(' - ')?.[1] || '';
+        const ncm = ncmEl?.value || '';
+        const cfop = cfopEl?.value || '';
+        const csosn_cst = csosnEl?.value || cstEl?.value || '';
+        const quantidade = parseFloat(quantidadeEl?.value || 0);
+        const valorUnit = parseFloat(valorUnitEl?.value || 0);
+        const valorTotal = parseFloat(valorTotalEl?.value || 0);
+        
+        if (descricao || ncm || cfop) {
+            itens.push({
+                descricao: descricao.trim(),
+                ncm: ncm,
+                cfop: cfop,
+                csosn_cst: csosn_cst,
+                valor_unitario: valorUnit,
+                quantidade: quantidade,
+                valor_total: valorTotal || (valorUnit * quantidade)
+            });
+        }
     });
+    
+    console.log('[IA] Itens coletados:', itens);
+    
+    if (itens.length === 0) {
+        console.log('[IA] Nenhum item válido encontrado');
+        return null;
+    }
     
     // Calcular totais
     const valorProdutos = itens.reduce((sum, item) => sum + item.valor_total, 0);
