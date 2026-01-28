@@ -135,6 +135,8 @@ class XMLSignatureService:
             signed_info_elem = sig_elem[0]  # Pega o SignedInfo filho
             signed_info_c14n = etree.tostring(signed_info_elem, method='c14n', exclusive=False, with_comments=False)
             print(f"[DEBUG] SignedInfo canonicalizado COM contexto: {len(signed_info_c14n)} bytes")
+            print(f"[DEBUG] SignedInfo C14N (primeiros 400 chars): {signed_info_c14n[:400]}")
+            print(f"[DEBUG] SignedInfo C14N (últimos 100 chars): {signed_info_c14n[-100:]}")
             
             # 6. Assinar o SignedInfo canonicalizado (formato que SEFAZ verá)
             from cryptography.hazmat.primitives import hashes
