@@ -117,12 +117,15 @@ class XMLSignatureService:
             print("[SIGNXML] Iniciando assinatura com signxml...")
             
             # Criar signer com configurações para NFe (SHA1, C14N)
+            # signxml 4.x usa métodos como strings, não enums
             signer = XMLSigner(
-                method=XMLSigner.Methods.enveloped,
-                signature_algorithm="rsa-sha1",
+                method="enveloped",
+                signature_algorithm="rsa-sha1", 
                 digest_algorithm="sha1",
                 c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
             )
+            
+            print("[SIGNXML] Signer configurado: enveloped, rsa-sha1, sha1, C14N")
             
             # Preparar chave privada no formato que signxml espera
             # signxml usa cryptography, então podemos passar diretamente
@@ -135,12 +138,14 @@ class XMLSignatureService:
             # Preparar certificado no formato PEM
             cert_bytes = certificate.public_bytes(serialization.Encoding.PEM)
             
+            print(f"[SIGNXML] Assinando elemento com referência: {inf_nfe_id}")
+            
             # Assinar XML - signxml retorna elemento assinado
             signed_root = signer.sign(
                 nfe_element,
                 key=key_bytes,
                 cert=cert_bytes,
-                reference_uri=inf_nfe_id
+                reference_uri=f"#{inf_nfe_id}"
             )
             
             print(f"[OK] XML assinado com signxml")
