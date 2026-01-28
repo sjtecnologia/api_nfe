@@ -154,12 +154,14 @@ class XMLSignatureService:
             # 8. Construir Signature como STRING com espaços (NÃO parsear com lxml!)
             signature_xml = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo><SignatureValue>{signature_value}</SignatureValue><KeyInfo><X509Data><X509Certificate>{cert_base64}</X509Certificate></X509Data></KeyInfo></Signature>'
             
-            # 9. Inserir Signature como STRING no XML (antes da tag </infNFe>)
-            # Localizar posição para inserir (antes de </infNFe>)
+            # 9. Inserir Signature como STRING no XML (DEPOIS de </infNFe>, ANTES de </NFe>)
+            # Localizar posição para inserir (depois de </infNFe>)
             insert_pos = xml_without_sig.find('</infNFe>')
             if insert_pos == -1:
                 raise Exception("Tag </infNFe> não encontrada no XML")
             
+            # Inserir DEPOIS de </infNFe> (pular a tag completa)
+            insert_pos += len('</infNFe>')
             signed_xml = xml_without_sig[:insert_pos] + signature_xml + xml_without_sig[insert_pos:]
             signed_xml = '<?xml version="1.0" encoding="UTF-8"?>' + signed_xml
             
