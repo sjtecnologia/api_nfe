@@ -59,6 +59,7 @@ class XMLSignatureService:
             
             # 3. Usar signxml para assinar
             from signxml import XMLSigner
+            from signxml.algorithms import SignatureConstructionMethod
             from lxml import etree
             
             # Parsear XML
@@ -117,9 +118,8 @@ class XMLSignatureService:
             print("[SIGNXML] Iniciando assinatura com signxml...")
             
             # Criar signer com configurações para NFe (SHA1, C14N)
-            # signxml 4.x usa métodos como strings, não enums
             signer = XMLSigner(
-                method="enveloped",
+                method=SignatureConstructionMethod.enveloped,
                 signature_algorithm="rsa-sha1", 
                 digest_algorithm="sha1",
                 c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
