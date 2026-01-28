@@ -8,6 +8,7 @@ from cryptography import x509
 import base64
 import hashlib
 import uuid
+from signxml import XMLSigner
 from services.certificate_service import get_active_certificate_for_client
 
 class XMLSignatureService:
@@ -158,14 +159,18 @@ class XMLSignatureService:
             digest_value_elem = etree.SubElement(reference, f"{{{DS_NS}}}DigestValue")
             digest_value_elem.text = digest_value
             
-            # 4. CANONICALIZAR SignedInfo STANDALONE (antes de inserir no documento)
-            # CRÍTICO: Canonicalizar ANTES de inserir evita interferência do contexto XML externo
-            signed_info_c14n = etree.tostring(signed_info, method='c14n', exclusive=False, with_comments=False)
-            print(f"[DEBUG] SignedInfo canonicalizado STANDALONE: {len(signed_info_c14n)} bytes")
+            # 4. Inserir Signature no XML ANTES de canonicalizar SignedInfo
+            # CRÍTICO: SignedInfo deve ser canonicalizado COM o contexto do documento NFe
+            nfe_element.append(sig_elem)
+            
+            # 5. AGORA canonicalizar o SignedInfo DO XML COMPLETO (com contexto NFe)
+            signed_info_elem = sig_elem[0]  # Pega SignedInfo filho de Signature
+            signed_info_c14n = etree.tostring(signed_info_elem, method='c14n', exclusive=False, with_comments=False)
+            print(f"[DEBUG] SignedInfo canonicalizado COM contexto NFe: {len(signed_info_c14n)} bytes")
             print(f"[DEBUG] SignedInfo C14N (primeiros 400 chars): {signed_info_c14n[:400]}")
             print(f"[DEBUG] SignedInfo C14N (últimos 100 chars): {signed_info_c14n[-100:]}")
             
-            # 5. Assinar o SignedInfo canonicalizado
+            # 6. Assinar o SignedInfo canonicalizado
             from cryptography.hazmat.primitives import hashes
             from cryptography.hazmat.primitives.asymmetric import padding
             
@@ -177,11 +182,14 @@ class XMLSignatureService:
             signature_value = base64.b64encode(signature).decode()
             print(f"[OK] Assinatura gerada: {len(signature_value)} caracteres")
             
-            # 6. Adicionar SignatureValue e KeyInfo
+            # 7. Remover Signature temporariamente para adicionar SignatureValue e KeyInfo
+            nfe_element.remove(sig_elem)
+            
+            # 8. Adicionar SignatureValue e KeyInfo
             sig_value_elem = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignatureValue")
             sig_value_elem.text = signature_value
             
-            # 7. Obter certificado X509 em base64
+            # 9. Obter certificado X509 em base64
             cert_der = certificate.public_bytes(serialization.Encoding.DER)
             cert_base64 = base64.b64encode(cert_der).decode()
             
@@ -199,7 +207,7 @@ class XMLSignatureService:
                 for i, add_cert in enumerate(additional_certificates, 1):
                     print(f"  - Certificado {i}: {add_cert.subject.rfc4514_string()[:80]}")
             
-            # 8. AGORA inserir Signature completa no documento NFe
+            # 10. Reinserir Signature completa no documento NFe
             nfe_element.append(sig_elem)
             
             # 9. Serializar XML completo COM assinatura
