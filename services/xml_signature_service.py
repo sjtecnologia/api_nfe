@@ -77,22 +77,22 @@ class XMLSignatureService:
             
             print(f"[SIGNXML] infNFe ID: {inf_nfe_id}")
             
-            # 5. USAR SIGNXML com configuração para NFe
-            # NFe exige: SHA1, RSA-SHA1, C14N 1.0
-            # IMPORTANTE: allow_deprecated_algorithms=True necessário para SHA1 (exigido pela SEFAZ)
+            # 5. HABILITAR SHA1 ANTES de criar o XMLSigner
+            # NFe exige SHA1 (exigido pela SEFAZ, apesar de deprecado)
+            from signxml.util import enable_rfc3061_sha1
+            enable_rfc3061_sha1()
+            print("[SIGNXML] SHA1 habilitado (exigido pela SEFAZ)")
+            
+            # 6. CRIAR XMLSigner com configuração para NFe
             signer = XMLSigner(
                 signature_algorithm=SignatureMethod.RSA_SHA1,
                 digest_algorithm=DigestAlgorithm.SHA1,
                 c14n_algorithm=CanonicalizationMethod.CANONICAL_XML_1_0
             )
             
-            # Habilitar algoritmos deprecados (SHA1 exigido pela SEFAZ NFe)
-            from signxml.util import enable_rfc3061_sha1
-            enable_rfc3061_sha1()
+            print("[SIGNXML] Configuração: RSA_SHA1, SHA1, C14N 1.0")
             
-            print("[SIGNXML] Configuração: RSA_SHA1, SHA1, C14N 1.0 (SHA1 habilitado)")
-            
-            # 6. Assinar - referência ao elemento infNFe
+            # 7. Assinar - referência ao elemento infNFe
             signed_root = signer.sign(
                 xml_tree,
                 key=private_key,
