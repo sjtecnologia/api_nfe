@@ -125,10 +125,13 @@ class XMLSignatureService:
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
             # 3. Construir Signature usando etree (para namespace correto)
-            # IMPORTANTE: Não criar como string, pois isso causa xmlns="" nos subelementos
+            # IMPORTANTE: Usar namespace DEFAULT (sem prefixo), como no XML aprovado do EmissorSebrae
+            # XML Aprovado usa: <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+            # NÃO usar prefixo ns0: ou ds: - usar xmlns inline
             DS_NS = "http://www.w3.org/2000/09/xmldsig#"
             
-            sig_elem = etree.Element(f"{{{DS_NS}}}Signature")
+            # Criar elemento com namespace DEFAULT (sem prefixo)
+            sig_elem = etree.Element(f"{{{DS_NS}}}Signature", nsmap={None: DS_NS})
             signed_info = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignedInfo")
             
             canon_method = etree.SubElement(signed_info, f"{{{DS_NS}}}CanonicalizationMethod")
