@@ -124,39 +124,38 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Construir Signature DIRETAMENTE no documento
-            # CRÍTICO: Usar QName para definir elementos SEM namespace (ficam sem prefixo)
-            # Elementos SEM namespace ficam como: <SignedInfo> (sem xmlns)
-            # Apenas Signature tem xmlns declarado
+            # 3. Construir Signature com namespace DEFAULT (sem prefixo)
+            # CRÍTICO: nsmap={None: DS_NS} cria namespace default: <Signature xmlns="...">
+            # NÃO usar nsmap={'ds': DS_NS} ou QName, pois criam prefixo: <ds:Signature> ou <ns0:Signature>
             DS_NS = "http://www.w3.org/2000/09/xmldsig#"
             
-            # Criar Signature com namespace
-            sig_elem = etree.Element(etree.QName(DS_NS, "Signature"))
+            # Criar Signature com namespace DEFAULT (sem prefixo)
+            sig_elem = etree.Element(f"{{{DS_NS}}}Signature", nsmap={None: DS_NS})
             
-            # Criar SignedInfo e demais elementos SEM namespace (sem prefixo)
-            signed_info = etree.SubElement(sig_elem, etree.QName(DS_NS, "SignedInfo"))
+            # Criar elementos filhos (herdam namespace do pai)
+            signed_info = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignedInfo")
             
-            canon_method = etree.SubElement(signed_info, etree.QName(DS_NS, "CanonicalizationMethod"))
+            canon_method = etree.SubElement(signed_info, f"{{{DS_NS}}}CanonicalizationMethod")
             canon_method.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
             
-            sig_method = etree.SubElement(signed_info, etree.QName(DS_NS, "SignatureMethod"))
+            sig_method = etree.SubElement(signed_info, f"{{{DS_NS}}}SignatureMethod")
             sig_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1")
             
-            reference = etree.SubElement(signed_info, etree.QName(DS_NS, "Reference"))
+            reference = etree.SubElement(signed_info, f"{{{DS_NS}}}Reference")
             reference.set("URI", f"#{inf_nfe_id}")
             
-            transforms = etree.SubElement(reference, etree.QName(DS_NS, "Transforms"))
+            transforms = etree.SubElement(reference, f"{{{DS_NS}}}Transforms")
             
-            transform1 = etree.SubElement(transforms, etree.QName(DS_NS, "Transform"))
+            transform1 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
             transform1.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#enveloped-signature")
             
-            transform2 = etree.SubElement(transforms, etree.QName(DS_NS, "Transform"))
+            transform2 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
             transform2.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
             
-            digest_method = etree.SubElement(reference, etree.QName(DS_NS, "DigestMethod"))
+            digest_method = etree.SubElement(reference, f"{{{DS_NS}}}DigestMethod")
             digest_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#sha1")
             
-            digest_value_elem = etree.SubElement(reference, etree.QName(DS_NS, "DigestValue"))
+            digest_value_elem = etree.SubElement(reference, f"{{{DS_NS}}}DigestValue")
             digest_value_elem.text = digest_value
             
             # 4. Inserir Signature no XML (para canonicalizar com namespace herdado)
