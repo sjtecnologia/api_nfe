@@ -124,14 +124,40 @@ class XMLSignatureService:
             digest_value = base64.b64encode(hashlib.sha1(inf_nfe_c14n).digest()).decode()
             print(f"[OK] Digest calculado: {digest_value[:20]}...")
             
-            # 3. Construir Signature SEM SignatureValue primeiro (com espaços)
-            signature_xml_template = f'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1" /><Reference URI="#{inf_nfe_id}"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" /><Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315" /></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1" /><DigestValue>{digest_value}</DigestValue></Reference></SignedInfo></Signature>'
+            # 3. Construir Signature usando etree (para namespace correto)
+            # IMPORTANTE: Não criar como string, pois isso causa xmlns="" nos subelementos
+            DS_NS = "http://www.w3.org/2000/09/xmldsig#"
             
-            # 4. Parsear Signature e inserir no XML (para obter contexto de namespace correto)
-            sig_elem = etree.fromstring(signature_xml_template.encode('utf-8'))
+            sig_elem = etree.Element(f"{{{DS_NS}}}Signature")
+            signed_info = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignedInfo")
+            
+            canon_method = etree.SubElement(signed_info, f"{{{DS_NS}}}CanonicalizationMethod")
+            canon_method.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
+            
+            sig_method = etree.SubElement(signed_info, f"{{{DS_NS}}}SignatureMethod")
+            sig_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1")
+            
+            reference = etree.SubElement(signed_info, f"{{{DS_NS}}}Reference")
+            reference.set("URI", f"#{inf_nfe_id}")
+            
+            transforms = etree.SubElement(reference, f"{{{DS_NS}}}Transforms")
+            
+            transform1 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
+            transform1.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#enveloped-signature")
+            
+            transform2 = etree.SubElement(transforms, f"{{{DS_NS}}}Transform")
+            transform2.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
+            
+            digest_method = etree.SubElement(reference, f"{{{DS_NS}}}DigestMethod")
+            digest_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#sha1")
+            
+            digest_value_elem = etree.SubElement(reference, f"{{{DS_NS}}}DigestValue")
+            digest_value_elem.text = digest_value
+            
+            # 4. Inserir Signature no XML (para canonicalizar com namespace herdado)
             nfe_element.append(sig_elem)
             
-            # 5. AGORA canonicalizar o SignedInfo DO XML (com namespace herdado)
+            # 5. AGORA canonicalizar o SignedInfo DO XML (com namespace correto)
             signed_info_elem = sig_elem[0]  # Pega o SignedInfo filho
             signed_info_c14n = etree.tostring(signed_info_elem, method='c14n', exclusive=False, with_comments=False)
             print(f"[DEBUG] SignedInfo canonicalizado COM contexto: {len(signed_info_c14n)} bytes")
@@ -154,13 +180,13 @@ class XMLSignatureService:
             cert_der = certificate.public_bytes(serialization.Encoding.DER)
             cert_base64 = base64.b64encode(cert_der).decode()
             
-            # 8. Adicionar SignatureValue e KeyInfo à Signature já no XML
-            sig_value_elem = etree.SubElement(sig_elem, 'SignatureValue')
+            # 8. Adicionar SignatureValue e KeyInfo à Signature com namespace correto
+            sig_value_elem = etree.SubElement(sig_elem, f"{{{DS_NS}}}SignatureValue")
             sig_value_elem.text = signature_value
             
-            key_info_elem = etree.SubElement(sig_elem, 'KeyInfo')
-            x509_data_elem = etree.SubElement(key_info_elem, 'X509Data')
-            x509_cert_elem = etree.SubElement(x509_data_elem, 'X509Certificate')
+            key_info_elem = etree.SubElement(sig_elem, f"{{{DS_NS}}}KeyInfo")
+            x509_data_elem = etree.SubElement(key_info_elem, f"{{{DS_NS}}}X509Data")
+            x509_cert_elem = etree.SubElement(x509_data_elem, f"{{{DS_NS}}}X509Certificate")
             x509_cert_elem.text = cert_base64
             
             # 9. Serializar XML completo COM assinatura
