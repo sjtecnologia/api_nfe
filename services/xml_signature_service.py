@@ -187,22 +187,17 @@ class XMLSignatureService:
             key_info_elem = etree.SubElement(sig_elem, f"{{{DS_NS}}}KeyInfo")
             x509_data_elem = etree.SubElement(key_info_elem, f"{{{DS_NS}}}X509Data")
             
-            # Incluir certificado do usuário
+            # IMPORTANTE: Schema XSD da NFe permite apenas UM certificado em X509Data
+            # A cadeia de certificação é validada pela SEFAZ através da AC Raiz ICP-Brasil
             x509_cert_elem = etree.SubElement(x509_data_elem, f"{{{DS_NS}}}X509Certificate")
             x509_cert_elem.text = cert_base64
             print(f"[OK] Certificado do usuário incluído no XML")
             
-            # Incluir cadeia de certificação (certificados intermediários e raiz)
+            # Log da cadeia para debug (não incluída no XML)
             if additional_certificates:
+                print(f"[INFO] Cadeia disponível no PKCS#12: {len(additional_certificates)} certificado(s) adicional(is)")
                 for i, add_cert in enumerate(additional_certificates, 1):
-                    add_cert_der = add_cert.public_bytes(serialization.Encoding.DER)
-                    add_cert_base64 = base64.b64encode(add_cert_der).decode()
-                    add_cert_elem = etree.SubElement(x509_data_elem, f"{{{DS_NS}}}X509Certificate")
-                    add_cert_elem.text = add_cert_base64
-                    print(f"[OK] Certificado adicional {i} incluído: {add_cert.subject.rfc4514_string()[:80]}")
-                print(f"[OK] Cadeia de certificação completa: {len(additional_certificates) + 1} certificado(s)")
-            else:
-                print(f"[WARN] Nenhum certificado adicional encontrado na cadeia")
+                    print(f"  - Certificado {i}: {add_cert.subject.rfc4514_string()[:80]}")
             
             # 9. Serializar XML completo COM assinatura
             signed_xml = etree.tostring(xml_tree, encoding='unicode', xml_declaration=False)
