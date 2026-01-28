@@ -534,10 +534,10 @@ def generate_nfe_xml_nfelib(
     
     # 13. Criar InfRespTec (Responsável Técnico - obrigatório em muitos estados)
     inf_resp_tec = Nfe.InfNfe.InfRespTec(
-        CNPJ="07939907000168",  # CNPJ do desenvolvedor (SJ Tecnologia)
-        xContato="Renato Carlos",
-        email="renato@sjtecnologia.com.br",
-        fone="1733019898"
+        CNPJ="46840224000102",  # CNPJ do desenvolvedor (EmiteMax)
+        xContato="Carlos Renato",
+        email="contato@emitemax.com.br",
+        fone="1732118981"
     )
     print("✅ [NFELIB] InfRespTec criado")
     
