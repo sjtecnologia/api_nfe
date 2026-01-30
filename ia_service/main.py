@@ -770,38 +770,85 @@ DADOS INFORMADOS:
 - CST IBS/CBS: {req.cst_ibs_cbs or 'não informado'}
 - Regime Tributário: {req.regime_tributario_nome or 'não informado'}
 
-REGRAS DE VALIDAÇÃO:
+CONHECIMENTO BASE OFICIAL (Receita Federal e Gov.br):
+
+📌 LC 116/2003 - LISTA DE SERVIÇOS:
+A Lista de Serviços está organizada em 40 categorias (1.00 a 40.01).
+Exemplos:
+• 1.01 - Análise e desenvolvimento de sistemas
+• 1.02 - Programação
+• 1.03 - Processamento, armazenamento ou hospedagem de dados
+• 17.05 - Fornecimento de mão-de-obra (exceto temporária)
+• 17.09 - Perícias, laudos, exames técnicos
+
+📌 CÓDIGO NBS (Nomenclatura Brasileira de Serviços):
+• Estrutura: 9 dígitos no formato X.XXXX (ex: 1.0101, 1.0102)
+• Obrigatório a partir de 2026 (Reforma Tributária LC 214/2025)
+• Cada código LC116 pode ter MÚLTIPLOS códigos NBS associados
+• O código NBS especifica COM MAIS DETALHE o serviço dentro da categoria LC116
+• NÃO há relação 1:1 entre LC116 e NBS - é uma hierarquia (1 LC116 → N códigos NBS)
+
+IMPORTANTE SOBRE NBS:
+- Um código LC116 (ex: 1.02) pode ter vários NBS diferentes (1.0201, 1.0202, 1.0203...)
+- O sistema armazena a relação no banco de dados (tabela servicos_lc116_nbs)
+- Se o NBS informado está cadastrado no sistema, considere VÁLIDO
+- NÃO invalide se o NBS não estiver "relacionado" - pode ser um cadastro novo válido
 
 📌 ISS (Imposto Sobre Serviços):
-• Alíquota: entre 2% e 5% conforme município
-• São José do Rio Preto: 5% (padrão), 2% (serviços específicos)
-• ISS Retido: tomador retém se for empresa e o serviço permitir
-• LC 116/2003: 40 categorias principais (1.00 a 40.01)
+• Alíquota: entre 2% e 5% conforme município (LC 116/2003)
+• São José do Rio Preto-SP: 5% (padrão), 2% (construção civil, alguns serviços)
+• ISS Retido: tomador retém quando for pessoa jurídica e serviço específico permitir
+• Base de cálculo: preço do serviço
 
-📌 REFORMA TRIBUTÁRIA (LC 214/2025):
-• Código NBS obrigatório a partir de 2026
-• CST IBS/CBS: 001=Tributado, 002=Redução, 003=Diferido, 004=Isento, 005=Não tributado
-• IBS + CBS: novos tributos que substituirão PIS/COFINS
+📌 REFORMA TRIBUTÁRIA (LC 214/2025 - Emenda Constitucional 132/2023):
 
-📌 VALIDAÇÕES IMPORTANTES:
-1. Código LC116 deve existir e estar ativo
-2. Código NBS deve estar relacionado ao código LC116
-3. Alíquota ISS entre 2% e 5%
-4. Se regime é Simples Nacional, alíquota já inclui tributos federais
-5. CST IBS/CBS deve ser compatível com o regime tributário
+CST IBS/CBS - Código de Situação Tributária (3 dígitos):
+• 001 - Tributado integralmente (PADRÃO para todos os regimes)
+• 002 - Tributado com redução de base de cálculo
+• 003 - Diferido
+• 004 - Isento (incentivos fiscais específicos)
+• 005 - Não tributado (fora do campo de incidência)
+• 006 - Suspenso por decisão judicial
+• 007 - Suspenso por procedimento administrativo
+• 008 - Não incidência
+
+IBS (Imposto sobre Bens e Serviços):
+• Substitui ICMS nos estados e ISS nos municípios
+• Alíquota padrão: 27,5% (estimativa 2026-2033)
+• Período de transição: 2026-2033
+• Aplicável a TODOS os regimes (Simples, Presumido, Real)
+
+CBS (Contribuição sobre Bens e Serviços):
+• Substitui PIS e COFINS
+• Alíquota padrão: 12% (estimativa 2026-2033)
+• Aplicável a TODOS os regimes (Simples, Presumido, Real)
+
+SIMPLES NACIONAL E REFORMA TRIBUTÁRIA:
+• CST IBS/CBS 001 (Tributado) É VÁLIDO para Simples Nacional
+• Empresas do Simples pagarão IBS/CBS de forma simplificada via DAS
+• Alíquotas já incluídas nos anexos do Simples Nacional
+• Não há incompatibilidade entre Simples e CST 001
+
+📌 VALIDAÇÕES QUE VOCÊ DEVE FAZER:
+1. ✅ Alíquota ISS entre 2% e 5%
+2. ✅ Código LC116 deve estar no formato correto (ex: 1.01, 17.05)
+3. ✅ CST IBS/CBS deve estar entre 001 e 008
+4. ❌ NÃO invalidar por "NBS não relacionado" - pode ser cadastro novo válido
+5. ❌ NÃO invalidar CST 001 para Simples Nacional - é compatível
 
 Responda APENAS em JSON puro (sem markdown):
 {{
   "valido": true ou false,
-  "erros": ["liste erros encontrados"],
-  "sugestoes": ["correções específicas"],
-  "explicacao": "explicação técnica detalhada"
+  "erros": ["liste APENAS erros REAIS baseados nas regras acima"],
+  "sugestoes": ["correções específicas apenas se houver erro"],
+  "explicacao": "explicação técnica curta e objetiva"
 }}
 
 IMPORTANTE: 
-- Se todos os dados estão corretos e compatíveis, retorne "valido": true
-- Seja específico nos erros (mencione o campo e o valor incorreto)
-- Nas sugestões, informe o valor correto ou a ação necessária"""
+- Seja GENEROSO na validação - aceite se estiver tecnicamente correto
+- NÃO crie erros fictícios sobre "relação NBS/LC116" - o banco controla isso
+- CST 001 é VÁLIDO para qualquer regime incluindo Simples Nacional
+- Se os valores estão dentro dos parâmetros legais, retorne "valido": true"""
 
         if github_token:
             # Usar IA do GitHub Models
