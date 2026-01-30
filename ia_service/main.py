@@ -730,3 +730,180 @@ RESPONDA APENAS JSON:
             "score_confianca": 0,
             "resumo": f"Erro no serviço: {str(e)}"
         })
+
+
+# =====================================================================
+# VALIDAÇÃO DE REGRAS TRIBUTÁRIAS DE SERVIÇO (NFS-e)
+# =====================================================================
+
+class ValidacaoRegraServicoRequest(BaseModel):
+    tipo: str
+    codigo_servico_lc116: str
+    codigo_nbs: Optional[str] = None
+    descricao_servico: Optional[str] = None
+    aliquota_iss: Optional[str] = None
+    iss_retido: Optional[bool] = False
+    cst_ibs_cbs: Optional[str] = None
+    regime_tributario_id: Optional[int] = None
+    regime_tributario_nome: Optional[str] = None
+
+
+@app.post('/valida/regra-servico')
+async def validar_regra_servico(req: ValidacaoRegraServicoRequest):
+    """
+    Valida regra tributária de serviço (NFS-e) - LC 116/2003 e Reforma Tributária
+    """
+    try:
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        
+        # Construir prompt de validação
+        prompt = f"""Você é um especialista em tributação de serviços no Brasil (ISS, LC 116/2003 e Reforma Tributária LC 214/2025).
+
+Analise se esta regra tributária de NFS-e está CORRETA ou INCORRETA:
+
+DADOS INFORMADOS:
+- Código Serviço LC116: {req.codigo_servico_lc116}
+- Código NBS: {req.codigo_nbs or 'não informado'}
+- Descrição: {req.descricao_servico or 'não informada'}
+- Alíquota ISS: {req.aliquota_iss}%
+- ISS Retido: {'Sim' if req.iss_retido else 'Não'}
+- CST IBS/CBS: {req.cst_ibs_cbs or 'não informado'}
+- Regime Tributário: {req.regime_tributario_nome or 'não informado'}
+
+REGRAS DE VALIDAÇÃO:
+
+📌 ISS (Imposto Sobre Serviços):
+• Alíquota: entre 2% e 5% conforme município
+• São José do Rio Preto: 5% (padrão), 2% (serviços específicos)
+• ISS Retido: tomador retém se for empresa e o serviço permitir
+• LC 116/2003: 40 categorias principais (1.00 a 40.01)
+
+📌 REFORMA TRIBUTÁRIA (LC 214/2025):
+• Código NBS obrigatório a partir de 2026
+• CST IBS/CBS: 001=Tributado, 002=Redução, 003=Diferido, 004=Isento, 005=Não tributado
+• IBS + CBS: novos tributos que substituirão PIS/COFINS
+
+📌 VALIDAÇÕES IMPORTANTES:
+1. Código LC116 deve existir e estar ativo
+2. Código NBS deve estar relacionado ao código LC116
+3. Alíquota ISS entre 2% e 5%
+4. Se regime é Simples Nacional, alíquota já inclui tributos federais
+5. CST IBS/CBS deve ser compatível com o regime tributário
+
+Responda APENAS em JSON puro (sem markdown):
+{{
+  "valido": true ou false,
+  "erros": ["liste erros encontrados"],
+  "sugestoes": ["correções específicas"],
+  "explicacao": "explicação técnica detalhada"
+}}
+
+IMPORTANTE: 
+- Se todos os dados estão corretos e compatíveis, retorne "valido": true
+- Seja específico nos erros (mencione o campo e o valor incorreto)
+- Nas sugestões, informe o valor correto ou a ação necessária"""
+
+        if github_token:
+            # Usar IA do GitHub Models
+            llm_url = "https://models.inference.ai.azure.com/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {github_token}"
+            }
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Especialista em tributação de serviços no Brasil. Responda APENAS JSON puro, sem markdown."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 1000,
+                "temperature": 0.1
+            }
+            
+            resp = requests.post(llm_url, json=payload, headers=headers, timeout=20)
+            
+            if resp.status_code == 200:
+                resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+                
+                try:
+                    # Limpar markdown se houver
+                    resposta_limpa = resposta.strip()
+                    if resposta_limpa.startswith("```json"):
+                        resposta_limpa = resposta_limpa.replace("```json", "").replace("```", "").strip()
+                    elif resposta_limpa.startswith("```"):
+                        resposta_limpa = resposta_limpa.replace("```", "").strip()
+                    
+                    resultado = json.loads(resposta_limpa)
+                    
+                    # Garantir estrutura mínima
+                    if "valido" not in resultado:
+                        resultado["valido"] = True
+                    if "erros" not in resultado:
+                        resultado["erros"] = []
+                    if "sugestoes" not in resultado:
+                        resultado["sugestoes"] = []
+                    if "explicacao" not in resultado:
+                        resultado["explicacao"] = "Regra analisada com sucesso."
+                    
+                    return JSONResponse(content=resultado)
+                    
+                except json.JSONDecodeError as e:
+                    print(f"[IA-VALIDACAO-SERVICO] Erro ao parsear JSON: {str(e)}")
+                    print(f"[IA-VALIDACAO-SERVICO] Resposta raw: {resposta[:500]}")
+                    
+                    return JSONResponse(content={
+                        "valido": True,
+                        "erros": [],
+                        "sugestoes": [],
+                        "explicacao": "Não foi possível validar com IA. Resposta fora do formato esperado."
+                    })
+            else:
+                print(f"[IA-VALIDACAO-SERVICO] Erro HTTP {resp.status_code}: {resp.text}")
+                return JSONResponse(content={
+                    "valido": True,
+                    "erros": [],
+                    "sugestoes": [],
+                    "explicacao": "Serviço de IA temporariamente indisponível."
+                })
+        else:
+            # Validação básica sem IA (fallback)
+            erros = []
+            sugestoes = []
+            
+            # Validar alíquota ISS
+            try:
+                aliquota = float(req.aliquota_iss or 0)
+                if aliquota < 2 or aliquota > 5:
+                    erros.append(f"Alíquota ISS de {aliquota}% está fora do intervalo permitido (2% a 5%)")
+                    sugestoes.append("Ajustar alíquota ISS entre 2% e 5% conforme legislação municipal")
+            except:
+                pass
+            
+            # Validar código LC116
+            if not req.codigo_servico_lc116:
+                erros.append("Código de Serviço LC 116 é obrigatório")
+                sugestoes.append("Informar um código válido da Lista de Serviços LC 116/2003")
+            
+            # Validar código NBS (obrigatório a partir de 2026)
+            if not req.codigo_nbs:
+                erros.append("Código NBS será obrigatório a partir de 2026 (Reforma Tributária)")
+                sugestoes.append("Informar o código NBS correspondente ao serviço")
+            
+            return JSONResponse(content={
+                "valido": len(erros) == 0,
+                "erros": erros,
+                "sugestoes": sugestoes,
+                "explicacao": f"Validação por regras básicas (IA não disponível). {len(erros)} erro(s) encontrado(s)." if erros else "Regra válida conforme validação básica."
+            })
+            
+    except Exception as e:
+        print(f"[IA-VALIDACAO-SERVICO] Erro: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return JSONResponse(content={
+            "valido": True,
+            "erros": [],
+            "sugestoes": [],
+            "explicacao": f"Erro ao validar: {str(e)}"
+        })
