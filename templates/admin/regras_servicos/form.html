@@ -21,15 +21,23 @@
                         <div class="row">
                             <div class="col-md-4">
                                 <label class="form-label required">Código Serviço (LC116)</label>
-                                <input type="text" class="form-control" name="codigo_servico_lc116" 
-                                       value="{{ regra.codigo_servico_lc116 if regra else '' }}" 
-                                       placeholder="Ex: 01.01" required>
+                                <select class="form-control select2-servicos" name="codigo_servico_lc116" id="codigo_servico_lc116" required>
+                                    <option value="">Carregando serviços...</option>
+                                    {% if regra %}
+                                    <option value="{{ regra.codigo_servico_lc116 }}" selected>{{ regra.codigo_servico_lc116 }}</option>
+                                    {% endif %}
+                                </select>
+                                <small class="form-text text-muted">Selecione o serviço da LC 116/2003</small>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label required">Código NBS</label>
-                                <input type="text" class="form-control" name="codigo_nbs" 
-                                       value="{{ regra.codigo_nbs if regra else '101010000' }}" 
-                                       placeholder="9 dígitos" required>
+                                <select class="form-control select2-nbs" name="codigo_nbs" id="codigo_nbs" required>
+                                    <option value="">Primeiro selecione o serviço</option>
+                                    {% if regra %}
+                                    <option value="{{ regra.codigo_nbs }}" selected>{{ regra.codigo_nbs }}</option>
+                                    {% endif %}
+                                </select>
+                                <small class="form-text text-muted">Código será carregado automaticamente</small>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label required">Regime Tributário</label>
@@ -165,11 +173,146 @@
 
 <script>
 $(document).ready(function() {
+    // ===== CARREGAR SERVIÇOS LC116 =====
+    function carregarServicosLC116() {
+        $.ajax({
+            url: '/admin/nfse/api/servicos-lc116',
+            method: 'GET',
+            success: function(servicos) {
+                console.log('✅ Carregados', servicos.length, 'serviços LC116');
+                
+                const $select = $('#codigo_servico_lc116');
+                const valorAtual = $select.find('option:selected').val();
+                
+                $select.empty();
+                $select.append('<option value="">-- Selecione um serviço --</option>');
+                
+                servicos.forEach(function(servico) {
+                    const texto = servico.codigo + ' - ' + servico.descricao;
+                    const option = $('<option></option>')
+                        .attr('value', servico.codigo)
+                        .attr('data-descricao', servico.descricao)
+                        .text(texto);
+                    
+                    if (servico.codigo === valorAtual) {
+                        option.prop('selected', true);
+                    }
+                    
+                    $select.append(option);
+                });
+                
+                // Inicializar Select2 se disponível
+                if ($.fn.select2) {
+                    $select.select2({
+                        placeholder: 'Digite para buscar...',
+                        allowClear: true,
+                        width: '100%'
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Erro ao carregar serviços:', error);
+                const $select = $('#codigo_servico_lc116');
+                $select.empty();
+                $select.append('<option value="">Erro ao carregar serviços</option>');
+            }
+        });
+    }
+    
+    // ===== CARREGAR CÓDIGOS NBS =====
+    function carregarCodigosNBS(codigoServico) {
+        const $select = $('#codigo_nbs');
+        
+        if (!codigoServico) {
+            $select.empty();
+            $select.append('<option value="">Primeiro selecione o serviço</option>');
+            return;
+        }
+        
+        // Mostrar loading
+        $select.empty();
+        $select.append('<option value="">Carregando códigos NBS...</option>');
+        $select.prop('disabled', true);
+        
+        $.ajax({
+            url: '/admin/nfse/api/codigos-nbs/' + codigoServico,
+            method: 'GET',
+            success: function(codigos) {
+                console.log('✅ Carregados', codigos.length, 'códigos NBS para serviço', codigoServico);
+                
+                const valorAtual = $select.find('option:selected').val();
+                
+                $select.empty();
+                $select.append('<option value="">-- Selecione um código NBS --</option>');
+                
+                if (codigos.length === 0) {
+                    $select.append('<option value="101010000">101.01.00.00 - Padrão (nenhum específico cadastrado)</option>');
+                } else {
+                    codigos.forEach(function(nbs) {
+                        const texto = nbs.codigo_formatado + ' - ' + nbs.descricao;
+                        const option = $('<option></option>')
+                            .attr('value', nbs.codigo)
+                            .attr('data-descricao', nbs.descricao)
+                            .text(texto);
+                        
+                        if (nbs.codigo === valorAtual) {
+                            option.prop('selected', true);
+                        }
+                        
+                        $select.append(option);
+                    });
+                }
+                
+                // Inicializar Select2 se disponível
+                if ($.fn.select2) {
+                    $select.select2({
+                        placeholder: 'Digite para buscar...',
+                        allowClear: true,
+                        width: '100%'
+                    });
+                }
+                
+                $select.prop('disabled', false);
+                
+                // Auto-preencher descrição do serviço se vazio
+                const descricaoServico = $('#codigo_servico_lc116 option:selected').data('descricao');
+                if (descricaoServico && !$('textarea[name="descricao_servico"]').val()) {
+                    $('textarea[name="descricao_servico"]').val(descricaoServico);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Erro ao carregar códigos NBS:', error);
+                $select.empty();
+                $select.append('<option value="101010000">101.01.00.00 - Padrão</option>');
+                $select.prop('disabled', false);
+            }
+        });
+    }
+    
+    // ===== EVENTOS =====
+    
+    // Carregar serviços ao abrir a página
+    carregarServicosLC116();
+    
+    // Carregar NBS quando selecionar serviço
+    $('#codigo_servico_lc116').on('change', function() {
+        const codigoServico = $(this).val();
+        console.log('🔄 Serviço selecionado:', codigoServico);
+        carregarCodigosNBS(codigoServico);
+    });
+    
+    // Se já tem um serviço selecionado (modo edição), carregar NBS
+    {% if regra and regra.codigo_servico_lc116 %}
+    setTimeout(function() {
+        carregarCodigosNBS('{{ regra.codigo_servico_lc116 }}');
+    }, 500);
+    {% endif %}
+    
     // Função de validação com IA
     function validarRegraComIA() {
         // Coletar dados do formulário
-        const codigoServico = $('input[name="codigo_servico_lc116"]').val();
-        const codigoNbs = $('input[name="codigo_nbs"]').val();
+        const codigoServico = $('#codigo_servico_lc116').val();
+        const codigoNbs = $('#codigo_nbs').val();
         const descricao = $('textarea[name="descricao_servico"]').val();
         const aliquotaIss = $('input[name="aliquota_iss"]').val();
         const issRetido = $('input[name="iss_retido"]').is(':checked');
@@ -293,11 +436,11 @@ $(document).ready(function() {
     
     // Validação automática ao mudar campos críticos (com debounce)
     let validacaoTimeout;
-    $('input[name="codigo_servico_lc116"], input[name="codigo_nbs"], select[name="regime_tributario_id"]').on('change', function() {
+    $('#codigo_servico_lc116, #codigo_nbs, select[name="regime_tributario_id"]').on('change', function() {
         clearTimeout(validacaoTimeout);
         validacaoTimeout = setTimeout(function() {
-            const codigoServico = $('input[name="codigo_servico_lc116"]').val();
-            const codigoNbs = $('input[name="codigo_nbs"]').val();
+            const codigoServico = $('#codigo_servico_lc116').val();
+            const codigoNbs = $('#codigo_nbs').val();
             
             if (codigoServico && codigoNbs) {
                 console.log('🔄 Auto-validação disparada por mudança de campo');
