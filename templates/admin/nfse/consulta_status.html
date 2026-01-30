@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Consulta Status NFS-e{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1 class="page-title">🔍 Consulta de Status</h1>
+                <div class="page-subtitle">
+                    Protocolo: {{ protocolo }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header 
+                    {% if sucesso %}bg-success{% else %}bg-warning{% endif %} text-white">
+                    <h5 class="mb-0">
+                        {% if sucesso %}
+                            <i class="fas fa-check-circle"></i> Consulta Realizada
+                        {% else %}
+                            <i class="fas fa-exclamation-circle"></i> Aguardando Processamento
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if resultado %}
+                    <table class="table table-bordered">
+                        {% if resultado.numero_nfse %}
+                        <tr>
+                            <th width="35%">Número NFS-e:</th>
+                            <td><strong>{{ resultado.numero_nfse }}</strong></td>
+                        </tr>
+                        {% endif %}
+                        
+                        {% if resultado.codigo_verificacao %}
+                        <tr>
+                            <th>Código de Verificação:</th>
+                            <td>{{ resultado.codigo_verificacao }}</td>
+                        </tr>
+                        {% endif %}
+                        
+                        {% if resultado.data_emissao %}
+                        <tr>
+                            <th>Data de Emissão:</th>
+                            <td>{{ resultado.data_emissao }}</td>
+                        </tr>
+                        {% endif %}
+                        
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if resultado.situacao == '1' or resultado.situacao == 'processado' %}
+                                    <span class="badge bg-success">Processado com Sucesso</span>
+                                {% elif resultado.situacao == '2' or resultado.situacao == 'aguardando' %}
+                                    <span class="badge bg-warning">Aguardando Processamento</span>
+                                {% elif resultado.situacao == '3' or resultado.situacao == 'erro' %}
+                                    <span class="badge bg-danger">Erro no Processamento</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ resultado.situacao or 'Desconhecido' }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        
+                        {% if resultado.mensagem %}
+                        <tr>
+                            <th>Mensagem:</th>
+                            <td>{{ resultado.mensagem }}</td>
+                        </tr>
+                        {% endif %}
+                        
+                        {% if resultado.erros and resultado.erros|length > 0 %}
+                        <tr>
+                            <th>Erros:</th>
+                            <td>
+                                <ul class="mb-0">
+                                {% for erro in resultado.erros %}
+                                    <li class="text-danger">{{ erro }}</li>
+                                {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        Nenhuma informação disponível para este protocolo.
+                    </div>
+                    {% endif %}
+
+                    <div class="text-center mt-4">
+                        <a href="{{ url_for('nfse.consultar_status', protocolo=protocolo) }}" class="btn btn-primary me-2">
+                            <i class="fas fa-sync"></i> Atualizar Status
+                        </a>
+                        <a href="{{ url_for('nfse.list_nfse') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar para Lista
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informações sobre processamento -->
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-info-circle"></i> Sobre o Processamento</h6>
+                </div>
+                <div class="card-body">
+                    <p>O RPS (Recibo Provisório de Serviço) é processado pela prefeitura e convertido em NFS-e.</p>
+                    <p>Este processo pode levar alguns minutos. Se o status ainda estiver "Aguardando", 
+                       clique em "Atualizar Status" para verificar novamente.</p>
+                    <small class="text-muted">
+                        <strong>Nota:</strong> Em ambiente de homologação (testes), o processamento 
+                        pode ter comportamento diferente do ambiente de produção.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

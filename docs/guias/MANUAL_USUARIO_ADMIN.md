@@ -18,7 +18,7 @@
 4. [Gerenciamento de Clientes](#4-gerenciamento-de-clientes)
 5. [Gerenciamento de Usuários](#5-gerenciamento-de-usuários)
 6. [Gerenciamento de Produtos](#6-gerenciamento-de-produtos)
-7. [Gerenciamento de Destinatários NFe](#7-gerenciamento-de-destinatários-nfe)
+7. [Gerenciamento de Destinatários/Tomadores NFe](#7-gerenciamento-de-Destinatários/Tomadores-nfe)
 8. [Gerenciamento de Regras Tributárias](#8-gerenciamento-de-regras-tributárias)
 9. [Gerenciamento de Certificados Digitais](#9-gerenciamento-de-certificados-digitais)
 10. [Perguntas Frequentes (FAQ)](#10-perguntas-frequentes-faq)
@@ -38,7 +38,7 @@ Como **Administrador**, você possui permissões para:
 
 ✅ Gerenciar clientes (visualizar, editar - apenas os que você tem acesso)  
 ✅ Cadastrar e gerenciar produtos dos clientes  
-✅ Cadastrar e gerenciar destinatários de NFe  
+✅ Cadastrar e gerenciar Destinatários/Tomadores de NFe  
 ✅ Configurar regras tributárias (ICMS, PIS, COFINS, IPI)  
 ✅ Fazer upload e gerenciar certificados digitais  
 ✅ Criar e gerenciar usuários para os clientes  
@@ -55,7 +55,7 @@ Como **Administrador**, você possui permissões para:
    ↓
 3. Cadastrar produtos do cliente
    ↓
-4. Cadastrar destinatários frequentes
+4. Cadastrar Destinatários/Tomadores frequentes
    ↓
 5. Configurar regras tributárias
    ↓
@@ -108,7 +108,7 @@ Após o login bem-sucedido, você será direcionado ao **Dashboard Principal**.
 - **👥 Clientes:** Gerenciamento de clientes
 - **👤 Usuários:** Gerenciamento de usuários
 - **📦 Produtos:** Cadastro de produtos (requer selecionar cliente)
-- **🎯 Destinatários:** Cadastro de destinatários NFe
+- **🎯 Destinatários/Tomadores:** Cadastro de Destinatários/Tomadores NFe
 - **⚖️ Regras Tributárias:** Configuração de tributos
 - **🔐 Certificados:** Gerenciamento de certificados digitais
 - **📄 Emitir NFe:** Emissão de notas fiscais
@@ -209,9 +209,9 @@ Esta aba lista todos os certificados digitais do cliente. Consulte a seção [9.
 
 Esta aba lista todas as regras tributárias configuradas. Consulte a seção [8. Gerenciamento de Regras Tributárias](#8-gerenciamento-de-regras-tributárias).
 
-#### 🎯 Aba: Destinatários NF-e
+#### 🎯 Aba: Destinatários/Tomadores
 
-Esta aba lista todos os destinatários cadastrados. Consulte a seção [7. Gerenciamento de Destinatários NFe](#7-gerenciamento-de-destinatários-nfe).
+Esta aba lista todos os Destinatários/Tomadores cadastrados. Consulte a seção [7. Gerenciamento de Destinatários/Tomadores NFe](#7-gerenciamento-de-Destinatários/Tomadores-nfe).
 
 ### 4.4 Dicas Importantes - Clientes
 
@@ -255,7 +255,7 @@ Nesta tela você visualiza:
 - **Confirmar Senha:** Digite a senha novamente
 
 **Perfil de Acesso (Role)**
-- **admin:** Pode gerenciar produtos, regras, destinatários, etc.
+- **admin:** Pode gerenciar produtos, regras, Destinatários/Tomadores, etc.
 - **cliente:** Apenas emitir NFe e consultar histórico
 - **super_admin:** Acesso total (apenas Super Admin pode conceder)
 
@@ -391,13 +391,13 @@ Use a barra de pesquisa na lista de produtos para filtrar por:
 
 ---
 
-## 7. Gerenciamento de Destinatários NFe
+## 7. Gerenciamento de Destinatários/Tomadores NFe
 
-### 7.1 Listar Destinatários
+### 7.1 Listar Destinatários/Tomadores
 
-**Caminho:** Menu Lateral → **Destinatários** ou via aba do cliente
+**Caminho:** Menu Lateral → **Destinatários/Tomadores** ou via aba do cliente
 
-![Lista de Destinatários](Documentacao/screenshots/Lista%20de%20destinatários.png)
+![Lista de Destinatários/Tomadores](Documentacao/screenshots/Lista%20de%20Destinatários/Tomadores.png)
 
 Nesta tela você visualiza:
 - **Nome/Razão Social:** Nome do destinatário
@@ -462,15 +462,15 @@ Nesta tela você visualiza:
 
 **Passo 2:** Confirme a exclusão
 
-⚠️ **Atenção:** Destinatários com NFes já emitidas não podem ser excluídos.
+⚠️ **Atenção:** Destinatários/Tomadores com NFes já emitidas não podem ser excluídos.
 
-### 7.5 Dicas Importantes - Destinatários
+### 7.5 Dicas Importantes - Destinatários/Tomadores
 
 ⚠️ **CPF/CNPJ:** Deve ser válido  
 ⚠️ **Indicador IE:** Escolha corretamente para evitar rejeição da NFe  
 💡 **Email:** Essencial para envio automático da DANFE  
 💡 **Busca CEP:** Evita erros de digitação no endereço  
-💡 **Cadastro Prévio:** Cadastre destinatários frequentes para agilizar emissão  
+💡 **Cadastro Prévio:** Cadastre Destinatários/Tomadores frequentes para agilizar emissão  
 💡 **Consumidor Final:** Para NFCe, não é necessário cadastrar destinatário
 
 ---
@@ -775,10 +775,10 @@ R: Você precisará preencher manualmente os campos tributários na emissão da 
 **P: Como sei se a regra está correta?**  
 R: Teste em ambiente de Homologação primeiro. Consulte um contador para validar alíquotas e CSTs.
 
-### 10.5 Destinatários
+### 10.5 Destinatários/Tomadores
 
-**P: Preciso cadastrar todos os destinatários?**  
-R: Não é obrigatório. Você pode digitar os dados diretamente na emissão. Porém, cadastrar destinatários frequentes agiliza o processo.
+**P: Preciso cadastrar todos os Destinatários/Tomadores?**  
+R: Não é obrigatório. Você pode digitar os dados diretamente na emissão. Porém, cadastrar Destinatários/Tomadores frequentes agiliza o processo.
 
 **P: Posso emitir NFCe sem destinatário?**  
 R: Sim. NFCe (Nota Fiscal de Consumidor) permite venda sem identificação do destinatário (consumidor final não identificado).
@@ -888,8 +888,8 @@ Use este checklist ao configurar um novo cliente:
   - [ ] CSOSN/CST configurado
   - [ ] Preço unitário definido
 
-- [ ] **4. Cadastrar Destinatários (Opcional)**
-  - [ ] Destinatários frequentes cadastrados
+- [ ] **4. Cadastrar Destinatários/Tomadores (Opcional)**
+  - [ ] Destinatários/Tomadores frequentes cadastrados
   - [ ] CPF/CNPJ válidos
   - [ ] Endereços completos
   - [ ] Email para recebimento de DANFE

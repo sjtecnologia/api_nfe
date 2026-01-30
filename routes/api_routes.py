@@ -453,3 +453,61 @@ def validar_produto_ia():
             "error": "Erro inesperado",
             "details": str(e)
         }), 500
+
+@api_bp.route('/validar-regra-servico-ia', methods=['POST'])
+@login_required
+def validar_regra_servico_ia():
+    """
+    Proxy para validação de regra tributária de serviço (NFS-e) com IA.
+    Evita problemas de CORS ao fazer requisição server-side.
+    """
+    import requests
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "Dados não fornecidos"}), 400
+        
+        print(f"[IA VALIDAÇÃO SERVIÇO] Proxy recebeu dados: {data}")
+        
+        # Chamar serviço de IA internamente (server-side)
+        response = requests.post(
+            'http://localhost:8081/valida/regra-servico',
+            json=data,
+            timeout=20
+        )
+        
+        print(f"[IA VALIDAÇÃO SERVIÇO] Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            resultado = response.json()
+            print(f"[IA VALIDAÇÃO SERVIÇO] Resultado: {resultado}")
+            return jsonify(resultado), 200
+        else:
+            print(f"[IA VALIDAÇÃO SERVIÇO] Erro: {response.text}")
+            return jsonify({
+                "error": "Erro ao validar com IA",
+                "details": response.text
+            }), response.status_code
+            
+    except requests.exceptions.Timeout:
+        print(f"[IA VALIDAÇÃO SERVIÇO] Timeout ao conectar serviço IA")
+        return jsonify({
+            "error": "Timeout ao validar com IA",
+            "details": "Serviço demorou mais de 20 segundos"
+        }), 504
+        
+    except requests.exceptions.ConnectionError:
+        print(f"[IA VALIDAÇÃO SERVIÇO] Erro de conexão com serviço IA")
+        return jsonify({
+            "error": "Serviço de IA indisponível",
+            "details": "Não foi possível conectar ao serviço de IA na porta 8081"
+        }), 503
+        
+    except Exception as e:
+        print(f"[IA VALIDAÇÃO SERVIÇO] Erro inesperado: {e}")
+        return jsonify({
+            "error": "Erro inesperado",
+            "details": str(e)
+        }), 500

@@ -120,7 +120,7 @@ from auth.decorators import (
 ### Rotas que ainda precisam de atenção:
 - Rotas de certificados (`certificados.create`, `certificados.edit`, etc.)
 - Rotas de produtos (várias com `produtos.view`, `produtos.create`, etc.)
-- Rotas de destinatários (`destinatarios_nfe.*`)
+- Rotas de Destinatários/Tomadores (`destinatarios_nfe.*`)
 - Rotas de regras de tributação (`regras_tributacao.*`)
 - Rotas de backups (`backups.*`)
 - Rotas de motivos de desoneração (`motivos_desoneracao.*`)

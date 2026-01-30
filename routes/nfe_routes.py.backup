@@ -449,7 +449,7 @@ def emitir_nfe():
         # MÉTODO GET - CARREGAR DADOS PARA O FORMULÁRIO
         print("📋 === CARREGANDO FORMULÁRIO (GET) ===")
         
-        # BUSCAR DESTINATÁRIOS
+        # BUSCAR Destinatários/Tomadores
         destinatarios = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
         destinatarios_data = []
         for dest in destinatarios:
@@ -574,7 +574,7 @@ def emitir_nfe():
             print(f"⚠️ Erro ao carregar CSOSNs: {e}")
             csosns_data = []
         
-        print(f"📋 Renderizando template com {len(destinatarios_data)} destinatários e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
+        print(f"📋 Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
         
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,

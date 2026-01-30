@@ -28,7 +28,7 @@ Este documento descreve as diferenças de permissões entre **Admin Comum** e **
    - **RESTRIÇÃO**: Só pode vincular a clientes que ele gerencia
 
 5. **Acessar Dados dos Clientes**
-   - NFes, produtos, destinatários, certificados, regras tributárias
+   - NFes, produtos, Destinatários/Tomadores, certificados, regras tributárias
    - Apenas dos clientes vinculados
 
 ### ❌ **Não Pode Fazer:**

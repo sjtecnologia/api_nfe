@@ -694,7 +694,7 @@ werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on 
 [OK] Cliente: 4YOUPET MARKET PLACE E TECNOLOGIA LTDA
 [DATA] Calculando estatísticas...
   Produtos: 3
-  Destinatários: 2
+  Destinatários/Tomadores: 2
   Regras: 2
   Certificados: 1
 [DATA] Contando NFes...
@@ -709,7 +709,7 @@ werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on 
     [!] Valor total não encontrado no JSON
   NFe ID 102: Status=REJEITADA, Data=2025-12-18 15:48:57.103347
     [!] Valor total não encontrado no JSON
-[OK] DASHBOARD: Dados carregados - 3 produtos, 2 destinatários, 3 NFes recentes
+[OK] DASHBOARD: Dados carregados - 3 produtos, 2 Destinatários/Tomadores, 3 NFes recentes
 [DEBUG] Iniciando dashboard_api_data...
 [DEBUG] Conexão DB obtida
 [DEBUG] Período: tudo, data_inicio: None, data_fim: None
@@ -793,7 +793,7 @@ werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on 
 [OK] Cliente: 4YOUPET MARKET PLACE E TECNOLOGIA LTDA
 [DATA] Calculando estatísticas...
   Produtos: 3
-  Destinatários: 2
+  Destinatários/Tomadores: 2
   Regras: 2
   Certificados: 1
 [DATA] Contando NFes...
@@ -808,7 +808,7 @@ werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on 
     [!] Valor total não encontrado no JSON
   NFe ID 102: Status=REJEITADA, Data=2025-12-18 15:48:57.103347
     [!] Valor total não encontrado no JSON
-[OK] DASHBOARD: Dados carregados - 3 produtos, 2 destinatários, 3 NFes recentes
+[OK] DASHBOARD: Dados carregados - 3 produtos, 2 Destinatários/Tomadores, 3 NFes recentes
  * Restarting with stat
 lxml carregado com sucesso
 nfelib carregado com sucesso

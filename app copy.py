@@ -2092,7 +2092,7 @@ def admin_destinatarios_nfe_add():
         cliente_id = int(cliente_id_form) if cliente_id_form else None
         
         if cliente_id is not None and cliente_id not in accessible_client_ids:
-            msg = 'Você não tem permissão para adicionar destinatários a este cliente.'
+            msg = 'Você não tem permissão para adicionar Destinatários/Tomadores a este cliente.'
             if is_modal_request:
                 return jsonify({'success': False, 'message': msg}), 403
             flash(msg, 'danger')

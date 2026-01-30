@@ -185,8 +185,8 @@ data = {
 
 ## ✅ Status das Correções
 
-- ✅ `admin_destinatarios_nfe_add()` - Criação de destinatários
-- ✅ `salvar_destinatario()` - Salvamento alternativo de destinatários
+- ✅ `admin_destinatarios_nfe_add()` - Criação de Destinatários/Tomadores
+- ✅ `salvar_destinatario()` - Salvamento alternativo de Destinatários/Tomadores
 - ✅ `create_cliente()` - Criação de clientes
 - ✅ `edit_cliente()` - Edição de clientes
 

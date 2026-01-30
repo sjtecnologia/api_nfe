@@ -191,7 +191,7 @@
 **Status Atual:** Apenas cadastro manual individual  
 **O Que Falta:**
 - Importação de produtos via CSV/Excel
-- Importação de destinatários em lote
+- Importação de Destinatários/Tomadores em lote
 - Emissão em lote de NFes (múltiplas notas)
 - Validação prévia (antes de processar)
 - Relatório de erros de importação

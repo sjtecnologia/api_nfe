@@ -2,7 +2,7 @@
 
 **Assunto:** Adequação do Sistema à Lei Complementar 214/2025 - IBS e CBS  
 **Data:** 02 de dezembro de 2025  
-**Destinatários:** Todos os clientes  
+**Destinatários/Tomadores:** Todos os clientes  
 
 ---
 

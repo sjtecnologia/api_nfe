@@ -63,7 +63,7 @@ def dashboard(cliente_hash):
         print(f"  Produtos: {total_produtos}")
         
         total_destinatarios = db.query(func.count(DestinatarioNFe.destinatario_id)).filter_by(cliente_id=cliente_id).scalar() or 0
-        print(f"  Destinatários: {total_destinatarios}")
+        print(f"  Destinatários/Tomadores: {total_destinatarios}")
         
         total_regras = db.query(func.count(RegraTributacao.regra_tributacao_id)).filter_by(cliente_id=cliente_id).scalar() or 0
         print(f"  Regras: {total_regras}")
@@ -71,41 +71,47 @@ def dashboard(cliente_hash):
         total_certificados = db.query(func.count(CertificadoDigital.certificado_digital_id)).filter_by(cliente_id=cliente_id).scalar() or 0
         print(f"  Certificados: {total_certificados}")
         
-        # Contagem de NFes - Usar SQL Nativo para garantir resultados corretos
-        print("[DATA] Contando NFes...")
-        # CORRIGIDO: Usar formato MAIÚSCULO para os status para garantir compatibilidade
+        # Contagem de NFes, NFCes e NFSes - Usar SQL Nativo para garantir resultados corretos
+        print("[DATA] Contando NFes, NFCes e NFSes...")
+        # UNIÃO de NFe + NFCe + NFSe
         query_nfes_total = text("""
-            SELECT COUNT(*) as total
-            FROM nfe_emitidas
-            WHERE cliente_id = :cliente_id
+            SELECT COUNT(*) as total FROM (
+                SELECT data_criacao FROM nfe_emitidas WHERE cliente_id = :cliente_id
+                UNION ALL
+                SELECT data_emissao FROM nfse WHERE cliente_id = :cliente_id
+            ) AS todas_notas
         """)
         
         query_nfes_ano = text("""
-            SELECT COUNT(*) as total
-            FROM nfe_emitidas
-            WHERE cliente_id = :cliente_id
-            AND EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
+            SELECT COUNT(*) as total FROM (
+                SELECT data_criacao FROM nfe_emitidas WHERE cliente_id = :cliente_id
+                UNION ALL
+                SELECT data_emissao AS data_criacao FROM nfse WHERE cliente_id = :cliente_id
+            ) AS todas_notas
+            WHERE EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
         """)
         
         query_nfes_mes = text("""
-            SELECT COUNT(*) as total
-            FROM nfe_emitidas
-            WHERE cliente_id = :cliente_id
-            AND EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
+            SELECT COUNT(*) as total FROM (
+                SELECT data_criacao FROM nfe_emitidas WHERE cliente_id = :cliente_id
+                UNION ALL
+                SELECT data_emissao AS data_criacao FROM nfse WHERE cliente_id = :cliente_id
+            ) AS todas_notas
+            WHERE EXTRACT(YEAR FROM data_criacao) = EXTRACT(YEAR FROM CURRENT_DATE)
             AND EXTRACT(MONTH FROM data_criacao) = EXTRACT(MONTH FROM CURRENT_DATE)
         """)
         
         total_nfes_row = db.execute(query_nfes_total, {"cliente_id": cliente_id}).fetchone()
         total_nfes = total_nfes_row[0] if total_nfes_row is not None else 0
-        print(f"  Total NFes: {total_nfes}")
+        print(f"  Total Notas (NFe+NFS-e): {total_nfes}")
 
         nfes_ano_row = db.execute(query_nfes_ano, {"cliente_id": cliente_id}).fetchone()
         nfes_ano = nfes_ano_row[0] if nfes_ano_row is not None else 0
-        print(f"  NFes no ano: {nfes_ano}")
+        print(f"  Notas no ano: {nfes_ano}")
 
         nfes_mes_row = db.execute(query_nfes_mes, {"cliente_id": cliente_id}).fetchone()
         nfes_mes = nfes_mes_row[0] if nfes_mes_row is not None else 0
-        print(f"  NFes no mês: {nfes_mes}")
+        print(f"  Notas no mês: {nfes_mes}")
         
         print(f"[DATA] Contagens: {total_produtos}P, {total_destinatarios}D, {total_regras}R, {total_certificados}C, {total_nfes}N")
         
@@ -120,10 +126,10 @@ def dashboard(cliente_hash):
             'nfes_mes': nfes_mes
         }
         
-        # CORRIGIDO: Últimas NFes - Usar SQL nativo para garantir dados corretos
+        # CORRIGIDO: Últimas Notas (NFe + NFCe + NFSe) - Usar SQL nativo com UNION ALL
         query_ultimas_nfes = text("""
             SELECT 
-                nfe_emitida_id,
+                nfe_emitida_id as id,
                 cliente_id,
                 numero,
                 status,
@@ -135,11 +141,30 @@ def dashboard(cliente_hash):
                 destinatario_cnpj_cpf,
                 tipo_nfe,
                 valor_total,
-                json_nfe
+                json_nfe,
+                'NFe' as tipo_documento
             FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
+            UNION ALL
+            SELECT 
+                id,
+                cliente_id,
+                numero_rps as numero,
+                status,
+                data_emissao as data_criacao,
+                NULL as chave_acesso,
+                protocolo as protocolo_sefaz,
+                mensagem_retorno as mensagem_sefaz,
+                tomador_razao_social as destinatario_razao_social,
+                tomador_cpf_cnpj as destinatario_cnpj_cpf,
+                'NFS-e' as tipo_nfe,
+                valor_servicos as valor_total,
+                NULL as json_nfe,
+                'NFS-e' as tipo_documento
+            FROM nfse
+            WHERE cliente_id = :cliente_id
             ORDER BY data_criacao DESC
-            LIMIT 3
+            LIMIT 5
         """)
         
         ultimas_nfes_result = db.execute(query_ultimas_nfes, {"cliente_id": cliente_id})
@@ -209,18 +234,21 @@ def dashboard(cliente_hash):
                 # Continuar com a próxima NFe
                 continue
         
-        # CORRIGIDO: NFes por mês - últimos 6 meses
+        # CORRIGIDO: Notas por mês (NFe + NFCe + NFSe) - últimos 6 meses
         hoje = datetime.now()
         seis_meses_atras = hoje - timedelta(days=180)
         
         query_nfes_por_mes = text("""
             SELECT 
-                EXTRACT(MONTH FROM data_criacao) as mes,
-                EXTRACT(YEAR FROM data_criacao) as ano,
-                COUNT(*) as quantidade
-            FROM nfe_emitidas
-            WHERE cliente_id = :cliente_id
-            AND data_criacao >= :data_inicio
+                EXTRACT(MONTH FROM data_criacao)::INTEGER as mes,
+                EXTRACT(YEAR FROM data_criacao)::INTEGER as ano,
+                COUNT(*)::INTEGER as quantidade
+            FROM (
+                SELECT data_criacao FROM nfe_emitidas WHERE cliente_id = :cliente_id
+                UNION ALL
+                SELECT data_emissao AS data_criacao FROM nfse WHERE cliente_id = :cliente_id
+            ) AS todas_notas
+            WHERE data_criacao >= :data_inicio
             GROUP BY EXTRACT(YEAR FROM data_criacao), EXTRACT(MONTH FROM data_criacao)
             ORDER BY EXTRACT(YEAR FROM data_criacao), EXTRACT(MONTH FROM data_criacao)
         """)
@@ -248,7 +276,7 @@ def dashboard(cliente_hash):
                     'quantidade': 0
                 })
         
-        print(f"[OK] DASHBOARD: Dados carregados - {total_produtos} produtos, {total_destinatarios} destinatários, {len(ultimas_nfes)} NFes recentes")
+        print(f"[OK] DASHBOARD: Dados carregados - {total_produtos} produtos, {total_destinatarios} Destinatários/Tomadores, {len(ultimas_nfes)} NFes recentes")
         
         return render_template('cliente/dashboard.html', 
                              cliente=cliente, 
@@ -375,15 +403,18 @@ def api_nfes_por_mes(cliente_id):
         else:  # padrão 6 meses
             data_inicio = hoje - timedelta(days=180)
         
-        # Buscar dados agrupados por mês
+        # Buscar dados agrupados por mês (NFe + NFCe + NFSe)
         query_nfes_por_mes = text("""
             SELECT 
                 EXTRACT(MONTH FROM data_criacao)::INTEGER as mes,
                 EXTRACT(YEAR FROM data_criacao)::INTEGER as ano,
                 COUNT(*)::INTEGER as quantidade
-            FROM nfe_emitidas
-            WHERE cliente_id = :cliente_id
-            AND data_criacao >= :data_inicio
+            FROM (
+                SELECT data_criacao FROM nfe_emitidas WHERE cliente_id = :cliente_id
+                UNION ALL
+                SELECT data_emissao AS data_criacao FROM nfse WHERE cliente_id = :cliente_id
+            ) AS todas_notas
+            WHERE data_criacao >= :data_inicio
             AND data_criacao <= :data_fim
             GROUP BY EXTRACT(YEAR FROM data_criacao), EXTRACT(MONTH FROM data_criacao)
             ORDER BY ano, mes

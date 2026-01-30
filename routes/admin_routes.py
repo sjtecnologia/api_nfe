@@ -1271,7 +1271,7 @@ def visualizar_cliente(cliente_id: int):
         """), {'cid': cliente_id}).fetchall()
         produtos = [dict(p._mapping) for p in produtos]
 
-        # Busca destinatários do cliente
+        # Busca Destinatários/Tomadores do cliente
         destinatarios = db.execute(text("""
             SELECT destinatario_id, nome_razao_social, cpf_cnpj, email
             FROM destinatarios_nfe
@@ -2580,22 +2580,47 @@ def _register_template_utils(setup_state):
 def list_clientes():
     db = _get_db()
     try:
+        # Capturar filtros
+        filtro_razao = request.args.get('razao_social', '').strip()
+        filtro_cnpj = request.args.get('cnpj', '').strip()
+        filtro_email = request.args.get('email', '').strip()
+        
+        # Construir WHERE dinâmico
+        where_clauses = []
+        params = {}
+        
+        if filtro_razao:
+            where_clauses.append("razao_social ILIKE :razao_social")
+            params['razao_social'] = f'%{filtro_razao}%'
+        
+        if filtro_cnpj:
+            where_clauses.append("cnpj ILIKE :cnpj")
+            params['cnpj'] = f'%{filtro_cnpj}%'
+        
+        if filtro_email:
+            where_clauses.append("email_contato ILIKE :email")
+            params['email'] = f'%{filtro_email}%'
+        
+        where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
+        
         # Super Admin vê todos os clientes, Admin Comum vê apenas seus clientes
         if current_user.is_super_admin():
-            rows = db.execute(text("""
+            rows = db.execute(text(f"""
                 SELECT cliente_id, razao_social, cnpj, ativo, data_cadastro, email_contato, telefone_contato
                 FROM clientes
+                WHERE 1=1{where_sql}
                 ORDER BY razao_social
-            """)).fetchall()
+            """), params).fetchall()
         else:
             # Admin Comum: apenas clientes vinculados
-            rows = db.execute(text("""
+            params['user_id'] = current_user.id
+            rows = db.execute(text(f"""
                 SELECT c.cliente_id, c.razao_social, c.cnpj, c.ativo, c.data_cadastro, c.email_contato, c.telefone_contato
                 FROM clientes c
                 INNER JOIN user_clients uc ON c.cliente_id = uc.client_id
-                WHERE uc.user_id = :user_id
+                WHERE uc.user_id = :user_id{where_sql}
                 ORDER BY c.razao_social
-            """), {'user_id': current_user.id}).fetchall()
+            """), params).fetchall()
         
         clientes = [_safe_row_to_dict(r, [
             'cliente_id','razao_social','cnpj','ativo','data_cadastro','email_contato','telefone_contato'
@@ -2988,7 +3013,7 @@ def edit_cliente(cliente_id: int):
         if regras_rows:
             regras_existentes = [dict(row._mapping) for row in regras_rows]
             
-        # Consultar destinatários para o cliente
+        # Consultar Destinatários/Tomadores para o cliente
         destinatarios_rows = db.execute(text("""
             SELECT * FROM destinatarios_nfe WHERE cliente_id = :cid
         """), {'cid': cliente_id}).fetchall()
@@ -3272,12 +3297,12 @@ def admin_destinatarios_nfe_add(cliente_id: int):
                         :uf, :codigo_uf, :codigo_pais, :nome_pais, :data_cadastro, :created_by_user_id)
             """), data)
             db.commit()
-            flash('Destinatário adicionado com sucesso', 'success')
+            flash('Destinatário/Tomador adicionado com sucesso', 'success')
             return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         except Exception as e:
             db.rollback()
             print(f"[X] Erro admin_destinatarios_nfe_add: {e}")
-            flash('Erro ao adicionar destinatário', 'error')
+            flash('Erro ao adicionar destinatário/tomador', 'error')
             return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         finally:
             db.close()
@@ -3302,11 +3327,11 @@ def delete_destinatario(destinatario_id: int):
         db.execute(text("DELETE FROM destinatarios_nfe WHERE destinatario_id = :cid"),
                    {'cid': destinatario_id})
         db.commit()
-        flash('Destinatário excluído com sucesso', 'success')
+        flash('Destinatário/Tomador excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
         print(f"ERRO: Erro delete_destinatario: {e}")
-        flash('Erro ao excluir destinatário', 'error')
+        flash('Erro ao excluir destinatário/tomador', 'error')
     finally:
         db.close()
     
@@ -3330,14 +3355,43 @@ def list_produtos():
         if not cliente_id:
             flash('Nenhum cliente selecionado.', 'error')
             return render_template('admin/produtos/list.html', produtos=[])
-        rows = db.execute(text("""
+        
+        # Capturar filtros
+        filtro_codigo = request.args.get('codigo', '').strip()
+        filtro_descricao = request.args.get('descricao', '').strip()
+        filtro_ncm = request.args.get('ncm', '').strip()
+        filtro_ativo = request.args.get('ativo', '').strip()
+        
+        # Construir WHERE dinâmico
+        where_clauses = []
+        params = {'cliente_id': cliente_id}
+        
+        if filtro_codigo:
+            where_clauses.append("p.codigo_interno ILIKE :codigo")
+            params['codigo'] = f'%{filtro_codigo}%'
+        
+        if filtro_descricao:
+            where_clauses.append("p.descricao ILIKE :descricao")
+            params['descricao'] = f'%{filtro_descricao}%'
+        
+        if filtro_ncm:
+            where_clauses.append("n.codigo ILIKE :ncm")
+            params['ncm'] = f'%{filtro_ncm}%'
+        
+        if filtro_ativo and filtro_ativo != 'todos':
+            where_clauses.append("p.ativo = :ativo")
+            params['ativo'] = filtro_ativo == 'ativo'
+        
+        where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
+        
+        rows = db.execute(text(f"""
             SELECT p.produto_id, p.codigo_interno, p.descricao, p.unidade_comercial, p.preco_unitario_padrao,
                    p.ncm_id, p.cfop_id, p.ativo, n.codigo as ncm_codigo
             FROM produtos p
             LEFT JOIN ncms n ON n.ncm_id = p.ncm_id
-            WHERE p.cliente_id = :cliente_id
+            WHERE p.cliente_id = :cliente_id{where_sql}
             ORDER BY p.descricao
-        """), {'cliente_id': cliente_id}).fetchall()
+        """), params).fetchall()
         produtos = [_safe_row_to_dict(r, [
             'produto_id','codigo_interno','descricao','unidade_comercial',
             'preco_unitario_padrao','ncm_id','cfop_id','ativo','ncm_codigo'
@@ -3690,7 +3744,7 @@ def delete_produto(produto_id: int):
     return redirect(url_for('admin.list_produtos'))        
 
 # -------------------------------------------------------------------
-# DESTINATÁRIOS
+# Destinatários/Tomadores
 # -------------------------------------------------------------------
 
 @admin_bp.route('/destinatarios/<int:cliente_id>')
@@ -3714,7 +3768,7 @@ def list_destinatarios(cliente_id: int):
         return render_template('admin/destinatarios/list.html', destinatarios=destinatarios, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
         print(f"[X] Erro list_destinatarios: {e}")
-        flash('Erro ao carregar destinatários', 'error')
+        flash('Erro ao carregar Destinatários/Tomadores', 'error')
         # Buscar nome do cliente para erro também
         cliente_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
         cliente_nome = cliente_row[0] if cliente_row else f"ID {cliente_id}"
@@ -3791,13 +3845,13 @@ def salvar_destinatario():
                         
         """), data)
         db.commit()
-        flash('Destinatário salvo', 'success')
+        flash('Destinatário/Tomador salvo', 'success')
         cliente_id = request.form.get('cliente_id')
         return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
         print(f"[X] Erro salvar_destinatario: {e}")
-        flash('Erro ao salvar destinatário', 'error')
+        flash('Erro ao salvar destinatário/tomador', 'error')
         cliente_id = request.form.get('cliente_id')
         return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
     finally:
@@ -3888,7 +3942,7 @@ def edit_destinatario(destinatario_id: int):
                            {'did': destinatario_id}).fetchone()
             cliente_id = row[0] if row else None
             
-            flash('Destinatário atualizado com sucesso', 'success')
+            flash('Destinatário/Tomador atualizado com sucesso', 'success')
             if cliente_id:
                 return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
             else:
@@ -3896,9 +3950,9 @@ def edit_destinatario(destinatario_id: int):
         except Exception as e:
             db.rollback()
             import traceback
-            print(f"ERRO: Erro ao atualizar destinatário: {e}")
+            print(f"ERRO: Erro ao atualizar destinatário/tomador: {e}")
             traceback.print_exc()
-            flash('Erro ao atualizar destinatário', 'error')
+            flash('Erro ao atualizar destinatário/tomador', 'error')
             # Tentar obter cliente_id mesmo com erro
             try:
                 row = db.execute(text("SELECT cliente_id FROM destinatarios_nfe WHERE destinatario_id = :did"),
@@ -3931,7 +3985,7 @@ def edit_destinatario(destinatario_id: int):
         ])
         
         if not destinatario:
-            flash('Destinatário não encontrado', 'warning')
+            flash('Destinatário/Tomador não encontrado', 'warning')
             cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
             if cliente_id:
                 return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
@@ -3948,7 +4002,7 @@ def edit_destinatario(destinatario_id: int):
         import traceback
         print(f"ERRO: Erro edit_destinatario: {e}")
         traceback.print_exc()  # Log completo do erro
-        flash('Erro ao carregar destinatário', 'error')
+        flash('Erro ao carregar destinatário/tomador', 'error')
         cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
         if not cliente_id and destinatario:
             cliente_id = destinatario.get('cliente_id')
@@ -4309,8 +4363,41 @@ def list_regras_tributacao():
             flash('Selecione um cliente para visualizar as regras tributárias.', 'warning')
             return render_template('admin/regras_tributacao/list.html', regras=[], cliente_id=None)
         
+        # Capturar filtros
+        filtro_cfop = request.args.get('cfop', '').strip()
+        filtro_ncm = request.args.get('ncm', '').strip()
+        filtro_uf_origem = request.args.get('uf_origem', '').strip()
+        filtro_uf_destino = request.args.get('uf_destino', '').strip()
+        filtro_cst_icms = request.args.get('cst_icms', '').strip()
+        
+        # Construir WHERE dinâmico
+        where_clauses = []
+        params = {'cid': cliente_id}
+        
+        if filtro_cfop:
+            where_clauses.append("cf.cfop ILIKE :cfop")
+            params['cfop'] = f'%{filtro_cfop}%'
+        
+        if filtro_ncm:
+            where_clauses.append("nc.codigo ILIKE :ncm")
+            params['ncm'] = f'%{filtro_ncm}%'
+        
+        if filtro_uf_origem:
+            where_clauses.append("rt.uf_origem ILIKE :uf_origem")
+            params['uf_origem'] = f'%{filtro_uf_origem}%'
+        
+        if filtro_uf_destino:
+            where_clauses.append("rt.uf_destino ILIKE :uf_destino")
+            params['uf_destino'] = f'%{filtro_uf_destino}%'
+        
+        if filtro_cst_icms:
+            where_clauses.append("rt.cst_icms ILIKE :cst_icms")
+            params['cst_icms'] = f'%{filtro_cst_icms}%'
+        
+        where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
+        
         # Query com JOIN para trazer dados completos de CFOP e NCM
-        rows = db.execute(text("""
+        rows = db.execute(text(f"""
             SELECT 
                 rt.regra_tributacao_id, rt.cliente_id, rt.cfop_id, rt.ncm_id, 
                 rt.uf_origem, rt.uf_destino, rt.tipo_item, rt.prioridade, 
@@ -4323,9 +4410,9 @@ def list_regras_tributacao():
             FROM regras_tributacao rt
             LEFT JOIN cfops cf ON rt.cfop_id = cf.cfop_id
             LEFT JOIN ncms nc ON rt.ncm_id = nc.ncm_id
-            WHERE rt.cliente_id = :cid
+            WHERE rt.cliente_id = :cid{where_sql}
             ORDER BY rt.regra_tributacao_id DESC            
-        """), {'cid': cliente_id}).fetchall()
+        """), params).fetchall()
         
         regras = [dict(r._mapping) for r in rows]
         return render_template('admin/regras_tributacao/list.html', regras=regras, cliente_id=cliente_id)
@@ -6193,7 +6280,7 @@ def test_email_debug():
                                 <li>Data/Hora: {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')}</li>
                                 <li>Servidor: {smtp_server}:{smtp_port}</li>
                                 <li>Remetente: {smtp_user}</li>
-                                <li>Destinatário: {email_destino}</li>
+                                <li>Destinatário/Tomador: {email_destino}</li>
                             </ul>
                         </div>
                         <p><strong>✓ Se você recebeu este email, significa que o sistema de envio está funcionando corretamente!</strong></p>
@@ -6328,7 +6415,7 @@ def test_email():
                                 <li>Data/Hora: {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')}</li>
                                 <li>Servidor: {smtp_server}:{smtp_port}</li>
                                 <li>Remetente: {smtp_user}</li>
-                                <li>Destinatário: {email_destino}</li>
+                                <li>Destinatário/Tomador: {email_destino}</li>
                             </ul>
                         </div>
                         <p><strong>✓ Se você recebeu este email, significa que o sistema de envio está funcionando corretamente!</strong></p>

@@ -745,7 +745,7 @@ def emitir_nfe():
         # MÉTODO GET - CARREGAR DADOS PARA O FORMULÁRIO
         print(" === CARREGANDO FORMULÁRIO (GET) ===")
         
-        # BUSCAR DESTINATÁRIOS
+        # BUSCAR Destinatários/Tomadores
         destinatarios = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
         destinatarios_data = []
         for dest in destinatarios:
@@ -870,7 +870,7 @@ def emitir_nfe():
             print(f"AVISO: Erro ao carregar CSOSNs: {e}")
             csosns_data = []
         
-        print(f" Renderizando template com {len(destinatarios_data)} destinatários e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
+        print(f" Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
         
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,
@@ -944,38 +944,41 @@ def list_nfes():
             flash('Você não tem acesso a nenhum cliente.', 'warning')
             return redirect(url_for('home.home'))
         
+        # Obter parâmetros de filtro
+        filtro_numero = request.args.get('numero', '').strip()
+        filtro_destinatario = request.args.get('destinatario', '').strip()
+        filtro_data_inicio = request.args.get('data_inicio', '').strip()
+        filtro_data_fim = request.args.get('data_fim', '').strip()
+        filtro_status = request.args.get('status', '').strip()
+        
         # BUSCAR NFEs COM SQL RAW para evitar problemas de ORM
         if cliente_id:
             # Filtrar por cliente específico
-            query = text("""
-                SELECT 
-                    n.nfe_emitida_id,
-                    n.cliente_id,
-                    n.tipo_nfe,
-                    n.finalidade_emissao,
-                    n.natureza_operacao,
-                    n.status,
-                    n.data_criacao,
-                    n.destinatario_razao_social,
-                    n.destinatario_cnpj_cpf,
-                    n.chave_acesso,
-                    n.protocolo_sefaz,
-                    n.mensagem_sefaz,
-                    n.numero,
-                    n.serie,
-                    c.razao_social as cliente_nome
-                FROM nfe_emitidas n
-                JOIN clientes c ON n.cliente_id = c.cliente_id
-                WHERE n.cliente_id = :cliente_id
-                ORDER BY n.numero DESC, n.serie DESC
-                LIMIT 100
-            """)
-            result = db.execute(query, {'cliente_id': cliente_id})
-        else:
-            # Buscar NFEs dos clientes acessíveis (Super Admin = todos, Admin Comum = apenas ativo)
-            # Usar placeholders seguros para evitar SQL injection
-            placeholders = ','.join([f':id_{i}' for i in range(len(accessible_client_ids))])
-            params = {f'id_{i}': client_id for i, client_id in enumerate(accessible_client_ids)}
+            where_clauses = ["n.cliente_id = :cliente_id"]
+            params = {'cliente_id': cliente_id}
+            
+            # Adicionar filtros adicionais
+            if filtro_numero:
+                where_clauses.append("CAST(n.numero AS TEXT) LIKE :numero")
+                params['numero'] = f'%{filtro_numero}%'
+            
+            if filtro_destinatario:
+                where_clauses.append("(n.destinatario_razao_social ILIKE :destinatario OR n.destinatario_cnpj_cpf LIKE :destinatario)")
+                params['destinatario'] = f'%{filtro_destinatario}%'
+            
+            if filtro_data_inicio:
+                where_clauses.append("DATE(n.data_criacao) >= :data_inicio")
+                params['data_inicio'] = filtro_data_inicio
+            
+            if filtro_data_fim:
+                where_clauses.append("DATE(n.data_criacao) <= :data_fim")
+                params['data_fim'] = filtro_data_fim
+            
+            if filtro_status:
+                where_clauses.append("n.status = :status")
+                params['status'] = filtro_status
+            
+            where_sql = " AND ".join(where_clauses)
             
             query = text(f"""
                 SELECT 
@@ -996,7 +999,63 @@ def list_nfes():
                     c.razao_social as cliente_nome
                 FROM nfe_emitidas n
                 JOIN clientes c ON n.cliente_id = c.cliente_id
-                WHERE n.cliente_id IN ({placeholders})
+                WHERE {where_sql}
+                ORDER BY n.numero DESC, n.serie DESC
+                LIMIT 100
+            """)
+            result = db.execute(query, params)
+        else:
+            # Buscar NFEs dos clientes acessíveis (Super Admin = todos, Admin Comum = apenas ativo)
+            # Usar placeholders seguros para evitar SQL injection
+            where_clauses = []
+            placeholders = ','.join([f':id_{i}' for i in range(len(accessible_client_ids))])
+            params = {f'id_{i}': client_id for i, client_id in enumerate(accessible_client_ids)}
+            
+            where_clauses.append(f"n.cliente_id IN ({placeholders})")
+            
+            # Adicionar filtros adicionais
+            if filtro_numero:
+                where_clauses.append("CAST(n.numero AS TEXT) LIKE :numero")
+                params['numero'] = f'%{filtro_numero}%'
+            
+            if filtro_destinatario:
+                where_clauses.append("(n.destinatario_razao_social ILIKE :destinatario OR n.destinatario_cnpj_cpf LIKE :destinatario)")
+                params['destinatario'] = f'%{filtro_destinatario}%'
+            
+            if filtro_data_inicio:
+                where_clauses.append("DATE(n.data_criacao) >= :data_inicio")
+                params['data_inicio'] = filtro_data_inicio
+            
+            if filtro_data_fim:
+                where_clauses.append("DATE(n.data_criacao) <= :data_fim")
+                params['data_fim'] = filtro_data_fim
+            
+            if filtro_status:
+                where_clauses.append("n.status = :status")
+                params['status'] = filtro_status
+            
+            where_sql = " AND ".join(where_clauses)
+            
+            query = text(f"""
+                SELECT 
+                    n.nfe_emitida_id,
+                    n.cliente_id,
+                    n.tipo_nfe,
+                    n.finalidade_emissao,
+                    n.natureza_operacao,
+                    n.status,
+                    n.data_criacao,
+                    n.destinatario_razao_social,
+                    n.destinatario_cnpj_cpf,
+                    n.chave_acesso,
+                    n.protocolo_sefaz,
+                    n.mensagem_sefaz,
+                    n.numero,
+                    n.serie,
+                    c.razao_social as cliente_nome
+                FROM nfe_emitidas n
+                JOIN clientes c ON n.cliente_id = c.cliente_id
+                WHERE {where_sql}
                 ORDER BY n.numero DESC, n.serie DESC
                 LIMIT 100
             """)
@@ -1709,7 +1768,7 @@ def edit(nfe_id):
                     print(f"AVISO: Erro ao buscar dados do emitente: {e}")
                     emitente_data_for_template = {}
                 
-                # BUSCAR DESTINATÁRIOS DO CLIENTE
+                # BUSCAR Destinatários/Tomadores DO CLIENTE
                 try:
                     destinatarios_query = text("""
                         SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
@@ -1742,7 +1801,7 @@ def edit(nfe_id):
                             print(f"AVISO: Erro ao processar destinatário: {e}")
                             continue
                 except Exception as e:
-                    print(f"AVISO: Erro ao buscar destinatários: {e}")
+                    print(f"AVISO: Erro ao buscar Destinatários/Tomadores: {e}")
                     destinatarios = []
                 
                 # BUSCAR CSOSNs
@@ -1781,7 +1840,7 @@ def edit(nfe_id):
                     print(f"AVISO: Erro ao buscar regime tributário: {e}")
                 
                 print(f" Dados auxiliares carregados: {len(clientes)} clientes, {len(cfops)} CFOPs, {len(ncms)} NCMs, {len(produtos)} produtos")
-                print(f" Destinatários: {len(destinatarios)}, CSOSNs: {len(csosns)}, Regime: {regime_tributario_nome}")
+                print(f" Destinatários/Tomadores: {len(destinatarios)}, CSOSNs: {len(csosns)}, Regime: {regime_tributario_nome}")
                 
                 # USAR O MESMO TEMPLATE DE EMISSÃO MAS EM MODO EDIÇÃO
                 return render_template('admin/nfes/emitir.html',

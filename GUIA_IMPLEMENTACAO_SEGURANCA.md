@@ -382,7 +382,7 @@ Para cada role, testar:
 
 **Editor:**
 - [ ] Consegue emitir NFe
-- [ ] Consegue criar/editar destinatários
+- [ ] Consegue criar/editar Destinatários/Tomadores
 - [ ] Consegue criar/editar produtos
 - [ ] NÃO consegue acessar área administrativa
 - [ ] NÃO consegue gerenciar usuários

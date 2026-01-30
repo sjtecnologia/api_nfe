@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}{% if regra %}Editar{% else %}Nova{% endif %} Regra de Serviço{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h2>{% if regra %}Editar{% else %}Nova{% endif %} Regra Tributária de Serviço</h2>
+            <p class="text-muted">{% if cliente %}Cliente: {{ cliente.razao_social }}{% endif %}</p>
+            
+            <form method="POST" action="{{ url_for('regras_servicos.salvar_regra_servico') }}">
+                {% if regra %}
+                <input type="hidden" name="regra_id" value="{{ regra.regra_id }}">
+                {% endif %}
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                
+                <div class="card mb-3">
+                    <div class="card-header"><strong>Dados Básicos</strong></div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label class="form-label required">Código Serviço (LC116)</label>
+                                <input type="text" class="form-control" name="codigo_servico_lc116" 
+                                       value="{{ regra.codigo_servico_lc116 if regra else '' }}" 
+                                       placeholder="Ex: 01.01" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Código NBS</label>
+                                <input type="text" class="form-control" name="codigo_nbs" 
+                                       value="{{ regra.codigo_nbs if regra else '101010000' }}" 
+                                       placeholder="9 dígitos" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Regime Tributário</label>
+                                <select class="form-control" name="regime_tributario_id" required>
+                                    {% for regime in regimes %}
+                                    <option value="{{ regime.regime_tributario_id }}" 
+                                            {% if regra and regime.regime_tributario_id == regra.regime_tributario_id %}selected{% endif %}>
+                                        {{ regime.nome }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <label class="form-label">Descrição do Serviço</label>
+                                <textarea class="form-control" name="descricao_servico" rows="2">{{ regra.descricao_servico if regra else '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header"><strong>ISS</strong></div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label class="form-label required">Alíquota ISS (%)</label>
+                                <input type="number" class="form-control" name="aliquota_iss" step="0.01" min="0" max="5"
+                                       value="{{ regra.aliquota_iss if regra else 5.00 }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">ISS Retido</label>
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" name="iss_retido" 
+                                           {% if regra and regra.iss_retido %}checked{% endif %}>
+                                    <label class="form-check-label">Sim</label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Responsável Retenção</label>
+                                <select class="form-control" name="responsavel_retencao">
+                                    <option value="">Nenhum</option>
+                                    <option value="1" {% if regra and regra.responsavel_retencao == '1' %}selected{% endif %}>Tomadores</option>
+                                    <option value="2" {% if regra and regra.responsavel_retencao == '2' %}selected{% endif %}>Intermediário</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Prioridade</label>
+                                <input type="number" class="form-control" name="prioridade" 
+                                       value="{{ regra.prioridade if regra else 100 }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header"><strong>Reforma Tributária</strong></div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label class="form-label">CST IBS/CBS</label>
+                                <select class="form-control" name="cst_ibs_cbs">
+                                    <option value="001" {% if not regra or regra.cst_ibs_cbs == '001' %}selected{% endif %}>001 - Tributado</option>
+                                    <option value="002" {% if regra and regra.cst_ibs_cbs == '002' %}selected{% endif %}>002 - Redução</option>
+                                    <option value="003" {% if regra and regra.cst_ibs_cbs == '003' %}selected{% endif %}>003 - Diferido</option>
+                                    <option value="004" {% if regra and regra.cst_ibs_cbs == '004' %}selected{% endif %}>004 - Isento</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">% Tributos Federais</label>
+                                <input type="number" class="form-control" name="percentual_total_tributos_federais" step="0.01" min="0" max="100"
+                                       value="{{ regra.percentual_total_tributos_federais if regra else 0 }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">% Tributos Municipais</label>
+                                <input type="number" class="form-control" name="percentual_total_tributos_municipais" step="0.01" min="0" max="100"
+                                       value="{{ regra.percentual_total_tributos_municipais if regra else 5 }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header"><strong>Controle</strong></div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="ativo" 
+                                           {% if not regra or regra.ativo %}checked{% endif %}>
+                                    <label class="form-check-label">Regra Ativa</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="optante_simples_nacional" 
+                                           {% if not regra or regra.optante_simples_nacional %}checked{% endif %}>
+                                    <label class="form-check-label">Optante Simples Nacional</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between gap-2 mb-3">
+                    <button type="button" class="btn btn-info" id="btn-validar-ia">
+                        <i class="fas fa-robot"></i> Validar com IA
+                    </button>
+                    <div>
+                        <a href="{{ url_for('regras_servicos.list_regras_servicos', cliente_id=cliente_id) }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Card de validação IA -->
+                <div class="card border-info mb-3" id="validacao-ia-container" style="display: none;">
+                    <div class="card-header bg-info text-white" id="validacao-ia-header">
+                        <h5 class="mb-0"><i class="fas fa-robot"></i> Validação por IA</h5>
+                    </div>
+                    <div class="card-body" id="validacao-ia-body">
+                        <!-- Conteúdo será preenchido via AJAX -->
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Função de validação com IA
+    function validarRegraComIA() {
+        // Coletar dados do formulário
+        const codigoServico = $('input[name="codigo_servico_lc116"]').val();
+        const codigoNbs = $('input[name="codigo_nbs"]').val();
+        const descricao = $('textarea[name="descricao_servico"]').val();
+        const aliquotaIss = $('input[name="aliquota_iss"]').val();
+        const issRetido = $('input[name="iss_retido"]').is(':checked');
+        const cstIbsCbs = $('select[name="cst_ibs_cbs"]').val();
+        const regimeId = $('select[name="regime_tributario_id"]').val();
+        const regimeNome = $('select[name="regime_tributario_id"] option:selected').text();
+        
+        // Validar campos mínimos
+        if (!codigoServico || !codigoNbs) {
+            alert('Preencha ao menos o Código do Serviço (LC116) e o Código NBS para validar!');
+            return;
+        }
+        
+        // Montar payload
+        const payload = {
+            tipo: 'servico',
+            codigo_servico_lc116: codigoServico,
+            codigo_nbs: codigoNbs,
+            descricao_servico: descricao || '',
+            aliquota_iss: aliquotaIss || '5.00',
+            iss_retido: issRetido,
+            cst_ibs_cbs: cstIbsCbs || '001',
+            regime_tributario_id: regimeId,
+            regime_tributario_nome: regimeNome
+        };
+        
+        console.log('📤 Enviando para validação:', payload);
+        
+        // Mostrar loading
+        const $btn = $('#btn-validar-ia');
+        const originalHtml = $btn.html();
+        $btn.html('<i class="fas fa-spinner fa-spin"></i> Validando...').prop('disabled', true);
+        
+        $('#validacao-ia-container').show();
+        $('#validacao-ia-body').html('<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-2">Analisando regra de serviço com IA...</p></div>');
+        
+        // Chamar endpoint de validação
+        $.ajax({
+            url: '/api/validar-regra-servico-ia',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            timeout: 15000,
+            success: function(resultado) {
+                console.log('✅ Validação concluída:', resultado);
+                
+                // Montar HTML do resultado
+                let html = '';
+                
+                if (resultado.valido) {
+                    $('#validacao-ia-container').removeClass('border-danger').addClass('border-success');
+                    $('#validacao-ia-header').removeClass('bg-danger text-white').addClass('bg-success text-white');
+                    
+                    html = '<div class="alert alert-success mb-0">';
+                    html += '<h5><i class="fas fa-check-circle"></i> Regra válida!</h5>';
+                    html += '<p class="mb-0">' + (resultado.explicacao || 'Todos os parâmetros estão corretos.') + '</p>';
+                    html += '</div>';
+                } else {
+                    $('#validacao-ia-container').removeClass('border-success').addClass('border-danger');
+                    $('#validacao-ia-header').removeClass('bg-success text-white').addClass('bg-danger text-white');
+                    
+                    html = '<div class="alert alert-danger">';
+                    html += '<h5><i class="fas fa-exclamation-triangle"></i> Erros encontrados:</h5>';
+                    html += '<ul class="mb-2">';
+                    resultado.erros.forEach(function(erro) {
+                        html += '<li>' + erro + '</li>';
+                    });
+                    html += '</ul>';
+                    html += '</div>';
+                    
+                    if (resultado.sugestoes && resultado.sugestoes.length > 0) {
+                        html += '<div class="alert alert-info mb-2">';
+                        html += '<h6><i class="fas fa-lightbulb"></i> Sugestões:</h6>';
+                        html += '<ul class="mb-0">';
+                        resultado.sugestoes.forEach(function(sugestao) {
+                            html += '<li>' + sugestao + '</li>';
+                        });
+                        html += '</ul>';
+                        html += '</div>';
+                    }
+                    
+                    if (resultado.explicacao) {
+                        html += '<div class="alert alert-secondary mb-0">';
+                        html += '<h6><i class="fas fa-info-circle"></i> Explicação:</h6>';
+                        html += '<p class="mb-0">' + resultado.explicacao + '</p>';
+                        html += '</div>';
+                    }
+                }
+                
+                $('#validacao-ia-body').html(html);
+                
+                // Scroll suave até o resultado
+                $('html, body').animate({
+                    scrollTop: $('#validacao-ia-container').offset().top - 20
+                }, 500);
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Erro na validação:', error);
+                
+                $('#validacao-ia-container').removeClass('border-success').addClass('border-warning');
+                $('#validacao-ia-header').removeClass('bg-success bg-danger text-white').addClass('bg-warning');
+                
+                let html = '<div class="alert alert-warning mb-0">';
+                html += '<h5><i class="fas fa-exclamation-circle"></i> Erro ao validar</h5>';
+                html += '<p class="mb-0">Não foi possível conectar ao serviço de IA. Verifique se o serviço está rodando.</p>';
+                html += '<small class="text-muted d-block mt-2">Erro técnico: ' + error + '</small>';
+                html += '</div>';
+                
+                $('#validacao-ia-body').html(html);
+            },
+            complete: function() {
+                $btn.html(originalHtml).prop('disabled', false);
+            }
+        });
+    }
+    
+    // Botão de validação manual
+    $('#btn-validar-ia').on('click', function() {
+        validarRegraComIA();
+    });
+    
+    // Validação automática ao mudar campos críticos (com debounce)
+    let validacaoTimeout;
+    $('input[name="codigo_servico_lc116"], input[name="codigo_nbs"], select[name="regime_tributario_id"]').on('change', function() {
+        clearTimeout(validacaoTimeout);
+        validacaoTimeout = setTimeout(function() {
+            const codigoServico = $('input[name="codigo_servico_lc116"]').val();
+            const codigoNbs = $('input[name="codigo_nbs"]').val();
+            
+            if (codigoServico && codigoNbs) {
+                console.log('🔄 Auto-validação disparada por mudança de campo');
+                validarRegraComIA();
+            }
+        }, 1000);
+    });
+});
+</script>
+{% endblock %}

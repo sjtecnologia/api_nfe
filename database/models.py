@@ -436,6 +436,7 @@ class Cliente(Base):
     nfes_emitidas = relationship('NFeEmitidas', back_populates='cliente', cascade='all, delete-orphan')
     produtos = relationship('Produto', back_populates='cliente', cascade='all, delete-orphan')
     regras_tributacao = relationship('RegraTributacao', back_populates='cliente', cascade='all, delete-orphan')
+    regras_servicos = relationship('RegraTributacaoServico', back_populates='cliente', cascade='all, delete-orphan')
     destinatarios_nfe = relationship('DestinatarioNFe', back_populates='cliente', cascade='all, delete-orphan')
     assinaturas = relationship('AssinaturaCliente', back_populates='cliente', cascade='all, delete-orphan')
 
@@ -737,6 +738,92 @@ class RegraTributacao(Base):
 
     def __repr__(self):
         return f"<RegraTributacao(id={self.regra_tributacao_id}, cliente_id={self.cliente_id}, cfop_id={self.cfop_id}, ncm_id={self.ncm_id}, prioridade={self.prioridade})>"
+
+
+class RegraTributacaoServico(Base):
+    """Regras tributárias específicas para NFS-e (serviços)"""
+    __tablename__ = 'regras_tributacao_servicos'
+    
+    regra_id = Column(Integer, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
+    regime_tributario_id = Column(Integer, ForeignKey('regimes_tributarios.regime_tributario_id'), nullable=False)
+    
+    # Identificação do serviço
+    codigo_servico_lc116 = Column(String(5), nullable=False)
+    codigo_nbs = Column(String(9), nullable=False, default='101010000')
+    descricao_servico = Column(Text, nullable=True)
+    
+    # ISS (Imposto Sobre Serviços)
+    aliquota_iss = Column(Numeric(5, 2), nullable=False, default=5.00)
+    iss_retido = Column(Boolean, default=False)
+    responsavel_retencao = Column(String(1), nullable=True)
+    
+    # Reforma Tributária LC 214/2025
+    cst_ibs_cbs = Column(String(3), default='001')
+    codigo_indicador_operacao = Column(String(6), default='000001')
+    codigo_classificacao_tributaria = Column(String(6), default='000001')
+    codigo_localidade_incidencia = Column(String(7), default='3549805')
+    percentual_redutor = Column(Numeric(5, 2), default=0.00)
+    
+    # Percentuais de Tributos
+    percentual_total_tributos_federais = Column(Numeric(5, 2), default=0.00)
+    percentual_total_tributos_estaduais = Column(Numeric(5, 2), default=0.00)
+    percentual_total_tributos_municipais = Column(Numeric(5, 2), default=5.00)
+    
+    # Regime Especial
+    regime_especial_tributacao = Column(String(1), nullable=True)
+    optante_simples_nacional = Column(Boolean, default=True)
+    incentivador_cultural = Column(Boolean, default=False)
+    
+    # Condições de aplicação
+    uf_origem = Column(String(2), nullable=True)
+    uf_destino = Column(String(2), nullable=True)
+    indicador_destinatario = Column(String(1), default='0')
+    indicador_consumidor_final = Column(String(1), default='0')
+    finalidade_nfse = Column(String(1), default='0')
+    
+    # Controle e auditoria
+    prioridade = Column(Integer, default=100)
+    descricao_regra = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True)
+    data_criacao = Column(DateTime, nullable=False, default=datetime_now_brt)
+    data_atualizacao = Column(DateTime, nullable=False, default=datetime_now_brt, onupdate=datetime_now_brt)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    
+    # Relacionamentos
+    cliente = relationship('Cliente', back_populates='regras_servicos')
+    regime_tributario = relationship('RegimeTributario')
+    created_by_user = relationship('UserModel', foreign_keys=[created_by_user_id])
+    updated_by_user = relationship('UserModel', foreign_keys=[updated_by_user_id])
+    
+    def to_dict(self):
+        """Converte o objeto para dicionário"""
+        data = {
+            column.name: getattr(self, column.name)
+            for column in self.__table__.columns
+        }
+        # Converter tipos específicos para JSON-serializáveis
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+            elif isinstance(value, date):
+                data[key] = value.isoformat()
+            elif isinstance(value, Decimal):
+                data[key] = float(value)
+        
+        # Adicionar dados de relacionamentos
+        if self.regime_tributario:
+            data['regime_tributario_nome'] = self.regime_tributario.nome
+        if self.cliente:
+            data['cliente_razao_social'] = self.cliente.razao_social
+        if self.created_by_user:
+            data['created_by_username'] = self.created_by_user.username
+        
+        return data
+    
+    def __repr__(self):
+        return f"<RegraTributacaoServico(id={self.regra_id}, cliente_id={self.cliente_id}, codigo_servico={self.codigo_servico_lc116}, aliquota_iss={self.aliquota_iss})>"
 
 
 # --- SISTEMA DE PLANOS E ASSINATURAS ---

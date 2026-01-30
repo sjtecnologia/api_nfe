@@ -4,6 +4,11 @@
     "css.validate": false,
     "html.validate.styles": false,
     "javascript.validate.enable": false,
+    "python.analysis.extraPaths": [],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "none",
+        "reportMissingModuleSource": "none"
+    },
     "[html]": {
         "editor.quickSuggestions": {
             "other": true,

@@ -3,37 +3,79 @@
 {% block title %}Clientes - Admin{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 mb-0">Administração de Clientes</h1>
-        {% if is_super_admin() and can_create() %}
-        <a href="{{ url_for('admin.create_cliente') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Adicionar Novo Cliente
-        </a>
-        {% elif is_viewer_only() %}
-        <span class="text-muted"><i class="fas fa-eye"></i> Modo visualização</span>
-        {% else %}
-        <span class="text-muted"><i class="fas fa-info-circle"></i> Você só pode gerenciar clientes vinculados à sua conta</span>
-        {% endif %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">🏢 Clientes</h1>
+                    <div class="page-subtitle">
+                        Administração de Clientes
+                    </div>
+                </div>
+                <div>
+                    {% if is_super_admin() and can_create() %}
+                    <a href="{{ url_for('admin.create_cliente') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Novo Cliente
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 
-    
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Razão Social</label>
+                    <input type="text" class="form-control" name="razao_social" placeholder="Buscar por razão social" value="{{ request.args.get('razao_social', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">CNPJ</label>
+                    <input type="text" class="form-control" name="cnpj" placeholder="CNPJ" value="{{ request.args.get('cnpj', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">E-mail</label>
+                    <input type="text" class="form-control" name="email" placeholder="E-mail" value="{{ request.args.get('email', '') }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    {% if request.args.get('razao_social') or request.args.get('cnpj') or request.args.get('email') %}
+                    <a href="{{ url_for('admin.list_clientes') }}" class="btn btn-secondary ms-1">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
 
-    <div class="table-responsive">
-        <table class="table table-bordered table-hover align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>ID</th>
-                    <th>Razão Social</th>
-                    <th>CNPJ</th>
-                    <th>E-mail</th>
-                    <th>Telefone</th>
-                    <th>Ativo</th>
-                    <th class="text-center">Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for cliente in clientes %}
+    <!-- Tabela de Clientes -->
+    <div class="card">
+        <div class="card-body">
+            {% if clientes %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Razão Social</th>
+                            <th>CNPJ</th>
+                            <th>E-mail</th>
+                            <th>Telefone</th>
+                            <th>Ativo</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cliente in clientes %}
                 <tr>
                     <td>{{ cliente.cliente_id }}</td>
                     <td>{{ cliente.razao_social }}</td>
@@ -78,13 +120,23 @@
                         </div>
                     </td>
                 </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7" class="text-center text-muted">Nenhum cliente cadastrado.</td>
-                </tr>
                 {% endfor %}
             </tbody>
         </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-building fa-4x text-muted mb-3"></i>
+                <h5 class="text-muted">Nenhum cliente cadastrado</h5>
+                <p class="text-muted">Clique em "Novo Cliente" para adicionar o primeiro cliente.</p>
+                {% if is_super_admin() and can_create() %}
+                <a href="{{ url_for('admin.create_cliente') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Adicionar Cliente
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}

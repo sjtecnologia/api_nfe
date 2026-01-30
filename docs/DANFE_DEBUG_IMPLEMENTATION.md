@@ -223,7 +223,7 @@ else:
 
 ### `templates/cliente/resumo.html`
 
-#### Linha 100 - Link "Destinatários"
+#### Linha 100 - Link "Destinatários/Tomadores"
 **Problema**: Usando query string ao invés de route parameter
 
 ```html

@@ -1706,12 +1706,17 @@ document.addEventListener('DOMContentLoaded', function() {
 let modalValidacaoIA = null;
 
 function validarComIA() {
+    console.log('[IA] ========================================');
+    console.log('[IA] validarComIA() iniciado');
+    
     // Inicializar modal Bootstrap 5 se necessário
     if (!modalValidacaoIA) {
+        console.log('[IA] Criando nova instância do modal');
         modalValidacaoIA = new bootstrap.Modal(document.getElementById('modalValidacaoIA'));
     }
     
     // Mostrar modal com loading
+    console.log('[IA] Mostrando modal...');
     modalValidacaoIA.show();
     document.getElementById('validacaoLoading').style.display = 'block';
     document.getElementById('validacaoResultado').style.display = 'none';
@@ -1719,7 +1724,9 @@ function validarComIA() {
     document.getElementById('modalValidacaoHeader').className = 'modal-header bg-primary text-white';
     
     // Coletar dados do formulário
+    console.log('[IA] Chamando coletarDadosFormulario()...');
     const formData = coletarDadosFormulario();
+    console.log('[IA] formData retornado:', formData);
     
     if (!formData) {
         mostrarResultadoValidacao({
@@ -1761,8 +1768,11 @@ function validarComIA() {
 }
 
 function coletarDadosFormulario() {
-    // Validar campos básicos
-    const destinatarioSelect = document.getElementById('destinatario_id');
+    // Validar campos básicos - o ID é 'destinatario' (sem _id)
+    const destinatarioSelect = document.getElementById('destinatario');
+    console.log('[IA] destinatarioSelect:', destinatarioSelect);
+    console.log('[IA] destinatarioSelect.value:', destinatarioSelect?.value);
+    
     if (!destinatarioSelect || !destinatarioSelect.value) {
         console.log('[IA] Destinatário não selecionado');
         return null;
@@ -1771,7 +1781,23 @@ function coletarDadosFormulario() {
     // Coletar itens do container de itens (cards)
     const itens = [];
     const itensContainer = document.getElementById('itensContainer');
-    const itensCards = itensContainer?.querySelectorAll('.card');
+    console.log('[IA] itensContainer:', itensContainer);
+    
+    // Os itens são divs dentro do container, não necessariamente .card
+    let itensCards = itensContainer?.querySelectorAll('[id^="item-card-"]');
+    console.log('[IA] Cards com id^="item-card-":', itensCards?.length);
+    
+    // Se não encontrar, tentar .card
+    if (!itensCards || itensCards.length === 0) {
+        itensCards = itensContainer?.querySelectorAll('.card');
+        console.log('[IA] Cards .card:', itensCards?.length);
+    }
+    
+    // Se ainda não encontrar, pegar todos os filhos diretos
+    if (!itensCards || itensCards.length === 0) {
+        itensCards = itensContainer?.children;
+        console.log('[IA] Children diretos:', itensCards?.length);
+    }
     
     if (!itensCards || itensCards.length === 0) {
         console.log('[IA] Nenhum item encontrado');
@@ -1784,16 +1810,22 @@ function coletarDadosFormulario() {
         const produtoSelect = card.querySelector('select[name^="produto_"]');
         const itemIndex = produtoSelect?.name?.match(/produto_(\d+)/)?.[1] || (index + 1);
         
-        // Coletar valores dos campos
+        console.log('[IA] Processando item índice:', itemIndex);
+        
+        // Coletar valores dos campos - NCM e CFOP são SELECT, não INPUT
         const descricaoEl = card.querySelector(`input[name="descricao_${itemIndex}"]`) || 
                            card.querySelector('select[name^="produto_"] option:checked');
-        const ncmEl = card.querySelector(`input[name="ncm_${itemIndex}"]`);
+        const ncmEl = card.querySelector(`select[name="ncm_${itemIndex}"]`);
         const cfopEl = card.querySelector(`select[name="cfop_${itemIndex}"]`);
         const csosnEl = card.querySelector(`select[name="csosn_${itemIndex}"]`);
         const cstEl = card.querySelector(`select[name="cst_icms_${itemIndex}"]`);
         const quantidadeEl = card.querySelector(`input[name="quantidade_${itemIndex}"]`);
         const valorUnitEl = card.querySelector(`input[name="valor_unitario_${itemIndex}"]`);
         const valorTotalEl = card.querySelector(`input[name="valor_total_${itemIndex}"]`);
+        
+        // Log para debug
+        console.log('[IA] ncmEl:', ncmEl, 'valor:', ncmEl?.value);
+        console.log('[IA] cfopEl:', cfopEl, 'valor:', cfopEl?.value);
         
         const descricao = descricaoEl?.value || descricaoEl?.textContent?.split(' - ')?.[1] || '';
         const ncm = ncmEl?.value || '';
@@ -1850,8 +1882,9 @@ function coletarDadosFormulario() {
         emitente_crt: '{{ emitente_data.regime_tributario_id or emitente_data.crt or "1" }}',
         emitente_ie: '{{ emitente_data.ie or emitente_data.inscricao_estadual or "" }}',
         
-        destinatario_cpf_cnpj: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-cpf-cnpj') || '',
-        destinatario_nome: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.text || '',
+        // Corrigido: usar data-documento (não data-cpf-cnpj)
+        destinatario_cpf_cnpj: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-documento') || '',
+        destinatario_nome: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-nome') || destinatarioSelect.options[destinatarioSelect.selectedIndex]?.text || '',
         destinatario_uf: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-uf') || 'SP',
         destinatario_ie: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-ie') || '',
         

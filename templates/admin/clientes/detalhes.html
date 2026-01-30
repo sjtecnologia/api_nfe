@@ -74,7 +74,7 @@
         </ul>
     </div>
     <div class="mb-4">
-        <h5>Destinatários</h5>
+        <h5>Destinatários/Tomadores</h5>
         <ul>
             {% for d in destinatarios %}
                 <li>{{ d.nome_razao_social }} - {{ d.cpf_cnpj }} {% if d.email %}({{ d.email }}){% endif %}</li>

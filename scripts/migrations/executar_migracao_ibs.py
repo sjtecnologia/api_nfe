@@ -150,7 +150,7 @@ def popular_codigos_servico():
         ('07.03', '7.03', 'Elaboração de planos diretores, estudos de viabilidade, estudos organizacionais e outros, relacionados com obras e serviços de engenharia; elaboração de anteprojetos, projetos básicos e projetos executivos para trabalhos de engenharia.'),
         ('07.04', '7.04', 'Demolição.'),
         ('07.05', '7.05', 'Reparação, conservação e reforma de edifícios, estradas, pontes, portos e congêneres.'),
-        ('07.06', '7.06', 'Colocação e instalação de tapetes, carpetes, assoalhos, cortinas, revestimentos de parede, vidros, divisórias, placas de gesso e congêneres, com material fornecido pelo tomador do serviço.'),
+        ('07.06', '7.06', 'Colocação e instalação de tapetes, carpetes, assoalhos, cortinas, revestimentos de parede, vidros, divisórias, placas de gesso e congêneres, com material fornecido pelo Tomadores do serviço.'),
         ('07.07', '7.07', 'Recuperação, raspagem, polimento e lustração de pisos e congêneres.'),
         ('07.08', '7.08', 'Calafetação.'),
         ('07.09', '7.09', 'Varrição, coleta, remoção, incineração, tratamento, reciclagem, separação e destinação final de lixo, rejeitos e outros resíduos quaisquer.'),

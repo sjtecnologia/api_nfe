@@ -32,6 +32,8 @@ from routes.a3_routes import a3_bp
 from routes.api_keys_routes import api_keys_bp
 from routes.api_v2_routes import api_v2_bp
 from routes.webhooks_routes import webhooks_bp
+from routes.nfse_routes import nfse_bp
+from routes.regras_servicos_routes import regras_servicos_bp
 
 # Configurar Flask-Login
 from auth.login_manager import init_login_manager
@@ -73,6 +75,8 @@ app.register_blueprint(api_keys_bp)  # Gerenciamento de API Keys
 app.register_blueprint(webhooks_bp)  # Gerenciamento de Webhooks
 app.register_blueprint(home_bp)
 app.register_blueprint(llm_api_bp)  # API específica para LLM
+app.register_blueprint(nfse_bp)  # NFS-e Nacional
+app.register_blueprint(regras_servicos_bp)  # Regras Tributárias de Serviços
 
 import re
 from markupsafe import Markup, escape

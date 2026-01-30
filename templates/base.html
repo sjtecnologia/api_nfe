@@ -782,10 +782,18 @@
                                         <i class="fas fa-box"></i> Produtos
                                     </a>
                                 </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_regras_tributacao') }}">
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                         <i class="fas fa-gavel"></i> Regras Tributárias
                                     </a>
+                                    <div class="dropdown-menu">
+                                        <a class="dropdown-item" href="{{ url_for('admin.list_regras_tributacao') }}">
+                                            <i class="fas fa-file-invoice"></i> Regras NFe
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url_for('regras_servicos.list_regras_servicos') }}">
+                                            <i class="fas fa-file-alt"></i> Regras NFSe
+                                        </a>
+                                    </div>
                                 </li>
                             {% endif %}
                             <li class="nav-item dropdown">
@@ -823,13 +831,18 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
+                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
                                         <i class="fas fa-boxes"></i> Produtos
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
-                                        <i class="fas fa-address-book"></i> Destinatários
+                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
                                     </a>
                                 </li>
                                 {# Editor NÃO vê Certificados nem Regras Tributárias #}
@@ -847,13 +860,18 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
+                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
                                         <i class="fas fa-boxes"></i> Produtos
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
-                                        <i class="fas fa-address-book"></i> Destinatários
+                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
                                     </a>
                                 </li>
                                 {# Viewer NÃO vê Certificados, Regras Tributárias, nem botões de edição/criação #}

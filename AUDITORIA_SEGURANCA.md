@@ -11,7 +11,7 @@ Esta auditoria identificou **VULNERABILIDADES CRÍTICAS** no sistema de controle
 ### Roles do Sistema:
 1. **Super_Admin** - Acesso total ao sistema e gerenciamento da plataforma
 2. **Admin** - Administrador da conta do cliente emissor com acesso total ao ambiente do cliente
-3. **Editor** - Permissão para emitir NFe, cadastrar destinatários, produtos, etc.
+3. **Editor** - Permissão para emitir NFe, cadastrar Destinatários/Tomadores, produtos, etc.
 4. **Viewer** - Somente leitura, sem poder fazer ações de criação/edição/exclusão
 
 ---

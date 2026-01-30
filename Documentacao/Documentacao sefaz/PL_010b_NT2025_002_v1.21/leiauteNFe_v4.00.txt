@@ -796,7 +796,7 @@ Este campo será obrigatoriamente preenchido com:
 									</xs:element>
 									<xs:element name="IM" minOccurs="0">
 										<xs:annotation>
-											<xs:documentation>Inscrição Municipal do tomador do serviço</xs:documentation>
+											<xs:documentation>Inscrição Municipal do Tomadores do serviço</xs:documentation>
 										</xs:annotation>
 										<xs:simpleType>
 											<xs:restriction base="TString">

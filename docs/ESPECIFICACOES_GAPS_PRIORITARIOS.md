@@ -634,7 +634,7 @@ def executar_backup_manual():
 ## GAP 5: IMPORTAÇÃO EM LOTE
 
 ### Objetivo
-Permitir importação de produtos e destinatários via CSV/Excel com validação.
+Permitir importação de produtos e Destinatários/Tomadores via CSV/Excel com validação.
 
 ### Fluxo de Importação
 

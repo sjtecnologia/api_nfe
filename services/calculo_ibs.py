@@ -220,7 +220,7 @@ class CalculadoraIBS:
         
         TODO: Implementar deduções quando regulamentação definir:
         - Descontos incondicionais
-        - Materiais fornecidos pelo tomador
+        - Materiais fornecidos pelo Tomadores
         - Subempreitadas (depende do caso)
         """
         # Por enquanto, base = valor do serviço (sem deduções)

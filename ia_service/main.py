@@ -625,58 +625,40 @@ Item {i}:
   - Valor Total: R$ {item.get('valor_total', 0)}
 """
         
-        prompt = f"""Você é um especialista fiscal brasileiro em NFe 4.0. 
-Analise os dados abaixo e identifique ERROS que causariam rejeição na SEFAZ.
+        prompt = f"""Você é um validador fiscal de NFe. Analise os dados e identifique APENAS erros GRAVES.
 
-=== DADOS DA NFE ===
-AMBIENTE: {req.ambiente}
-TIPO OPERAÇÃO: {'Saída' if req.tipo_operacao == '1' else 'Entrada'}
-NATUREZA: {req.natureza_operacao}
+IMPORTANTE - O QUE NÃO É ERRO:
+- CSOSN 102 com CRT 1 (Simples Nacional) - ESTÁ CORRETO
+- CSOSN 101, 102, 103, 201, 202, 203, 300, 400, 500, 900 com CRT 1 - TODOS VÁLIDOS
+- IE do emitente cadastrada - NÃO questionar validade
+- IE do destinatário vazia para pessoa física - OK
+- CFOP 5101, 5102, 5405 para vendas SP→SP - VÁLIDOS
+- NCM com 8 dígitos numéricos - VÁLIDO
 
-=== EMITENTE ===
-CNPJ: {req.emitente_cnpj}
-Razão Social: {req.emitente_razao_social}
-UF: {req.emitente_uf}
-IE: {req.emitente_ie}
-CRT: {req.emitente_crt} ({'Simples Nacional' if req.emitente_crt == '1' else 'Lucro Presumido/Real' if req.emitente_crt == '3' else 'SN Sublimite'})
+SÓ APONTE ERRO SE:
+- NCM estiver vazio ou com menos de 8 dígitos
+- CFOP começar com 5 mas UFs forem diferentes
+- CFOP começar com 6 mas UFs forem iguais
+- Valor total for ZERO ou negativo
+- CNPJ/CPF estiver vazio
 
-=== DESTINATÁRIO ===
-CPF/CNPJ: {req.destinatario_cpf_cnpj}
-Nome: {req.destinatario_nome}
-UF: {req.destinatario_uf}
-IE: {req.destinatario_ie or 'Não informada'}
+DADOS:
+- Ambiente: {req.ambiente}
+- Emitente: {req.emitente_cnpj} | CRT: {req.emitente_crt} | UF: {req.emitente_uf} | IE: {req.emitente_ie or 'cadastrada'}
+- Destinatário: {req.destinatario_cpf_cnpj} | UF: {req.destinatario_uf}
+- Itens:{itens_resumo}
+- Valor Total: R$ {req.valor_total_nfe}
 
-=== ITENS ==={itens_resumo}
+Se TUDO estiver OK, retorne validacao_ok=true com score 95-100.
 
-=== TOTAIS ===
-Valor Produtos: R$ {req.valor_produtos}
-Valor Total NFe: R$ {req.valor_total_nfe}
-
-=== PAGAMENTO ===
-Forma: {req.forma_pagamento}
-Valor: R$ {req.valor_pagamento}
-
-=== ANÁLISE SOLICITADA ===
-1. Verifique se CFOP é compatível com operação (entrada/saída, UF origem/destino)
-2. Verifique se CST/CSOSN é compatível com CRT do emitente
-3. Verifique se NCM é válido (8 dígitos)
-4. Verifique se valores estão coerentes
-5. Verifique se IE é obrigatória e está no formato correto
-6. Verifique compatibilidade PIS/COFINS para o regime
-7. Identifique qualquer outro erro potencial
-
-RESPONDA APENAS JSON (sem markdown):
+RESPONDA APENAS JSON:
 {{
   "validacao_ok": true/false,
-  "erros_criticos": [
-    {{"campo": "nome_campo", "erro": "descrição do erro", "solucao": "como corrigir"}}
-  ],
-  "alertas": [
-    {{"campo": "nome_campo", "alerta": "descrição do alerta", "sugestao": "recomendação"}}
-  ],
-  "sugestoes_melhoria": ["sugestões gerais"],
-  "score_confianca": 0-100,
-  "resumo": "resumo em uma frase"
+  "erros_criticos": [{{"campo": "x", "erro": "y", "solucao": "z"}}],
+  "alertas": [],
+  "sugestoes_melhoria": [],
+  "score_confianca": 95,
+  "resumo": "NFe válida para emissão"
 }}"""
 
         llm_url = "https://models.inference.ai.azure.com/chat/completions"

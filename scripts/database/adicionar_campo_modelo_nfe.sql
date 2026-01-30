@@ -18,7 +18,7 @@ UPDATE nfe_emitidas
 SET tipo_nfe = '1' 
 WHERE tipo_nfe = 'NFCE';
 
--- Atualizar destinatários vazios de NFCe para "Consumidor Final"
+-- Atualizar Destinatários/Tomadores vazios de NFCe para "Consumidor Final"
 UPDATE nfe_emitidas 
 SET destinatario_razao_social = 'Consumidor Final'
 WHERE modelo = '65' 

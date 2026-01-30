@@ -594,3 +594,71 @@ def validar_nfe_com_ia():
             'score_confianca': 0,
             'resumo': f'Erro: {str(e)}'
         })
+
+
+@llm_api_bp.route('/validar-nfse', methods=['POST'])
+def validar_nfse_com_ia():
+    """
+    Endpoint para validar dados da NFS-e usando IA antes da emissão.
+    Chama o serviço ia_service FastAPI.
+    """
+    import requests
+    import os
+    
+    try:
+        dados = request.get_json()
+        
+        if not dados:
+            return jsonify({
+                'sucesso': False,
+                'validacao_ok': False,
+                'erros_criticos': [{'campo': 'dados', 'erro': 'Nenhum dado recebido', 'solucao': 'Preencha o formulário'}],
+                'alertas': [],
+                'sugestoes_melhoria': [],
+                'score_confianca': 0,
+                'resumo': 'Dados não recebidos'
+            })
+        
+        # URL do serviço de IA (FastAPI rodando na porta 8081)
+        ia_service_url = os.getenv('IA_SERVICE_URL', 'http://localhost:8081')
+        
+        # Chamar serviço de IA
+        response = requests.post(
+            f'{ia_service_url}/valida/nfse-pre-emissao',
+            json=dados,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({
+                'sucesso': False,
+                'validacao_ok': True,
+                'erros_criticos': [],
+                'alertas': [{'alerta': f'Serviço IA retornou código {response.status_code}'}],
+                'sugestoes_melhoria': [],
+                'score_confianca': 0,
+                'resumo': 'Serviço IA indisponível'
+            })
+            
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            'sucesso': False,
+            'validacao_ok': True,
+            'erros_criticos': [],
+            'alertas': [{'alerta': 'Serviço de IA não está rodando. Verifique se o ia_service está ativo.'}],
+            'sugestoes_melhoria': [],
+            'score_confianca': 0,
+            'resumo': 'Serviço IA offline'
+        })
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'validacao_ok': True,
+            'erros_criticos': [],
+            'alertas': [{'alerta': f'Erro: {str(e)}'}],
+            'sugestoes_melhoria': [],
+            'score_confianca': 0,
+            'resumo': f'Erro: {str(e)}'
+        })
