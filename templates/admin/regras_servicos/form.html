@@ -180,7 +180,8 @@ $(document).ready(function() {
         $.ajax({
             url: '/admin/nfse/api/servicos-lc116',
             method: 'GET',
-            success: function(servicos) {
+            success: function(data) {
+                const servicos = data.servicos || [];
                 console.log('✅ Carregados', servicos.length, 'serviços LC116');
                 
                 const $select = $('#codigo_servico_lc116');
@@ -239,7 +240,8 @@ $(document).ready(function() {
         $.ajax({
             url: '/admin/nfse/api/codigos-nbs/' + codigoServico,
             method: 'GET',
-            success: function(codigos) {
+            success: function(data) {
+                const codigos = data.codigos_nbs || [];
                 console.log('✅ Carregados', codigos.length, 'códigos NBS para serviço', codigoServico);
                 
                 const valorAtual = $select.find('option:selected').val();
@@ -251,7 +253,7 @@ $(document).ready(function() {
                     $select.append('<option value="101010000">101.01.00.00 - Padrão (nenhum específico cadastrado)</option>');
                 } else {
                     codigos.forEach(function(nbs) {
-                        const texto = nbs.codigo_formatado + ' - ' + nbs.descricao;
+                        const texto = nbs.codigo + ' - ' + nbs.descricao;
                         const option = $('<option></option>')
                             .attr('value', nbs.codigo)
                             .attr('data-descricao', nbs.descricao)
