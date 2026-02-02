@@ -1,0 +1,88 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:nfse="http://nfse.abrasf.org.br">
+	<soapenv:Header/>
+	<soapenv:Body>
+		<nfse:ConsultarLoteRpsRequest>
+			<nfseCabecMsg>
+				&lt;p:cabecalho versao=&quot;2.00&quot; xmlns:ds=&quot;http://www.w3.org/2000/09/xmldsig#&quot; xmlns:p=&quot;http://www.giss.com.br/cabecalho-v2_04.xsd&quot; xmlns:p1=&quot;http://www.giss.com.br/tipos-v2_04.xsd&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&gt;
+					&lt;p:versaoDados&gt;2.00&lt;/p:versaoDados&gt;
+				&lt;/p:cabecalho&gt;
+			</nfseCabecMsg>
+			<nfseDadosMsg>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;con:ConsultarLoteRpsEnvio xmlns:con=&quot;http://www.giss.com.br/consultar-lote-rps-envio-v2_04.xsd&quot; xmlns:tip=&quot;http://www.giss.com.br/tipos-v2_04.xsd&quot;&gt;
+	&lt;con:Prestador&gt;
+		&lt;tip:CpfCnpj&gt;
+			&lt;tip:Cnpj&gt;11042997000169&lt;/tip:Cnpj&gt;
+		&lt;/tip:CpfCnpj&gt;
+		&lt;!--Optional:--&gt;
+		&lt;tip:InscricaoMunicipal&gt;77761&lt;/tip:InscricaoMunicipal&gt;
+	&lt;/con:Prestador&gt;
+	&lt;con:Protocolo&gt;3010935&lt;/con:Protocolo&gt;
+	&lt;Signature xmlns=&quot;http://www.w3.org/2000/09/xmldsig#&quot;&gt;
+		&lt;SignedInfo&gt;
+			&lt;CanonicalizationMethod Algorithm=&quot;http://www.w3.org/TR/2001/REC-xml-c14n-20010315&quot;/&gt;
+			&lt;SignatureMethod Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#rsa-sha1&quot;/&gt;
+			&lt;Reference URI=&quot;&quot;&gt;
+				&lt;Transforms&gt;
+					&lt;Transform Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#enveloped-signature&quot;/&gt;
+				&lt;/Transforms&gt;
+				&lt;DigestMethod Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#sha1&quot;/&gt;
+				&lt;DigestValue&gt;xMaDrYHMTyPlbY32macnyhVUD78=&lt;/DigestValue&gt;
+			&lt;/Reference&gt;
+		&lt;/SignedInfo&gt;
+		&lt;SignatureValue&gt;zVbjtCLUqq1cy0xsQtSo1Gqhnccf7M9XAO2+bjpXYtN5rZ7/PBJuqpJZLvbMmxka
+v2laKoB+Ss6Ur4+U3kQfT60LJSmP4v1weiGI9FsS3crGZm37OpZ+APgK9oIA+hJ/
+LrMmwO7jVhoEYpUSq/WyjMQPK7ZmAau1YwkxFroP3W0NkFZDJfHBc87rfFyoG5AU
+jI9u1pQjXxjpsSxpjpBeKgsM7DJGX0Evq0y4RcIgKZzOZHTxQxB0PZYIRwU0kYpE
+K1Zh87arTKBl6G5fnoYbMo291vcG+sRLifmJY/uksKH/rnv1J/C4r3H9Kt6aHPAp
+e3uQsMWqq8VgMvGTCtOtJw==&lt;/SignatureValue&gt;
+		&lt;KeyInfo&gt;
+			&lt;X509Data&gt;
+				&lt;X509Certificate&gt;MIIIOzCCBiOgAwIBAgIISNV1bHXeAhswDQYJKoZIhvcNAQELBQAwdTELMAkGA1UE
+BhMCQlIxEzARBgNVBAoTCklDUC1CcmFzaWwxNjA0BgNVBAsTLVNlY3JldGFyaWEg
+ZGEgUmVjZWl0YSBGZWRlcmFsIGRvIEJyYXNpbCAtIFJGQjEZMBcGA1UEAxMQQUMg
+T05MSU5FIFJGQiB2NTAeFw0yNDA5MDQxNDQ3MDJaFw0yNTA5MDQxNDQ3MDJaMIIB
+PjELMAkGA1UEBhMCQlIxCzAJBgNVBAgTAlNQMRIwEAYDVQQHEwlTQU8gUEFVTE8x
+EzARBgNVBAoTCklDUC1CcmFzaWwxNjA0BgNVBAsTLVNlY3JldGFyaWEgZGEgUmVj
+ZWl0YSBGZWRlcmFsIGRvIEJyYXg
+VKBShlBodHRwOi8vaWNwLWJyYXNpbDIudmFsaWRjZXJ0aWZpY2Fkb3JhLmNvbS5i
+ci9hYy1vbmxpbmVyZmIvbGNyLWFjLW9ubGluZXJmYnY1LmNybDAOBgNVHQ8BAf8E
+BAMCBeAwHQYDVR0lBBYwFAYIKwYBBQUHAwIGCCsGAQUFBwMEMIHEBgNVHREEgbww
+gbmBJmFkbWluaXN0cmF0aXZvQGNvbnN1bHRvcmlhdmlzYW8uY29tLmJyoDgGBWBM
+AQMEoC8ELTE0MTAxOTU4MDMwMDU4MDk4MzgwMDAwMDAwMDAwMDAwMDAwMDAwMDAw
+MDAwMKAhBgVgTAEDAqAYBBZMVUlaIEFMQkVSVE8gUk9EUklHVUVToBkGBWBMAQMD
+oBAEDjExMDQyOTk3MDAwMTY5oBcGBWBMAQMHoA4EDDAwMDAwMDAwMDAwMDANBgkq
+hkiG9w0BAQsFAAOCAgEAeUjEdSZmaFSaIqvCPWUwlrAnXqBGEID7w+GjCWrQv5Em
+1pcD7cKcKWr1IKBhG4jNA9Ml6rz6P0nixLhDxHW8yAm++QUUzUATNOwZ5Zv98eXt
+NgnpHVKOGDG3RcwirvIpSu6DBBfcXEeI+c9wA7RMykuWrEaeQ0/S0+Pn4hn0VXtN
+xkZyhqctQdKC/e4a9zJ8UCKddfG6ifP8vfx/pvr0NFSdJkvfAD83cscKTIOPY1Cb
+46fMjVeU6TdugfO7NTQod8mebJ+AHm/7e74uvLOA/H0cUuXbrVvjrioPvEdBuUp+
+HkIfDuTlMQW7P1IMOxY+g8K1RHW7f5Tg6/aAY2Va+GoBvD+sdD/5rQjadYwwt9RG
+7hH+DzJia/J7KiQHxN655mQ8J/SYpwJXlXy8jKloPDE56WBpAkgHCREvt0LxJdk2
+YvaUNAKin1TgBVXNwoNJ84DlGGjW6t93zfcsADHg1MnpryZid1DZ2c9gL6YQ6Npb
+g9S/vXRZdf9t8hr1Tx0YWvI0bSzCiyZPyzG0G8FOSHX3OOQbK96V2cMCgJ6MwXKw
+NMmRyI2tyy8brWCvj4VSX7LlRBx9JT4dD/HhQhPxpxCV3HfPSAjBhmznOf3QWaWG
+G1nQm8S7Yfm2kT6erje0muB3YWvOWZBiPy3uCq0i72SeHzOkmt4uLgKGJF6wxSk=
+&lt;/X509Certificate&gt;
+			&lt;/X509Data&gt;
+			&lt;KeyValue&gt;
+&lt;RSAKeyValue&gt;
+&lt;Modulus&gt;
+5i5RSmpIlVGe38SePxgbvDNfBvlj48/VQ4sBxt2BtrIRhDOa4zrhY/pD7bVCTTSG
+guRVeOf0Uvy2Mh5iBBF+WOPee9Bbgo9Csg0iyeuaUg2iDKFExVXDAlWoAt
+UeN3I8OuWb1qlDc+cuDye13j4hr3W4QIJ2J/22QwULoh17J3U/pncP4rGbgWtDAT
+PKOjgsim340xR8CPIxfU8MHcjd5bv/J/w2mFMUdDo77hTYFVdVia+Fnm5u2pFOHu
+gPc+UMXXAbI8BlXrYQY2QTF1yuba3QYQw4a76NXsSjsgHyr6k2FT867zCAxJYusQ
+AvAk54ENic/z8iGxIP0qjw==
+&lt;/Modulus&gt;
+&lt;Exponent&gt;
+AQAB
+&lt;/Exponent&gt;
+&lt;/RSAKeyValue&gt;
+&lt;/KeyValue&gt;
+		&lt;/KeyInfo&gt;
+	&lt;/Signature&gt;
+&lt;/con:ConsultarLoteRpsEnvio&gt;</nfseDadosMsg>
+		</nfse:ConsultarLoteRpsRequest>
+	</soapenv:Body>
+</soapenv:Envelope>
+

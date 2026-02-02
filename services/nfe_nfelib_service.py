@@ -209,6 +209,27 @@ def generate_nfe_xml_nfelib(
     
     print(f"📋 [DEBUG] Natureza Operação: '{nat_op}'")
     
+    # Determinar idDest baseado no CFOP ou UF
+    # 1=Operação interna, 2=Operação interestadual, 3=Operação com exterior
+    cfop_primeiro_item = (items[0].get('cfop') or '') if items else ''
+    uf_emitente = emitente_data.get('uf', 'SP')
+    uf_destinatario = destinatario_data.get('uf', 'SP')
+    
+    if cfop_primeiro_item.startswith('6') or cfop_primeiro_item.startswith('7'):
+        # CFOP 6xxx ou 7xxx = Operação interestadual
+        id_dest = "2"
+    elif uf_emitente != uf_destinatario:
+        # UFs diferentes = Operação interestadual
+        id_dest = "2"
+    elif cfop_primeiro_item.startswith('3'):
+        # CFOP 3xxx = Operação com exterior
+        id_dest = "3"
+    else:
+        # CFOP 5xxx e mesma UF = Operação interna
+        id_dest = "1"
+    
+    print(f"📋 [DEBUG] idDest: {id_dest} (CFOP: {cfop_primeiro_item}, UF Emit: {uf_emitente}, UF Dest: {uf_destinatario})")
+    
     # Extrair cDV (dígito verificador) da chave de acesso
     cdv = chave_acesso[-1]  # Último dígito da chave
     
@@ -221,7 +242,7 @@ def generate_nfe_xml_nfelib(
         nNF=str(numero_nfe),
         dhEmi=data_emissao.isoformat(),
         tpNF=str(form_data.get('tpNF', '1')),
-        idDest="1",
+        idDest=id_dest,  # Agora dinâmico baseado no CFOP e UF
         cMunFG=str(emitente_data.get('codigo_municipio', '3550308')),
         tpImp="1",
         tpEmis="1",
@@ -409,62 +430,152 @@ def generate_nfe_xml_nfelib(
         
         v_prod_total += Decimal(str(item.get('valor_total', '0.00')))
         
-        # Determinar CSOSN baseado no CFOP
+        # VERIFICAR CRT DO EMITENTE para usar CST ou CSOSN
+        crt_int = int(crt_emitente) if crt_emitente.isdigit() else 1
+        usar_csosn = crt_int in [1, 2]  # 1=Simples Nacional, 2=SN Sublimite
+        
+        print(f"  [NFELIB] Item {idx} - CRT: {crt_int}, Usar CSOSN: {usar_csosn}")
+        
+        # Buscar CST ou CSOSN do item
+        cst_item = item.get('cst_icms') or item.get('cst')
+        csosn_item = item.get('csosn_icms') or item.get('csosn')
         cfop = str(item.get('cfop', '5102'))
-        csosn_item = item.get('csosn', None)
         
-        # Se não fornecido, determinar automaticamente
-        if not csosn_item:
-            # CFOP 5102/6102 = Venda de mercadoria (CSOSN 102 - SN sem crédito)
-            # CFOP 5405/6405 = Venda de bem do ativo imobilizado (CSOSN 102 - SN sem destaque ICMS)
-            if cfop in ('5102', '6102', '5405', '6405'):
-                csosn_item = '102'
-            # CFOP 5103/6103 = Venda com ICMS ST (CSOSN 500)
-            elif cfop in ('5103', '6103'):
-                csosn_item = '500'
-            # CFOP 5403/6403 = Retorno de remessa ST (CSOSN 500)
-            elif cfop in ('5403', '6403'):
-                csosn_item = '500'
-            else:
-                csosn_item = '102'  # Padrão: Simples Nacional sem permissão de crédito
-        
-        print(f"  [NFELIB] Item {idx} - CFOP {cfop} → CSOSN {csosn_item}")
-        
-        # Impostos - ICMS baseado no CSOSN
-        if csosn_item == '500':
-            # CSOSN 500 - ICMS cobrado anteriormente por ST
-            icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
-                orig="0",
-                CSOSN="500",
-                vBCSTRet="0.00",
-                pST="0.00",
-                vICMSSubstituto="0.00",
-                vICMSSTRet="0.00"
-            )
-            icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
-        elif csosn_item == '103':
-            # CSOSN 103 - Isenção do ICMS para faixa de receita bruta
-            icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
-                orig="0",
-                CSOSN="103"
-            )
-            icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
+        # DECISÃO: CST ou CSOSN baseado no CRT
+        if usar_csosn:
+            # SIMPLES NACIONAL - usar CSOSN
+            if not csosn_item:
+                # Determinar CSOSN automaticamente baseado no CFOP
+                if cfop in ('5102', '6102', '5405', '6405'):
+                    csosn_item = '102'  # SN sem crédito
+                elif cfop in ('5103', '6103', '5403', '6403'):
+                    csosn_item = '500'  # ICMS ST
+                else:
+                    csosn_item = '102'  # Padrão
+            
+            print(f"  [NFELIB] Item {idx} - CFOP {cfop} → CSOSN {csosn_item}")
+            
+            # Criar ICMS com CSOSN
+            if csosn_item == '500':
+                icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
+                    orig="0",
+                    CSOSN="500",
+                    vBCSTRet="0.00",
+                    pST="0.00",
+                    vICMSSubstituto="0.00",
+                    vICMSSTRet="0.00"
+                )
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
+            elif csosn_item == '103':
+                icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
+                    orig="0",
+                    CSOSN="103"
+                )
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
+            else:  # 102 ou outros
+                icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
+                    orig="0",
+                    CSOSN="102"
+                )
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
+            
+            # PIS/COFINS não tributado para SN
+            pis_nt = Nfe.InfNfe.Det.Imposto.Pis.Pisnt(CST="07")
+            pis = Nfe.InfNfe.Det.Imposto.Pis(PISNT=pis_nt)
+            cofins_nt = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsnt(CST="07")
+            cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSNT=cofins_nt)
+            
         else:
-            # CSOSN 102 - Tributada pelo Simples Nacional sem permissão de crédito
-            # Usado para: 5102, 5405 (venda ativo), e outros CFOPs sem destaque ICMS
-            icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
-                orig="0",
-                CSOSN="102"
-            )
-            icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
+            # REGIME NORMAL - usar CST
+            if not cst_item:
+                cst_item = '20'  # CST 20 = Redução de BC (padrão seguro)
+            
+            print(f"  [NFELIB] Item {idx} - CFOP {cfop} → CST {cst_item}")
+            
+            # Buscar dados tributários do item
+            origem = item.get('origem', '0')
+            aliquota_icms = Decimal(str(item.get('aliquota_icms', '7')))
+            reducao_bc = Decimal(str(item.get('reducao_base_icms', '0')))
+            bc_icms = Decimal(str(item.get('bc_icms', valor_total)))
+            valor_icms = Decimal(str(item.get('valor_icms', '0')))
+            modalidade_bc = item.get('modalidade_bc_icms', '3')
+            
+            # Criar ICMS com CST apropriado
+            if cst_item == '00':
+                # Tributada integralmente
+                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms00(
+                    orig=origem,
+                    CST="00",
+                    modBC=modalidade_bc,
+                    vBC=f"{bc_icms:.2f}",
+                    pICMS=f"{aliquota_icms:.2f}",
+                    vICMS=f"{valor_icms:.2f}"
+                )
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS00=icms_obj)
+            elif cst_item == '20':
+                # Redução de base de cálculo
+                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms20(
+                    orig=origem,
+                    CST="20",
+                    modBC=modalidade_bc,
+                    pRedBC=f"{reducao_bc:.2f}",
+                    vBC=f"{bc_icms:.2f}",
+                    pICMS=f"{aliquota_icms:.2f}",
+                    vICMS=f"{valor_icms:.2f}"
+                )
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS20=icms_obj)
+            elif cst_item in ['40', '41', '50']:
+                # Isenta, não tributada ou suspensão
+                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms40(
+                    orig=origem,
+                    CST=cst_item
+                )
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS40=icms_obj)
+            else:
+                # Fallback: usar CST 20
+                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms20(
+                    orig=origem,
+                    CST="20",
+                    modBC=modalidade_bc,
+                    pRedBC=f"{reducao_bc:.2f}",
+                    vBC=f"{bc_icms:.2f}",
+                    pICMS=f"{aliquota_icms:.2f}",
+                    vICMS=f"{valor_icms:.2f}"
+                )
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS20=icms_obj)
+            
+            # PIS/COFINS para regime normal
+            cst_pis = item.get('cst_pis', '01')
+            cst_cofins = item.get('cst_cofins', '01')
+            aliq_pis = Decimal(str(item.get('aliquota_pis', '1.65')))
+            aliq_cofins = Decimal(str(item.get('aliquota_cofins', '7.6')))
+            
+            # PIS
+            if cst_pis in ['01', '02']:
+                pis_aliq = Nfe.InfNfe.Det.Imposto.Pis.Pisaliq(
+                    CST=cst_pis,
+                    vBC=f"{valor_total:.2f}",
+                    pPIS=f"{aliq_pis:.2f}",
+                    vPIS=f"{(valor_total * aliq_pis / 100):.2f}"
+                )
+                pis = Nfe.InfNfe.Det.Imposto.Pis(PISALIQ=pis_aliq)
+            else:
+                pis_nt = Nfe.InfNfe.Det.Imposto.Pis.Pisnt(CST=cst_pis)
+                pis = Nfe.InfNfe.Det.Imposto.Pis(PISNT=pis_nt)
+            
+            # COFINS
+            if cst_cofins in ['01', '02']:
+                cofins_aliq = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsaliq(
+                    CST=cst_cofins,
+                    vBC=f"{valor_total:.2f}",
+                    pCOFINS=f"{aliq_cofins:.2f}",
+                    vCOFINS=f"{(valor_total * aliq_cofins / 100):.2f}"
+                )
+                cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSALIQ=cofins_aliq)
+            else:
+                cofins_nt = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsnt(CST=cst_cofins)
+                cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSNT=cofins_nt)
         
-        # PIS (não tributado para Simples Nacional)
-        pis_nt = Nfe.InfNfe.Det.Imposto.Pis.Pisnt(CST="07")
-        pis = Nfe.InfNfe.Det.Imposto.Pis(PISNT=pis_nt)
-        
-        # COFINS (não tributado para Simples Nacional)
-        cofins_nt = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsnt(CST="07")
-        cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSNT=cofins_nt)
         
         # vTotTrib - Valor aproximado dos tributos (Lei da Transparência)
         # Para Simples Nacional geralmente é 0.00

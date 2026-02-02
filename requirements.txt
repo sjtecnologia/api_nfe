@@ -45,6 +45,11 @@ reportlab>=3.6.9
 # PyNFe para geração de DANFE
 pynfe>=0.4.1
 
+# SignXML para assinatura digital XML
+# Version pinning: v4.2.0 é necessário devido ao monkeypatch em nfse_service.py
+# Não atualizar sem revisar o método assinar_xml() e a função check_deprecated_methods()
+signxml==4.2.0
+
 # Importação em lote de produtos (Fase 3)
 pandas>=2.2.0
 openpyxl>=3.1.2

@@ -123,9 +123,19 @@
                                             Regime Tributário
                                         </label>
                                         <select class="form-control" id="regime_tributario_id" name="regime_tributario_id">
-                                            <option value="1" {% if not regra or regra.regime_tributario_id == 1 %}selected{% endif %}>Simples Nacional</option>
-                                            <option value="2" {% if regra and regra.regime_tributario_id == 2 %}selected{% endif %}>Lucro Presumido</option>
-                                            <option value="3" {% if regra and regra.regime_tributario_id == 3 %}selected{% endif %}>Lucro Real</option>
+                                            {% if regimes %}
+                                                {% for regime in regimes %}
+                                                <option value="{{ regime.regime_tributario_id }}" 
+                                                        {% if regra and regra.regime_tributario_id == regime.regime_tributario_id %}selected
+                                                        {% elif not regra and loop.first %}selected{% endif %}>
+                                                    {{ regime.nome }}
+                                                </option>
+                                                {% endfor %}
+                                            {% else %}
+                                                <option value="1" selected>Simples Nacional</option>
+                                                <option value="2">Lucro Presumido</option>
+                                                <option value="3">Lucro Real</option>
+                                            {% endif %}
                                         </select>
                                     </div>
                                 </div>

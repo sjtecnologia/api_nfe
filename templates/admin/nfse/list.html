@@ -96,10 +96,12 @@
                             <td>{{ nfse.tomador_razao_social or nfse.tomador_nome or '-' }}</td>
                             <td>R$ {{ "%.2f"|format(nfse.valor_servicos or 0) }}</td>
                             <td>
-                                {% if nfse.status == '1' %}
+                                {% if nfse.status == '0' %}
+                                    <span class="badge bg-secondary">Pendente</span>
+                                {% elif nfse.status == '1' %}
                                     <span class="badge bg-success">Autorizada</span>
                                 {% elif nfse.status == '2' %}
-                                    <span class="badge bg-warning">Aguardando</span>
+                                    <span class="badge bg-warning">Aguardando Processamento</span>
                                 {% elif nfse.status == '3' %}
                                     <span class="badge bg-danger">Cancelada</span>
                                 {% elif nfse.status == '4' %}

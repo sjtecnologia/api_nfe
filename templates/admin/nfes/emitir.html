@@ -1003,13 +1003,56 @@ function adicionarItem() {
             
             <!-- Impostos ICMS -->
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>Alíquota ICMS (%)</label>
                         <input type="number" step="0.01" name="aliquota_icms_${itemCounter}" 
                                class="form-control" value="0.00" min="0" max="50" onchange="calcularTotal(${itemCounter})">
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Redução BC ICMS (%)</label>
+                        <input type="number" step="0.01" name="reducao_base_icms_${itemCounter}" 
+                               class="form-control" value="0.00" min="0" max="100" onchange="calcularTotal(${itemCounter})" 
+                               title="Percentual de redução da base de cálculo do ICMS">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Modalidade BC</label>
+                        <select name="modalidade_bc_icms_${itemCounter}" class="form-control" onchange="atualizarItemJSON(${itemCounter})">
+                            <option value="">Não aplicável</option>
+                            <option value="0">0 - Margem Valor Agregado (%)</option>
+                            <option value="1">1 - Pauta (Valor)</option>
+                            <option value="2">2 - Preço Tabelado Máx. (valor)</option>
+                            <option value="3">3 - Valor da operação</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Motivo Desoneracao</label>
+                        <select name="motivo_desoneracao_icms_${itemCounter}" class="form-control" onchange="atualizarItemJSON(${itemCounter})">
+                            <option value="">Não aplicável</option>
+                            <option value="1">1 - Táxi</option>
+                            <option value="3">3 - Produtor Agropecuário</option>
+                            <option value="4">4 - Frotista/Locadora</option>
+                            <option value="5">5 - Diplomático/Consular</option>
+                            <option value="6">6 - Utilitários Amazônia Ocidental/Livre Comércio</option>
+                            <option value="7">7 - SUFRAMA</option>
+                            <option value="8">8 - Venda a órgão Público</option>
+                            <option value="9">9 - Outros</option>
+                            <option value="10">10 - Deficiente Condutor</option>
+                            <option value="11">11 - Deficiente não Condutor</option>
+                            <option value="16">16 - Olimpíadas Rio 2016</option>
+                            <option value="90">90 - Solicitado pelo Fisco</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
                 <div class="col-md-4">
                     <div class="form-group">
                         <label>Valor Base Cálculo ICMS</label>
@@ -1436,6 +1479,27 @@ async function aplicarRegraTributaria(itemId, produtoId) {
                 aliquotaIcmsInput.value = result.regra.aliquota_icms;
             }
             
+            // ICMS - Aplicar redução de base de cálculo
+            const reducaoBaseIcmsInput = document.querySelector(`input[name="reducao_base_icms_${itemId}"]`);
+            if (result.regra.reducao_base_icms && reducaoBaseIcmsInput) {
+                console.log('Aplicando redução BC ICMS:', result.regra.reducao_base_icms);
+                reducaoBaseIcmsInput.value = result.regra.reducao_base_icms;
+            }
+            
+            // ICMS - Aplicar modalidade BC
+            const modalidadeBcIcmsSelect = document.querySelector(`select[name="modalidade_bc_icms_${itemId}"]`);
+            if (result.regra.modalidade_bc_icms !== null && result.regra.modalidade_bc_icms !== undefined && modalidadeBcIcmsSelect) {
+                console.log('Aplicando modalidade BC ICMS:', result.regra.modalidade_bc_icms);
+                modalidadeBcIcmsSelect.value = result.regra.modalidade_bc_icms;
+            }
+            
+            // ICMS - Aplicar motivo desoneração
+            const motivoDesoneracaoSelect = document.querySelector(`select[name="motivo_desoneracao_icms_${itemId}"]`);
+            if (result.regra.motivo_desoneracao_icms && motivoDesoneracaoSelect) {
+                console.log('Aplicando motivo desoneração ICMS:', result.regra.motivo_desoneracao_icms);
+                motivoDesoneracaoSelect.value = result.regra.motivo_desoneracao_icms;
+            }
+            
             // PIS - Aplicar CST e alíquota
             if (result.regra.cst_pis && cstPisInput) {
                 console.log('Aplicando CST PIS:', result.regra.cst_pis);
@@ -1510,7 +1574,16 @@ function calcularTotal(itemId) {
     
     if (aliquotaIcms > 0) {
         // Há tributação - calcular base de cálculo e valor do ICMS
-        const bcIcms = total;
+        // Considerar redução de base de cálculo se informada
+        const reducaoBaseIcms = parseFloat(document.querySelector(`input[name="reducao_base_icms_${itemId}"]`)?.value) || 0;
+        
+        let bcIcms = total;
+        if (reducaoBaseIcms > 0) {
+            // Aplicar redução na base de cálculo
+            bcIcms = total * (1 - (reducaoBaseIcms / 100));
+            console.log(`[ICMS] Total: R$ ${total.toFixed(2)} | Redução: ${reducaoBaseIcms}% | BC: R$ ${bcIcms.toFixed(2)}`);
+        }
+        
         const valorIcms = bcIcms * (aliquotaIcms / 100);
         document.querySelector(`input[name="bc_icms_${itemId}"]`).value = bcIcms.toFixed(2);
         document.querySelector(`input[name="valor_icms_${itemId}"]`).value = valorIcms.toFixed(2);
@@ -1538,9 +1611,22 @@ function atualizarItemJSON(itemId) {
         ncm: document.querySelector(`select[name="ncm_${itemId}"]`)?.value || '',
         cfop: document.querySelector(`select[name="cfop_${itemId}"]`)?.value || '',
         origem: document.querySelector(`select[name="origem_${itemId}"]`)?.value || '',
+        // ICMS
         aliquota_icms: document.querySelector(`input[name="aliquota_icms_${itemId}"]`)?.value || '0.00',
+        reducao_base_icms: document.querySelector(`input[name="reducao_base_icms_${itemId}"]`)?.value || '0.00',
+        modalidade_bc_icms: document.querySelector(`select[name="modalidade_bc_icms_${itemId}"]`)?.value || '',
+        motivo_desoneracao_icms: document.querySelector(`select[name="motivo_desoneracao_icms_${itemId}"]`)?.value || '',
         bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`)?.value || '0.00',
-        valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00'
+        valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00',
+        // PIS
+        cst_pis: document.querySelector(`input[name="cst_pis_${itemId}"]`)?.value || '',
+        aliquota_pis: document.querySelector(`input[name="aliquota_pis_${itemId}"]`)?.value || '0.00',
+        // COFINS
+        cst_cofins: document.querySelector(`input[name="cst_cofins_${itemId}"]`)?.value || '',
+        aliquota_cofins: document.querySelector(`input[name="aliquota_cofins_${itemId}"]`)?.value || '0.00',
+        // IPI
+        cst_ipi: document.querySelector(`input[name="cst_ipi_${itemId}"]`)?.value || '',
+        aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00'
     };
     
     // ⭐ CORREÇÃO: Capturar SEMPRE os valores que estão na tela (editados pelo usuário)

@@ -899,72 +899,90 @@ function validarComIA() {
 function coletarDadosFormulario() {
     console.log('[IA NFSE] Coletando dados do formulário');
     
+    // Helper para pegar valor de campo com segurança
+    const getFieldValue = (id, defaultValue = '') => {
+        const elem = document.getElementById(id);
+        return elem ? elem.value : defaultValue;
+    };
+    
+    const getFloatValue = (id, defaultValue = 0) => {
+        const elem = document.getElementById(id);
+        if (!elem || !elem.value) return defaultValue;
+        return parseFloatBR(elem.value) || defaultValue;
+    };
+    
     // Validar campos obrigatórios
-    const codigoServico = document.getElementById('codigo_servico').value;
-    const discriminacao = document.getElementById('discriminacao').value;
-    const valorServicos = parseFloatBR(document.getElementById('valor_servicos').value);
+    const codigoServico = getFieldValue('codigo_servico');
+    const discriminacao = getFieldValue('discriminacao');
+    const valorServicos = getFloatValue('valor_servico'); // Corrigido: é valor_servico, não valor_servicos
     
     if (!codigoServico || !discriminacao || !valorServicos) {
-        console.log('[IA NFSE] Campos obrigatórios não preenchidos');
+        console.log('[IA NFSE] Campos obrigatórios não preenchidos', {
+            codigoServico, discriminacao, valorServicos
+        });
         return null;
     }
     
     // Coletar dados do prestador (emitente)
     const prestador = {
-        cnpj: '{{ emitente_data.cnpj }}',
-        razao_social: '{{ emitente_data.razao_social }}',
+        cnpj: '{{ emitente_data.cnpj if emitente_data else "" }}',
+        razao_social: '{{ emitente_data.razao_social if emitente_data else "" }}',
         inscricao_municipal: '{{ emitente_data.inscricao_municipal or "" }}',
-        uf: '{{ emitente_data.uf }}',
-        municipio: '{{ emitente_data.municipio }}'
+        uf: '{{ emitente_data.uf if emitente_data else "SP" }}',
+        municipio: '{{ emitente_data.municipio if emitente_data else "São José do Rio Preto" }}'
     };
     
     // Coletar dados do Tomador
-    const tomadorSelect = document.getElementById('tomador_select');
-    const tomadorOption = tomadorSelect.options[tomadorSelect.selectedIndex];
-    
     const tomador = {
-        cpf_cnpj: document.getElementById('tomador_cpf_cnpj').value || '',
-        razao_social: document.getElementById('tomador_razao_social').value || '',
-        uf: document.getElementById('tomador_uf').value || 'SP',
-        municipio: document.getElementById('tomador_municipio').value || ''
+        cpf_cnpj: getFieldValue('tomador_cpf_cnpj'),
+        nome_razao: getFieldValue('tomador_razao_social'),
+        uf: getFieldValue('tomador_uf', 'SP'),
+        municipio: getMunicipioNome()
     };
+    
+    // Helper para obter nome do município do tomador
+    function getMunicipioNome() {
+        const select = document.getElementById('tomador_select');
+        const option = select.options[select.selectedIndex];
+        return option && option.dataset.municipioNome ? option.dataset.municipioNome : 'N/A';
+    }
     
     // Coletar dados do serviço
     const servico = {
         codigo_servico: codigoServico,
-        codigo_nbs: document.getElementById('codigo_nbs').value || '',
+        codigo_nbs: getFieldValue('codigo_nbs'),
         discriminacao: discriminacao,
         valor_servicos: valorServicos,
-        valor_deducoes: parseFloatBR(document.getElementById('valor_deducoes').value) || 0,
-        aliquota_iss: parseFloatBR(document.getElementById('aliquota_iss').value) || 0,
-        valor_iss: parseFloatBR(document.getElementById('valor_iss').value) || 0,
-        base_calculo: parseFloatBR(document.getElementById('base_calculo').value) || 0,
-        valor_liquido: parseFloatBR(document.getElementById('valor_liquido').value) || 0
+        valor_deducoes: getFloatValue('valor_deducoes'),
+        aliquota_iss: getFloatValue('aliquota_iss'),
+        valor_iss: parseFloat(document.getElementById('valor_iss_display')?.value?.replace(/[^\d,]/g, '').replace(',', '.') || 0),
+        base_calculo: parseFloat(document.getElementById('base_calculo_display')?.value?.replace(/[^\d,]/g, '').replace(',', '.') || 0),
+        valor_liquido: parseFloat(document.getElementById('valor_liquido_display')?.textContent?.replace(/[^\d,]/g, '').replace(',', '.') || 0)
     };
     
     // Coletar dados da Reforma Tributária (IBS/CBS)
     const reformaTributaria = {
-        percentual_tributos_federais: parseFloatBR(document.getElementById('percentual_total_tributos_federais').value) || 0,
-        percentual_tributos_estaduais: parseFloatBR(document.getElementById('percentual_total_tributos_estaduais').value) || 0,
-        percentual_tributos_municipais: parseFloatBR(document.getElementById('percentual_total_tributos_municipais').value) || 0,
-        finalidade_nfse: document.getElementById('finalidade_nfse').value || '1',
-        indicador_consumidor_final: document.getElementById('indicador_consumidor_final').value || '1',
-        codigo_indicador_operacao: document.getElementById('codigo_indicador_operacao').value || '',
-        indicador_destinatario: document.getElementById('indicador_destinatario').value || '1',
-        cst_ibs_cbs: document.getElementById('cst_ibs_cbs').value || '',
-        codigo_classificacao_tributaria: document.getElementById('codigo_classificacao_tributaria').value || '',
-        percentual_redutor: parseFloatBR(document.getElementById('percentual_redutor').value) || 0
+        percentual_tributos_federais: getFloatValue('percentual_total_tributos_federais'),
+        percentual_tributos_estaduais: getFloatValue('percentual_total_tributos_estaduais'),
+        percentual_tributos_municipais: getFloatValue('percentual_total_tributos_municipais'),
+        finalidade_nfse: getFieldValue('finalidade_nfse', '0'),
+        indicador_consumidor_final: getFieldValue('indicador_consumidor_final', '0'),
+        codigo_indicador_operacao: getFieldValue('codigo_indicador_operacao', '000001'),
+        indicador_destinatario: getFieldValue('indicador_destinatario', '0'),
+        cst_ibs_cbs: getFieldValue('cst_ibs_cbs', '001'),
+        codigo_classificacao_tributaria: getFieldValue('codigo_classificacao_tributaria', '000001'),
+        percentual_redutor: getFloatValue('percentual_redutor')
     };
     
     // Montar objeto completo
     const dados = {
-        ambiente: 'homologacao',
+        ambiente: getFieldValue('ambiente', 'homologacao'),
         tipo_documento: 'nfse',
         prestador: prestador,
         tomador: tomador,
         servico: servico,
         reforma_tributaria: reformaTributaria,
-        informacoes_complementares: document.getElementById('informacoes_complementares').value || ''
+        informacoes_complementares: getFieldValue('informacoes_complementares')
     };
     
     console.log('[IA NFSE] Dados coletados:', dados);

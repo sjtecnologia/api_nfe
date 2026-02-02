@@ -22,6 +22,20 @@ from auth.permissions import get_accessible_client_ids
 nfse_bp = Blueprint('nfse', __name__, url_prefix='/admin/nfse')
 
 
+def br_to_float(valor_str):
+    """Converte valor monetário brasileiro (5.000,00) para float (5000.00)"""
+    if not valor_str:
+        return 0.0
+    if isinstance(valor_str, (int, float)):
+        return float(valor_str)
+    # Remove pontos de milhar e substitui vírgula por ponto
+    valor_limpo = str(valor_str).replace('.', '').replace(',', '.')
+    try:
+        return float(valor_limpo)
+    except ValueError:
+        return 0.0
+
+
 @nfse_bp.route('/')
 @login_required
 @viewer_or_higher_required()
@@ -194,8 +208,11 @@ def emitir():
         else:
             cliente_id = accessible_clients[0]
         
-        # Buscar dados do prestador
-        prestador_data = db.query(Cliente).filter(Cliente.cliente_id == cliente_id).first()
+        # Buscar dados do prestador com regime tributário
+        from sqlalchemy.orm import joinedload
+        prestador_data = db.query(Cliente).options(
+            joinedload(Cliente.regime_tributario)
+        ).filter(Cliente.cliente_id == cliente_id).first()
         
         if not prestador_data:
             flash("Dados do prestador não encontrados", "danger")
@@ -229,25 +246,25 @@ def emitir():
             'codigo_servico': request.form.get('codigo_servico', '17.01'),
             'codigo_cnae': request.form.get('codigo_cnae'),
             'discriminacao': request.form.get('discriminacao', ''),
-            'valor_servico': request.form.get('valor_servico', 0),
-            'valor_deducoes': request.form.get('valor_deducoes', 0),
-            'valor_pis': request.form.get('valor_pis', 0),
-            'valor_cofins': request.form.get('valor_cofins', 0),
-            'valor_inss': request.form.get('valor_inss', 0),
-            'valor_ir': request.form.get('valor_ir', 0),
-            'valor_csll': request.form.get('valor_csll', 0),
-            'outras_retencoes': request.form.get('outras_retencoes', 0),
-            'desconto_incondicionado': request.form.get('desconto_incondicionado', 0),
-            'desconto_condicionado': request.form.get('desconto_condicionado', 0),
-            'aliquota_iss': request.form.get('aliquota_iss', 0),
+            'valor_servico': br_to_float(request.form.get('valor_servico', 0)),
+            'valor_deducoes': br_to_float(request.form.get('valor_deducoes', 0)),
+            'valor_pis': br_to_float(request.form.get('valor_pis', 0)),
+            'valor_cofins': br_to_float(request.form.get('valor_cofins', 0)),
+            'valor_inss': br_to_float(request.form.get('valor_inss', 0)),
+            'valor_ir': br_to_float(request.form.get('valor_ir', 0)),
+            'valor_csll': br_to_float(request.form.get('valor_csll', 0)),
+            'outras_retencoes': br_to_float(request.form.get('outras_retencoes', 0)),
+            'desconto_incondicionado': br_to_float(request.form.get('desconto_incondicionado', 0)),
+            'desconto_condicionado': br_to_float(request.form.get('desconto_condicionado', 0)),
+            'aliquota_iss': br_to_float(request.form.get('aliquota_iss', 0)),
             'iss_retido': request.form.get('iss_retido') == 'on',
             'codigo_municipio_prestacao': request.form.get('codigo_municipio_prestacao', '3549805'),
             
             # Campos obrigatórios Reforma Tributária (LC 214/2025)
             'codigo_nbs': request.form.get('codigo_nbs', '101010000'),
-            'percentual_total_tributos_federais': float(request.form.get('percentual_total_tributos_federais', 0) or 0),
-            'percentual_total_tributos_estaduais': float(request.form.get('percentual_total_tributos_estaduais', 0) or 0),
-            'percentual_total_tributos_municipais': float(request.form.get('percentual_total_tributos_municipais', 5) or 5),
+            'percentual_total_tributos_federais': br_to_float(request.form.get('percentual_total_tributos_federais', 0)),
+            'percentual_total_tributos_estaduais': br_to_float(request.form.get('percentual_total_tributos_estaduais', 0)),
+            'percentual_total_tributos_municipais': br_to_float(request.form.get('percentual_total_tributos_municipais', 5)),
             'finalidade_nfse': request.form.get('finalidade_nfse', '0'),
             'indicador_consumidor_final': request.form.get('indicador_consumidor_final', '0'),
             'codigo_indicador_operacao': request.form.get('codigo_indicador_operacao', '000001'),
@@ -255,9 +272,11 @@ def emitir():
             'cst_ibs_cbs': request.form.get('cst_ibs_cbs', '001'),
             'codigo_classificacao_tributaria': request.form.get('codigo_classificacao_tributaria', '000001'),
             'codigo_localidade_incidencia': request.form.get('codigo_localidade_incidencia', '3549805'),
-            'percentual_redutor': float(request.form.get('percentual_redutor', 0) or 0),
+            'percentual_redutor': br_to_float(request.form.get('percentual_redutor', 0)),
             'regime_especial_tributacao': request.form.get('regime_especial_tributacao'),
-            'optante_simples_nacional': request.form.get('optante_simples_nacional') == 'on',
+            # CORREÇÃO: Buscar do regime tributário do cliente (CRT=1 = Simples Nacional)
+            # Carrega o relacionamento regime_tributario se ainda não estiver carregado
+            'optante_simples_nacional': prestador_data.regime_tributario.crt == 1 if prestador_data.regime_tributario else False,
             'incentivador_cultural': request.form.get('incentivador_cultural') == 'on',
             
             # Informações adicionais
@@ -289,7 +308,7 @@ def emitir():
         # Gerar XML do RPS
         xml_rps = service.gerar_xml_rps(nfse)
         
-        # Status inicial (antes de enviar)
+        # Status inicial
         status = '0'  # Pendente
         protocolo = None
         numero_nfse = None
@@ -297,7 +316,7 @@ def emitir():
         
         # Tentar enviar para o webservice GISS Online
         try:
-            print("[NFSE] Tentando enviar para GISS Online...")
+            print("[NFSE] Tentando enviar para GISS Online (Homologação RTC)...")
             sucesso, resposta = service.enviar_lote_rps(nfse, db_session=db)
             
             if sucesso:
@@ -351,9 +370,9 @@ def emitir():
             ) RETURNING id
         """)
         
-        # Calcular valores
-        valor_servicos = float(dados.get('valor_servico', 0) or 0)
-        aliquota = float(dados.get('aliquota_iss', 0) or 0)
+        # Calcular valores (já convertidos para float)
+        valor_servicos = dados.get('valor_servico', 0.0)
+        aliquota = dados.get('aliquota_iss', 0.0)
         valor_iss = valor_servicos * (aliquota / 100)
         valor_liquido = valor_servicos - valor_iss if dados.get('iss_retido') else valor_servicos
         

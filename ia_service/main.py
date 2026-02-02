@@ -632,15 +632,20 @@ IMPORTANTE - O QUE NÃO É ERRO:
 - CSOSN 101, 102, 103, 201, 202, 203, 300, 400, 500, 900 com CRT 1 - TODOS VÁLIDOS
 - IE do emitente cadastrada - NÃO questionar validade
 - IE do destinatário vazia para pessoa física - OK
-- CFOP 5101, 5102, 5405 para vendas SP→SP - VÁLIDOS
+- CFOP 5101, 5102, 5405 para vendas SP→SP (mesmo estado) - VÁLIDOS
+- CFOP 6101, 6102, 6108, 6405 para vendas entre estados diferentes - VÁLIDOS
 - NCM com 8 dígitos numéricos - VÁLIDO
 
 SÓ APONTE ERRO SE:
 - NCM estiver vazio ou com menos de 8 dígitos
-- CFOP começar com 5 mas UFs forem diferentes
-- CFOP começar com 6 mas UFs forem iguais
+- CFOP começar com 5 e UFs forem DIFERENTES (operação interna mas estados diferentes)
+- CFOP começar com 6 e UFs forem IGUAIS (operação interestadual mas estados iguais)
 - Valor total for ZERO ou negativo
 - CNPJ/CPF estiver vazio
+
+REGRAS CFOP VÁLIDAS:
+- CFOP 5xxx (5101, 5102, 5405, etc): Operações INTERNAS - UF emitente = UF destinatário
+- CFOP 6xxx (6101, 6102, 6108, 6405, etc): Operações INTERESTADUAIS - UF emitente ≠ UF destinatário
 
 DADOS:
 - Ambiente: {req.ambiente}
@@ -953,4 +958,185 @@ IMPORTANTE:
             "erros": [],
             "sugestoes": [],
             "explicacao": f"Erro ao validar: {str(e)}"
+        })
+
+
+# =====================================================================
+# VALIDAÇÃO DE NFS-e ANTES DA EMISSÃO
+# =====================================================================
+
+class ValidacaoNFSeRequest(BaseModel):
+    ambiente: str
+    tipo_documento: str
+    prestador: Optional[Dict[str, Any]] = None
+    tomador: Optional[Dict[str, Any]] = None
+    servico: Optional[Dict[str, Any]] = None
+    reforma_tributaria: Optional[Dict[str, Any]] = None
+    informacoes_complementares: Optional[str] = None
+
+
+@app.post('/valida/nfse-pre-emissao')
+async def validar_nfse_pre_emissao(req: ValidacaoNFSeRequest):
+    """
+    Valida dados da NFS-e usando IA antes da emissão.
+    Identifica problemas fiscais, tributários e de conformidade.
+    """
+    
+    try:
+        github_token = os.getenv("GITHUB_TOKEN", "")
+        
+        if not github_token:
+            return JSONResponse(content={
+                "sucesso": False,
+                "validacao_ok": True,
+                "erros_criticos": [],
+                "alertas": [{"alerta": "Token GitHub não configurado - validação IA indisponível"}],
+                "sugestoes_melhoria": [],
+                "score_confianca": 0,
+                "resumo": "IA indisponível"
+            })
+        
+        # Extrair dados principais
+        prestador = req.prestador or {}
+        tomador = req.tomador or {}
+        servico = req.servico or {}
+        reforma = req.reforma_tributaria or {}
+        
+        # Construir prompt de validação
+        prompt = f"""Você é um especialista em NFS-e e tributação de serviços no Brasil.
+
+Analise os dados desta NFS-e e identifique APENAS erros GRAVES ou CRÍTICOS que impediriam a emissão.
+
+IMPORTANTE - O QUE NÃO É ERRO:
+- Regime tributário Simples Nacional com ISS - VÁLIDO
+- Alíquota ISS entre 2% e 5% - VÁLIDA
+- CST IBS/CBS 001 para todos os regimes - VÁLIDO
+- Código NBS relacionado ao LC116 - VÁLIDO (sistema valida relação)
+- IE do prestador cadastrada - NÃO questionar
+- CPF/CNPJ em formato válido - OK
+
+SÓ APONTE ERRO SE:
+- Código de Serviço LC116 estiver vazio ou inválido
+- Valor do serviço for ZERO ou negativo
+- CNPJ do Prestador estiver vazio ou inválido
+- CNPJ/CPF do Tomador estiver vazio
+- Alíquota ISS fora de 2-5%
+- Discriminação do serviço estiver vazia
+- CST IBS/CBS fora da faixa 001-008
+
+DADOS DA NFS-e:
+Ambiente: {req.ambiente}
+Tipo: {req.tipo_documento}
+
+PRESTADOR:
+- CNPJ: {prestador.get('cnpj', 'N/A')}
+- Razão Social: {prestador.get('razao_social', 'N/A')}
+- Município: {prestador.get('municipio', 'N/A')} - {prestador.get('uf', 'N/A')}
+
+TOMADOR:
+- CPF/CNPJ: {tomador.get('cpf_cnpj', 'N/A')}
+- Nome/Razão: {tomador.get('nome_razao', 'N/A')}
+- Município: {tomador.get('municipio', 'N/A')} - {tomador.get('uf', 'N/A')}
+
+SERVIÇO:
+- Código LC116: {servico.get('codigo_servico', 'N/A')}
+- Discriminação: {servico.get('discriminacao', 'N/A')[:100]}...
+- Valor do Serviço: R$ {servico.get('valor_servicos', 0)}
+- Alíquota ISS: {servico.get('aliquota_iss', 0)}%
+- Valor ISS: R$ {servico.get('valor_iss', 0)}
+- Base de Cálculo: R$ {servico.get('base_calculo', 0)}
+
+REFORMA TRIBUTÁRIA:
+- CST IBS/CBS: {reforma.get('cst_ibs_cbs', 'N/A')}
+- Indicador Consumidor Final: {reforma.get('indicador_consumidor_final', 'N/A')}
+- Percentual Tributos Federais: {reforma.get('percentual_tributos_federais', 0)}%
+- Percentual Redutor: {reforma.get('percentual_redutor', 0)}%
+
+Se TUDO estiver OK, retorne validacao_ok=true com score 95-100.
+
+RESPONDA APENAS JSON válido (sem markdown):
+{{
+  "sucesso": true,
+  "validacao_ok": true/false,
+  "erros_criticos": [{{"campo": "x", "erro": "y", "solucao": "z"}}],
+  "alertas": [{{"campo": "x", "alerta": "y", "sugestao": "z"}}],
+  "sugestoes_melhoria": ["sugestão 1", "sugestão 2"],
+  "score_confianca": 95,
+  "resumo": "NFS-e válida para emissão"
+}}"""
+
+        llm_url = "https://models.inference.ai.azure.com/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {github_token}"
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "Você é um especialista fiscal brasileiro em NFS-e. Analise os dados e identifique erros. Responda APENAS JSON válido, sem markdown."},
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 2000,
+            "temperature": 0.1
+        }
+        
+        print(f"[IA-VALIDACAO-NFSE] Enviando requisição para GitHub Models...")
+        resp = requests.post(llm_url, json=payload, headers=headers, timeout=30)
+        print(f"[IA-VALIDACAO-NFSE] Resposta: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            try:
+                # Limpar markdown se presente
+                resposta_limpa = resposta.strip()
+                if resposta_limpa.startswith("```json"):
+                    resposta_limpa = resposta_limpa.replace("```json", "", 1)
+                if resposta_limpa.startswith("```"):
+                    resposta_limpa = resposta_limpa.replace("```", "", 1)
+                if resposta_limpa.endswith("```"):
+                    resposta_limpa = resposta_limpa.rsplit("```", 1)[0]
+                resposta_limpa = resposta_limpa.strip()
+                
+                resultado = json.loads(resposta_limpa)
+                resultado["sucesso"] = True
+                return JSONResponse(content=resultado)
+            except Exception as e:
+                print(f"[IA-VALIDACAO-NFSE] Erro ao parsear JSON: {str(e)}")
+                print(f"[IA-VALIDACAO-NFSE] Resposta bruta: {resposta[:500]}")
+                return JSONResponse(content={
+                    "sucesso": False,
+                    "validacao_ok": True,
+                    "erros_criticos": [],
+                    "alertas": [{"alerta": f"Erro ao processar resposta IA: {str(e)}"}],
+                    "sugestoes_melhoria": [],
+                    "score_confianca": 0,
+                    "resumo": "Não foi possível processar a resposta da IA",
+                    "resposta_raw": resposta[:500]
+                })
+        else:
+            print(f"[IA-VALIDACAO-NFSE] Erro HTTP {resp.status_code}: {resp.text}")
+            return JSONResponse(content={
+                "sucesso": False,
+                "validacao_ok": True,
+                "erros_criticos": [],
+                "alertas": [{"alerta": f"IA indisponível: HTTP {resp.status_code}"}],
+                "sugestoes_melhoria": [],
+                "score_confianca": 0,
+                "resumo": "Serviço de IA temporariamente indisponível"
+            })
+            
+    except Exception as e:
+        print(f"[IA-VALIDACAO-NFSE] Erro: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return JSONResponse(content={
+            "sucesso": False,
+            "validacao_ok": True,
+            "erros_criticos": [],
+            "alertas": [{"alerta": f"Erro: {str(e)}"}],
+            "sugestoes_melhoria": [],
+            "score_confianca": 0,
+            "resumo": f"Erro no serviço: {str(e)}"
         })

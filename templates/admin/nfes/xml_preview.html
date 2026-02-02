@@ -226,15 +226,15 @@
                         <button type="button" id="btn-edit-rejected" class="btn btn-secondary">
                             <i class="fas fa-edit"></i> Editar e Corrigir
                         </button>
-                        {% elif nfe.status|upper == 'RASCUNHO' %}
-                        <!-- Botão para editar rascunho -->
+                        {% elif nfe.status|upper in ['RASCUNHO', 'PROCESSANDO'] %}
+                        <!-- Botão para editar rascunho/processando -->
                         <a href="{{ url_for('nfe.edit', nfe_id=nfe.nfe_emitida_id) }}" class="btn btn-primary">
-                            <i class="fas fa-edit"></i> Editar Rascunho
+                            <i class="fas fa-edit"></i> Editar {{ 'Rascunho' if nfe.status|upper == 'RASCUNHO' else 'NFe' }}
                         </a>
                         
                         <!-- Botão para emitir -->
                         <button type="button" id="btn-issue-draft" class="btn btn-success">
-                            <i class="fas fa-paper-plane"></i> Emitir Agora
+                            <i class="fas fa-paper-plane"></i> {{ 'Emitir Agora' if nfe.status|upper == 'RASCUNHO' else 'Reenviar para SEFAZ' }}
                         </button>
                         {% endif %}
                         
@@ -270,41 +270,42 @@
                         
                         <dt>CNPJ</dt>
                         <dd>
-                            {% if nfe.json_nfe and nfe.json_nfe.xml_content %}
+                            {% if nfe.json_nfe and nfe.json_nfe.get('emitente') and nfe.json_nfe.emitente.get('cnpj') %}
+                                {% set cnpj_raw = nfe.json_nfe.emitente.cnpj|string %}
+                                {{ cnpj_raw[:2] }}.{{ cnpj_raw[2:5] }}.{{ cnpj_raw[5:8] }}/{{ cnpj_raw[8:12] }}-{{ cnpj_raw[12:] }}
+                            {% elif nfe.json_nfe and nfe.json_nfe.xml_content %}
                                 {% set cnpj_start = nfe.json_nfe.xml_content.find('<CNPJ>') %}
                                 {% set cnpj_end = nfe.json_nfe.xml_content.find('</CNPJ>') %}
                                 {% if cnpj_start != -1 and cnpj_end != -1 %}
                                     {% set cnpj_raw = nfe.json_nfe.xml_content[cnpj_start + 6:cnpj_end] %}
                                     {{ cnpj_raw[:2] }}.{{ cnpj_raw[2:5] }}.{{ cnpj_raw[5:8] }}/{{ cnpj_raw[8:12] }}-{{ cnpj_raw[12:] }}
                                 {% endif %}
-                       
                             {% endif %}
                         </dd>
                         
                         <dt>IE</dt>
                         <dd>
-                            {% if nfe.json_nfe and nfe.json_nfe.xml_content %}
+                            {% if nfe.json_nfe and nfe.json_nfe.get('emitente') and nfe.json_nfe.emitente.get('ie') %}
+                                {{ nfe.json_nfe.emitente.ie }}
+                            {% elif nfe.json_nfe and nfe.json_nfe.xml_content %}
                                 {% set ie_start = nfe.json_nfe.xml_content.find('<IE>') %}
                                 {% set ie_end = nfe.json_nfe.xml_content.find('</IE>') %}
                                 {% if ie_start != -1 and ie_end != -1 %}
-                                    {% set ie_raw = nfe.json_nfe.xml_content[ie_start + 4:ie_end] %}
-                                    {{ ie_raw[:3] }}.{{ ie_raw[3:6] }}.{{ ie_raw[6:9] }}.{{ ie_raw[9:] }}
-                                
+                                    {{ nfe.json_nfe.xml_content[ie_start + 4:ie_end] }}
                                 {% endif %}
-                            
                             {% endif %}
                         </dd>
                         
                         <dt>Nome Fantasia</dt>
                         <dd>
-                            {% if nfe.json_nfe and nfe.json_nfe.xml_content %}
+                            {% if nfe.json_nfe and nfe.json_nfe.get('emitente') and nfe.json_nfe.emitente.get('nome_fantasia') %}
+                                {{ nfe.json_nfe.emitente.nome_fantasia }}
+                            {% elif nfe.json_nfe and nfe.json_nfe.xml_content %}
                                 {% set xfant_start = nfe.json_nfe.xml_content.find('<xFant>') %}
                                 {% set xfant_end = nfe.json_nfe.xml_content.find('</xFant>') %}
                                 {% if xfant_start != -1 and xfant_end != -1 %}
                                     {{ nfe.json_nfe.xml_content[xfant_start + 7:xfant_end] }}
-                                
                                 {% endif %}
-                            
                             {% endif %}
                         </dd>
                     </div>
@@ -424,14 +425,14 @@
                                 {% for item in nfe.json_nfe.get('items') %}
                                 <tr>
                                     <td>{{ loop.index }}</td>
-                                    <td>{{ item.codigo_produto or item.get('codigo_produto') }}</td>
-                                    <td>{{ item.descricao }}</td>
-                                    <td>{{ item.ncm }}</td>
-                                    <td>{{ item.cfop }}</td>
-                                    <td>{{ item.quantidade_comercial or item.quantidade }}</td>
-                                    <td>{{ item.unidade_comercial or item.unidade }}</td>
-                                    <td>R$ {{ "%.2f"|format((item.valor_unitario_comercial or item.valor_unitario or 0)|float) }}</td>
-                                    <td>R$ {{ "%.2f"|format(((item.valor_unitario_comercial or item.valor_unitario or 0)|float) * ((item.quantidade_comercial or item.quantidade or 0)|float)) }}</td>
+                                    <td>{{ item.get('codigo_produto') or item.get('codigo') or item.get('cProd') }}</td>
+                                    <td>{{ item.get('descricao') or item.get('xProd') or item.get('nome_produto') or 'Produto sem descrição' }}</td>
+                                    <td>{{ item.get('ncm') or item.get('NCM') }}</td>
+                                    <td>{{ item.get('cfop') or item.get('CFOP') }}</td>
+                                    <td>{{ item.get('quantidade_comercial') or item.get('quantidade') or item.get('qCom') }}</td>
+                                    <td>{{ item.get('unidade_comercial') or item.get('unidade') or item.get('uCom') }}</td>
+                                    <td>R$ {{ "%.2f"|format((item.get('valor_unitario_comercial') or item.get('valor_unitario') or item.get('vUnCom') or 0)|float) }}</td>
+                                    <td>R$ {{ "%.2f"|format(((item.get('valor_unitario_comercial') or item.get('valor_unitario') or item.get('vUnCom') or 0)|float) * ((item.get('quantidade_comercial') or item.get('quantidade') or item.get('qCom') or 0)|float)) }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -623,10 +624,10 @@
 <!-- ✅ CONFIGURAÇÃO INICIAL -->
 <script type="application/json" id="nfe-config">
 {
-    "id": {{ nfe.nfe_emitida_id|tojson|safe }},
+    "id": {{ (nfe.nfe_emitida_id or 0)|tojson|safe }},
     "status": {{ (nfe.status or "")|tojson|safe }},
     "chaveAcesso": {{ (nfe.chave_acesso or "")|tojson|safe }},
-    "hasXml": {{ (nfe.json_nfe and nfe.json_nfe.xml_content)|tojson|safe }}
+    "hasXml": {{ (nfe.json_nfe and nfe.json_nfe.get('xml_content') if nfe.json_nfe else false)|tojson|safe }}
 }
 </script>
 

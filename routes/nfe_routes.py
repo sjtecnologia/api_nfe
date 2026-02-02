@@ -1101,6 +1101,35 @@ def list_nfes():
 @viewer_or_higher_required()
 def view(nfe_id):
     """Visualizar uma NFe específica"""
+    from datetime import datetime, date
+    from decimal import Decimal
+    from jinja2 import Undefined
+    
+    def sanitize_value(value):
+        """Converte valores não serializáveis para tipos Python básicos"""
+        # Se for Undefined do Jinja2, retorna None
+        if isinstance(value, Undefined):
+            return None
+        # Mantém datetime e date como estão (Jinja2 sabe trabalhar com eles)
+        if isinstance(value, (datetime, date)):
+            return value
+        # Decimal para float
+        if isinstance(value, Decimal):
+            return float(value)
+        # Bytes para string
+        if isinstance(value, bytes):
+            try:
+                return value.decode('utf-8')
+            except:
+                return None
+        # Se for dict, sanitiza recursivamente
+        if isinstance(value, dict):
+            return {k: sanitize_value(v) for k, v in value.items()}
+        # Se for lista, sanitiza cada item
+        if isinstance(value, (list, tuple)):
+            return [sanitize_value(item) for item in value]
+        return value
+    
     db = next(get_db())
     try:
         query = text("""
@@ -1118,26 +1147,24 @@ def view(nfe_id):
             flash('NFe não encontrada.', 'error')
             return redirect(url_for('nfe.list_nfes'))
         
-        # Converter para dict - CORREÇÃO AQUI
+        # Converter para dict
         try:
-            # Se _mapping é um método, precisamos chamá-lo
             if hasattr(nfe, '_mapping') and callable(nfe._mapping):
                 nfe_data = dict(nfe._mapping())
-            # Se _mapping é um atributo
             elif hasattr(nfe, '_mapping'):
                 nfe_data = dict(nfe._mapping)
-            # Fallback para row._asdict() que alguns drivers SQL usam
             elif hasattr(nfe, '_asdict') and callable(nfe._asdict):
                 nfe_data = nfe._asdict()
-            # Último recurso: converter manualmente
             else:
                 nfe_data = {column: getattr(nfe, column) for column in nfe._fields}
         except Exception as e:
             print(f"Erro ao converter resultado para dict: {e}")
             import traceback
             traceback.print_exc()
-            # Fallback simples
             nfe_data = {key: getattr(nfe, key) for key in dir(nfe) if not key.startswith('_') and not callable(getattr(nfe, key))}
+        
+        # Sanitiza todos os valores não serializáveis
+        nfe_data = sanitize_value(nfe_data)
         
         # Se for NFC-e, redirecionar para a página correta
         if nfe_data.get('tipo_nfe') == 'NFCE':
@@ -1148,11 +1175,65 @@ def view(nfe_id):
             try:
                 import json
                 nfe_data['json_nfe'] = json.loads(nfe_data['json_nfe'])
+                # Sanitiza o json_nfe também após o parse
+                nfe_data['json_nfe'] = sanitize_value(nfe_data['json_nfe'])
             except Exception as e:
                 print(f"Erro ao fazer parse do json_nfe: {e}")
                 nfe_data['json_nfe'] = None
+        elif nfe_data.get('json_nfe'):
+            # Se json_nfe já é um dict/objeto, sanitiza também
+            nfe_data['json_nfe'] = sanitize_value(nfe_data['json_nfe'])
         
-        print(nfe_data)
+        # Enriquecer json_nfe com dados do emitente se não existir
+        if nfe_data.get('json_nfe') and not nfe_data['json_nfe'].get('emitente'):
+            try:
+                emitente_query = text("""
+                    SELECT cnpj, razao_social, nome_fantasia, inscricao_estadual
+                    FROM clientes 
+                    WHERE cliente_id = :cliente_id
+                """)
+                emitente_result = db.execute(emitente_query, {'cliente_id': nfe_data['cliente_id']}).fetchone()
+                
+                if emitente_result:
+                    nfe_data['json_nfe']['emitente'] = {
+                        'cnpj': emitente_result[0],
+                        'razao_social': emitente_result[1],
+                        'nome_fantasia': emitente_result[2],
+                        'ie': emitente_result[3]
+                    }
+            except Exception as e:
+                print(f"Aviso: Erro ao buscar dados do emitente: {e}")
+        
+        # Enriquecer items com descrições dos produtos se não existir
+        if nfe_data.get('json_nfe') and nfe_data['json_nfe'].get('items'):
+            try:
+                for item in nfe_data['json_nfe']['items']:
+                    if not item.get('descricao') or item.get('descricao') == 'None':
+                        codigo = item.get('codigo_produto') or item.get('codigo') or item.get('cProd')
+                        if codigo:
+                            produto_query = text("""
+                                SELECT descricao FROM produtos 
+                                WHERE codigo = :codigo AND cliente_id = :cliente_id
+                            """)
+                            produto_result = db.execute(produto_query, {
+                                'codigo': codigo,
+                                'cliente_id': nfe_data['cliente_id']
+                            }).fetchone()
+                            
+                            if produto_result and produto_result[0]:
+                                item['descricao'] = produto_result[0]
+            except Exception as e:
+                print(f"Aviso: Erro ao buscar descrições dos produtos: {e}")
+        
+        # Debug com serialização segura
+        try:
+            import json
+            print(f"NFe data keys: {list(nfe_data.keys())}")
+            # Tenta serializar para verificar se há problemas
+            json.dumps(nfe_data, default=str)
+        except Exception as e:
+            print(f"Aviso: NFe data contém valores não serializáveis: {e}")
+        
         return render_template('admin/nfes/xml_preview.html', nfe=nfe_data)
         
     except Exception as e:
@@ -1948,16 +2029,63 @@ def edit(nfe_id):
                     else:
                         cfop_item = '5102'
                     
+                    # SEMPRE buscar descrição real do banco, ignorando o que vem do form
+                    descricao_produto = None
+                    if codigo_produto:
+                        try:
+                            produto_query = text("""
+                                SELECT descricao FROM produtos 
+                                WHERE (codigo = :codigo OR codigo_interno = :codigo OR produto_id::text = :codigo)
+                                AND cliente_id = :cliente_id
+                                LIMIT 1
+                            """)
+                            produto_result = db.execute(produto_query, {
+                                'codigo': codigo_produto,
+                                'cliente_id': cliente_id
+                            }).fetchone()
+                            
+                            if produto_result and produto_result[0]:
+                                descricao_produto = produto_result[0]
+                                print(f"✅ Descrição do produto {codigo_produto} encontrada no banco: {descricao_produto[:50]}...")
+                            else:
+                                print(f"⚠️ Descrição do produto {codigo_produto} NÃO encontrada no banco")
+                                # Fallback para o form apenas se não encontrar no banco
+                                descricao_produto = request.form.get(f'descricao_{idx}')
+                        except Exception as e:
+                            print(f"❌ Erro ao buscar descrição do produto: {e}")
+                            # Fallback para o form em caso de erro
+                            descricao_produto = request.form.get(f'descricao_{idx}')
+                    
+                    # Se ainda não tem descrição, usar genérica
+                    if not descricao_produto or descricao_produto.strip() == '' or descricao_produto.startswith('Produto '):
+                        descricao_produto = f'Produto {codigo_produto}'
+                        print(f"⚠️ Usando descrição genérica para produto {codigo_produto}")
+                    
                     item = {
                         'codigo_produto': codigo_produto,
-                        'descricao': request.form.get(f'descricao_{idx}'),
+                        'descricao': descricao_produto,
                         'ncm': request.form.get(f'ncm_{idx}'),
                         'cfop': cfop_item,  # OK: CFOP garantido
                         'origem': request.form.get(f'origem_{idx}', '0'),
+                        # ICMS
                         'cst_icms': request.form.get(f'cst_icms_{idx}', '00'),
+                        'csosn_icms': request.form.get(f'csosn_{idx}'),
                         'aliquota_icms': request.form.get(f'aliquota_icms_{idx}', '0'),
+                        'reducao_base_icms': request.form.get(f'reducao_base_icms_{idx}', '0'),
+                        'modalidade_bc_icms': request.form.get(f'modalidade_bc_icms_{idx}'),
+                        'motivo_desoneracao_icms': request.form.get(f'motivo_desoneracao_icms_{idx}'),
                         'bc_icms': request.form.get(f'bc_icms_{idx}', '0'),
                         'valor_icms': request.form.get(f'valor_icms_{idx}', '0'),
+                        # PIS
+                        'cst_pis': request.form.get(f'cst_pis_{idx}'),
+                        'aliquota_pis': request.form.get(f'aliquota_pis_{idx}', '0'),
+                        # COFINS
+                        'cst_cofins': request.form.get(f'cst_cofins_{idx}'),
+                        'aliquota_cofins': request.form.get(f'aliquota_cofins_{idx}', '0'),
+                        # IPI
+                        'cst_ipi': request.form.get(f'cst_ipi_{idx}'),
+                        'aliquota_ipi': request.form.get(f'aliquota_ipi_{idx}', '0'),
+                        # Produto
                         'quantidade': request.form.get(f'quantidade_{idx}'),
                         'unidade': request.form.get(f'unidade_{idx}'),
                         'valor_unitario': request.form.get(f'valor_unitario_{idx}'),
@@ -2006,11 +2134,43 @@ def edit(nfe_id):
                     flash('Destinatário não encontrado', 'error')
                     return redirect(url_for('nfe.edit', nfe_id=nfe_id))
                 
+                # Buscar dados completos do emitente para salvar no JSON
+                emitente_query = text("""
+                    SELECT cliente_id, razao_social, cnpj, nome_fantasia, inscricao_estadual, 
+                           logradouro, numero, bairro, cep, codigo_municipio, nome_municipio, uf, ambiente
+                    FROM clientes 
+                    WHERE cliente_id = :cliente_id
+                """)
+                emitente_result = db.execute(emitente_query, {'cliente_id': cliente_id}).fetchone()
+                
+                emitente_dict = {}
+                ambiente_str = 'homologacao'  # default
+                if emitente_result:
+                    # Ambiente: 1=Homologação, 2=Produção no banco
+                    ambiente_cliente = emitente_result[12]
+                    ambiente_str = 'producao' if ambiente_cliente == 2 else 'homologacao'
+                    
+                    emitente_dict = {
+                        'cliente_id': emitente_result[0],
+                        'razao_social': emitente_result[1],
+                        'cnpj': emitente_result[2],
+                        'nome_fantasia': emitente_result[3],
+                        'ie': emitente_result[4],
+                        'logradouro': emitente_result[5],
+                        'numero': emitente_result[6],
+                        'bairro': emitente_result[7],
+                        'cep': emitente_result[8],
+                        'codigo_municipio': emitente_result[9],
+                        'nome_municipio': emitente_result[10],
+                        'uf': emitente_result[11]
+                    }
+                
                 # Preparar dados para salvar
                 json_nfe = {
                     'form_data': dados_nfe,
                     'items': itens,
-                    'ambiente': 'homologacao'  # ou 'producao'
+                    'emitente': emitente_dict,
+                    'ambiente': ambiente_str
                 }
                 
                 # Atualizar NFe no banco
@@ -2034,15 +2194,15 @@ def edit(nfe_id):
                 
                 # Determinar novo status
                 action = request.form.get('action', 'save')
+                
+                # NÃO mudar para PROCESSANDO aqui - só depois de confirmar emissão
                 if action == 'save':
                     new_status = 'RASCUNHO'
                     mensagem = 'Rascunho atualizado'
-                elif action == 'emit':
-                    new_status = 'PROCESSANDO'
-                    mensagem = 'Aguardando processamento na SEFAZ'
                 else:
-                    new_status = 'RASCUNHO'
-                    mensagem = 'Rascunho atualizado'
+                    # Para action='emit', manter o status atual até confirmar emissão
+                    new_status = current_status if current_status in status_editaveis else 'RASCUNHO'
+                    mensagem = 'Aguardando processamento'
                 
                 # OK: CORREÇÃO: Acessar dados do destinatário por índice ou atributo
                 try:
@@ -2154,13 +2314,18 @@ def reenviar_nfe(nfe_id):
                 'message': 'NF-e não encontrada'
             }), 404
         
-        nfe_data = dict(nfe_result)
+        # Converter resultado para dict corretamente
+        if hasattr(nfe_result, '_mapping'):
+            nfe_data = dict(nfe_result._mapping)
+        else:
+            nfe_data = dict(nfe_result)
         
-        # Verificar se está rejeitada
-        if nfe_data['status'].upper() not in ['REJEITADA', 'ERRO']:
+        # Verificar se está rejeitada ou processando
+        status_upper = nfe_data['status'].upper()
+        if status_upper not in ['REJEITADA', 'ERRO', 'PROCESSANDO']:
             return jsonify({
                 'success': False,
-                'message': 'Apenas NF-es rejeitadas podem ser reenviadas'
+                'message': f'Apenas NF-es rejeitadas ou em processamento podem ser reenviadas. Status atual: {nfe_data["status"]}'
             }), 400
         
         print(f"OK: NFe encontrada - Status: {nfe_data['status']}")
@@ -2216,51 +2381,69 @@ def reenviar_nfe(nfe_id):
             'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
             'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
         }
-        # Buscar destinatário baseado nos dados do form_data
+        # Buscar destinatário - pode estar no form_data ou já armazenado na NFe
         
         form_data = json_data.get('form_data', {})
         destinatario_id = form_data.get('destinatario')
         destinatario_data: Dict[str, Any] = {}
         
+        # Tentar buscar destinatário pelo ID no form_data
         if destinatario_id:
-            destinatario = db.query(DestinatarioNFe).filter_by(
-                destinatario_id=destinatario_id,
-                cliente_id=nfe_data['cliente_id']
-            ).first()
-            
-            if destinatario:
-                destinatario_data = {
-                    'nome_razao_social': destinatario.nome_razao_social,
-                    'cpf_cnpj': destinatario.cpf_cnpj,
-                    'logradouro': destinatario.logradouro,
-                    'numero': destinatario.numero,
-                    'bairro': destinatario.bairro,
-                    'cep': destinatario.cep,
-                    'codigo_municipio': destinatario.codigo_municipio,
-                    'nome_municipio': destinatario.nome_municipio,
-                    'uf': destinatario.uf
-                }
+            try:
+                dest_query = text("""
+                    SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
+                           bairro, cep, codigo_municipio, nome_municipio, uf
+                    FROM destinatarios_nfe 
+                    WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
+                """)
+                dest_result = db.execute(dest_query, {
+                    'dest_id': destinatario_id,
+                    'cliente_id': nfe_data['cliente_id']
+                }).fetchone()
+                
+                if dest_result:
+                    dest_mapping = dest_result._mapping if hasattr(dest_result, '_mapping') else dest_result
+                    destinatario_data = {
+                        'nome_razao_social': dest_mapping['nome_razao_social'],
+                        'cpf_cnpj': dest_mapping['cpf_cnpj'],
+                        'logradouro': dest_mapping['logradouro'],
+                        'numero': dest_mapping['numero'],
+                        'bairro': dest_mapping['bairro'],
+                        'cep': dest_mapping['cep'],
+                        'codigo_municipio': dest_mapping['codigo_municipio'],
+                        'nome_municipio': dest_mapping['nome_municipio'],
+                        'uf': dest_mapping['uf']
+                    }
+            except Exception as e:
+                print(f"Aviso: Erro ao buscar destinatário por ID: {e}")
         
-        # OK: CORREÇÃO: Verificar se destinatário foi encontrado
-        if not destinatario_data:
-            # Atualizar status de volta para rascunho
+        # Se não encontrou pelo ID, tentar usar dados já armazenados na NFe
+        if not destinatario_data and nfe_data.get('destinatario_razao_social'):
+            print("Usando dados do destinatário já armazenados na NFe")
+            destinatario_data = {
+                'nome_razao_social': nfe_data.get('destinatario_razao_social'),
+                'cpf_cnpj': nfe_data.get('destinatario_cnpj_cpf'),
+                'logradouro': form_data.get('dest_logradouro', 'RUA TESTE'),
+                'numero': form_data.get('dest_numero', 'SN'),
+                'bairro': form_data.get('dest_bairro', 'CENTRO'),
+                'cep': form_data.get('dest_cep', '00000000'),
+                'codigo_municipio': form_data.get('dest_codigo_municipio', '3550308'),
+                'nome_municipio': form_data.get('dest_municipio', 'SAO PAULO'),
+                'uf': form_data.get('dest_uf', 'SP')
+            }
+        
+        # Verificar se destinatário foi encontrado
+        if not destinatario_data or not destinatario_data.get('nome_razao_social'):
+            # Atualizar status de volta para erro
             update_back_query = text("""
                 UPDATE nfe_emitidas 
-                SET status = 'RASCUNHO',
+                SET status = 'ERRO',
                     mensagem_sefaz = 'Dados do destinatário não encontrados'
                 WHERE nfe_emitida_id = :nfe_id
             """)
             db.execute(update_back_query, {'nfe_id': nfe_id})
             db.commit()
             
-            return jsonify({
-                'success': False,
-                'message': 'Dados do destinatário não encontrados no rascunho'
-            }), 400
-           
-        
-        # Verificar se destinatário foi encontrado
-        if not destinatario_data:
             return jsonify({
                 'success': False,
                 'message': 'Dados do destinatário não encontrados no rascunho'
@@ -2376,13 +2559,18 @@ def emitir_rascunho(nfe_id):
                 'message': 'NF-e não encontrada'
             }), 404
         
-        nfe_data = dict(nfe_result)
+        # Converter resultado para dict corretamente
+        if hasattr(nfe_result, '_mapping'):
+            nfe_data = dict(nfe_result._mapping)
+        else:
+            nfe_data = dict(nfe_result)
         
-        # Verificar se está em rascunho
-        if nfe_data['status'].upper() != 'RASCUNHO':
+        # Verificar se está em rascunho ou processando
+        status_upper = nfe_data['status'].upper()
+        if status_upper not in ['RASCUNHO', 'PROCESSANDO']:
             return jsonify({
                 'success': False,
-                'message': 'Apenas rascunhos podem ser emitidos por esta função'
+                'message': f'Apenas rascunhos ou NFes em processamento podem ser emitidos. Status atual: {nfe_data["status"]}'
             }), 400
         
         print(f"OK: Rascunho encontrado")
@@ -2439,32 +2627,135 @@ def emitir_rascunho(nfe_id):
             'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
         }
         
-        # Buscar destinatário para o rascunho
+        # Buscar destinatário - pode estar no form_data ou já armazenado na NFe
         form_data = json_data.get('form_data', {})
         destinatario_id = form_data.get('destinatario')
         destinatario_data = {}
         
+        print("="*80)
+        print(f"BUSCA DESTINATÁRIO - NFe {nfe_id}")
+        print(f"ID no form_data: {destinatario_id}")
+        print(f"CPF/CNPJ na NFe: {nfe_data.get('destinatario_cnpj_cpf')}")
+        print(f"Cliente ID: {nfe_data['cliente_id']}")
+        print("="*80)
+        
+        # Tentar buscar destinatário pelo ID no form_data
         if destinatario_id:
-            destinatario = db.query(DestinatarioNFe).filter_by(
-                destinatario_id=destinatario_id,
-                cliente_id=nfe_data['cliente_id']
-            ).first()
+            try:
+                dest_query = text("""
+                    SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
+                           bairro, cep, codigo_municipio, nome_municipio, uf, complemento
+                    FROM destinatarios_nfe 
+                    WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
+                """)
+                dest_result = db.execute(dest_query, {
+                    'dest_id': destinatario_id,
+                    'cliente_id': nfe_data['cliente_id']
+                }).fetchone()
+                
+                if dest_result:
+                    dest_mapping = dest_result._mapping if hasattr(dest_result, '_mapping') else dest_result
+                    destinatario_data = {
+                        'nome_razao_social': dest_mapping['nome_razao_social'],
+                        'cpf_cnpj': dest_mapping['cpf_cnpj'],
+                        'logradouro': dest_mapping['logradouro'],
+                        'numero': dest_mapping['numero'],
+                        'bairro': dest_mapping['bairro'],
+                        'cep': dest_mapping['cep'],
+                        'codigo_municipio': dest_mapping['codigo_municipio'],
+                        'nome_municipio': dest_mapping['nome_municipio'],
+                        'uf': dest_mapping['uf'],
+                        'complemento': dest_mapping.get('complemento')
+                    }
+                    print(f"✅ Destinatário encontrado no banco por ID - UF: {dest_mapping['uf']}")
+            except Exception as e:
+                print(f"❌ ERRO ao buscar destinatário por ID: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Se não encontrou pelo ID, buscar pelo CPF/CNPJ armazenado na NFe
+        if not destinatario_data and nfe_data.get('destinatario_cnpj_cpf'):
+            cpf_cnpj_nfe = nfe_data.get('destinatario_cnpj_cpf', '').replace('.', '').replace('-', '').replace('/', '')
+            print(f"Buscando pelo CPF/CNPJ: {nfe_data.get('destinatario_cnpj_cpf')} (limpo: {cpf_cnpj_nfe})")
+            try:
+                dest_query2 = text("""
+                    SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
+                           bairro, cep, codigo_municipio, nome_municipio, uf, complemento
+                    FROM destinatarios_nfe 
+                    WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') = :cpf_cnpj_limpo 
+                    AND cliente_id = :cliente_id
+                    LIMIT 1
+                """)
+                dest_result2 = db.execute(dest_query2, {
+                    'cpf_cnpj_limpo': cpf_cnpj_nfe,
+                    'cliente_id': nfe_data['cliente_id']
+                }).fetchone()
+                
+                if dest_result2:
+                    dest_mapping2 = dest_result2._mapping if hasattr(dest_result2, '_mapping') else dest_result2
+                    destinatario_data = {
+                        'nome_razao_social': dest_mapping2['nome_razao_social'],
+                        'cpf_cnpj': dest_mapping2['cpf_cnpj'],
+                        'logradouro': dest_mapping2['logradouro'],
+                        'numero': dest_mapping2['numero'],
+                        'bairro': dest_mapping2['bairro'],
+                        'cep': dest_mapping2['cep'],
+                        'codigo_municipio': dest_mapping2['codigo_municipio'],
+                        'nome_municipio': dest_mapping2['nome_municipio'],
+                        'uf': dest_mapping2['uf'],
+                        'complemento': dest_mapping2.get('complemento')
+                    }
+                    print(f"✅ Destinatário encontrado pelo CPF/CNPJ - UF: {dest_mapping2['uf']}, Município: {dest_mapping2['nome_municipio']}")
+                else:
+                    print(f"❌ Destinatário NÃO encontrado pelo CPF/CNPJ na base")
+                    # Fazer uma query para verificar quantos destinatários existem
+                    count_query = text("SELECT COUNT(*) FROM destinatarios_nfe WHERE cliente_id = :cliente_id")
+                    count_result = db.execute(count_query, {'cliente_id': nfe_data['cliente_id']}).scalar()
+                    print(f"Total de destinatários cadastrados para este cliente: {count_result}")
+            except Exception as e:
+                print(f"[ERRO] Erro ao buscar destinatário por CPF/CNPJ: {e}", file=sys.stderr)
+        
+        # Se não encontrou pelo ID ou CPF/CNPJ no banco
+        if not destinatario_data:
+            print("❌ Destinatário não encontrado no banco de dados")
             
-            if destinatario:
-                destinatario_data = {
-                    'nome_razao_social': destinatario.nome_razao_social,
-                    'cpf_cnpj': destinatario.cpf_cnpj,
-                    'logradouro': destinatario.logradouro,
-                    'numero': destinatario.numero,
-                    'bairro': destinatario.bairro,
-                    'cep': destinatario.cep,
-                    'codigo_municipio': destinatario.codigo_municipio,
-                    'nome_municipio': destinatario.nome_municipio,
-                    'uf': destinatario.uf
-                }
+            # Verificar se o CFOP indica operação interestadual
+            cfop_primeiro = json_data.get('items', [{}])[0].get('cfop', '5102') if json_data.get('items') else '5102'
+            is_interestadual = cfop_primeiro.startswith('6') or cfop_primeiro.startswith('7')
+            uf_emitente = emitente_data_for_template.get('uf', 'SP')
+            
+            print(f"CFOP: {cfop_primeiro}, Interestadual: {is_interestadual}")
+            
+            # Para operações interestaduais, DEVE ter o destinatário cadastrado
+            if is_interestadual:
+                return jsonify({
+                    'success': False,
+                    'message': f'CFOP {cfop_primeiro} indica operação interestadual, mas o destinatário não foi encontrado no banco de dados. CPF/CNPJ na NFe: {nfe_data.get("destinatario_cnpj_cpf")}. Certifique-se de que o destinatário está cadastrado com os dados completos incluindo UF.'
+                }), 400
+            
+            # Para operações internas, pode usar dados básicos da NFe com fallbacks
+            print("⚠️ Usando dados básicos da NFe com fallbacks para operação interna")
+            destinatario_data = {
+                'nome_razao_social': nfe_data.get('destinatario_razao_social'),
+                'cpf_cnpj': nfe_data.get('destinatario_cnpj_cpf'),
+                'logradouro': form_data.get('dest_logradouro') or 'RUA TESTE',
+                'numero': form_data.get('dest_numero') or 'SN',
+                'bairro': form_data.get('dest_bairro') or 'CENTRO',
+                'cep': form_data.get('dest_cep') or '00000000',
+                'codigo_municipio': form_data.get('dest_codigo_municipio') or '3550308',
+                'nome_municipio': form_data.get('dest_municipio') or 'SAO PAULO',
+                'uf': uf_emitente  # Para operação interna, usa UF do emitente
+            }
+        
+        print(f"[DEBUG] Dados do destinatário final:")
+        print(f"[DEBUG] - Nome: {destinatario_data.get('nome_razao_social')}")
+        print(f"[DEBUG] - CPF/CNPJ: {destinatario_data.get('cpf_cnpj')}")
+        print(f"[DEBUG] - Logradouro: {destinatario_data.get('logradouro')}")
+        print(f"[DEBUG] - Município: {destinatario_data.get('nome_municipio')} ({destinatario_data.get('codigo_municipio')})")
+        print(f"[DEBUG] - UF: {destinatario_data.get('uf')}")
         
         # Verificar se destinatário foi encontrado
-        if not destinatario_data:
+        if not destinatario_data or not destinatario_data.get('nome_razao_social'):
             return jsonify({
                 'success': False,
                 'message': 'Dados do destinatário não encontrados no rascunho'
@@ -2475,6 +2766,10 @@ def emitir_rascunho(nfe_id):
         # tpAmb SEFAZ: 1=Produção, 2=Homologação
         tp_amb = 1 if ambiente == 'producao' else 2
         
+        print(f"[DEBUG] Gerando XML para emissão de rascunho")
+        print(f"[DEBUG] Ambiente: {ambiente} (tpAmb={tp_amb})")
+        print(f"[DEBUG] Items: {len(json_data.get('items', []))}")
+        
         xml_gerado = generate_nfe_xml(
             json_data.get('form_data', {}),
             emitente_data_for_template,
@@ -2484,6 +2779,9 @@ def emitir_rascunho(nfe_id):
             'emitir'
         )
         
+        # Log do XML gerado (primeiros 500 caracteres)
+        print(f"[DEBUG] XML gerado (início): {xml_gerado[:500]}...")
+        
         # Assinar XML - BLOQUEIA SE FALHAR
         try:
             from services.xml_signature_service import xml_signature_service
@@ -2491,6 +2789,8 @@ def emitir_rascunho(nfe_id):
             print(f"[OK] XML assinado com sucesso - emissão de rascunho")
         except Exception as e:
             print(f"[X] ERRO CRÍTICO na assinatura (rascunho): {e}")
+            import traceback
+            traceback.print_exc()
             return jsonify({
                 'success': False,
                 'message': f'Erro na assinatura digital: {str(e)}. Verifique se o certificado está válido.'
@@ -2504,8 +2804,12 @@ def emitir_rascunho(nfe_id):
                 'message': 'Certificado não encontrado'
             }), 400
         
+        print(f"[DEBUG] Enviando para SEFAZ...")
+        
         # Enviar para SEFAZ
         resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente, nfe_data['cliente_id'])
+        
+        print(f"[DEBUG] Resultado SEFAZ: {resultado_sefaz}")
         
         # Preparar resultado
         resultado = {

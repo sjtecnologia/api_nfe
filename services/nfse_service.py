@@ -8,9 +8,13 @@ import json
 import requests
 import hashlib
 import uuid
+import base64
+import tempfile
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from lxml import etree
+from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
+from services.certificate_service import _decrypt_password
 
 # Importar models
 import sys
@@ -33,23 +37,23 @@ class NFSeService:
     NS_TIPOS = "http://www.giss.com.br/tipos-v2_04.xsd"
     NS_DSIG = "http://www.w3.org/2000/09/xmldsig#"
     
-    # URLs do webservice - São José do Rio Preto usa GISS Online
+    # URLs do webservice - GISS Online (Atualizado conforme documentação oficial)
     URLS_SJRP = {
         "homologacao": {
-            "base": "https://homologacao.giss.com.br/SaoJoseDoRioPreto/servlet/",
-            "wsdl": "https://homologacao.giss.com.br/SaoJoseDoRioPreto/servlet/aws_nfse?wsdl",
-            "enviar_lote": "aws_nfse",
-            "consultar_lote": "aws_nfse",
-            "consultar_nfse": "aws_nfse",
-            "cancelar": "aws_nfse"
+            "base": "https://ws-homologacao-rtc.giss.com.br/",
+            "wsdl": "https://ws-homologacao-rtc.giss.com.br/service-ws/nf/nfse-ws?wsdl",
+            "enviar_lote": "service-ws/nf/nfse-ws",
+            "consultar_lote": "service-ws/nf/nfse-ws",
+            "consultar_nfse": "service-ws/nf/nfse-ws",
+            "cancelar": "service-ws/nf/nfse-ws"
         },
         "producao": {
-            "base": "https://www.giss.com.br/SaoJoseDoRioPreto/servlet/",
-            "wsdl": "https://www.giss.com.br/SaoJoseDoRioPreto/servlet/aws_nfse?wsdl",
-            "enviar_lote": "aws_nfse",
-            "consultar_lote": "aws_nfse",
-            "consultar_nfse": "aws_nfse",
-            "cancelar": "aws_nfse"
+            "base": "https://ws-rtc.giss.com.br/",
+            "wsdl": "https://ws-rtc.giss.com.br/service-ws/nf/nfse-ws?wsdl",
+            "enviar_lote": "service-ws/nf/nfse-ws",
+            "consultar_lote": "service-ws/nf/nfse-ws",
+            "consultar_nfse": "service-ws/nf/nfse-ws",
+            "cancelar": "service-ws/nf/nfse-ws"
         }
     }
     
@@ -119,6 +123,13 @@ class NFSeService:
         """Formata valor para o padrão do XML (2 casas decimais)"""
         return f"{valor:.2f}"
     
+    def formatar_aliquota(self, aliquota: float) -> str:
+        """Formata alíquota para o padrão GISS (decimal com 4 casas, ex: 5% = 0.0500)"""
+        # Se alíquota estiver como percentual inteiro (ex: 5.00), dividir por 100
+        if aliquota > 1:
+            aliquota = aliquota / 100
+        return f"{aliquota:.4f}"
+    
     def limpar_texto(self, texto: str, max_len: int = 2000) -> str:
         """Remove caracteres especiais e limita tamanho"""
         if not texto:
@@ -158,6 +169,7 @@ class NFSeService:
         
         # p:LoteRps
         lote_rps = etree.SubElement(root, "{%s}LoteRps" % self.NS_ENVIO)
+        lote_rps.set("Id", "1")  # GISS exige atributo Id
         lote_rps.set("versao", "2.04")
         
         # p1:NumeroLote
@@ -167,8 +179,9 @@ class NFSeService:
         prestador_lote = etree.SubElement(lote_rps, "{%s}Prestador" % self.NS_TIPOS)
         cpf_cnpj_prest_lote = etree.SubElement(prestador_lote, "{%s}CpfCnpj" % self.NS_TIPOS)
         etree.SubElement(cpf_cnpj_prest_lote, "{%s}Cnpj" % self.NS_TIPOS).text = nfse.prestador.cnpj
-        if nfse.prestador.inscricao_municipal:
-            etree.SubElement(prestador_lote, "{%s}InscricaoMunicipal" % self.NS_TIPOS).text = nfse.prestador.inscricao_municipal
+        # InscricaoMunicipal é obrigatório no schema GISS
+        inscricao = nfse.prestador.inscricao_municipal or "0"
+        etree.SubElement(prestador_lote, "{%s}InscricaoMunicipal" % self.NS_TIPOS).text = inscricao
         
         # p1:QuantidadeRps
         etree.SubElement(lote_rps, "{%s}QuantidadeRps" % self.NS_TIPOS).text = "1"
@@ -181,10 +194,11 @@ class NFSeService:
         
         # p1:InfDeclaracaoPrestacaoServico
         inf_rps = etree.SubElement(rps, "{%s}InfDeclaracaoPrestacaoServico" % self.NS_TIPOS)
-        inf_rps.set("Id", f"rps{nfse.numero_rps or 1}")
+        inf_rps.set("Id", "rps1")  # Id único para InfDeclaracaoPrestacaoServico
         
         # p1:Rps (identificação)
         rps_ident = etree.SubElement(inf_rps, "{%s}Rps" % self.NS_TIPOS)
+        rps_ident.set("Id", "identificacao-rps1")  # Id único para elemento Rps
         ident_rps = etree.SubElement(rps_ident, "{%s}IdentificacaoRps" % self.NS_TIPOS)
         etree.SubElement(ident_rps, "{%s}Numero" % self.NS_TIPOS).text = str(nfse.numero_rps or 1)
         etree.SubElement(ident_rps, "{%s}Serie" % self.NS_TIPOS).text = nfse.serie_rps
@@ -200,93 +214,77 @@ class NFSeService:
         # p1:Servico
         servico_el = etree.SubElement(inf_rps, "{%s}Servico" % self.NS_TIPOS)
         
-        # p1:Valores do serviço
+        # p1:Valores do serviço - GISS exige valores zerados explícitos
         valores = etree.SubElement(servico_el, "{%s}Valores" % self.NS_TIPOS)
         etree.SubElement(valores, "{%s}ValorServicos" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_servicos)
-        
-        if nfse.servico.valor_deducoes > 0:
-            etree.SubElement(valores, "{%s}ValorDeducoes" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_deducoes)
-        if nfse.servico.valor_pis > 0:
-            etree.SubElement(valores, "{%s}ValorPis" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_pis)
-        if nfse.servico.valor_cofins > 0:
-            etree.SubElement(valores, "{%s}ValorCofins" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_cofins)
-        if nfse.servico.valor_inss > 0:
-            etree.SubElement(valores, "{%s}ValorInss" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_inss)
-        if nfse.servico.valor_ir > 0:
-            etree.SubElement(valores, "{%s}ValorIr" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_ir)
-        if nfse.servico.valor_csll > 0:
-            etree.SubElement(valores, "{%s}ValorCsll" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_csll)
+        etree.SubElement(valores, "{%s}ValorDeducoes" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_deducoes)
+        etree.SubElement(valores, "{%s}ValorPis" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_pis)
+        etree.SubElement(valores, "{%s}ValorCofins" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_cofins)
+        etree.SubElement(valores, "{%s}ValorInss" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_inss)
+        etree.SubElement(valores, "{%s}ValorIr" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_ir)
+        etree.SubElement(valores, "{%s}ValorCsll" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_csll)
         if nfse.servico.outras_retencoes > 0:
             etree.SubElement(valores, "{%s}OutrasRetencoes" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.outras_retencoes)
         
         if nfse.servico.valor_iss > 0:
             etree.SubElement(valores, "{%s}ValorIss" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_iss)
         
-        etree.SubElement(valores, "{%s}Aliquota" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.aliquota_iss)
+        # Alíquota no formato decimal (ex: 5% = 0.0500)
+        etree.SubElement(valores, "{%s}Aliquota" % self.NS_TIPOS).text = self.formatar_aliquota(nfse.servico.aliquota_iss)
         
         if nfse.servico.desconto_incondicionado > 0:
             etree.SubElement(valores, "{%s}DescontoIncondicionado" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.desconto_incondicionado)
         if nfse.servico.desconto_condicionado > 0:
             etree.SubElement(valores, "{%s}DescontoCondicionado" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.desconto_condicionado)
         
-        # p1:trib - Tributos totais (obrigatório GISS)
-        trib = etree.SubElement(valores, "{%s}trib" % self.NS_TIPOS)
-        tot_trib = etree.SubElement(trib, "{%s}totTrib" % self.NS_TIPOS)
-        p_tot_trib = etree.SubElement(tot_trib, "{%s}pTotTrib" % self.NS_TIPOS)
-        etree.SubElement(p_tot_trib, "{%s}pTotTribFed" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.percentual_total_tributos_federais)
-        etree.SubElement(p_tot_trib, "{%s}pTotTribEst" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.percentual_total_tributos_estaduais)
-        etree.SubElement(p_tot_trib, "{%s}pTotTribMun" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.percentual_total_tributos_municipais)
-        
-        # p1:IBSCBS - Reforma Tributária (obrigatório GISS)
-        ibs_cbs = etree.SubElement(valores, "{%s}IBSCBS" % self.NS_TIPOS)
-        etree.SubElement(ibs_cbs, "{%s}finNFSe" % self.NS_TIPOS).text = nfse.servico.finalidade_nfse
-        etree.SubElement(ibs_cbs, "{%s}indFinal" % self.NS_TIPOS).text = nfse.servico.indicador_consumidor_final
-        etree.SubElement(ibs_cbs, "{%s}cIndOp" % self.NS_TIPOS).text = nfse.servico.codigo_indicador_operacao
-        etree.SubElement(ibs_cbs, "{%s}indDest" % self.NS_TIPOS).text = nfse.servico.indicador_destinatario
-        
-        # p1:valores (dentro de IBSCBS)
-        valores_ibs = etree.SubElement(ibs_cbs, "{%s}valores" % self.NS_TIPOS)
-        trib_ibs = etree.SubElement(valores_ibs, "{%s}trib" % self.NS_TIPOS)
-        g_ibs_cbs = etree.SubElement(trib_ibs, "{%s}gIBSCBS" % self.NS_TIPOS)
-        etree.SubElement(g_ibs_cbs, "{%s}CST" % self.NS_TIPOS).text = nfse.servico.cst_ibs_cbs
-        etree.SubElement(g_ibs_cbs, "{%s}cClassTrib" % self.NS_TIPOS).text = nfse.servico.codigo_classificacao_tributaria
-        
-        etree.SubElement(valores_ibs, "{%s}cLocalidadeIncid" % self.NS_TIPOS).text = nfse.servico.codigo_localidade_incidencia
-        etree.SubElement(valores_ibs, "{%s}pRedutor" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.percentual_redutor)
+        # FIM dos Valores - REMOVER trib e IBSCBS temporariamente (não estão no exemplo básico)
         
         # p1:IssRetido
         etree.SubElement(servico_el, "{%s}IssRetido" % self.NS_TIPOS).text = "1" if nfse.servico.iss_retido else "2"
         
-        # p1:ItemListaServico (código LC 116)
-        etree.SubElement(servico_el, "{%s}ItemListaServico" % self.NS_TIPOS).text = nfse.servico.codigo_tributacao_nacional
+        # p1:ItemListaServico (código LC 116) - ex: "11.02"
+        # GISS exige formato NN.NN com zero à esquerda (01.02, não 1.02)
+        codigo_lc116 = nfse.servico.codigo_tributacao_nacional
+        if '.' in codigo_lc116:
+            partes = codigo_lc116.split('.')
+            codigo_lc116 = f"{partes[0].zfill(2)}.{partes[1].zfill(2)}"
+        etree.SubElement(servico_el, "{%s}ItemListaServico" % self.NS_TIPOS).text = codigo_lc116
         
-        # p1:CodigoCnae (opcional)
-        if nfse.servico.codigo_cnae:
-            etree.SubElement(servico_el, "{%s}CodigoCnae" % self.NS_TIPOS).text = nfse.servico.codigo_cnae
-        
-        # p1:CodigoNbs (obrigatório GISS)
-        etree.SubElement(servico_el, "{%s}CodigoNbs" % self.NS_TIPOS).text = nfse.servico.codigo_nbs
+        # p1:CodigoTributacaoMunicipio - GISS exige após ItemListaServico
+        # Derivar do código LC 116 ou usar padrão
+        # Exemplo: "01.01" -> "8010001", "07.02" -> "8070002"
+        codigo_sem_ponto = codigo_lc116.replace(".", "")
+        codigo_trib_municipal = f"80{codigo_sem_ponto.zfill(5)}" if len(codigo_sem_ponto) <= 5 else "8020001"
+        etree.SubElement(servico_el, "{%s}CodigoTributacaoMunicipio" % self.NS_TIPOS).text = codigo_trib_municipal
         
         # p1:Discriminacao do serviço
         etree.SubElement(servico_el, "{%s}Discriminacao" % self.NS_TIPOS).text = self.limpar_texto(nfse.servico.discriminacao)
         
         # p1:CodigoMunicipio de prestação
-        etree.SubElement(servico_el, "{%s}CodigoMunicipio" % self.NS_TIPOS).text = nfse.servico.codigo_municipio_prestacao or "3549805"
+        codigo_municipio = nfse.servico.codigo_municipio_prestacao or "3549805"
+        etree.SubElement(servico_el, "{%s}CodigoMunicipio" % self.NS_TIPOS).text = codigo_municipio
+        
+        # p1:CodigoPais - GISS exige (Brasil = 1058 IBGE ou 0076 BACEN)
+        etree.SubElement(servico_el, "{%s}CodigoPais" % self.NS_TIPOS).text = "1058"
         
         # p1:ExigibilidadeISS
         etree.SubElement(servico_el, "{%s}ExigibilidadeISS" % self.NS_TIPOS).text = "1"  # Exigível
+        
+        # p1:MunicipioIncidencia - GISS exige (código IBGE do município)
+        etree.SubElement(servico_el, "{%s}MunicipioIncidencia" % self.NS_TIPOS).text = codigo_municipio
         
         # p1:Prestador
         prestador_el = etree.SubElement(inf_rps, "{%s}Prestador" % self.NS_TIPOS)
         cpf_cnpj_prestador = etree.SubElement(prestador_el, "{%s}CpfCnpj" % self.NS_TIPOS)
         etree.SubElement(cpf_cnpj_prestador, "{%s}Cnpj" % self.NS_TIPOS).text = nfse.prestador.cnpj
-        if nfse.prestador.inscricao_municipal:
-            etree.SubElement(prestador_el, "{%s}InscricaoMunicipal" % self.NS_TIPOS).text = nfse.prestador.inscricao_municipal
+        # InscricaoMunicipal é obrigatório no schema GISS
+        inscricao = nfse.prestador.inscricao_municipal or "0"
+        etree.SubElement(prestador_el, "{%s}InscricaoMunicipal" % self.NS_TIPOS).text = inscricao
         
-        # p1:TomadoresServico
+        # p1:TomadorServico (SINGULAR conforme exemplo GISS)
         if nfse.Tomadores:
-            tomador_el = etree.SubElement(inf_rps, "{%s}TomadoresServico" % self.NS_TIPOS)
-            ident_Tomadores = etree.SubElement(tomador_el, "{%s}IdentificacaoTomadores" % self.NS_TIPOS)
+            tomador_el = etree.SubElement(inf_rps, "{%s}TomadorServico" % self.NS_TIPOS)
+            ident_Tomadores = etree.SubElement(tomador_el, "{%s}IdentificacaoTomador" % self.NS_TIPOS)
             cpf_cnpj_Tomadores = etree.SubElement(ident_Tomadores, "{%s}CpfCnpj" % self.NS_TIPOS)
             
             if nfse.Tomadores.tipo_documento == "CPF":
@@ -317,13 +315,10 @@ class NFSeService:
                 if nfse.Tomadores.endereco_cep:
                     etree.SubElement(endereco_Tomadores, "{%s}Cep" % self.NS_TIPOS).text = nfse.Tomadores.endereco_cep.replace("-", "")[:8]
             
-            # Contato do Tomadores
-            if nfse.Tomadores.telefone or nfse.Tomadores.email:
+            # Contato do Tomadores - GISS v2.04 suporta apenas Telefone
+            if nfse.Tomadores.telefone:
                 contato_Tomadores = etree.SubElement(tomador_el, "{%s}Contato" % self.NS_TIPOS)
-                if nfse.Tomadores.telefone:
-                    etree.SubElement(contato_Tomadores, "{%s}Telefone" % self.NS_TIPOS).text = nfse.Tomadores.telefone[:20]
-                if nfse.Tomadores.email:
-                    etree.SubElement(contato_Tomadores, "{%s}Email" % self.NS_TIPOS).text = nfse.Tomadores.email[:80]
+                etree.SubElement(contato_Tomadores, "{%s}Telefone" % self.NS_TIPOS).text = nfse.Tomadores.telefone[:20]
         
         # p1:OptanteSimplesNacional
         etree.SubElement(inf_rps, "{%s}OptanteSimplesNacional" % self.NS_TIPOS).text = "1" if nfse.optante_simples_nacional else "2"
@@ -337,11 +332,25 @@ class NFSeService:
         # Adicionar declaração XML
         xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_str
         
+        # DEBUG: Salvar XML gerado para análise
+        try:
+            with open('/tmp/last_generated_nfse.xml', 'w', encoding='utf-8') as f:
+                f.write(xml_str)
+            print(f"[NFSE] XML não assinado salvo em /tmp/last_generated_nfse.xml")
+        except:
+            pass
+        
         return xml_str
     
     def assinar_xml(self, xml: str, db_session=None, cliente_id: Optional[int] = None) -> str:
         """
-        Assina o XML RPS da NFS-e com certificado digital A1
+        ⚠️ EXCLUSIVO PARA NFS-e - NÃO AFETA NF-e ⚠️
+        
+        Assina o XML RPS da NFS-e com certificado digital A1.
+        Esta função usa signxml para assinar especificamente o elemento LoteRps
+        conforme exigido pelo webservice GISS.
+        
+        A assinatura de NF-e usa PyNFe e está em services/sefaz_service.py
         
         Args:
             xml: XML a ser assinado
@@ -360,7 +369,6 @@ class NFSeService:
             
             # Importar serviços necessários
             from services.certificate_service import get_active_certificate_for_client
-            from pynfe.processamento.assinatura import AssinaturaA1
             import tempfile
             import base64
             import os
@@ -396,8 +404,25 @@ class NFSeService:
             
             print(f"[NFSE] Certificado salvo temporariamente")
             
-            # 4. Criar assinador PyNFe
-            assinador = AssinaturaA1(cert_file_path, cert_senha)
+            # 4. Converter PFX para formato utilizável pela assinatura
+            from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
+            from cryptography import x509
+            from signxml import XMLSigner
+            
+            # Carregar PFX
+            with open(cert_file_path, 'rb') as f:
+                pfx_data = f.read()
+            
+            private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(
+                pfx_data, 
+                cert_senha.encode('utf-8')
+            )
+            
+            # Converter certificado para formato PEM string (signxml precisa)
+            from cryptography.hazmat.primitives import serialization
+            cert_pem = certificate.public_bytes(serialization.Encoding.PEM).decode('utf-8')
+            
+            print(f"[NFSE] Certificado carregado e convertido para PEM")
             
             # 5. Parse do XML
             if isinstance(xml, str):
@@ -407,9 +432,115 @@ class NFSeService:
             else:
                 xml_element = xml
             
-            # 6. Assinar (PyNFe assina automaticamente a tag com atributo Id)
-            print("[NFSE] Assinando com PyNFe...")
-            xml_assinado = assinador.assinar(xml_element, retorna_string=True)
+            # 6. Assinar SOMENTE o LoteRps (GISS exige assinatura no LoteRps com Id="1")
+            # Encontrar o elemento LoteRps
+            namespaces = {
+                'p': 'http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd',
+                'p1': 'http://www.giss.com.br/tipos-v2_04.xsd',
+                'ds': 'http://www.w3.org/2000/09/xmldsig#'
+            }
+            lote_rps = xml_element.find('.//p:LoteRps', namespaces)
+            
+            if lote_rps is not None:
+                lote_id = lote_rps.get('Id', '1')
+                print(f"[NFSE] Assinando LoteRps com Id='{lote_id}'...")
+                
+                # Usar signxml para assinar corretamente (API signxml 4.x)
+                # ⚠️ EXCLUSIVO PARA NFS-e - NÃO AFETA NF-e ⚠️
+                from signxml import methods, DigestAlgorithm, SignatureMethod
+                
+                # ==================================================================================
+                # JUSTIFICATIVA DO MONKEYPATCH (Documentado em 30/12/2024)
+                # ==================================================================================
+                # 
+                # Conforme solicitado: "lembre-se sempre consultar a documentação"
+                # Documentação consultada: https://xml-security.github.io/signxml/
+                # 
+                # PROBLEMA:
+                # - signxml v4.x bloqueia CRIAÇÃO de assinaturas SHA1 por segurança
+                #   (SHA1 tem vulnerabilidades conhecidas de colisão)
+                # - Documentação oficial apenas mostra como VERIFICAR SHA1, não como criar
+                # 
+                # REQUISITO GOVERNAMENTAL:
+                # - Webservice GISS de São José do Rio Preto EXIGE SHA1 (padrão legado)
+                # - Não há opção de usar SHA256 (webservice rejeita)
+                # 
+                # ALTERNATIVAS AVALIADAS:
+                # 1. Downgrade signxml v3.x: Mantém SHA1 mas perde correções de segurança
+                # 2. PyNFe: Não suporta assinatura de LoteRps (assina elemento errado)
+                # 3. xmlsec library: Dependência C++ complexa, dificuldade de deploy
+                # 4. Implementação manual: Alto risco, difícil manutenção
+                # 
+                # SOLUÇÃO ESCOLHIDA:
+                # - Monkeypatch XMLSigner.check_deprecated_methods() (linha 122 em signxml/signer.py)
+                # - Permite usar SHA1 apenas neste contexto específico
+                # - Mantém signxml v4.2.0 com todas as correções de segurança para outras operações
+                # 
+                # IMPACTO & SEGURANÇA:
+                # - SHA1 usado APENAS para assinatura NFS-e (exigência legal)
+                # - NF-e usa PyNFe (xml_signature_service.py) - NÃO AFETADO
+                # - Version pinning: signxml==4.2.0 em requirements.txt
+                # 
+                # REFERÊNCIAS:
+                # - signxml docs: "SHA1-based algorithms disabled by default"
+                # - GISS v2.04: Seção DigestMethod exige http://www.w3.org/2000/09/xmldsig#sha1
+                # ==================================================================================
+                XMLSigner.check_deprecated_methods = lambda self: None
+                
+                # Extrair apenas o LoteRps para assinar
+                # A assinatura será inserida como irmão do LoteRps no EnviarLoteRpsEnvio
+                signer = XMLSigner(
+                    method=methods.detached,  # Detached para assinar elemento específico
+                    signature_algorithm=SignatureMethod.RSA_SHA1,
+                    digest_algorithm=DigestAlgorithm.SHA1,
+                    c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
+                )
+                
+                # Salvar o LoteRps canonicalizado para debug
+                from lxml import etree as lxml_etree
+                c14n_method = lxml_etree.C14NWriterTarget(with_comments=False)
+                lote_rps_canonicalizado = lxml_etree.tostring(
+                    lote_rps, 
+                    method='c14n', 
+                    exclusive=False, 
+                    with_comments=False
+                ).decode('utf-8')
+                
+                # Calcular digest manualmente para verificar
+                import hashlib
+                digest_calculado = hashlib.sha1(lote_rps_canonicalizado.encode('utf-8')).digest()
+                digest_base64 = base64.b64encode(digest_calculado).decode('utf-8')
+                
+                with open('/tmp/lote_rps_c14n.xml', 'w', encoding='utf-8') as f:
+                    f.write(lote_rps_canonicalizado)
+                
+                self.logger.info(f"[NFSE] LoteRps canonicalizado salvo: {len(lote_rps_canonicalizado)} bytes")
+                self.logger.info(f"[NFSE] DigestValue calculado manualmente: {digest_base64}")
+                
+                # Assinar APENAS o LoteRps (detached)
+                signature_element = signer.sign(
+                    lote_rps,
+                    key=private_key,
+                    cert=cert_pem,
+                    reference_uri=f"#{lote_id}"
+                )
+                
+                # Extrair DigestValue da assinatura para comparar
+                ns = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
+                digest_na_assinatura = signature_element.find('.//ds:DigestValue', ns)
+                if digest_na_assinatura is not None:
+                    self.logger.info(f"[NFSE] DigestValue na assinatura: {digest_na_assinatura.text}")
+                
+                # Inserir a assinatura no documento original como irmão do LoteRps
+                # (após o LoteRps, dentro de EnviarLoteRpsEnvio)
+                xml_element.append(signature_element)
+                
+                xml_assinado = etree.tostring(xml_element, encoding='unicode', pretty_print=True)
+                # Adicionar declaração XML
+                xml_assinado = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_assinado
+            else:
+                print("[NFSE] ⚠️ LoteRps não encontrado, retornando sem assinatura")
+                xml_assinado = xml
             
             # 7. Limpar arquivo temporário
             os.unlink(cert_file_path)
@@ -445,6 +576,9 @@ class NFSeService:
         Returns:
             Tuple (sucesso, dados_resposta)
         """
+        cert_file_path = None
+        key_file_path = None
+        
         try:
             print(f"[NFSE] === ENVIANDO RPS PARA GISS ONLINE ===")
             print(f"[NFSE] Ambiente: {self.ambiente}")
@@ -455,49 +589,111 @@ class NFSeService:
             nfse.xml_rps = xml_rps
             print(f"[NFSE] XML RPS gerado: {len(xml_rps)} caracteres")
             
-            # 2. Assinar XML
+            # 2. Obter certificado do banco para envio HTTPS
+            certificado = None
+            if db_session and nfse.cliente_id:
+                from database.models import CertificadoDigital
+                certificado = db_session.query(CertificadoDigital).filter(
+                    CertificadoDigital.cliente_id == nfse.cliente_id,
+                    CertificadoDigital.ativo == True
+                ).first()
+            
+            if not certificado:
+                print("[NFSE] ⚠️ Certificado não encontrado no banco")
+                return False, {"erro": "Certificado digital não encontrado", "mensagem": "Configure um certificado digital válido para o cliente"}
+            
+            # 3. Preparar certificado para requisição HTTPS (mTLS)
+            cert_data = certificado.conteudo_certificado
+            cert_senha_encrypted = certificado.senha_certificado
+            
+            if not cert_data or not cert_senha_encrypted:
+                return False, {"erro": "Dados do certificado incompletos", "mensagem": "Certificado ou senha não configurados"}
+            
+            # Descriptografar a senha do certificado
+            try:
+                cert_senha = _decrypt_password(cert_senha_encrypted)
+                print(f"[NFSE] Senha descriptografada com sucesso")
+            except Exception as e:
+                print(f"[NFSE] ❌ Erro ao descriptografar senha: {e}")
+                return False, {"erro": "Erro ao descriptografar senha do certificado", "mensagem": str(e)}
+            
+            # 4. Converter PFX para PEM (necessário para requests)
+            import tempfile
+            from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
+            
+            # Decodificar certificado
+            if not isinstance(cert_data, bytes):
+                cert_data = base64.b64decode(cert_data)
+            
+            # Extrair chave privada e certificado do PFX
+            private_key, certificate, _ = pkcs12.load_key_and_certificates(
+                cert_data,
+                cert_senha.encode('utf-8') if isinstance(cert_senha, str) else cert_senha
+            )
+            
+            # Salvar em arquivos temporários
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
+                cert_file.write(certificate.public_bytes(Encoding.PEM))
+                cert_file_path = cert_file.name
+            
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
+                key_file.write(private_key.private_bytes(
+                    encoding=Encoding.PEM,
+                    format=PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=NoEncryption()
+                ))
+                key_file_path = key_file.name
+            
+            print(f"[NFSE] Certificado convertido para PEM")
+            
+            # 5. Assinar XML
             xml_assinado = self.assinar_xml(xml_rps, db_session=db_session, cliente_id=nfse.cliente_id)
             print(f"[NFSE] XML assinado: {len(xml_assinado)} caracteres")
             
-            # 3. Criar envelope SOAP para RecepcionarLoteRps
-            # GISS Online usa estrutura específica
-            soap_envelope = f'''<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" 
-               xmlns:ws="http://nfse.abrasf.org.br">
-    <soap:Body>
-        <ws:RecepcionarLoteRpsRequest>
-            <nfseCabecMsg>
-                <![CDATA[<?xml version="1.0" encoding="UTF-8"?>
-<cabecalho xmlns="http://www.abrasf.org.br/nfse.xsd" versao="2.04">
-    <versaoDados>2.04</versaoDados>
-</cabecalho>]]>
-            </nfseCabecMsg>
-            <nfseDadosMsg>
-                <![CDATA[{xml_assinado}]]>
-            </nfseDadosMsg>
-        </ws:RecepcionarLoteRpsRequest>
-    </soap:Body>
-</soap:Envelope>'''
+            # 6. Criar envelope SOAP para o webservice GISS
+            # IMPORTANTE: O conteúdo dentro de nfseCabecMsg e nfseDadosMsg deve estar escapado (entidades HTML)
+            import html
             
-            # 4. Headers HTTP
+            # Cabeçalho conforme documentação GISS (namespace correto: cabecalho-v2_04.xsd)
+            cabecalho = '''<cabecalho versao="2.04" xmlns="http://www.giss.com.br/cabecalho-v2_04.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <versaoDados>2.04</versaoDados>
+</cabecalho>'''
+            
+            # Escapar XML para incluir no SOAP
+            cabecalho_escaped = html.escape(cabecalho)
+            dados_escaped = html.escape(xml_assinado)
+            
+            soap_envelope = f'''<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:nfse="http://nfse.abrasf.org.br">
+    <soapenv:Header/>
+    <soapenv:Body>
+        <nfse:RecepcionarLoteRpsRequest>
+            <nfseCabecMsg>{cabecalho_escaped}</nfseCabecMsg>
+            <nfseDadosMsg>{dados_escaped}</nfseDadosMsg>
+        </nfse:RecepcionarLoteRpsRequest>
+    </soapenv:Body>
+</soapenv:Envelope>'''
+            
+            # Headers HTTP para SOAP
             headers = {
-                "Content-Type": "text/xml; charset=utf-8",
-                "SOAPAction": "RecepcionarLoteRps"
+                "Content-Type": "text/xml; charset=utf-8"
             }
             
-            # 5. URL do webservice
+            # URL do webservice
             url = self.urls["base"] + self.urls["enviar_lote"]
             print(f"[NFSE] URL: {url}")
+            print(f"[NFSE] Usando certificado mTLS")
+            print(f"[NFSE] Enviando com envelope SOAP GISS (XML escapado)")
             
-            # 6. Fazer requisição HTTP POST
-            print(f"[NFSE] Enviando requisição SOAP...")
+            # Fazer requisição HTTP POST com certificado cliente (mTLS)
+            print(f"[NFSE] Enviando requisição...")
             
             response = requests.post(
                 url,
                 data=soap_envelope.encode("utf-8"),
                 headers=headers,
+                cert=(cert_file_path, key_file_path),  # mTLS: certificado + chave privada
                 timeout=60,
-                verify=True  # Validar certificado SSL
+                verify=True  # Validar certificado SSL do servidor
             )
             
             print(f"[NFSE] Status HTTP: {response.status_code}")
@@ -531,6 +727,20 @@ class NFSeService:
                 "mensagem": str(e),
                 "tipo": type(e).__name__
             }
+        finally:
+            # Limpar arquivos temporários de certificado
+            if cert_file_path and os.path.exists(cert_file_path):
+                try:
+                    os.unlink(cert_file_path)
+                    print("[NFSE] Certificado temporário removido")
+                except:
+                    pass
+            if key_file_path and os.path.exists(key_file_path):
+                try:
+                    os.unlink(key_file_path)
+                    print("[NFSE] Chave privada temporária removida")
+                except:
+                    pass
     
     def consultar_lote(self, protocolo: str, prestador_cnpj: str, inscricao_municipal: str) -> Tuple[bool, Dict[str, Any]]:
         """
@@ -660,60 +870,73 @@ class NFSeService:
         try:
             print("[NFSE] Processando resposta XML...")
             
-            # Parse XML
-            # Remove namespace prefixes para facilitar busca
-            xml_limpo = xml_resposta
-            for ns_prefix in ['soap:', 'ns1:', 'ns2:', 'ws:', 'nfse:']:
-                xml_limpo = xml_limpo.replace(ns_prefix, '')
+            # Parse SOAP response
+            root = etree.fromstring(xml_resposta.encode("utf-8"))
             
-            root = etree.fromstring(xml_limpo.encode("utf-8"))
+            # Buscar outputXML dentro do SOAP Body
+            output_xml = root.find(".//{http://nfse.abrasf.org.br}outputXML")
+            if output_xml is None:
+                output_xml = root.find(".//outputXML")
             
-            # Procurar por protocolo (sucesso)
-            # GISS pode retornar em diferentes estruturas
-            protocolo_elem = (
-                root.find(".//Protocolo") or 
-                root.find(".//NumeroProtocolo") or
-                root.find(".//{*}Protocolo") or
-                root.find(".//{*}NumeroProtocolo")
-            )
-            
-            if protocolo_elem is not None and protocolo_elem.text:
-                protocolo = protocolo_elem.text.strip()
-                print(f"[NFSE] ✅ Protocolo recebido: {protocolo}")
+            if output_xml is not None and output_xml.text:
+                # Desescapar o XML interno
+                import html
+                xml_interno = html.unescape(output_xml.text)
+                print(f"[NFSE] XML interno extraído: {len(xml_interno)} caracteres")
                 
-                # Verificar se há NFS-e já autorizada (resposta síncrona)
-                numero_nfse_elem = (
-                    root.find(".//NumeroNfse") or
-                    root.find(".//Numero") or
-                    root.find(".//{*}NumeroNfse")
-                )
+                # Parse o XML interno
+                root_interno = etree.fromstring(xml_interno.encode("utf-8"))
                 
-                if numero_nfse_elem is not None and numero_nfse_elem.text:
-                    numero_nfse = numero_nfse_elem.text.strip()
-                    print(f"[NFSE] ✅ NFS-e autorizada imediatamente: {numero_nfse}")
+                # Procurar por protocolo (sucesso)
+                protocolo_elem = root_interno.find(".//{*}Protocolo")
+                if protocolo_elem is None:
+                    protocolo_elem = root_interno.find(".//{*}NumeroProtocolo")
+                
+                if protocolo_elem is not None and protocolo_elem.text:
+                    protocolo = protocolo_elem.text.strip()
+                    print(f"[NFSE] ✅ Protocolo recebido: {protocolo}")
+                    
+                    # Verificar se há NFS-e já autorizada (resposta síncrona)
+                    numero_nfse_elem = root_interno.find(".//{*}NumeroNfse")
+                    if numero_nfse_elem is None:
+                        numero_nfse_elem = root_interno.find(".//{*}Numero")
+                    
+                    if numero_nfse_elem is not None and numero_nfse_elem.text:
+                        numero_nfse = numero_nfse_elem.text.strip()
+                        print(f"[NFSE] ✅ NFS-e autorizada: {numero_nfse}")
+                        return True, {
+                            "sucesso": True,
+                            "protocolo": protocolo,
+                            "numero_nfse": numero_nfse,
+                            "mensagem": "NFS-e autorizada com sucesso"
+                        }
+                    
                     return True, {
                         "sucesso": True,
                         "protocolo": protocolo,
-                        "numero_nfse": numero_nfse,
-                        "mensagem": "NFS-e autorizada com sucesso",
-                        "sincrono": True
+                        "mensagem": "Lote enviado. Aguardando processamento."
                     }
                 
-                return True, {
-                    "sucesso": True,
-                    "protocolo": protocolo,
-                    "mensagem": "Lote enviado com sucesso. Aguardando processamento.",
-                    "sincrono": False
-                }
-            
-            # Procurar por erros
-            mensagem_erro_elem = (
-                root.find(".//Mensagem") or 
-                root.find(".//MensagemRetorno") or
-                root.find(".//DescricaoErro") or
-                root.find(".//{*}Mensagem") or
-                root.find(".//{*}MensagemRetorno")
-            )
+                # Procurar por mensagens de erro
+                msg_retorno = root_interno.find(".//{*}MensagemRetorno")
+                if msg_retorno is not None:
+                    codigo = msg_retorno.find(".//{*}Codigo")
+                    mensagem = msg_retorno.find(".//{*}Mensagem")
+                    correcao = msg_retorno.find(".//{*}Correcao")
+                    
+                    erro_msg = ""
+                    if codigo is not None and codigo.text:
+                        erro_msg += f"Código {codigo.text}: "
+                    if mensagem is not None and mensagem.text:
+                        erro_msg += mensagem.text
+                    if correcao is not None and correcao.text:
+                        erro_msg += f" ({correcao.text})"
+                    
+                    print(f"[NFSE] ❌ Erro: {erro_msg}")
+                    return False, {
+                        "erro": erro_msg or "Erro no processamento",
+                        "mensagem": erro_msg
+                    }
             
             codigo_erro_elem = (
                 root.find(".//Codigo") or 

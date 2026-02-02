@@ -41,16 +41,30 @@ def editar_produto(produto_id):
         
         if request.method == 'POST':
             # Atualiza produto
+            # Função auxiliar para converter vazios em None
+            def get_or_none(field, convert_to=None):
+                val = request.form.get(field)
+                if val is None or val == '':
+                    return None
+                try:
+                    if convert_to == int:
+                        return int(val)
+                    elif convert_to == float:
+                        return float(val)
+                    return val
+                except:
+                    return None
+            
             data = {
                 'produto_id': produto_id,
                 'codigo_interno': request.form.get('codigo_interno'),
                 'descricao': request.form.get('descricao'),
                 'unidade_comercial': request.form.get('unidade_comercial','UN'),
-                'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
-                'ncm_id': request.form.get('ncm_id'),
-                'cfop_id': request.form.get('cfop_id'),
-                'cest': request.form.get('cest'),
-                'csosn_id': request.form.get('csosn_id'),
+                'preco_unitario_padrao': get_or_none('preco_unitario_padrao', float) or 0,
+                'ncm_id': get_or_none('ncm_id', int),
+                'cfop_id': get_or_none('cfop_id', int),
+                'cest': request.form.get('cest') or None,
+                'csosn_id': get_or_none('csosn_id', int),
             }
             db.execute(text("""
                 UPDATE produtos
@@ -3154,6 +3168,14 @@ def create_regra_tributacao(cliente_id: int):
     template = 'admin/regras_tributacao/form.html'
     db = _get_db()
     try:
+        # Buscar regimes tributários
+        regime_rows = db.execute(text("""
+            SELECT regime_tributario_id, nome, descricao 
+            FROM regimes_tributarios 
+            ORDER BY regime_tributario_id
+        """)).fetchall()
+        regimes = [dict(row._mapping) for row in regime_rows]
+        
         # Buscar todos os CFOPs
         cfop_rows = db.execute(text("""
             SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
@@ -3171,6 +3193,7 @@ def create_regra_tributacao(cliente_id: int):
             regra=None,
             cliente_id=cliente_id,
             modal=modal,
+            regimes=regimes,
             cfops=cfops,
             ncms=ncms
         )
@@ -3191,6 +3214,14 @@ def edit_regra_tributacao(regra_tributacao_id: int):
             flash('Regra de tributação não encontrada', 'warning')
             return redirect(url_for('admin.list_regras_tributacao'))
         
+        # Buscar regimes tributários
+        regime_rows = db.execute(text("""
+            SELECT regime_tributario_id, nome, descricao 
+            FROM regimes_tributarios 
+            ORDER BY regime_tributario_id
+        """)).fetchall()
+        regimes = [dict(row._mapping) for row in regime_rows]
+        
         # Buscar todos os CFOPs
         cfop_rows = db.execute(text("""
             SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
@@ -3204,7 +3235,8 @@ def edit_regra_tributacao(regra_tributacao_id: int):
         ncms = [dict(row._mapping) for row in ncm_rows]
         
         return render_template('admin/regras_tributacao/form.html', 
-                             regra=regra, 
+                             regra=regra,
+                             regimes=regimes,
                              cfops=cfops, 
                              ncms=ncms)
     except Exception as e:
@@ -3663,6 +3695,20 @@ def create_produto():
 def store_produto():
     db = _get_db()
     try:
+        # Helper para converter campos vazios em None
+        def get_or_none(field, convert_to=None):
+            val = request.form.get(field)
+            if val is None or val == '':
+                return None
+            try:
+                if convert_to == int:
+                    return int(val)
+                elif convert_to == float:
+                    return float(val)
+                return val
+            except:
+                return None
+        
         # Busca o cliente_id do form ou da sessão
         cliente_id = request.form.get('cliente_id') or session.get('current_client_id')
         # Corrige caso venha string 'None' ou valor vazio
@@ -3677,11 +3723,11 @@ def store_produto():
             'descricao': request.form.get('descricao'),
             'unidade_comercial': request.form.get('unidade_comercial','UN'),
             'tipo_item': request.form.get('tipo_item'),
-            'preco_unitario_padrao': request.form.get('preco_unitario_padrao') or 0,
-            'ncm_id': request.form.get('ncm_id'),
-            'cfop_id': request.form.get('cfop_id'),
+            'preco_unitario_padrao': get_or_none('preco_unitario_padrao', float) or 0,
+            'ncm_id': get_or_none('ncm_id', int),
+            'cfop_id': get_or_none('cfop_id', int),
             'origem_mercadoria': request.form.get('origem_mercadoria'),
-            'cest': request.form.get('cest'),
+            'cest': request.form.get('cest') or None,
             'cst_id': int(cst_id) if cst_id else None,
             'csosn_id': int(csosn_id) if csosn_id else None,
             'created_by_user_id': current_user.id,
@@ -4429,6 +4475,14 @@ def list_regras_tributacao():
 def nova_regra_tributacao():
     db = _get_db()
     try:
+        # Buscar regimes tributários
+        regime_rows = db.execute(text("""
+            SELECT regime_tributario_id, nome, descricao 
+            FROM regimes_tributarios 
+            ORDER BY regime_tributario_id
+        """)).fetchall()
+        regimes = [dict(row._mapping) for row in regime_rows]
+        
         # Buscar todos os CFOPs
         cfop_rows = db.execute(text("""
             SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop
@@ -4445,6 +4499,7 @@ def nova_regra_tributacao():
         
         return render_template('admin/regras_tributacao/form.html', 
                              regra=None, 
+                             regimes=regimes,
                              cfops=cfops, 
                              ncms=ncms,
                              cliente_id=cliente_id)
@@ -4488,8 +4543,13 @@ def salvar_regra_tributacao():
         descricao = get_or_none('descricao_regra', str)
         if not descricao:
             # Gerar descrição automática se não fornecida (compatibilidade com regras antigas)
-            regime_map = {1: 'Simples Nacional', 2: 'Lucro Presumido', 3: 'Lucro Real'}
-            descricao = f"Regra {regime_map.get(regime_id, 'Tributária')}"
+            # Buscar nome do regime do banco
+            regime_row = db.execute(text("""
+                SELECT nome FROM regimes_tributarios WHERE regime_tributario_id = :id
+            """), {'id': regime_id}).fetchone()
+            regime_nome = regime_row[0] if regime_row else 'Tributária'
+            
+            descricao = f"Regra {regime_nome}"
             if cfop_id or ncm_id:
                 descricao += " - Específica"
             else:
@@ -4572,8 +4632,11 @@ def salvar_regra_tributacao():
         return redirect(url_for('admin.list_regras_tributacao', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
+        import traceback
+        erro_completo = traceback.format_exc()
         print(f"[X] Erro salvar_regra_tributacao: {e}")
-        flash('Erro ao salvar regra de tributação', 'error')
+        print(f"[X] Traceback completo:\n{erro_completo}")
+        flash(f'Erro ao salvar regra de tributação: {str(e)}', 'error')
         return redirect(url_for('admin.nova_regra_tributacao'))
     finally:
         db.close()
