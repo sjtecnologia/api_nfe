@@ -1166,6 +1166,40 @@ class NFeService:
         except Exception as e:
             print(f"ERRO: Erro na simulação: {e}")
             return {'success': False, 'message': f'Erro na simulação: {str(e)}'}
+    
+    def consultar_nfe(self, chave_acesso: str, ambiente: int = 2) -> Dict[str, Any]:
+        """
+        Consulta status de uma NFe na SEFAZ (simulado)
+        
+        Args:
+            chave_acesso: Chave de acesso da NFe (44 dígitos)
+            ambiente: 1=Produção, 2=Homologação
+            
+        Returns:
+            Dict com resultado da consulta
+        """
+        try:
+            print(f"[CONSULTA] Consultando NFe: {chave_acesso}")
+            print(f"[CONSULTA] Ambiente: {ambiente} ({'Produção' if ambiente == 1 else 'Homologação'})")
+            
+            # TODO: Implementar consulta real na SEFAZ quando disponível
+            # Por enquanto, retorna simulação
+            
+            return {
+                'success': True,
+                'status': '100',
+                'mensagem': 'Autorizado o uso da NF-e',
+                'protocolo': f"135{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                'data_autorizacao': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                'motivo': 'NFe autorizada'
+            }
+            
+        except Exception as e:
+            print(f"[ERRO] Erro na consulta: {e}")
+            return {
+                'success': False,
+                'message': f'Erro ao consultar NFe: {str(e)}'
+            }
         
     def _extrair_chave_acesso(self, xml_content: str) -> Optional[str]:
         """Extrai chave de acesso do XML assinado"""
@@ -1234,23 +1268,43 @@ class NFeService:
             root = ET.fromstring(xml_assinado)
             nfe_element = root.find('.//{http://www.portalfiscal.inf.br/nfe}NFe')
             
+            # Extrair tpAmb do XML da NFe para usar no protocolo
+            tp_amb = '2'  # Padrão: homologação
+            try:
+                tp_amb_element = root.find('.//{http://www.portalfiscal.inf.br/nfe}tpAmb')
+                if tp_amb_element is not None and tp_amb_element.text:
+                    tp_amb = tp_amb_element.text
+                    print(f"[PROTOCOLO] tpAmb extraído da NFe: {tp_amb} ({'Produção' if tp_amb == '1' else 'Homologação'})")
+            except:
+                print(f"[PROTOCOLO] Não foi possível extrair tpAmb, usando padrão: 2")
+            
             if nfe_element is not None:
                 nfe_xml = ET.tostring(nfe_element, encoding='unicode')
             else:
                 nfe_xml = xml_assinado
+            
+            # Determinar cStat e digVal baseado no ambiente
+            if resultado.get('ambiente_real'):
+                # SEFAZ real retorna cStat como número (100, 150, etc)
+                cstat = resultado.get('status', '100') if resultado.get('status', '').isdigit() else '100'
+                dig_val = resultado.get('digVal', resultado.get('digest_value', ''))
+            else:
+                # Simulação
+                cstat = 'AUTORIZADA'
+                dig_val = 'SIMULADO'
             
             xml_protocolo = f'''<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
 {nfe_xml}
   <protNFe versao="4.00">
     <infProt>
-      <tpAmb>2</tpAmb>
+      <tpAmb>{tp_amb}</tpAmb>
       <verAplic>SP_NFE_PL_008i2</verAplic>
       <chNFe>{resultado.get('chave_acesso', '')}</chNFe>
       <dhRecbto>{resultado.get('data_autorizacao', datetime.now().isoformat())}</dhRecbto>
       <nProt>{resultado.get('protocolo', '')}</nProt>
-      <digVal>SIMULADO</digVal>
-      <cStat>{resultado.get('status', '100')}</cStat>
+      <digVal>{dig_val}</digVal>
+      <cStat>{cstat}</cStat>
       <xMotivo>{resultado.get('mensagem', 'Autorizado o uso da NF-e')}</xMotivo>
     </infProt>
   </protNFe>

@@ -1272,17 +1272,57 @@ def generate_danfe(nfe_id):
         nfe_data = dict(nfe._mapping)
         
         # Verificar se tem XML
-        if not nfe_data.get('json_nfe') or not nfe_data['json_nfe'].get('xml_content'):
+        xml_original = None
+        if nfe_data.get('json_nfe'):
+            xml_original = nfe_data['json_nfe'].get('xml_content')
+        
+        if not xml_original:
             return jsonify({'success': False, 'message': 'XML não disponível para esta NFe'}), 400
+        
+        # CORREÇÃO: Se a NFe está AUTORIZADA e o XML não tem protNFe, gerar protocolo
+        xml_para_danfe = xml_original
+        status = nfe_data.get('status', '').upper()
+        
+        if status == 'AUTORIZADA' and '<protNFe' not in xml_original:
+            print(f"[DANFE] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
+            try:
+                from services.nfe_service import NFeService
+                
+                # XML já é só NFe sem protocolo
+                nfe_service = NFeService()
+                resultado_sefaz = {
+                    'chave_acesso': nfe_data.get('chave_acesso'),
+                    'protocolo': nfe_data.get('protocolo_autorizacao') or nfe_data.get('protocolo_sefaz'),
+                    'status': '100',
+                    'digVal': 'N/A',
+                    'ambiente_real': True
+                }
+                
+                xml_para_danfe = nfe_service._gerar_xml_protocolo(xml_original, resultado_sefaz)
+                print(f"[DANFE] Protocolo gerado com tpAmb=1")
+                # Verificar se protNFe foi realmente adicionado
+                if '<protNFe' in xml_para_danfe and '<tpAmb>1</tpAmb>' in xml_para_danfe:
+                    print(f"[DANFE] ✅ XML final contém protNFe com tpAmb=1")
+                else:
+                    print(f"[DANFE] ❌ ERRO: XML final não contém protNFe com tpAmb=1")
+                    print(f"[DANFE] Primeiros 1000 chars: {xml_para_danfe[:1000]}")
+            except Exception as ex:
+                print(f"[DANFE] Erro ao gerar protocolo: {ex}")
+                import traceback
+                traceback.print_exc()
         
         # Gerar DANFE usando a biblioteca Python NFe
         from services.danfe_service import generate_danfe
+        import time
         
         try:
             # Buscar cliente_id da NFe
             cliente_id_nfe = nfe_data.get('cliente_id')
-            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id, cliente_id_nfe)
-            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
+            pdf_path = generate_danfe(xml_para_danfe, nfe_id, cliente_id_nfe)
+            
+            # Adicionar timestamp para evitar cache do navegador
+            timestamp = int(time.time())
+            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf') + f'?t={timestamp}'
             
             return jsonify({
                 'success': True,
@@ -1334,17 +1374,51 @@ def generate_danfe_after_issue():
         nfe_data = dict(nfe._mapping)
         
         # Verificar se tem XML
-        if not nfe_data.get('json_nfe') or not nfe_data['json_nfe'].get('xml_content'):
+        xml_original = None
+        if nfe_data.get('json_nfe'):
+            xml_original = nfe_data['json_nfe'].get('xml_content')
+        
+        if not xml_original:
             return jsonify({'success': False, 'message': 'XML não disponível para esta NFe'}), 400
+        
+        # CORREÇÃO: Se a NFe está AUTORIZADA e o XML não tem protNFe, gerar protocolo
+        xml_para_danfe = xml_original
+        status = nfe_data.get('status', '').upper()
+        
+        if status == 'AUTORIZADA' and '<protNFe' not in xml_original:
+            print(f"[DANFE-AFTER] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
+            try:
+                from services.nfe_service import NFeService
+                
+                # XML já é só NFe sem protocolo
+                nfe_service = NFeService()
+                resultado_sefaz = {
+                    'chave_acesso': nfe_data.get('chave_acesso'),
+                    'protocolo': nfe_data.get('protocolo_autorizacao') or nfe_data.get('protocolo_sefaz'),
+                    'status': '100',
+                    'digVal': 'N/A',
+                    'ambiente_real': True
+                }
+                
+                xml_para_danfe = nfe_service._gerar_xml_protocolo(xml_original, resultado_sefaz)
+                print(f"[DANFE-AFTER] Protocolo gerado com tpAmb=1")
+            except Exception as ex:
+                print(f"[DANFE-AFTER] Erro ao gerar protocolo: {ex}")
+                import traceback
+                traceback.print_exc()
         
         # Gerar DANFE usando o serviço
         from services.danfe_service import generate_danfe
+        import time
         
         try:
             # Buscar cliente_id da NFe
             cliente_id_nfe = nfe_data.get('cliente_id')
-            pdf_path = generate_danfe(nfe_data['json_nfe']['xml_content'], nfe_id, cliente_id_nfe)
-            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
+            pdf_path = generate_danfe(xml_para_danfe, nfe_id, cliente_id_nfe)
+            
+            # Adicionar timestamp para evitar cache do navegador
+            timestamp = int(time.time())
+            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf') + f'?t={timestamp}'
             
             return jsonify({
                 'success': True,
@@ -3014,11 +3088,32 @@ def compartilhar_nfe(nfe_id):
                         
                         xml_content = json_nfe.get('xml_content')
                         if xml_content:
+                            # Aplicar correção de protocolo se necessário
+                            xml_para_danfe = xml_content
+                            status = nfe_data.get('status', '').upper()
+                            
+                            if status == 'AUTORIZADA' and '<protNFe' not in xml_content:
+                                print(f"[EMAIL] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
+                                try:
+                                    from services.nfe_service import NFeService
+                                    nfe_service = NFeService()
+                                    resultado_sefaz = {
+                                        'chave_acesso': nfe_data.get('chave_acesso'),
+                                        'protocolo': nfe_data.get('protocolo_autorizacao') or nfe_data.get('protocolo_sefaz'),
+                                        'status': '100',
+                                        'digVal': 'N/A',
+                                        'ambiente_real': True
+                                    }
+                                    xml_para_danfe = nfe_service._gerar_xml_protocolo(xml_content, resultado_sefaz)
+                                    print(f"[EMAIL] Protocolo gerado com tpAmb=1")
+                                except Exception as ex:
+                                    print(f"[EMAIL] Erro ao gerar protocolo: {ex}")
+                            
                             # OK: CORREÇÃO: Usar caminho absoluto e verificar se existe
                             from services.danfe_service import generate_danfe
                             
-                            # Gerar DANFE
-                            pdf_path = generate_danfe(xml_content, nfe_id)
+                            # Gerar DANFE com XML corrigido
+                            pdf_path = generate_danfe(xml_para_danfe, nfe_id)
                             print(f" DANFE path: {pdf_path}")
                             
                             if pdf_path:
@@ -3192,6 +3287,212 @@ def compartilhar_nfe(nfe_id):
         return jsonify({
             'success': False,
             'message': f'Erro interno: {str(e)}'
+        }), 500
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/consultar-status/<int:nfe_id>', methods=['POST'])
+@login_required
+@viewer_or_higher_required()
+def consultar_status_sefaz(nfe_id):
+    """Consultar status da NFe na SEFAZ"""
+    db = next(get_db())
+    try:
+        # Buscar NFe
+        query = text("""
+            SELECT n.*, c.cnpj as emitente_cnpj, c.razao_social as emitente_razao
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+        
+        # Converter para dict
+        nfe_data = dict(nfe._mapping)
+        
+        chave_acesso = nfe_data.get('chave_acesso')
+        if not chave_acesso:
+            return jsonify({'success': False, 'message': 'Chave de acesso não encontrada'}), 400
+        
+        # Consultar na SEFAZ
+        from services.nfe_service import NFeService
+        nfe_service = NFeService()
+        
+        # Determinar ambiente
+        ambiente = 2  # Homologação por padrão
+        if nfe_data.get('json_nfe'):
+            json_nfe = nfe_data['json_nfe']
+            if isinstance(json_nfe, str):
+                import json
+                json_nfe = json.loads(json_nfe)
+            
+            xml_content = json_nfe.get('xml_content', '')
+            if '<tpAmb>1</tpAmb>' in xml_content:
+                ambiente = 1  # Produção
+        
+        # Fazer consulta
+        try:
+            resultado = nfe_service.consultar_nfe(chave_acesso, ambiente)
+            
+            if resultado.get('success'):
+                return jsonify({
+                    'success': True,
+                    'message': 'Consulta realizada com sucesso',
+                    'status': resultado.get('status'),
+                    'protocolo': resultado.get('protocolo'),
+                    'data_autorizacao': resultado.get('data_autorizacao'),
+                    'mensagem': resultado.get('motivo') or resultado.get('mensagem', 'Autorizada')
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': resultado.get('message', 'Erro na consulta SEFAZ')
+                })
+        except Exception as e:
+            print(f"[ERRO] Erro ao consultar SEFAZ: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao consultar SEFAZ: {str(e)}'
+            }), 500
+            
+    except Exception as e:
+        print(f"[ERRO] Erro geral: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+    finally:
+        db.close()@nfe_bp.route('/cancelar/<int:nfe_id>', methods=['POST'])
+@login_required
+@editor_or_admin_required()
+def cancelar_nfe(nfe_id):
+    """Cancelar NFe na SEFAZ"""
+    db = next(get_db())
+    try:
+        # Buscar NFe
+        query = text("""
+            SELECT n.*, c.cnpj as emitente_cnpj, c.razao_social as emitente_razao
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe = result.first()
+        
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+        
+        nfe_data = dict(nfe._mapping)
+        
+        # Validações
+        if nfe_data.get('status', '').upper() != 'AUTORIZADA':
+            return jsonify({'success': False, 'message': 'Apenas NFes autorizadas podem ser canceladas'}), 400
+        
+        chave_acesso = nfe_data.get('chave_acesso')
+        if not chave_acesso or len(chave_acesso) != 44:
+            return jsonify({'success': False, 'message': 'Chave de acesso inválida'}), 400
+        
+        protocolo = nfe_data.get('protocolo_autorizacao') or nfe_data.get('protocolo_sefaz')
+        if not protocolo:
+            return jsonify({'success': False, 'message': 'Protocolo não encontrado'}), 400
+        
+        # Verificar prazo de 24h
+        from datetime import datetime, timedelta
+        data_emissao = nfe_data.get('data_emissao')
+        if data_emissao:
+            if isinstance(data_emissao, str):
+                data_emissao = datetime.fromisoformat(data_emissao.replace('Z', '+00:00'))
+            if datetime.now() - data_emissao > timedelta(hours=24):
+                return jsonify({'success': False, 'message': 'Prazo de cancelamento expirado (24 horas)'}), 400
+        
+        # Obter justificativa
+        data = request.get_json()
+        justificativa = data.get('justificativa', '').strip()
+        
+        if not justificativa or len(justificativa) < 15:
+            return jsonify({'success': False, 'message': 'Justificativa deve ter no mínimo 15 caracteres'}), 400
+        
+        # Determinar ambiente
+        ambiente = 'producao'
+        if nfe_data.get('json_nfe'):
+            json_nfe = nfe_data['json_nfe']
+            if isinstance(json_nfe, str):
+                import json
+                json_nfe = json.loads(json_nfe)
+            xml_content = json_nfe.get('xml_content', '')
+            if '<tpAmb>2</tpAmb>' in xml_content:
+                ambiente = 'homologacao'
+        
+        # Obter certificado
+        from services.certificate_service import get_active_certificate_for_client
+        certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
+        
+        if not certificado:
+            return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
+        
+        # Cancelar na SEFAZ
+        from services.sefaz_service import SefazService
+        
+        sefaz = SefazService(
+            ambiente=ambiente,
+            cert_path=certificado.get('cert_path'),
+            key_path=certificado.get('key_path')
+        )
+        
+        resultado = sefaz.cancelar_nfe(
+            chave_nfe=chave_acesso,
+            protocolo=protocolo,
+            justificativa=justificativa,
+            cnpj_emitente=nfe_data['emitente_cnpj']
+        )
+        
+        if resultado.get('success'):
+            # Atualizar no banco
+            update_query = text("""
+                UPDATE nfe_emitidas 
+                SET status = 'CANCELADA',
+                    protocolo_cancelamento = :protocolo,
+                    data_cancelamento = :data_cancelamento,
+                    justificativa_cancelamento = :justificativa
+                WHERE nfe_emitida_id = :nfe_id
+            """)
+            db.execute(update_query, {
+                'protocolo': resultado.get('protocolo'),
+                'data_cancelamento': datetime.now(),
+                'justificativa': justificativa,
+                'nfe_id': nfe_id
+            })
+            db.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'NFe cancelada com sucesso na SEFAZ',
+                'protocolo': resultado.get('protocolo'),
+                'data_cancelamento': resultado.get('data_cancelamento')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': resultado.get('message', 'Erro ao cancelar na SEFAZ')
+            })
+            
+    except Exception as e:
+        db.rollback()
+        print(f"[ERRO] Erro ao cancelar NFe: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao cancelar: {str(e)}'
         }), 500
     finally:
         db.close()

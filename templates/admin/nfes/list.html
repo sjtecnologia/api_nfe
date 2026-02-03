@@ -156,20 +156,28 @@
                                                     {% elif nfe.finalidade_emissao == 2 or nfe.finalidade_emissao == '2' %}
                                                         <span class="badge bg-info">Complementar</span>
                                                     {% elif nfe.finalidade_emissao == 3 or nfe.finalidade_emissao == '3' %}
-                                                        <span class="badge bg-warning">Ajuste</span>
+                                                        <span class="badge bg-warning text-dark">Ajuste</span>
                                                     {% elif nfe.finalidade_emissao == 4 or nfe.finalidade_emissao == '4' %}
                                                         <span class="badge bg-secondary">Devolução</span>
                                                     {% else %}
-                                                        <span class="badge bg-light">{{ nfe.finalidade_emissao }}</span>
+                                                        <span class="badge bg-secondary text-white">{{ nfe.finalidade_emissao }}</span>
                                                     {% endif %}
                                                 {% else %}
-                                                    <span class="badge bg-light">N/A</span>
+                                                    <span class="badge bg-secondary text-white">N/A</span>
                                                 {% endif %}
                                             </td>
                                             <td>
                                                 {% if nfe.status|upper == 'AUTORIZADA' %}
                                                     <span class="badge bg-success">
                                                         <i class="fas fa-check-circle"></i> Autorizada
+                                                    </span>
+                                                {% elif nfe.status|upper == 'CANCELADA' %}
+                                                    <span class="badge bg-dark">
+                                                        <i class="fas fa-ban"></i> Cancelada
+                                                    </span>
+                                                {% elif nfe.status|upper == 'DENEGADA' %}
+                                                    <span class="badge bg-danger">
+                                                        <i class="fas fa-exclamation-triangle"></i> Denegada
                                                     </span>
                                                 {% elif nfe.status|upper == 'REJEITADA' %}
                                                     <span class="badge bg-danger" 
@@ -181,7 +189,7 @@
                                                         <i class="fas fa-times-circle"></i> Rejeitada
                                                     </span>
                                                 {% elif nfe.status|upper == 'PROCESSANDO' %}
-                                                    <span class="badge bg-warning">
+                                                    <span class="badge bg-warning text-dark">
                                                         <i class="fas fa-clock"></i> Processando
                                                     </span>
                                                 {% elif nfe.status|upper == 'RASCUNHO' %}
@@ -189,7 +197,7 @@
                                                         <i class="fas fa-edit"></i> Rascunho
                                                     </span>
                                                 {% else %}
-                                                    <span class="badge bg-light">{{ nfe.status or 'N/A' }}</span>
+                                                    <span class="badge bg-secondary text-white">{{ nfe.status or 'N/A' }}</span>
                                                 {% endif %}
                                             </td>
                                             <td>
@@ -225,12 +233,28 @@
                                                         <i class="fas fa-edit"></i>
                                                     </a>
                                                     {% endif %}
+                                                    {% if nfe.chave_acesso %}
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-warning btn-consultar-status"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            data-chave="{{ nfe.chave_acesso }}"
+                                                            title="Consultar Status na SEFAZ">
+                                                        <i class="fas fa-sync"></i>
+                                                    </button>
+                                                    {% endif %}
                                                     {% if nfe.status|upper == 'AUTORIZADA' %}
                                                     <button type="button"
                                                             class="btn btn-sm btn-outline-success btn-gerar-danfe"
                                                             data-nfe-id="{{ nfe.nfe_emitida_id }}"
                                                             title="Gerar DANFE">
                                                         <i class="fas fa-file-pdf"></i>
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-danger btn-cancelar-nfe"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            data-numero="{{ nfe.numero }}"
+                                                            title="Cancelar NFe">
+                                                        <i class="fas fa-ban"></i>
                                                     </button>
                                                     {% endif %}
                                                 </div>
@@ -464,6 +488,212 @@ async function enviarEmailDanfe() {
     } catch (error) {
         console.error('Erro ao enviar email:', error);
         alert(`Erro ao enviar email: ${error.message}`);
+    }
+}
+
+// ==================== CONSULTAR STATUS ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Botões de consultar status
+    document.querySelectorAll('.btn-consultar-status').forEach(button => {
+        button.addEventListener('click', async function() {
+            const nfeId = this.dataset.nfeId;
+            const chave = this.dataset.chave;
+            
+            if (!chave || chave.length !== 44) {
+                alert('NFe não possui chave de acesso válida');
+                return;
+            }
+            
+            if (!confirm('Deseja consultar o status desta NFe na SEFAZ?')) {
+                return;
+            }
+            
+            // Desabilitar botão e mostrar loading
+            this.disabled = true;
+            const iconOriginal = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            try {
+                const response = await fetch(`/admin/nfe/consultar-status/${nfeId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    let mensagem = `Status SEFAZ: ${result.status}\n`;
+                    mensagem += `\nMensagem: ${result.mensagem || 'N/A'}`;
+                    if (result.protocolo) {
+                        mensagem += `\nProtocolo: ${result.protocolo}`;
+                    }
+                    if (result.data_autorizacao) {
+                        mensagem += `\nData: ${result.data_autorizacao}`;
+                    }
+                    
+                    alert(mensagem);
+                    
+                    // Recarregar página se status mudou
+                    if (result.status_atualizado) {
+                        location.reload();
+                    }
+                } else {
+                    alert(`Erro ao consultar status: ${result.message || 'Erro desconhecido'}`);
+                }
+                
+            } catch (error) {
+                console.error('Erro ao consultar status:', error);
+                alert(`Erro ao consultar status: ${error.message}`);
+            } finally {
+                // Restaurar botão
+                this.disabled = false;
+                this.innerHTML = iconOriginal;
+            }
+        });
+    });
+});
+
+// ==================== CANCELAR NFE ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Botões de cancelar NFe
+    document.querySelectorAll('.btn-cancelar-nfe').forEach(button => {
+        button.addEventListener('click', function() {
+            const nfeId = this.dataset.nfeId;
+            const numero = this.dataset.numero;
+            
+            // Abrir modal de confirmação
+            abrirModalCancelamento(nfeId, numero);
+        });
+    });
+});
+
+function abrirModalCancelamento(nfeId, numero) {
+    const modalHtml = `
+        <div class="modal fade" id="modalCancelarNfe" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-ban"></i> Cancelar NFe ${numero}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <strong>Atenção!</strong> Esta ação é irreversível e será enviada para a SEFAZ.
+                            <br>Prazo máximo: 24 horas após emissão.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="justificativaCancelamento" class="form-label">
+                                Justificativa do Cancelamento <span class="text-danger">*</span>
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="justificativaCancelamento" 
+                                rows="4" 
+                                placeholder="Informe o motivo do cancelamento (mínimo 15 caracteres)"
+                                required
+                                minlength="15"></textarea>
+                            <small class="form-text text-muted">
+                                Mínimo de 15 caracteres. Esta justificativa será enviada para a SEFAZ.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="confirmarCancelamento(${nfeId})">
+                            <i class="fas fa-ban"></i> Confirmar Cancelamento
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const modalExistente = document.getElementById('modalCancelarNfe');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalCancelarNfe'));
+    modal.show();
+}
+
+async function confirmarCancelamento(nfeId) {
+    const justificativa = document.getElementById('justificativaCancelamento').value.trim();
+    
+    if (!justificativa || justificativa.length < 15) {
+        alert('Por favor, informe uma justificativa com no mínimo 15 caracteres');
+        return;
+    }
+    
+    if (!confirm('Tem certeza que deseja CANCELAR esta NFe na SEFAZ?\n\nEsta ação é IRREVERSÍVEL!')) {
+        return;
+    }
+    
+    try {
+        // Mostrar loading
+        const btnConfirmar = document.querySelector('#modalCancelarNfe .btn-danger');
+        btnConfirmar.disabled = true;
+        btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
+        
+        const response = await fetch(`/admin/nfe/cancelar/${nfeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                justificativa: justificativa
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalCancelarNfe'));
+            if (modal) modal.hide();
+            
+            // Mostrar mensagem de sucesso
+            let mensagem = 'NFe cancelada com sucesso na SEFAZ!\n';
+            if (result.protocolo) {
+                mensagem += `\nProtocolo: ${result.protocolo}`;
+            }
+            if (result.data_cancelamento) {
+                mensagem += `\nData: ${result.data_cancelamento}`;
+            }
+            
+            alert(mensagem);
+            
+            // Recarregar página
+            location.reload();
+            
+        } else {
+            alert(`Erro ao cancelar NFe: ${result.message || 'Erro desconhecido'}`);
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Confirmar Cancelamento';
+        }
+        
+    } catch (error) {
+        console.error('Erro ao cancelar NFe:', error);
+        alert(`Erro ao cancelar NFe: ${error.message}`);
+        
+        const btnConfirmar = document.querySelector('#modalCancelarNfe .btn-danger');
+        if (btnConfirmar) {
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Confirmar Cancelamento';
+        }
     }
 }
 
