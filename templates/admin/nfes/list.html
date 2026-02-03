@@ -697,6 +697,45 @@ async function confirmarCancelamento(nfeId) {
     }
 }
 
+// Função para copiar chave de acesso
+function copiarChave(chave) {
+    // Criar elemento temporário
+    const tempInput = document.createElement('input');
+    tempInput.value = chave;
+    document.body.appendChild(tempInput);
+    
+    // Selecionar e copiar
+    tempInput.select();
+    tempInput.setSelectionRange(0, 99999); // Para mobile
+    
+    try {
+        document.execCommand('copy');
+        
+        // Feedback visual
+        const btnCopiar = event.target.closest('button');
+        if (btnCopiar) {
+            const originalHtml = btnCopiar.innerHTML;
+            btnCopiar.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+            btnCopiar.classList.add('btn-success');
+            btnCopiar.classList.remove('btn-outline-secondary');
+            
+            setTimeout(() => {
+                btnCopiar.innerHTML = originalHtml;
+                btnCopiar.classList.remove('btn-success');
+                btnCopiar.classList.add('btn-outline-secondary');
+            }, 2000);
+        }
+        
+        console.log('Chave copiada:', chave);
+    } catch (err) {
+        console.error('Erro ao copiar:', err);
+        alert('Erro ao copiar chave. Tente novamente.');
+    }
+    
+    // Remover elemento temporário
+    document.body.removeChild(tempInput);
+}
+
 // Inicializar tooltips
 document.addEventListener('DOMContentLoaded', function() {
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));

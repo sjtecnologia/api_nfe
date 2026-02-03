@@ -870,6 +870,27 @@ def emitir_nfe():
             print(f"AVISO: Erro ao carregar CSOSNs: {e}")
             csosns_data = []
         
+        # BUSCAR CLASSIFICAÇÕES IBS/CBS
+        try:
+            from database.models import ClassificacaoIBSCBS
+            all_classificacoes = db.query(ClassificacaoIBSCBS).filter_by(ativo=True).all()
+            classificacoes_ibs_cbs = []
+            for clf in all_classificacoes:
+                classificacoes_ibs_cbs.append({
+                    'classificacao_id': clf.classificacao_id,
+                    'codigo': clf.codigo,
+                    'descricao': clf.descricao,
+                    'aliquota_ibs_uf': float(clf.aliquota_ibs_uf),
+                    'aliquota_ibs_mun': float(clf.aliquota_ibs_mun),
+                    'aliquota_cbs': float(clf.aliquota_cbs)
+                })
+            
+            print(f" Classificações IBS/CBS carregadas: {len(classificacoes_ibs_cbs)} registros")
+            
+        except Exception as e:
+            print(f"AVISO: Erro ao carregar Classificações IBS/CBS: {e}")
+            classificacoes_ibs_cbs = []
+        
         print(f" Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
         
         return render_template('admin/nfes/emitir.html',
@@ -880,6 +901,7 @@ def emitir_nfe():
                              all_csts=csts_data,
                              all_csosns=csosns_data,
                              all_ncms=ncms_data,
+                             classificacoes_ibs_cbs=classificacoes_ibs_cbs,
                              regime_tributario=regime_tributario_nome,
                              initial_nfe_items=[])
         
@@ -1997,6 +2019,25 @@ def edit(nfe_id):
                 print(f" Dados auxiliares carregados: {len(clientes)} clientes, {len(cfops)} CFOPs, {len(ncms)} NCMs, {len(produtos)} produtos")
                 print(f" Destinatários/Tomadores: {len(destinatarios)}, CSOSNs: {len(csosns)}, Regime: {regime_tributario_nome}")
                 
+                # BUSCAR CLASSIFICAÇÕES IBS/CBS
+                classificacoes_ibs_cbs = []
+                try:
+                    from database.models import ClassificacaoIBSCBS
+                    clf_query = text("SELECT classificacao_id, codigo, descricao, aliquota_ibs_uf, aliquota_ibs_mun, aliquota_cbs FROM classificacoes_ibs_cbs WHERE ativo = true")
+                    clf_results = db.execute(clf_query).fetchall()
+                    for clf_row in clf_results:
+                        classificacoes_ibs_cbs.append({
+                            'classificacao_id': clf_row[0],
+                            'codigo': clf_row[1],
+                            'descricao': clf_row[2],
+                            'aliquota_ibs_uf': float(clf_row[3]),
+                            'aliquota_ibs_mun': float(clf_row[4]),
+                            'aliquota_cbs': float(clf_row[5])
+                        })
+                    print(f" Classificações IBS/CBS carregadas: {len(classificacoes_ibs_cbs)} registros")
+                except Exception as e:
+                    print(f"AVISO: Erro ao buscar Classificações IBS/CBS: {e}")
+                
                 # USAR O MESMO TEMPLATE DE EMISSÃO MAS EM MODO EDIÇÃO
                 return render_template('admin/nfes/emitir.html',
                                      emitente_data=emitente_data_for_template,
@@ -2006,6 +2047,7 @@ def edit(nfe_id):
                                      all_csts=csts,
                                      all_csosns=csosns,
                                      all_ncms=ncms,
+                                     classificacoes_ibs_cbs=classificacoes_ibs_cbs,
                                      regime_tributario=regime_tributario_nome,
                                      initial_nfe_items=items_data,
                                      form_data=form_data,

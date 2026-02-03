@@ -9,6 +9,7 @@ from decimal import Decimal
 from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe
 from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import TenderEmi, Tendereco
 from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
+from services.ibs_cbs_service import calcular_ibs_cbs, gerar_xml_ibscbs, gerar_xml_totais_ibscbs
 import re
 import unicodedata
 
@@ -401,6 +402,15 @@ def generate_nfe_xml_nfelib(
     v_icms_total = Decimal('0')
     v_pis_total = Decimal('0')
     v_cofins_total = Decimal('0')
+    v_ipi_total = Decimal('0')  # Totalizador IPI
+    
+    # Totalizadores IBS/CBS
+    v_bc_ibs_cbs_total = Decimal('0')
+    v_ibs_uf_total = Decimal('0')
+    v_ibs_mun_total = Decimal('0')
+    v_ibs_total = Decimal('0')
+    v_cbs_total = Decimal('0')
+    itens_ibs_cbs = []  # Para armazenar dados IBS/CBS de cada item
     
     for idx, item in enumerate(items, start=1):
         print(f"📦 [ITEM {idx}] Dados recebidos:")
@@ -472,13 +482,19 @@ def generate_nfe_xml_nfelib(
             
             # Criar ICMS com CSOSN
             if csosn_item == '500':
+                # Pegar campos ICMS ST do formulário
+                v_bc_st_ret = Decimal(str(item.get('vBCSTRet', '0')))
+                p_st = Decimal(str(item.get('pST', '0')))
+                v_icms_substituto = Decimal(str(item.get('vICMSSubstituto', '0')))
+                v_icms_st_ret = Decimal(str(item.get('vICMSSTRet', '0')))
+                
                 icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
                     orig="0",
                     CSOSN="500",
-                    vBCSTRet="0.00",
-                    pST="0.00",
-                    vICMSSubstituto="0.00",
-                    vICMSSTRet="0.00"
+                    vBCSTRet=f"{v_bc_st_ret:.2f}",
+                    pST=f"{p_st:.2f}",
+                    vICMSSubstituto=f"{v_icms_substituto:.2f}",
+                    vICMSSTRet=f"{v_icms_st_ret:.2f}"
                 )
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
             elif csosn_item == '103':
@@ -531,24 +547,36 @@ def generate_nfe_xml_nfelib(
                 v_icms_total += valor_icms
             elif cst_item == '20':
                 # Redução de base de cálculo
-                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms20(
-                    orig=origem,
-                    CST="20",
-                    modBC=modalidade_bc,
-                    pRedBC=f"{reducao_bc:.2f}",
-                    vBC=f"{bc_icms:.2f}",
-                    pICMS=f"{aliquota_icms:.2f}",
-                    vICMS=f"{valor_icms:.2f}"
-                )
+                motivo_deson = item.get('motivo_desoneracao_icms')
+                icms20_params = {
+                    'orig': origem,
+                    'CST': "20",
+                    'modBC': modalidade_bc,
+                    'pRedBC': f"{reducao_bc:.2f}",
+                    'vBC': f"{bc_icms:.2f}",
+                    'pICMS': f"{aliquota_icms:.2f}",
+                    'vICMS': f"{valor_icms:.2f}"
+                }
+                # Adicionar motDesICMS se houver desoneração
+                if motivo_deson:
+                    icms20_params['motDesICMS'] = motivo_deson
+                
+                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms20(**icms20_params)
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS20=icms_obj)
                 v_bc_icms_total += bc_icms
                 v_icms_total += valor_icms
             elif cst_item in ['40', '41', '50']:
                 # Isenta, não tributada ou suspensão
-                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms40(
-                    orig=origem,
-                    CST=cst_item
-                )
+                motivo_deson = item.get('motivo_desoneracao_icms')
+                icms40_params = {
+                    'orig': origem,
+                    'CST': cst_item
+                }
+                # Adicionar motDesICMS se houver desoneração (obrigatório para alguns casos)
+                if motivo_deson:
+                    icms40_params['motDesICMS'] = motivo_deson
+                
+                icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms40(**icms40_params)
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS40=icms_obj)
             else:
                 # Fallback: usar CST 20
@@ -606,16 +634,77 @@ def generate_nfe_xml_nfelib(
                 cofins_nt = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsnt(CST=cst_cofins)
                 cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSNT=cofins_nt)
         
+        # IPI - Imposto sobre Produtos Industrializados
+        ipi = None
+        cst_ipi = item.get('cst_ipi')
+        aliq_ipi = Decimal(str(item.get('aliquota_ipi', '0')))
+        
+        if cst_ipi:
+            if cst_ipi in ['00', '49', '50', '99'] and aliq_ipi > 0:
+                # IPI Tributado
+                v_ipi = valor_total * aliq_ipi / 100
+                ipi_trib = Nfe.InfNfe.Det.Imposto.Ipi.Ipitrib(
+                    CST=cst_ipi,
+                    vBC=f"{valor_total:.2f}",
+                    pIPI=f"{aliq_ipi:.2f}",
+                    vIPI=f"{v_ipi:.2f}"
+                )
+                ipi = Nfe.InfNfe.Det.Imposto.Ipi(IPITrib=ipi_trib)
+                v_ipi_total += v_ipi
+                print(f"  [IPI] Item {idx} - CST {cst_ipi}: BC R$ {valor_total:.2f}, Aliq {aliq_ipi:.2f}%, Valor R$ {v_ipi:.2f}")
+            else:
+                # IPI Não Tributado
+                ipi_nt = Nfe.InfNfe.Det.Imposto.Ipi.Ipint(CST=cst_ipi)
+                ipi = Nfe.InfNfe.Det.Imposto.Ipi(IPINT=ipi_nt)
+                print(f"  [IPI] Item {idx} - CST {cst_ipi}: Não tributado")
+        
+        # IBS/CBS - Reforma Tributária (opcional, apenas se CRT=3 e classificacao_ibs_cbs_id presente)
+        ibs_cbs_xml = None
+        classificacao_ibs_cbs_id = item.get('classificacao_ibs_cbs_id')
+        
+        # Verificar se é CRT=3 (Lucro Real/Presumido) e tem classificação
+        if crt_int == 3 and classificacao_ibs_cbs_id:
+            try:
+                from database.connection import get_db
+                db = next(get_db())
+                
+                # Calcular IBS/CBS
+                ibs_cbs_data = calcular_ibs_cbs(valor_total, classificacao_ibs_cbs_id, db)
+                
+                # Gerar XML IBS/CBS
+                ibs_cbs_xml = gerar_xml_ibscbs(ibs_cbs_data)
+                
+                # Acumular totais
+                v_bc_ibs_cbs_total += Decimal(str(ibs_cbs_data['vBC']))
+                v_ibs_uf_total += Decimal(str(ibs_cbs_data['vIBSUF']))
+                v_ibs_mun_total += Decimal(str(ibs_cbs_data['vIBSMun']))
+                v_ibs_total += Decimal(str(ibs_cbs_data['vIBS']))
+                v_cbs_total += Decimal(str(ibs_cbs_data['vCBS']))
+                
+                itens_ibs_cbs.append(ibs_cbs_data)
+                
+                print(f"  [IBS/CBS] Item {idx} - Classificação {ibs_cbs_data['cClassTrib']}: "
+                      f"IBS R$ {ibs_cbs_data['vIBS']:.2f}, CBS R$ {ibs_cbs_data['vCBS']:.2f}")
+                
+            except Exception as e:
+                print(f"  [AVISO] Erro ao calcular IBS/CBS para item {idx}: {e}")
+                # Continuar sem IBS/CBS se houver erro
+        
         # vTotTrib - Valor aproximado dos tributos (Lei da Transparência)
         # Para Simples Nacional geralmente é 0.00
         v_tot_trib = "0.00"
         
-        imposto = Nfe.InfNfe.Det.Imposto(
-            vTotTrib=v_tot_trib,
-            ICMS=icms,
-            PIS=pis,
-            COFINS=cofins
-        )
+        # Montar objeto Imposto com IPI se houver
+        imposto_params = {
+            'vTotTrib': v_tot_trib,
+            'ICMS': icms,
+            'PIS': pis,
+            'COFINS': cofins
+        }
+        if ipi is not None:
+            imposto_params['IPI'] = ipi
+        
+        imposto = Nfe.InfNfe.Det.Imposto(**imposto_params)
         
         det = Nfe.InfNfe.Det(
             nItem=str(idx),
@@ -647,7 +736,7 @@ def generate_nfe_xml_nfelib(
         vSeg="0.00",
         vDesc="0.00",
         vII="0.00",
-        vIPI="0.00",
+        vIPI=f"{v_ipi_total:.2f}",
         vIPIDevol="0.00",
         vPIS=f"{v_pis_total:.2f}",
         vCOFINS=f"{v_cofins_total:.2f}",
@@ -795,6 +884,50 @@ def generate_nfe_xml_nfelib(
         # Localizar infNFe
         inf_nfe_elem = xml_tree.find('.//nfe:infNFe', ns)
         if inf_nfe_elem is not None:
+            
+            # REFORMA TRIBUTÁRIA: Adicionar IBS/CBS aos itens e totalizadores
+            if itens_ibs_cbs:
+                print(f"🏛️ [IBS/CBS] Adicionando tags aos {len(itens_ibs_cbs)} itens com classificação")
+                
+                # Adicionar <IBSCBS> a cada <imposto> dos itens
+                det_elements = xml_tree.findall('.//nfe:det', ns)
+                for idx, (det_elem, ibs_cbs_data) in enumerate(zip(det_elements, itens_ibs_cbs), 1):
+                    imposto_elem = det_elem.find('.//nfe:imposto', ns)
+                    if imposto_elem is not None:
+                        # Gerar XML IBS/CBS e parsear
+                        ibs_cbs_xml_str = gerar_xml_ibscbs(ibs_cbs_data)
+                        ibs_cbs_fragment = etree.fromstring(f'<root xmlns="http://www.portalfiscal.inf.br/nfe">{ibs_cbs_xml_str}</root>')
+                        ibs_cbs_elem = ibs_cbs_fragment[0]  # Primeiro filho
+                        
+                        # Adicionar após COFINS
+                        imposto_elem.append(ibs_cbs_elem)
+                        print(f"  [IBS/CBS] Item {idx} - Tag <IBSCBS> adicionada")
+                
+                # Adicionar <IBSCBSTot> aos totais
+                total_elem = xml_tree.find('.//nfe:total/nfe:ICMSTot', ns)
+                if total_elem is not None:
+                    # Preparar dados dos totais
+                    totais_ibs = {
+                        'vBCTotal': float(v_bc_ibs_cbs_total),
+                        'vIBSUF': float(v_ibs_uf_total),
+                        'vIBSMun': float(v_ibs_mun_total),
+                        'vIBS': float(v_ibs_total)
+                    }
+                    totais_cbs = {
+                        'vCBS': float(v_cbs_total)
+                    }
+                    
+                    # Gerar XML dos totalizadores
+                    totais_xml_str = gerar_xml_totais_ibscbs(totais_ibs, totais_cbs)
+                    totais_fragment = etree.fromstring(f'<root xmlns="http://www.portalfiscal.inf.br/nfe">{totais_xml_str}</root>')
+                    
+                    # Adicionar após ICMSTot
+                    parent_total = total_elem.getparent()
+                    for child in totais_fragment:
+                        parent_total.append(child)
+                    
+                    print(f"  [IBS/CBS] Totalizadores adicionados: IBS R$ {v_ibs_total:.2f}, CBS R$ {v_cbs_total:.2f}")
+            
             # IMPORTANTE: Adicionar infAdic ANTES de infRespTec (ordem correta do leiaute)
             inf_cpl_text = form_data.get('infCpl', '').strip()
             if inf_cpl_text:

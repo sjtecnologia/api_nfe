@@ -1140,6 +1140,29 @@ function adicionarItem() {
                 </div>
             </div>
             
+            <!-- IBS/CBS - Reforma Tributária (apenas para CRT=3) -->
+            <div class="row item-ibs-cbs" style="display: none;">
+                <div class="col-md-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-balance-scale"></i> <strong>Reforma Tributária</strong> - Selecione a classificação IBS/CBS para este item
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Classificação IBS/CBS</label>
+                        <select name="classificacao_ibs_cbs_id_${itemCounter}" class="form-control js-select2-classificacao-ibs">
+                            <option value="">Nenhuma (opcional)</option>
+                            {% for clf in classificacoes_ibs_cbs %}
+                            <option value="{{ clf.classificacao_id }}">{{ clf.codigo }} - {{ clf.descricao }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            Selecione a classificação IBS/CBS para Reforma Tributária (CRT 3 - Lucro Real/Presumido)
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Input hidden para dados JSON -->
             <input type="hidden" name="items[${itemCounter-1}][json]" id="item_json_${itemCounter}">
         </div>
@@ -2593,6 +2616,11 @@ async function verificarRegimeTributario() {
             // Mostrar/ocultar seções
             document.getElementById('secao-ibs-cbs').style.display = requerIBS ? 'block' : 'none';
             document.getElementById('secao-icms60').style.display = requerIBS ? 'block' : 'none';
+            
+            // Mostrar/ocultar campos IBS/CBS nos itens
+            document.querySelectorAll('.item-ibs-cbs').forEach(el => {
+                el.style.display = requerIBS ? 'block' : 'none';
+            });
             
             // Atualizar nome do regime
             const regimeNomeSpan = document.getElementById('regime-nome');
