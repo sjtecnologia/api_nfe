@@ -25,6 +25,7 @@ MUNICIPIOS_IBGE = {
     '2304400': 'Fortaleza',
     '1302603': 'Manaus',
     '5300108': 'Brasilia',
+    '2613305': 'Sao Joaquim do Monte',  # PE
 }
 
 
@@ -252,7 +253,7 @@ def generate_nfe_xml_nfelib(
         indFinal="1",
         indPres=form_data.get('indPres', "1"),
         indIntermed="0",
-        procEmi="0",  # 0=Aplicação do contribuinte (CORRIGIDO: era 1)
+        procEmi="0",  # MANTIDO 0=Aplicação do contribuinte (correto para aplicação própria)
         verProc="EmiteMax_1.0"
     )
     
@@ -396,8 +397,18 @@ def generate_nfe_xml_nfelib(
     det_list = []
     v_prod_total = Decimal('0')
     v_nf_total = Decimal('0')
+    v_bc_icms_total = Decimal('0')
+    v_icms_total = Decimal('0')
+    v_pis_total = Decimal('0')
+    v_cofins_total = Decimal('0')
     
     for idx, item in enumerate(items, start=1):
+        print(f"📦 [ITEM {idx}] Dados recebidos:")
+        print(f"   - codigo_produto: {item.get('codigo_produto')}")
+        print(f"   - codigo: {item.get('codigo')}")
+        print(f"   - descricao: {item.get('descricao')}")
+        print(f"   - Keys disponíveis: {list(item.keys())}")
+        
         # Formatar valores com casas decimais corretas
         quantidade = Decimal(str(item.get('quantidade', '1')))
         valor_unitario = Decimal(str(item.get('valor_unitario', '0')))
@@ -411,10 +422,14 @@ def generate_nfe_xml_nfelib(
         vprod_str = f"{valor_total:.2f}"
         
         # Produto
+        # ✅ CORREÇÃO: Aceitar 'codigo_produto' ou 'codigo' para compatibilidade
+        codigo_prod = item.get('codigo_produto') or item.get('codigo') or str(idx)
+        descricao_prod = item.get('descricao') or 'PRODUTO SEM DESCRIÇÃO'
+        
         prod = Nfe.InfNfe.Det.Prod(
-            cProd=str(item.get('codigo', idx)).strip()[:60],
+            cProd=str(codigo_prod).strip()[:60],
             cEAN=(item.get('ean') or 'SEM GTIN').strip(),
-            xProd=(item.get('descricao') or 'PRODUTO').strip()[:120],
+            xProd=descricao_prod.strip()[:120],
             NCM=(item.get('ncm') or '00000000').strip(),
             CFOP=str(item.get('cfop') or '5102').strip(),
             uCom=(item.get('unidade') or 'UN').strip()[:6],
@@ -512,6 +527,8 @@ def generate_nfe_xml_nfelib(
                     vICMS=f"{valor_icms:.2f}"
                 )
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS00=icms_obj)
+                v_bc_icms_total += bc_icms
+                v_icms_total += valor_icms
             elif cst_item == '20':
                 # Redução de base de cálculo
                 icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms20(
@@ -524,6 +541,8 @@ def generate_nfe_xml_nfelib(
                     vICMS=f"{valor_icms:.2f}"
                 )
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS20=icms_obj)
+                v_bc_icms_total += bc_icms
+                v_icms_total += valor_icms
             elif cst_item in ['40', '41', '50']:
                 # Isenta, não tributada ou suspensão
                 icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms40(
@@ -543,10 +562,19 @@ def generate_nfe_xml_nfelib(
                     vICMS=f"{valor_icms:.2f}"
                 )
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS20=icms_obj)
+                v_bc_icms_total += bc_icms
+                v_icms_total += valor_icms
             
             # PIS/COFINS para regime normal
-            cst_pis = item.get('cst_pis', '01')
-            cst_cofins = item.get('cst_cofins', '01')
+            cst_pis = item.get('cst_pis') or '01'
+            cst_cofins = item.get('cst_cofins') or '01'
+            print(f"[DEBUG-PIS] Item {idx}: cst_pis recebido='{item.get('cst_pis')}', final='{cst_pis}'")
+            print(f"[DEBUG-COFINS] Item {idx}: cst_cofins recebido='{item.get('cst_cofins')}', final='{cst_cofins}'")
+            # Garantir que CST nunca seja vazio
+            if not cst_pis or cst_pis == '':
+                cst_pis = '01'
+            if not cst_cofins or cst_cofins == '':
+                cst_cofins = '01'
             aliq_pis = Decimal(str(item.get('aliquota_pis', '1.65')))
             aliq_cofins = Decimal(str(item.get('aliquota_cofins', '7.6')))
             
@@ -558,7 +586,8 @@ def generate_nfe_xml_nfelib(
                     pPIS=f"{aliq_pis:.2f}",
                     vPIS=f"{(valor_total * aliq_pis / 100):.2f}"
                 )
-                pis = Nfe.InfNfe.Det.Imposto.Pis(PISALIQ=pis_aliq)
+                pis = Nfe.InfNfe.Det.Imposto.Pis(PISAliq=pis_aliq)
+                v_pis_total += (valor_total * aliq_pis / 100)
             else:
                 pis_nt = Nfe.InfNfe.Det.Imposto.Pis.Pisnt(CST=cst_pis)
                 pis = Nfe.InfNfe.Det.Imposto.Pis(PISNT=pis_nt)
@@ -571,11 +600,11 @@ def generate_nfe_xml_nfelib(
                     pCOFINS=f"{aliq_cofins:.2f}",
                     vCOFINS=f"{(valor_total * aliq_cofins / 100):.2f}"
                 )
-                cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSALIQ=cofins_aliq)
+                cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSAliq=cofins_aliq)
+                v_cofins_total += (valor_total * aliq_cofins / 100)
             else:
                 cofins_nt = Nfe.InfNfe.Det.Imposto.Cofins.Cofinsnt(CST=cst_cofins)
                 cofins = Nfe.InfNfe.Det.Imposto.Cofins(COFINSNT=cofins_nt)
-        
         
         # vTotTrib - Valor aproximado dos tributos (Lei da Transparência)
         # Para Simples Nacional geralmente é 0.00
@@ -602,8 +631,8 @@ def generate_nfe_xml_nfelib(
     
     # 10. Criar TOTAL
     icms_tot = Nfe.InfNfe.Total.Icmstot(
-        vBC="0.00",
-        vICMS="0.00",
+        vBC=f"{v_bc_icms_total:.2f}",
+        vICMS=f"{v_icms_total:.2f}",
         vICMSDeson="0.00",
         vFCPUFDest="0.00",  # ICMS interestadual
         vICMSUFDest="0.00",  # ICMS interestadual
@@ -620,8 +649,8 @@ def generate_nfe_xml_nfelib(
         vII="0.00",
         vIPI="0.00",
         vIPIDevol="0.00",
-        vPIS="0.00",
-        vCOFINS="0.00",
+        vPIS=f"{v_pis_total:.2f}",
+        vCOFINS=f"{v_cofins_total:.2f}",
         vOutro="0.00",
         vNF=f"{v_nf_total:.2f}",
         vTotTrib="0.00"  # Valor total aproximado dos tributos
@@ -632,9 +661,94 @@ def generate_nfe_xml_nfelib(
     print("✅ [NFELIB] TOTAL criado")
     
     # 11. Criar TRANSP
-    transp = Nfe.InfNfe.Transp(modFrete="9")  # 9=Sem frete
+    mod_frete = form_data.get('modFrete', '9')  # Modalidade do frete
+    transp_dict = {'modFrete': mod_frete}
     
-    print("✅ [NFELIB] TRANSP criado")
+    # Adicionar transportadora se informada
+    transportadora_nome = form_data.get('transportadoraNome', '').strip()
+    print(f"[DEBUG-TRANSP] transportadoraNome: '{transportadora_nome}'")
+    print(f"[DEBUG-TRANSP] modFrete: '{mod_frete}'")
+    if transportadora_nome and mod_frete != '9':  # Se não for "sem frete"
+        transporta_dict = {}
+        
+        # CNPJ ou CPF
+        cnpj_cpf = form_data.get('transportadoraCnpjCpf', '').strip()
+        print(f"[DEBUG-TRANSP] CNPJ/CPF: '{cnpj_cpf}'")
+        if cnpj_cpf:
+            if len(cnpj_cpf) == 14:
+                transporta_dict['CNPJ'] = cnpj_cpf
+            elif len(cnpj_cpf) == 11:
+                transporta_dict['CPF'] = cnpj_cpf
+        
+        # Nome/Razão Social
+        transporta_dict['xNome'] = transportadora_nome
+        
+        # Inscrição Estadual
+        ie = form_data.get('transportadoraIE', '').strip()
+        print(f"[DEBUG-TRANSP] IE: '{ie}'")
+        if ie:
+            transporta_dict['IE'] = ie
+        
+        # Endereço
+        endereco = form_data.get('transportadoraEndereco', '').strip()
+        print(f"[DEBUG-TRANSP] Endereço: '{endereco}'")
+        if endereco:
+            transporta_dict['xEnder'] = endereco
+        
+        # Município
+        municipio = form_data.get('transportadoraMunicipio', '').strip()
+        print(f"[DEBUG-TRANSP] Município: '{municipio}'")
+        if municipio:
+            transporta_dict['xMun'] = municipio
+        
+        # UF
+        uf = form_data.get('transportadoraUF', '').strip()
+        print(f"[DEBUG-TRANSP] UF: '{uf}'")
+        if uf:
+            transporta_dict['UF'] = uf
+        
+        print(f"[DEBUG-TRANSP] Dict final: {transporta_dict}")
+        if transporta_dict:
+            transp_dict['transporta'] = Nfe.InfNfe.Transp.Transporta(**transporta_dict)
+    
+    # Veículo
+    placa = form_data.get('veiculoPlaca', '').strip()
+    if placa:
+        veiculo_dict = {'placa': placa}
+        uf_veiculo = form_data.get('veiculoUF', '').strip()
+        if uf_veiculo:
+            veiculo_dict['UF'] = uf_veiculo
+        transp_dict['veicTransp'] = Nfe.InfNfe.Transp.VeicTransp(**veiculo_dict)
+    
+    # Volumes
+    qtd_vol = form_data.get('volumeQuantidade', '').strip()
+    if qtd_vol:
+        vol_dict = {}
+        if qtd_vol:
+            vol_dict['qVol'] = qtd_vol
+        especie = form_data.get('volumeEspecie', '').strip()[:60]  # Limite de 60 caracteres
+        print(f"[DEBUG-VOL] Espécie recebida do form: '{especie}' ({len(especie)} chars)")
+        if especie:
+            vol_dict['esp'] = especie
+            print(f"[DEBUG-VOL] Espécie adicionada ao dict: '{vol_dict['esp']}'")
+        marca = form_data.get('volumeMarca', '').strip()
+        if marca:
+            vol_dict['marca'] = marca
+        numeracao = form_data.get('volumeNumeracao', '').strip()
+        if numeracao:
+            vol_dict['nVol'] = numeracao
+        peso_bruto = form_data.get('volumePesoBruto', '').strip()
+        if peso_bruto:
+            vol_dict['pesoB'] = peso_bruto
+        peso_liquido = form_data.get('volumePesoLiquido', '').strip()
+        if peso_liquido:
+            vol_dict['pesoL'] = peso_liquido
+        
+        if vol_dict:
+            transp_dict['vol'] = [Nfe.InfNfe.Transp.Vol(**vol_dict)]
+    
+    transp = Nfe.InfNfe.Transp(**transp_dict)
+    print("✅ [NFELIB] TRANSP criado com dados do formulário")
     
     # 12. Criar PAG
     det_pag = Nfe.InfNfe.Pag.DetPag(
@@ -684,6 +798,12 @@ def generate_nfe_xml_nfelib(
             # IMPORTANTE: Adicionar infAdic ANTES de infRespTec (ordem correta do leiaute)
             inf_cpl_text = form_data.get('infCpl', '').strip()
             if inf_cpl_text:
+                # Remover caracteres de controle que violam o XSD (CR, LF, TAB exceto espaços)
+                # Permitir apenas espaços e quebras de linha simples
+                inf_cpl_text = inf_cpl_text.replace('\r\n', ' ').replace('\r', ' ').replace('\n', ' ')
+                # Remover múltiplos espaços
+                inf_cpl_text = ' '.join(inf_cpl_text.split())
+                
                 # Criar infAdic com infCpl
                 inf_adic = etree.Element('{http://www.portalfiscal.inf.br/nfe}infAdic')
                 
@@ -720,6 +840,15 @@ def generate_nfe_xml_nfelib(
         # A assinatura deve ser calculada sobre XML compacto (sem \n, \r, \t)
         xml_string = xml_string.replace('\n', '').replace('\r', '').replace('\t', '')
         print(f"✅ [NFELIB] Quebras removidas: {len(xml_string)} caracteres (compacto)")
+        
+        # DEBUG: Verificar se o campo espécie está correto no XML final
+        if '<vol>' in xml_string:
+            import re
+            esp_match = re.search(r'<esp>([^<]+)</esp>', xml_string)
+            if esp_match:
+                print(f"[DEBUG-XML] Campo <esp> no XML final: '{esp_match.group(1)}' ({len(esp_match.group(1))} chars)")
+            else:
+                print(f"[DEBUG-XML] Campo <esp> NÃO ENCONTRADO no XML!")
         
         # Salvar XML para análise offline
         try:

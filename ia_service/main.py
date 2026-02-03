@@ -635,6 +635,8 @@ IMPORTANTE - O QUE NÃO É ERRO:
 - CFOP 5101, 5102, 5405 para vendas SP→SP (mesmo estado) - VÁLIDOS
 - CFOP 6101, 6102, 6108, 6405 para vendas entre estados diferentes - VÁLIDOS
 - NCM com 8 dígitos numéricos - VÁLIDO
+- CRT 3 (Lucro Presumido) PODE SIM emitir CFOP 6xxx (interestadual) - TOTALMENTE VÁLIDO
+- CRT 1, 2 ou 3 podem usar CFOP 5xxx ou 6xxx conforme a operação - TODOS VÁLIDOS
 
 SÓ APONTE ERRO SE:
 - NCM estiver vazio ou com menos de 8 dígitos
@@ -643,9 +645,15 @@ SÓ APONTE ERRO SE:
 - Valor total for ZERO ou negativo
 - CNPJ/CPF estiver vazio
 
-REGRAS CFOP VÁLIDAS:
-- CFOP 5xxx (5101, 5102, 5405, etc): Operações INTERNAS - UF emitente = UF destinatário
-- CFOP 6xxx (6101, 6102, 6108, 6405, etc): Operações INTERESTADUAIS - UF emitente ≠ UF destinatário
+REGRAS CFOP - ATENÇÃO:
+- CFOP 5xxx (5101, 5102, 5405, etc): Operações INTERNAS - REQUER UF emitente = UF destinatário
+- CFOP 6xxx (6101, 6102, 6108, 6405, etc): Operações INTERESTADUAIS - REQUER UF emitente ≠ UF destinatário
+- NÃO existe restrição de CRT para CFOP! CRT 1, 2 ou 3 podem usar qualquer CFOP!
+
+EXEMPLO DE OPERAÇÃO CORRETA:
+- Emitente SP com CFOP 6108 para Destinatário PE = CORRETO (interestadual)
+- Emitente SP com CFOP 5102 para Destinatário SP = CORRETO (interna)
+- CRT 3 com CFOP 6xxx = CORRETO (não há restrição)
 
 DADOS:
 - Ambiente: {req.ambiente}

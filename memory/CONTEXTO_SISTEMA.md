@@ -1,6 +1,6 @@
 # 🖥️ Contexto Técnico do Sistema API NFe
 
-**Data:** 27/01/2026  
+**Última atualização:** 03/02/2026 13:50  
 **Projeto:** API de emissão de Nota Fiscal Eletrônica  
 **Branch atual:** lc214-migration
 

@@ -61,7 +61,7 @@ input[readonly] {
         </div>
     </div>
 
-    <form method="POST" id="nfeForm" novalidate>
+    <form method="POST" id="nfeForm" action="{{ url_for('nfe.create') }}" novalidate>
         <!-- ✅ IDENTIFICAÇÃO DA NFE -->
         <div class="card">
             <div class="card-header">
@@ -593,6 +593,9 @@ input[readonly] {
                         <button type="button" class="btn btn-info" onclick="previewXML()">
                             <i class="fas fa-eye"></i> Visualizar XML
                         </button>
+                        <button type="button" class="btn btn-secondary" onclick="previewDANFE()">
+                            <i class="fas fa-file-pdf"></i> Preview DANFE
+                        </button>
                         <button type="submit" name="action" value="emitir" class="btn btn-success" formnovalidate>
                             <i class="fas fa-paper-plane"></i> Emitir NFe
                         </button>
@@ -1073,9 +1076,20 @@ function adicionarItem() {
             <div class="row">
                 <div class="col-md-2">
                     <div class="form-group">
-                        <label>CST PIS</label>
-                        <input type="text" name="cst_pis_${itemCounter}" 
-                               class="form-control" maxlength="2" placeholder="Ex: 01">
+                        <label>CST PIS <span class="text-danger">*</span></label>
+                        <select name="cst_pis_${itemCounter}" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="01">01 - Tributada com Alíquota Básica</option>
+                            <option value="02">02 - Tributada com Alíquota Diferenciada</option>
+                            <option value="04">04 - Tributação Monofásica</option>
+                            <option value="05">05 - Tributação por ST</option>
+                            <option value="06">06 - Alíquota Zero</option>
+                            <option value="07">07 - Isenta da Contribuição</option>
+                            <option value="08">08 - Sem Incidência da Contribuição</option>
+                            <option value="09">09 - Suspensão da Contribuição</option>
+                            <option value="49">49 - Outras Operações de Saída</option>
+                            <option value="99">99 - Outras Operações</option>
+                        </select>
                     </div>
                 </div>
                 <div class="col-md-2">
@@ -1087,9 +1101,20 @@ function adicionarItem() {
                 </div>
                 <div class="col-md-2">
                     <div class="form-group">
-                        <label>CST COFINS</label>
-                        <input type="text" name="cst_cofins_${itemCounter}" 
-                               class="form-control" maxlength="2" placeholder="Ex: 01">
+                        <label>CST COFINS <span class="text-danger">*</span></label>
+                        <select name="cst_cofins_${itemCounter}" class="form-control" required>
+                            <option value="">Selecione...</option>
+                            <option value="01">01 - Tributada com Alíquota Básica</option>
+                            <option value="02">02 - Tributada com Alíquota Diferenciada</option>
+                            <option value="04">04 - Tributação Monofásica</option>
+                            <option value="05">05 - Tributação por ST</option>
+                            <option value="06">06 - Alíquota Zero</option>
+                            <option value="07">07 - Isenta da Contribuição</option>
+                            <option value="08">08 - Sem Incidência da Contribuição</option>
+                            <option value="09">09 - Suspensão da Contribuição</option>
+                            <option value="49">49 - Outras Operações de Saída</option>
+                            <option value="99">99 - Outras Operações</option>
+                        </select>
                     </div>
                 </div>
                 <div class="col-md-2">
@@ -1120,7 +1145,8 @@ function adicionarItem() {
         </div>
     `;
     
-    container.appendChild(itemDiv);
+    // ✅ ALTERAÇÃO: Inserir novo item NO TOPO da lista (primeiro filho)
+    container.insertBefore(itemDiv, container.firstChild);
     
     // Inicializar Select2 para os novos elementos do item
     setTimeout(() => {
@@ -1262,7 +1288,15 @@ function carregarProduto(itemId) {
     if (option.value) {
         // Dados básicos do produto
         document.querySelector(`input[name="codigo_produto_${itemId}"]`).value = option.dataset.codigo || '';
-        // Campo descricao foi removido
+        
+        // Capturar descrição do texto da option (nome do produto)
+        const descricao = option.text.trim();
+        // Armazenar em um campo hidden ou data attribute para uso posterior
+        const codigoProdutoInput = document.querySelector(`input[name="codigo_produto_${itemId}"]`);
+        if (codigoProdutoInput) {
+            codigoProdutoInput.setAttribute('data-descricao', descricao);
+        }
+        
         document.querySelector(`input[name="valor_unitario_${itemId}"]`).value = option.dataset.preco || '0.00';
         document.querySelector(`input[name="unidade_${itemId}"]`).value = option.dataset.unidade || 'UN';
         
@@ -1602,8 +1636,14 @@ function calcularTotal(itemId) {
 
 // Atualizar JSON do item
 function atualizarItemJSON(itemId) {
+    // Capturar descrição do produto selecionado
+    const produtoSelect = document.querySelector(`select[name="produto_${itemId}"]`);
+    const produtoOption = produtoSelect?.options[produtoSelect.selectedIndex];
+    const descricao = produtoOption?.text.trim() || '';
+    
     const itemData = {
         codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`)?.value || '',
+        descricao: descricao,
         unidade: document.querySelector(`input[name="unidade_${itemId}"]`)?.value || '',
         quantidade: document.querySelector(`input[name="quantidade_${itemId}"]`)?.value || '',
         valor_unitario: document.querySelector(`input[name="valor_unitario_${itemId}"]`)?.value || '',
@@ -1619,13 +1659,13 @@ function atualizarItemJSON(itemId) {
         bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`)?.value || '0.00',
         valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00',
         // PIS
-        cst_pis: document.querySelector(`input[name="cst_pis_${itemId}"]`)?.value || '',
+        cst_pis: document.querySelector(`select[name="cst_pis_${itemId}"]`)?.value || '',
         aliquota_pis: document.querySelector(`input[name="aliquota_pis_${itemId}"]`)?.value || '0.00',
         // COFINS
-        cst_cofins: document.querySelector(`input[name="cst_cofins_${itemId}"]`)?.value || '',
+        cst_cofins: document.querySelector(`select[name="cst_cofins_${itemId}"]`)?.value || '',
         aliquota_cofins: document.querySelector(`input[name="aliquota_cofins_${itemId}"]`)?.value || '0.00',
         // IPI
-        cst_ipi: document.querySelector(`input[name="cst_ipi_${itemId}"]`)?.value || '',
+        cst_ipi: document.querySelector(`select[name="cst_ipi_${itemId}"]`)?.value || '',
         aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00'
     };
     
@@ -2091,21 +2131,22 @@ function previewXML() {
     const errors = [];
     
     // Validar destinatário
-    const destinatarioSelect = document.getElementById('destinatario_id');
+    const destinatarioSelect = document.getElementById('destinatario');
     if (!destinatarioSelect || !destinatarioSelect.value) {
         errors.push('Destinatário é obrigatório');
     }
     
     // Validar produtos
-    const produtosTableBody = document.querySelector('#tabelaProdutos tbody');
-    if (!produtosTableBody || produtosTableBody.children.length === 0) {
+    const itensContainer = document.getElementById('itensContainer');
+    const itensCards = itensContainer?.querySelectorAll('.card');
+    if (!itensCards || itensCards.length === 0) {
         errors.push('Adicione pelo menos um produto');
     }
     
     // Validar pagamento
-    const pagamentoTableBody = document.querySelector('#tabelaPagamentos tbody');
-    if (!pagamentoTableBody || pagamentoTableBody.children.length === 0) {
-        errors.push('Adicione pelo menos uma forma de pagamento');
+    const formaPagamento = document.getElementById('formaPagamento')?.value;
+    if (!formaPagamento || formaPagamento.trim() === '') {
+        errors.push('Selecione a forma de pagamento');
     }
     
     if (errors.length > 0) {
@@ -2120,33 +2161,50 @@ function previewXML() {
         btnPreview.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando XML...';
     }
     
+    // Atualizar JSON de todos os itens antes de coletar dados
+    console.log('[PREVIEW] Atualizando JSON dos itens...');
+    const itens = document.querySelectorAll('[id^="item-"]');
+    itens.forEach(item => {
+        const itemId = item.id.split('-')[1];
+        atualizarItemJSON(itemId);
+    });
+    
     // Coletar dados do formulário
-    const formData = new FormData(document.getElementById('formEmitirNFe'));
+    const form = document.getElementById('nfeForm');
+    const formData = new FormData(form);
     formData.append('preview_only', 'true'); // Flag para indicar que é apenas preview
+    
+    console.log('[PREVIEW] FormData coletado, enviando requisição...');
     
     // Fazer requisição para gerar XML
     fetch('{{ url_for("nfe.emitir_nfe") }}', {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('[PREVIEW] Response status:', response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log('[PREVIEW] Response data:', data);
         if (data.success && data.xml_preview) {
             // Criar modal para exibir XML
             mostrarModalXML(data.xml_preview);
         } else {
-            alert('Erro ao gerar XML: ' + (data.message || 'Erro desconhecido'));
+            const errorMsg = data.message || 'Erro desconhecido';
+            console.error('[PREVIEW] Erro:', errorMsg);
+            alert('Erro ao gerar XML: ' + errorMsg);
         }
     })
     .catch(error => {
-        console.error('Erro:', error);
+        console.error('[PREVIEW] Erro na requisição:', error);
         alert('Erro ao gerar preview do XML. Verifique o console para mais detalhes.');
     })
     .finally(() => {
         // Restaurar botão
         if (btnPreview) {
             btnPreview.disabled = false;
-            btnPreview.innerHTML = '<i class="fas fa-file-code"></i> Visualizar XML';
+            btnPreview.innerHTML = '<i class="fas fa-eye"></i> Visualizar XML';
         }
     });
 }
@@ -2251,6 +2309,130 @@ function escapeHtml(text) {
         "'": '&#039;'
     };
     return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// ==================== PREVIEW DANFE ====================
+function previewDANFE() {
+    // Validar campos obrigatórios antes de gerar DANFE
+    const errors = [];
+    
+    // Validar destinatário
+    const destinatarioSelect = document.getElementById('destinatario');
+    if (!destinatarioSelect || !destinatarioSelect.value) {
+        errors.push('Destinatário é obrigatório');
+    }
+    
+    // Validar produtos
+    const itensContainer = document.getElementById('itensContainer');
+    const itensCards = itensContainer?.querySelectorAll('.card');
+    if (!itensCards || itensCards.length === 0) {
+        errors.push('Adicione pelo menos um produto');
+    }
+    
+    // Validar pagamento
+    const formaPagamento = document.getElementById('formaPagamento')?.value;
+    if (!formaPagamento || formaPagamento.trim() === '') {
+        errors.push('Selecione a forma de pagamento');
+    }
+    
+    if (errors.length > 0) {
+        alert('Corrija os seguintes erros antes de gerar o preview do DANFE:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+        return;
+    }
+    
+    // Mostrar loading
+    const btnPreview = document.querySelector('button[onclick="previewDANFE()"]');
+    if (btnPreview) {
+        btnPreview.disabled = true;
+        btnPreview.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando DANFE...';
+    }
+    
+    // Atualizar JSON de todos os itens antes de coletar dados
+    console.log('[DANFE PREVIEW] Atualizando JSON dos itens...');
+    const itens = document.querySelectorAll('[id^="item-"]');
+    itens.forEach(item => {
+        const itemId = item.id.split('-')[1];
+        atualizarItemJSON(itemId);
+    });
+    
+    // Coletar dados do formulário
+    const form = document.getElementById('nfeForm');
+    if (!form) {
+        console.error('[DANFE PREVIEW] Formulário não encontrado!');
+        alert('Erro: Formulário não encontrado');
+        return;
+    }
+    
+    const formData = new FormData(form);
+    formData.append('preview_danfe', 'true'); // Flag para gerar DANFE preview
+    
+    console.log('[DANFE PREVIEW] FormData coletado, enviando requisição...');
+    
+    // Fazer requisição para gerar DANFE
+    fetch('{{ url_for("nfe.emitir_nfe") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('[DANFE PREVIEW] Response status:', response.status);
+        console.log('[DANFE PREVIEW] Response headers:', response.headers);
+        
+        // Se for sucesso, resposta pode ser PDF blob
+        if (response.ok) {
+            const contentType = response.headers.get('content-type');
+            console.log('[DANFE PREVIEW] Content-Type:', contentType);
+            
+            if (contentType && contentType.includes('application/pdf')) {
+                // Resposta é PDF, abrir em nova aba
+                return response.blob().then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                    return { success: true, pdf: true };
+                });
+            } else {
+                // Resposta é JSON
+                return response.json();
+            }
+        } else {
+            // Erro HTTP - tentar ler como JSON ou texto
+            return response.text().then(text => {
+                console.error('[DANFE PREVIEW] Erro HTTP - Resposta:', text);
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    return { success: false, message: `Erro HTTP ${response.status}: ${text.substring(0, 200)}` };
+                }
+            });
+        }
+    })
+    .then(data => {
+        console.log('[DANFE PREVIEW] Response data:', data);
+        
+        if (data.pdf) {
+            // PDF já foi aberto
+            console.log('[DANFE PREVIEW] PDF aberto em nova aba');
+        } else if (data.success && data.danfe_url) {
+            // Abrir URL do DANFE em nova aba
+            window.open(data.danfe_url, '_blank');
+        } else if (data.success) {
+            alert('DANFE gerado com sucesso!');
+        } else {
+            const errorMsg = data.message || 'Erro desconhecido';
+            console.error('[DANFE PREVIEW] Erro:', errorMsg);
+            alert('Erro ao gerar DANFE: ' + errorMsg);
+        }
+    })
+    .catch(error => {
+        console.error('[DANFE PREVIEW] Erro na requisição:', error);
+        alert('Erro ao gerar preview do DANFE. Verifique o console para mais detalhes.');
+    })
+    .finally(() => {
+        // Restaurar botão
+        if (btnPreview) {
+            btnPreview.disabled = false;
+            btnPreview.innerHTML = '<i class="fas fa-file-pdf"></i> Preview DANFE';
+        }
+    });
 }
 
 // Função para copiar XML para clipboard
@@ -2571,19 +2753,23 @@ document.addEventListener('DOMContentLoaded', function() {
         
         form.addEventListener('submit', function(e) {
             console.log('🎯 SUBMIT INTERCEPTADO!', e);
-            e.preventDefault(); // SEMPRE prevenir submit padrão
-            e.stopPropagation();
-            e.stopImmediatePropagation();
             
             // Verificar qual botão foi clicado
             const submitter = e.submitter;
             console.log('🔍 Botão clicado:', submitter);
+            console.log('🔍 Valor do botão:', submitter?.value);
+            console.log('🔍 Name do botão:', submitter?.name);
             
-            // Se não for o botão Emitir, permitir submit
+            // Se não for o botão Emitir, permitir submit normal
             if (!submitter || submitter.value !== 'emitir') {
-                console.log('⚠️ Não é o botão Emitir, permitindo submit...');
-                return;
+                console.log('⚠️ Não é o botão Emitir, permitindo submit normal...');
+                return; // Deixa o navegador processar normalmente
             }
+            
+            // É o botão Emitir - prevenir submit padrão e processar com fetch
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
             
             console.log('🔍 INICIANDO VALIDAÇÃO...');
             
