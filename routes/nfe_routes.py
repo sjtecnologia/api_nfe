@@ -222,7 +222,6 @@ def emitir_nfe():
                         emitente_data_for_template,
                         destinatario_data,
                         nfe_items,
-                        tp_amb
                         tp_amb,
                         'preview'
                     )
