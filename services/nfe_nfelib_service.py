@@ -147,7 +147,8 @@ def generate_nfe_xml_nfelib(
     
     print("🚀 [NFELIB] Iniciando geração de XML com biblioteca nfelib")
     
-    tp_amb = form_data.get('tpAmb', 2)
+    # tpAmb padrão SEFAZ: 1=Produção, 2=Homologação
+    tp_amb = form_data.get('tpAmb', 2)  # Default: Homologação
     print(f"📋 [DEBUG] Ambiente: {'PRODUÇÃO' if tp_amb == 1 else 'HOMOLOGAÇÃO'} (tpAmb={tp_amb})")
     
     if tp_amb == 2:  # Homologação

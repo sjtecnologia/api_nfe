@@ -119,7 +119,7 @@ def emitir_nfe():
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
             'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
-            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
+            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Produção, 2=Homologação - padrão SEFAZ)
         }
         
         if request.method == 'POST':
@@ -165,11 +165,11 @@ def emitir_nfe():
             action = request.form.get('action')
             preview_only = request.form.get('preview_only') == 'true'
             
-            # Usar ambiente do cliente (1=Homologação, 2=Produção)
-            ambiente_cliente = emitente_data.ambiente
-            ambiente = 'producao' if ambiente_cliente == 2 else 'homologacao'
+            # Usar ambiente do cliente (1=Produção, 2=Homologação - padrão SEFAZ)
+            tp_amb = emitente_data.ambiente
+            ambiente = 'producao' if tp_amb == 1 else 'homologacao'
             
-            print(f" DEBUG - Ação recebida: {action}, Preview: {preview_only}, Ambiente do cliente: {ambiente} ({ambiente_cliente})")
+            print(f" DEBUG - Ação recebida: {action}, Preview: {preview_only}, Ambiente: {ambiente} (tpAmb={tp_amb})")
             
             # OK: INICIALIZAR VARIÁVEIS OBRIGATÓRIAS
             destinatario_data = {}
@@ -216,13 +216,13 @@ def emitir_nfe():
                     if not nfe_items:
                         return jsonify({'success': False, 'message': 'Adicione pelo menos um item'}), 400
                     
-                    # GERAR XML (sem assinatura)
-                    tp_amb = 1 if ambiente == 'producao' else 2
+                    # GERAR XML (sem assinatura) - tpAmb já vem correto do banco
                     xml_nfe = generate_nfe_xml(
                         form_data_initial,
                         emitente_data_for_template,
                         destinatario_data,
                         nfe_items,
+                        tp_amb
                         tp_amb,
                         'preview'
                     )
@@ -362,9 +362,8 @@ def emitir_nfe():
                     print("✅ [VALIDAÇÃO TRIBUTÁRIA] Tributação válida")
                     
                     # PROCESSAR EMISSÃO DA NFE
-                    # tpAmb SEFAZ: 1=Produção, 2=Homologação
-                    tp_amb = 1 if ambiente == 'producao' else 2
-                    print(f"→ Ambiente SEFAZ: {tp_amb} ({ambiente})")
+                    # tpAmb já vem correto do banco (1=Produção, 2=Homologação - padrão SEFAZ)
+                    print(f"→ Ambiente SEFAZ: tpAmb={tp_amb} ({ambiente})")
                     print(" === GERANDO XML ===")
                     try:
                         xml_nfe = generate_nfe_xml(
@@ -2495,7 +2494,7 @@ def reenviar_nfe(nfe_id):
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
             'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
-            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
+            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Produção, 2=Homologação - padrão SEFAZ)
         }
         # Buscar destinatário - pode estar no form_data ou já armazenado na NFe
         
@@ -2740,7 +2739,7 @@ def emitir_rascunho(nfe_id):
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
             'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
-            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Homologação, 2=Produção)
+            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Produção, 2=Homologação - padrão SEFAZ)
         }
         
         # Buscar destinatário - pode estar no form_data ou já armazenado na NFe

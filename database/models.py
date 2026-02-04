@@ -422,7 +422,7 @@ class Cliente(Base):
     cep = Column(String(9), nullable=False) 
     email_contato = Column(String(255), nullable=True)
     telefone_contato = Column(String(20), nullable=True)
-    ambiente = Column(Integer, default=1, nullable=False)  # 1=Homologação, 2=Produção
+    ambiente = Column(Integer, default=2, nullable=False)  # 1=Produção, 2=Homologação (padrão SEFAZ)
     logo_path = Column(String(255), nullable=True)  # Caminho do arquivo de logo
     ativo = Column(Boolean, default=True, nullable=False) 
     data_cadastro = Column(DateTime, default=datetime.now, nullable=False) 
