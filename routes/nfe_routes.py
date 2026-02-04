@@ -2260,9 +2260,9 @@ def edit(nfe_id):
                 emitente_dict = {}
                 ambiente_str = 'homologacao'  # default
                 if emitente_result:
-                    # Ambiente: 1=Homologação, 2=Produção no banco
+                    # Ambiente: 1=Produção, 2=Homologação (padrão SEFAZ)
                     ambiente_cliente = emitente_result[12]
-                    ambiente_str = 'producao' if ambiente_cliente == 2 else 'homologacao'
+                    ambiente_str = 'producao' if ambiente_cliente == 1 else 'homologacao'
                     
                     emitente_dict = {
                         'cliente_id': emitente_result[0],

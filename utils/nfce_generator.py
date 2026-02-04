@@ -189,7 +189,7 @@ def gerar_xml_nfce(dados: Dict[str, Any]) -> str:
     ET.SubElement(ide, 'tpImp').text = '4'  # 4=DANFE NFC-e
     ET.SubElement(ide, 'tpEmis').text = '1'  # 1=Normal
     ET.SubElement(ide, 'cDV').text = chave_acesso[-1]  # Dígito verificador
-    ET.SubElement(ide, 'tpAmb').text = '2' if nfce_info.get('ambiente') == 'homologacao' else '1'
+    ET.SubElement(ide, 'tpAmb').text = '1' if nfce_info.get('ambiente') == 'producao' else '2'
     ET.SubElement(ide, 'finNFe').text = '1'  # 1=NF-e normal
     ET.SubElement(ide, 'indFinal').text = '1'  # 1=Consumidor final
     ET.SubElement(ide, 'indPres').text = '1'  # 1=Operação presencial

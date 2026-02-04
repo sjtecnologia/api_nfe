@@ -849,8 +849,8 @@ class NFeService:
             print(f" Cliente ID: {cliente_id}")
             print(f" Ambiente: {ambiente}")
             
-            # 1. GERAR XML
-            tp_amb = 2 if ambiente == 'homologacao' else 1
+            # 1. GERAR XML - tpAmb SEFAZ: 1=Produção, 2=Homologação
+            tp_amb = 1 if ambiente == 'producao' else 2
             xml_nfe = generate_nfe_xml(dados_form, emitente_data, destinatario_data, items_data, tp_amb)
             
             if not xml_nfe:
