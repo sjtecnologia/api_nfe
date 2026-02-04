@@ -258,7 +258,7 @@
                 DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRÔNICA
             </div>
             <div style="margin-top: 5px;">
-                Ambiente: {% if nfce.ambiente == 2 %}Produção{% else %}Homologação{% endif %}
+                Ambiente: {% if nfce.ambiente == 1 %}Produção{% else %}Homologação{% endif %}
             </div>
             <div style="margin-top: 5px;">
                 Emitido em {{ nfce.data_emissao.strftime('%d/%m/%Y às %H:%M:%S') }}

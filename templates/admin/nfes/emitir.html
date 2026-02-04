@@ -150,8 +150,8 @@ input[readonly] {
                         <div class="form-group">
                             <label for="ambiente">Ambiente</label>
                             <input type="text" class="form-control" id="ambiente" readonly 
-                                   value="{% if emitente_data.ambiente == 2 %}Produção{% else %}Homologação{% endif %}" 
-                                   style="background-color: {% if emitente_data.ambiente == 2 %}#28a745{% else %}#ffc107{% endif %}; color: white; font-weight: bold;">
+                                   value="{% if emitente_data.ambiente == 1 %}Produção{% else %}Homologação{% endif %}" 
+                                   style="background-color: {% if emitente_data.ambiente == 1 %}#28a745{% else %}#ffc107{% endif %}; color: white; font-weight: bold;">
                             <small class="form-text text-muted">Configurado no cadastro do cliente</small>
                         </div>
                     </div>
