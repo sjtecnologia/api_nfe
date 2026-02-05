@@ -967,29 +967,28 @@ class NFeService:
         
         # Verificar se SefazService está disponível
         if not SEFAZ_DISPONIVEL or SefazService is None:
-            print(" SefazService não disponível")
+            print(" SefazService não disponível - módulo não carregado")
             return False
         
-        # Verificar configuração global
-        try:
-            force_simulation = current_app.config.get('FORCE_SEFAZ_SIMULATION', False)
-            if force_simulation:
-                print(" Simulação forçada por configuração")
-                return False
-        except:
-            print(" current_app não disponível, usando simulação")
-            return False
+        # IMPORTANTE: Não verificar mais FORCE_SEFAZ_SIMULATION
+        # Sempre usar SEFAZ real quando certificado válido estiver presente
         
-        # Verificar se certificado é real
-        if certificado.get('modo_simulado', True):
+        # Verificar se certificado é real e válido
+        if certificado.get('modo_simulado', False):
             print(" Certificado em modo simulado")
             return False
         
-        if not certificado.get('private_key') or certificado.get('private_key') == 'SIMULADO':
-            print(" Chave privada não disponível")
+        # Verificar se tem dados de certificado necessários
+        if not certificado.get('cert_data'):
+            print(" Certificado sem dados (cert_data não encontrado)")
+            return False
+            
+        if not certificado.get('password'):
+            print(" Certificado sem senha")
             return False
         
-        print("OK: Condições OK para SEFAZ real")
+        print("✅ OK: Condições OK para usar SEFAZ REAL")
+        print(f"✅ Ambiente: {ambiente.upper()}")
         return True
     
     def _enviar_sefaz_real(self, xml_assinado: str, chave_acesso: str, ambiente: str, cliente_id: int) -> Dict[str, Any]:
@@ -1132,12 +1131,16 @@ class NFeService:
                     pass
     
     def _enviar_sefaz_simulado(self, xml_assinado: str, chave_acesso: str, ambiente: str, motivo: Optional[str] = None) -> Dict[str, Any]:
-        """Envia para SEFAZ simulado"""
+        """Envia para SEFAZ simulado - FALLBACK quando não há certificado válido"""
         try:
+            print("\n" + "="*80)
+            print("⚠️  ATENÇÃO: USANDO SIMULAÇÃO LOCAL (NÃO É SEFAZ REAL)")
             if motivo:
-                print(f" Simulação SEFAZ - Motivo: {motivo}")
+                print(f"⚠️  Motivo: {motivo}")
             else:
-                print(" Usando simulação SEFAZ")
+                print("⚠️  Motivo: Não especificado")
+            print("⚠️  Para usar SEFAZ real, configure um certificado digital válido")
+            print("="*80 + "\n")
             
             # Simular resposta
             protocolo = f"135{datetime.now().strftime('%Y%m%d%H%M%S')}"
