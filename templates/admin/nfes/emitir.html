@@ -885,7 +885,7 @@ input[readonly] {
 </div>
 
 <!-- 🤖 Botão Assistente IA -->
-<button type="button" class="btn-assistente-ia" onclick="abrirAssistenteIA()" title="Assistente EmiteMax">
+<button type="button" class="btn-assistente-ia" id="btnAssistenteIA" title="Assistente EmiteMax">
     💬
 </button>
 <div class="assistente-tooltip">Pergunte ao Assistente EmiteMax</div>
@@ -929,10 +929,9 @@ input[readonly] {
             <div class="chat-input-area">
                 <div class="input-group">
                     <input type="text" class="form-control" id="chatInput" 
-                           placeholder="Digite sua dúvida..." 
-                           onkeypress="if(event.key==='Enter') enviarPergunta()">
+                           placeholder="Digite sua dúvida...">
                     <div class="input-group-append">
-                        <button class="btn btn-primary" type="button" onclick="enviarPergunta()">
+                        <button class="btn btn-primary" type="button" id="btnEnviarPergunta">
                             📤 Enviar
                         </button>
                     </div>
@@ -3625,6 +3624,30 @@ function adicionarItemComDados(itemData) {
 
 // 🤖 Limpar chat ao fechar modal do Assistente IA
 $(document).ready(function() {
+    // Event listener para botão do Assistente IA
+    const btnAssistente = document.getElementById('btnAssistenteIA');
+    if (btnAssistente) {
+        btnAssistente.addEventListener('click', abrirAssistenteIA);
+        console.log('✅ Event listener do Assistente IA registrado');
+    }
+    
+    // Event listener para enviar pergunta
+    const btnEnviar = document.getElementById('btnEnviarPergunta');
+    const inputPergunta = document.getElementById('chatInput');
+    
+    if (btnEnviar) {
+        btnEnviar.addEventListener('click', enviarPergunta);
+    }
+    
+    if (inputPergunta) {
+        inputPergunta.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                enviarPergunta();
+            }
+        });
+    }
+    
+    // Limpar chat ao fechar modal
     $('#modalAssistenteIA').on('hidden.bs.modal', function() {
         const chatBody = document.getElementById('chatBody');
         chatBody.innerHTML = `
