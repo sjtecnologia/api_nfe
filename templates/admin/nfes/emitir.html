@@ -883,6 +883,67 @@ input[readonly] {
         </div>
     </div>
 </div>
+
+<!-- 🤖 Botão Assistente IA -->
+<button type="button" class="btn-assistente-ia" onclick="abrirAssistenteIA()" title="Assistente EmiteMax">
+    💬
+</button>
+<div class="assistente-tooltip">Pergunte ao Assistente EmiteMax</div>
+
+<!-- Modal Assistente IA -->
+<div class="modal fade" id="modalAssistenteIA" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-chat-assistente modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="chat-header">
+                <h5 style="margin: 0;">🤖 Assistente EmiteMax</h5>
+                <small>Tire suas dúvidas sobre emissão de NFe</small>
+                <button type="button" class="close" data-dismiss="modal" style="position: absolute; right: 15px; top: 15px; color: white; opacity: 1;">
+                    <span>&times;</span>
+                </button>
+            </div>
+            
+            <div class="chat-body" id="chatBody">
+                <div class="chat-message bot">
+                    <div class="chat-avatar bot">🤖</div>
+                    <div class="chat-bubble bot">
+                        Olá! Sou o Assistente EmiteMax! 👋<br><br>
+                        Estou aqui para te ajudar a emitir sua NFe corretamente.<br>
+                        Escolha uma pergunta abaixo ou digite sua dúvida:
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-loading" id="chatLoading">
+                <div class="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <small>O assistente está pensando...</small>
+            </div>
+            
+            <div class="perguntas-sugeridas" id="perguntasSugeridas">
+                <!-- Perguntas serão carregadas dinamicamente via JS -->
+            </div>
+            
+            <div class="chat-input-area">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="chatInput" 
+                           placeholder="Digite sua dúvida..." 
+                           onkeypress="if(event.key==='Enter') enviarPergunta()">
+                    <div class="input-group-append">
+                        <button class="btn btn-primary" type="button" onclick="enviarPergunta()">
+                            📤 Enviar
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block mt-2">
+                    ⚠️ Este é um assistente educacional. Para situações complexas, consulte seu contador.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -893,6 +954,128 @@ console.log('🔍 Verificando se jQuery está disponível...');
 let itemCounter = 0;
 let totalGeral = 0;
 let currentNcmItemId = null;
+
+// 🤖 Assistente IA - Variáveis globais
+let empresaCRT = {{ emitente_data.crt if emitente_data else 1 }};
+let empresaUF = "{{ emitente_data.uf if emitente_data else 'SP' }}";
+let empresaRegime = empresaCRT === 1 ? "Simples Nacional" : "Regime Normal";
+
+// Perguntas contextuais por CRT
+const perguntasPorCRT = {
+    1: [ // Simples Nacional
+        "Como emitir venda de produto dentro do mesmo estado?",
+        "Como emitir venda para outro estado (interestadual)?",
+        "Como emitir para consumidor final (CPF)?",
+        "Qual CFOP usar para venda de mercadoria?",
+        "O que é CSOSN e qual número devo usar?",
+        "Como preencher os campos de ICMS no Simples Nacional?"
+    ],
+    3: [ // Regime Normal
+        "Como calcular ICMS em operação interestadual?",
+        "Quando usar CST 00, 20, 40, 41, 50, 60, 70?",
+        "O que é ICMS ST e quando devo aplicar?",
+        "Como usar código de benefício fiscal (cBenef)?",
+        "Como preencher redução de base de cálculo?",
+        "Qual a diferença entre CFOP 5102 e 6102?"
+    ]
+};
+
+// 🤖 Funções do Assistente IA
+function abrirAssistenteIA() {
+    const perguntasContainer = document.getElementById('perguntasSugeridas');
+    const perguntas = perguntasPorCRT[empresaCRT] || perguntasPorCRT[1];
+    
+    perguntasContainer.innerHTML = '<h6 style="margin-bottom: 10px; font-size: 13px; color: #666;">💡 Perguntas Frequentes:</h6>';
+    
+    perguntas.forEach(pergunta => {
+        const btn = document.createElement('button');
+        btn.className = 'pergunta-btn';
+        btn.textContent = pergunta;
+        btn.onclick = () => enviarPerguntaSugerida(pergunta);
+        perguntasContainer.appendChild(btn);
+    });
+    
+    $('#modalAssistenteIA').modal('show');
+}
+
+function enviarPerguntaSugerida(pergunta) {
+    document.getElementById('chatInput').value = pergunta;
+    enviarPergunta();
+}
+
+async function enviarPergunta() {
+    const input = document.getElementById('chatInput');
+    const pergunta = input.value.trim();
+    
+    if (!pergunta) return;
+    
+    adicionarMensagemChat('user', pergunta);
+    input.value = '';
+    
+    document.getElementById('chatLoading').classList.add('active');
+    
+    const contexto = {
+        empresa: {
+            crt: empresaCRT,
+            uf: empresaUF,
+            regime: empresaRegime
+        },
+        nfe: {
+            tipo: document.getElementById('tpNF')?.value,
+            modelo: document.getElementById('modelo')?.value,
+            destinatario_uf: document.getElementById('dest_uf')?.value
+        }
+    };
+    
+    try {
+        const response = await fetch('/api/assistente-ia', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                pergunta: pergunta,
+                contexto: contexto
+            })
+        });
+        
+        const data = await response.json();
+        
+        document.getElementById('chatLoading').classList.remove('active');
+        
+        if (data.success) {
+            adicionarMensagemChat('bot', data.resposta);
+        } else {
+            adicionarMensagemChat('bot', '❌ Desculpe, ocorreu um erro. Tente novamente.');
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar pergunta:', error);
+        document.getElementById('chatLoading').classList.remove('active');
+        adicionarMensagemChat('bot', '❌ Erro de conexão. Verifique sua internet e tente novamente.');
+    }
+}
+
+function adicionarMensagemChat(tipo, texto) {
+    const chatBody = document.getElementById('chatBody');
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${tipo}`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = `chat-avatar ${tipo}`;
+    avatar.textContent = tipo === 'bot' ? '🤖' : '👤';
+    
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble ${tipo}`;
+    bubble.innerHTML = texto.replace(/\n/g, '<br>');
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(bubble);
+    chatBody.appendChild(messageDiv);
+    
+    chatBody.scrollTop = chatBody.scrollHeight;
+}
 
 // Base de dados NCM (amostra)
 const ncmDatabase = [
@@ -3439,211 +3622,22 @@ function adicionarItemComDados(itemData) {
     }, 200); // Aumentei para 200ms para garantir que o item foi criado
 }
 {% endif %}
-</script>
 
-<!-- 🤖 Botão Assistente IA -->
-<button type="button" class="btn-assistente-ia" onclick="abrirAssistenteIA()" title="Assistente EmiteMax">
-    💬
-</button>
-<div class="assistente-tooltip">Pergunte ao Assistente EmiteMax</div>
-
-<!-- Modal Assistente IA -->
-<div class="modal fade" id="modalAssistenteIA" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-chat-assistente modal-dialog-centered" role="document">
-        <div class="modal-content">
-            <div class="chat-header">
-                <h5 style="margin: 0;">🤖 Assistente EmiteMax</h5>
-                <small>Tire suas dúvidas sobre emissão de NFe</small>
-                <button type="button" class="close" data-dismiss="modal" style="position: absolute; right: 15px; top: 15px; color: white; opacity: 1;">
-                    <span>&times;</span>
-                </button>
-            </div>
-            
-            <div class="chat-body" id="chatBody">
-                <div class="chat-message bot">
-                    <div class="chat-avatar bot">🤖</div>
-                    <div class="chat-bubble bot">
-                        Olá! Sou o Assistente EmiteMax! 👋<br><br>
-                        Estou aqui para te ajudar a emitir sua NFe corretamente.<br>
-                        Escolha uma pergunta abaixo ou digite sua dúvida:
-                    </div>
+// 🤖 Limpar chat ao fechar modal do Assistente IA
+$(document).ready(function() {
+    $('#modalAssistenteIA').on('hidden.bs.modal', function() {
+        const chatBody = document.getElementById('chatBody');
+        chatBody.innerHTML = `
+            <div class="chat-message bot">
+                <div class="chat-avatar bot">🤖</div>
+                <div class="chat-bubble bot">
+                    Olá! Sou o Assistente EmiteMax! 👋<br><br>
+                    Estou aqui para te ajudar a emitir sua NFe corretamente.<br>
+                    Escolha uma pergunta abaixo ou digite sua dúvida:
                 </div>
             </div>
-            
-            <div class="chat-loading" id="chatLoading">
-                <div class="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-                <small>O assistente está pensando...</small>
-            </div>
-            
-            <div class="perguntas-sugeridas" id="perguntasSugeridas">
-                <!-- Perguntas serão carregadas dinamicamente via JS -->
-            </div>
-            
-            <div class="chat-input-area">
-                <div class="input-group">
-                    <input type="text" class="form-control" id="chatInput" 
-                           placeholder="Digite sua dúvida..." 
-                           onkeypress="if(event.key==='Enter') enviarPergunta()">
-                    <div class="input-group-append">
-                        <button class="btn btn-primary" type="button" onclick="enviarPergunta()">
-                            📤 Enviar
-                        </button>
-                    </div>
-                </div>
-                <small class="text-muted d-block mt-2">
-                    ⚠️ Este é um assistente educacional. Para situações complexas, consulte seu contador.
-                </small>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-// 🤖 Assistente IA - Variáveis globais
-let empresaCRT = {{ emitente_data.crt if emitente_data else 1 }};
-let empresaUF = "{{ emitente_data.uf if emitente_data else 'SP' }}";
-let empresaRegime = empresaCRT === 1 ? "Simples Nacional" : "Regime Normal";
-
-// Perguntas contextuais por CRT
-const perguntasPorCRT = {
-    1: [ // Simples Nacional
-        "Como emitir venda de produto dentro do mesmo estado?",
-        "Como emitir venda para outro estado (interestadual)?",
-        "Como emitir para consumidor final (CPF)?",
-        "Qual CFOP usar para venda de mercadoria?",
-        "O que é CSOSN e qual número devo usar?",
-        "Como preencher os campos de ICMS no Simples Nacional?"
-    ],
-    3: [ // Regime Normal
-        "Como calcular ICMS em operação interestadual?",
-        "Quando usar CST 00, 20, 40, 41, 50, 60, 70?",
-        "O que é ICMS ST e quando devo aplicar?",
-        "Como usar código de benefício fiscal (cBenef)?",
-        "Como preencher redução de base de cálculo?",
-        "Qual a diferença entre CFOP 5102 e 6102?"
-    ]
-};
-
-function abrirAssistenteIA() {
-    // Carregar perguntas sugeridas baseadas no CRT
-    const perguntasContainer = document.getElementById('perguntasSugeridas');
-    const perguntas = perguntasPorCRT[empresaCRT] || perguntasPorCRT[1];
-    
-    perguntasContainer.innerHTML = '<h6 style="margin-bottom: 10px; font-size: 13px; color: #666;">💡 Perguntas Frequentes:</h6>';
-    
-    perguntas.forEach(pergunta => {
-        const btn = document.createElement('button');
-        btn.className = 'pergunta-btn';
-        btn.textContent = pergunta;
-        btn.onclick = () => enviarPerguntaSugerida(pergunta);
-        perguntasContainer.appendChild(btn);
+        `;
     });
-    
-    $('#modalAssistenteIA').modal('show');
-}
-
-function enviarPerguntaSugerida(pergunta) {
-    document.getElementById('chatInput').value = pergunta;
-    enviarPergunta();
-}
-
-async function enviarPergunta() {
-    const input = document.getElementById('chatInput');
-    const pergunta = input.value.trim();
-    
-    if (!pergunta) return;
-    
-    // Adicionar mensagem do usuário
-    adicionarMensagemChat('user', pergunta);
-    input.value = '';
-    
-    // Mostrar loading
-    document.getElementById('chatLoading').classList.add('active');
-    
-    // Contexto da empresa e NFe
-    const contexto = {
-        empresa: {
-            crt: empresaCRT,
-            uf: empresaUF,
-            regime: empresaRegime
-        },
-        nfe: {
-            tipo: document.getElementById('tpNF')?.value,
-            modelo: document.getElementById('modelo')?.value,
-            destinatario_uf: document.getElementById('dest_uf')?.value
-        }
-    };
-    
-    try {
-        const response = await fetch('/api/assistente-ia', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                pergunta: pergunta,
-                contexto: contexto
-            })
-        });
-        
-        const data = await response.json();
-        
-        // Esconder loading
-        document.getElementById('chatLoading').classList.remove('active');
-        
-        if (data.success) {
-            adicionarMensagemChat('bot', data.resposta);
-        } else {
-            adicionarMensagemChat('bot', '❌ Desculpe, ocorreu um erro. Tente novamente.');
-        }
-        
-    } catch (error) {
-        console.error('Erro ao enviar pergunta:', error);
-        document.getElementById('chatLoading').classList.remove('active');
-        adicionarMensagemChat('bot', '❌ Erro de conexão. Verifique sua internet e tente novamente.');
-    }
-}
-
-function adicionarMensagemChat(tipo, texto) {
-    const chatBody = document.getElementById('chatBody');
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `chat-message ${tipo}`;
-    
-    const avatar = document.createElement('div');
-    avatar.className = `chat-avatar ${tipo}`;
-    avatar.textContent = tipo === 'bot' ? '🤖' : '👤';
-    
-    const bubble = document.createElement('div');
-    bubble.className = `chat-bubble ${tipo}`;
-    bubble.innerHTML = texto.replace(/\n/g, '<br>');
-    
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(bubble);
-    chatBody.appendChild(messageDiv);
-    
-    // Scroll para o final
-    chatBody.scrollTop = chatBody.scrollHeight;
-}
-
-// Limpar chat ao fechar modal
-$('#modalAssistenteIA').on('hidden.bs.modal', function() {
-    const chatBody = document.getElementById('chatBody');
-    // Manter apenas a mensagem inicial
-    chatBody.innerHTML = `
-        <div class="chat-message bot">
-            <div class="chat-avatar bot">🤖</div>
-            <div class="chat-bubble bot">
-                Olá! Sou o Assistente EmiteMax! 👋<br><br>
-                Estou aqui para te ajudar a emitir sua NFe corretamente.<br>
-                Escolha uma pergunta abaixo ou digite sua dúvida:
-            </div>
-        </div>
-    `;
 });
 </script>
 {% endblock %}
