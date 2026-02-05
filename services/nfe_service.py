@@ -952,10 +952,10 @@ class NFeService:
             usar_sefaz_real = self._deve_usar_sefaz_real(certificado, ambiente)
             
             if usar_sefaz_real and SEFAZ_DISPONIVEL:
-                print(" === ENVIANDO PARA SEFAZ REAL ===")
+                print("✅ === ENVIANDO PARA SEFAZ REAL ===")
                 return self._enviar_sefaz_real(xml_assinado, chave_acesso, ambiente, cliente_id)
             else:
-                print(" === USANDO SIMULAÇÃO SEFAZ ===")
+                print("⚠️  === USANDO SIMULAÇÃO LOCAL (SEM CERTIFICADO) ===")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente)
                 
         except Exception as e:
@@ -1049,20 +1049,35 @@ class NFeService:
                     print(f"[X] Erro ao extrair certificado: {e}")
                     import traceback
                     traceback.print_exc()
-                    return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
-                                                     motivo=f"Erro ao extrair certificado: {e}")
+                    # NÃO USA SIMULAÇÃO - retorna erro real para forçar correção
+                    return {
+                        'success': False,
+                        'status': 'ERRO_CERTIFICADO',
+                        'message': f'Erro ao extrair certificado: {str(e)}',
+                        'ambiente_real': False
+                    }
             else:
                 print("[X] Certificado sem dados necessários (cert_data ou password)")
-                return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
-                                                 motivo="Certificado incompleto")
+                # NÃO USA SIMULAÇÃO - retorna erro real
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Certificado incompleto - configure cert_data e password',
+                    'ambiente_real': False
+                }
             
             # Inicializar serviço SEFAZ com certificado
             try:
                 sefaz = SefazService(ambiente=ambiente, cert_path=cert_path, key_path=key_path)
             except Exception as e:
                 print(f"ERRO: Erro ao inicializar SefazService: {e}")
-                return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
-                                                 motivo="Erro na inicialização do SefazService")
+                # NÃO USA SIMULAÇÃO - retorna erro real
+                return {
+                    'success': False,
+                    'status': 'ERRO_SEFAZ_SERVICE',
+                    'message': f'Erro ao inicializar SefazService: {str(e)}',
+                    'ambiente_real': False
+                }
             
             # DESABILITADO: Verificação de status requer certificado A1 em produção
             # O XML já tem assinatura digital, vamos enviar direto
@@ -1110,9 +1125,13 @@ class NFeService:
             print(f"ERRO: Erro SEFAZ real: {e}")
             import traceback
             traceback.print_exc()
-            # Fallback para simulação
-            return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
-                                             motivo=f"Erro: {str(e)}")
+            # NÃO USA SIMULAÇÃO - retorna erro real para forçar correção
+            return {
+                'success': False,
+                'status': 'ERRO_COMUNICACAO',
+                'message': f'Erro na comunicação com SEFAZ: {str(e)}',
+                'ambiente_real': False
+            }
         
         finally:
             # Limpar arquivos temporários
