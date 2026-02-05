@@ -550,6 +550,7 @@ def generate_nfe_xml_nfelib(
             elif cst_item == '20':
                 # Redução de base de cálculo
                 motivo_deson = item.get('motivo_desoneracao_icms')
+                cbenef = item.get('cbenef', '').strip() if item.get('cbenef') else None
                 icms20_params = {
                     'orig': origem,
                     'CST': "20",
@@ -559,6 +560,9 @@ def generate_nfe_xml_nfelib(
                     'pICMS': f"{aliquota_icms:.2f}",
                     'vICMS': f"{valor_icms:.2f}"
                 }
+                # Adicionar cBenef (obrigatório para CST 20)
+                if cbenef:
+                    icms20_params['cBenef'] = cbenef
                 # Adicionar motDesICMS se houver desoneração
                 if motivo_deson:
                     icms20_params['motDesICMS'] = motivo_deson
@@ -570,10 +574,14 @@ def generate_nfe_xml_nfelib(
             elif cst_item in ['40', '41', '50']:
                 # Isenta, não tributada ou suspensão
                 motivo_deson = item.get('motivo_desoneracao_icms')
+                cbenef = item.get('cbenef', '').strip() if item.get('cbenef') else None
                 icms40_params = {
                     'orig': origem,
                     'CST': cst_item
                 }
+                # Adicionar cBenef (obrigatório para CST 40, 41, 50)
+                if cbenef:
+                    icms40_params['cBenef'] = cbenef
                 # Adicionar motDesICMS se houver desoneração (obrigatório para alguns casos)
                 if motivo_deson:
                     icms40_params['motDesICMS'] = motivo_deson

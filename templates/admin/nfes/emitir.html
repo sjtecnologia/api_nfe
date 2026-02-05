@@ -993,6 +993,18 @@ function adicionarItem() {
                         </select>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Cód. Benef. Fiscal</label>
+                        <input type="text" name="cbenef_${itemCounter}" 
+                               class="form-control" 
+                               placeholder="Ex: SP000123"
+                               maxlength="10"
+                               onchange="atualizarItemJSON(${itemCounter})"
+                               title="Código de benefício fiscal quando CST indicar benefício (20, 30, 40, 41, 50, 70)">
+                        <small class="form-text text-muted">Obrigatório para CST 20,30,40,41,50,70</small>
+                    </div>
+                </div>
                 {% endif %}
             </div>
             
@@ -1697,6 +1709,7 @@ function atualizarItemJSON(itemId) {
         reducao_base_icms: document.querySelector(`input[name="reducao_base_icms_${itemId}"]`)?.value || '0.00',
         modalidade_bc_icms: document.querySelector(`select[name="modalidade_bc_icms_${itemId}"]`)?.value || '',
         motivo_desoneracao_icms: document.querySelector(`select[name="motivo_desoneracao_icms_${itemId}"]`)?.value || '',
+        cbenef: document.querySelector(`input[name="cbenef_${itemId}"]`)?.value || '',
         bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`)?.value || '0.00',
         valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00',
         // PIS
