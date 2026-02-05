@@ -3624,11 +3624,20 @@ function adicionarItemComDados(itemData) {
 
 // 🤖 Limpar chat ao fechar modal do Assistente IA
 $(document).ready(function() {
+    console.log('🤖 Inicializando Assistente IA...');
+    
     // Event listener para botão do Assistente IA
     const btnAssistente = document.getElementById('btnAssistenteIA');
+    console.log('🔍 Botão Assistente encontrado:', btnAssistente);
+    
     if (btnAssistente) {
-        btnAssistente.addEventListener('click', abrirAssistenteIA);
+        btnAssistente.addEventListener('click', function() {
+            console.log('🔘 Botão clicado!');
+            abrirAssistenteIA();
+        });
         console.log('✅ Event listener do Assistente IA registrado');
+    } else {
+        console.error('❌ Botão #btnAssistenteIA não encontrado!');
     }
     
     // Event listener para enviar pergunta
@@ -3636,15 +3645,21 @@ $(document).ready(function() {
     const inputPergunta = document.getElementById('chatInput');
     
     if (btnEnviar) {
-        btnEnviar.addEventListener('click', enviarPergunta);
+        btnEnviar.addEventListener('click', function() {
+            console.log('📤 Botão enviar clicado!');
+            enviarPergunta();
+        });
+        console.log('✅ Event listener enviar pergunta registrado');
     }
     
     if (inputPergunta) {
         inputPergunta.addEventListener('keypress', function(event) {
             if (event.key === 'Enter') {
+                console.log('⏎ Enter pressionado!');
                 enviarPergunta();
             }
         });
+        console.log('✅ Event listener Enter registrado');
     }
     
     // Limpar chat ao fechar modal
@@ -3661,6 +3676,8 @@ $(document).ready(function() {
             </div>
         `;
     });
+    
+    console.log('🎉 Assistente IA inicializado com sucesso!');
 });
 </script>
 {% endblock %}
