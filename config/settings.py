@@ -15,7 +15,7 @@ USAR_CERTIFICADO_REAL = True  # True = Usar certificado real, False = Simulado
 # ATENÇÃO: A SEFAZ-SP (homologação) ainda pode estar rejeitando essas tags
 # mesmo que a Reforma já esteja em vigor. Desabilitar temporariamente
 # se houver erro "Falha no Schema XML" relacionado ao IBS/CBS
-HABILITAR_IBS_CBS = False  # True = Incluir tags IBS/CBS, False = Não incluir
+HABILITAR_IBS_CBS = True  # True = Incluir tags IBS/CBS, False = Não incluir
 
 # Configurações de Debug
 DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
