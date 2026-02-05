@@ -1127,6 +1127,16 @@ function adicionarItem() {
     // ✅ ALTERAÇÃO: Inserir novo item NO TOPO da lista (primeiro filho)
     container.insertBefore(itemDiv, container.firstChild);
     
+    // Atualizar visibilidade dos campos IBS/CBS para o novo item
+    const itemIbsCbs = itemDiv.querySelector('.item-ibs-cbs');
+    if (itemIbsCbs) {
+        // Verificar se regime requer IBS/CBS (baseado na visibilidade da seção ICMS60)
+        const secaoIcms60 = document.getElementById('secao-icms60');
+        const requerIBS = secaoIcms60 && secaoIcms60.style.display !== 'none';
+        itemIbsCbs.style.display = requerIBS ? 'block' : 'none';
+        console.log(`🔄 Item ${itemCounter}: IBS/CBS ${requerIBS ? 'VISÍVEL' : 'OCULTO'}`);
+    }
+    
     // Inicializar Select2 para os novos elementos do item
     setTimeout(() => {
         initSelect2ForItem(itemCounter);
