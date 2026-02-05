@@ -175,6 +175,7 @@ input[readonly] {
                                 <option value="{{ dest.destinatario_id }}" 
                                         data-nome="{{ dest.nome_razao_social }}"
                                         data-documento="{{ dest.cpf_cnpj }}"
+                                        data-ie="{{ dest.inscricao_estadual or '' }}"
                                         data-endereco="{{ dest.logradouro }}, {{ dest.numero }} - {{ dest.bairro }}"
                                         data-cidade="{{ dest.nome_municipio }}/{{ dest.uf }}"
                                         data-cep="{{ dest.cep }}"
