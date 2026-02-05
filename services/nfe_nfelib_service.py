@@ -550,6 +550,7 @@ def generate_nfe_xml_nfelib(
             elif cst_item == '20':
                 # Redução de base de cálculo
                 motivo_deson = item.get('motivo_desoneracao_icms')
+                # cBenef será adicionado manualmente ao XML (nfelib não suporta)
                 cbenef = item.get('cbenef', '').strip() if item.get('cbenef') else None
                 icms20_params = {
                     'orig': origem,
@@ -560,9 +561,9 @@ def generate_nfe_xml_nfelib(
                     'pICMS': f"{aliquota_icms:.2f}",
                     'vICMS': f"{valor_icms:.2f}"
                 }
-                # Adicionar cBenef (obrigatório para CST 20)
-                if cbenef:
-                    icms20_params['cBenef'] = cbenef
+                # NÃO adicionar cBenef aqui - nfelib não suporta
+                # if cbenef:
+                #     icms20_params['cBenef'] = cbenef
                 # Adicionar motDesICMS se houver desoneração
                 if motivo_deson:
                     icms20_params['motDesICMS'] = motivo_deson
@@ -571,6 +572,12 @@ def generate_nfe_xml_nfelib(
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS20=icms_obj)
                 v_bc_icms_total += bc_icms
                 v_icms_total += valor_icms
+                
+                # Armazenar cBenef para adicionar manualmente ao XML
+                if cbenef:
+                    if not hasattr(det, '_cbenef_manual'):
+                        det._cbenef_manual = {}
+                    det._cbenef_manual[idx] = cbenef
             elif cst_item in ['40', '41', '50']:
                 # Isenta, não tributada ou suspensão
                 motivo_deson = item.get('motivo_desoneracao_icms')
@@ -579,15 +586,21 @@ def generate_nfe_xml_nfelib(
                     'orig': origem,
                     'CST': cst_item
                 }
-                # Adicionar cBenef (obrigatório para CST 40, 41, 50)
-                if cbenef:
-                    icms40_params['cBenef'] = cbenef
+                # NÃO adicionar cBenef aqui - nfelib não suporta
+                # if cbenef:
+                #     icms40_params['cBenef'] = cbenef
                 # Adicionar motDesICMS se houver desoneração (obrigatório para alguns casos)
                 if motivo_deson:
                     icms40_params['motDesICMS'] = motivo_deson
                 
                 icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms40(**icms40_params)
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS40=icms_obj)
+                
+                # Armazenar cBenef para adicionar manualmente ao XML
+                if cbenef:
+                    if not hasattr(det, '_cbenef_manual'):
+                        det._cbenef_manual = {}
+                    det._cbenef_manual[idx] = cbenef
             else:
                 # Fallback: usar CST 20
                 icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms20(
@@ -951,6 +964,31 @@ def generate_nfe_xml_nfelib(
                         parent_total.append(child)
                     
                     print(f"  [IBS/CBS] Totalizadores adicionados: IBS R$ {v_ibs_total:.2f}, CBS R$ {v_cbs_total:.2f}")
+            
+            # ========== ADICIONAR cBenef MANUALMENTE (nfelib não suporta) ==========
+            print(f"🔧 [cBenef] Verificando necessidade de adicionar cBenef manualmente...")
+            for idx, item in enumerate(items, 1):
+                cbenef = item.get('cbenef', '').strip() if item.get('cbenef') else None
+                if cbenef:
+                    print(f"  [cBenef] Item {idx} - Código: {cbenef}")
+                    # Encontrar o elemento det correspondente
+                    det_elem = xml_tree.find(f'.//nfe:det[@nItem="{idx}"]', ns)
+                    if det_elem is not None:
+                        # Encontrar ICMS20 ou ICMS40
+                        icms20_elem = det_elem.find('.//nfe:ICMS20', ns)
+                        icms40_elem = det_elem.find('.//nfe:ICMS40', ns)
+                        
+                        target_elem = icms20_elem if icms20_elem is not None else icms40_elem
+                        if target_elem is not None:
+                            # Adicionar <cBenef> após <CST>
+                            cst_elem = target_elem.find('nfe:CST', ns)
+                            if cst_elem is not None:
+                                cbenef_elem = etree.Element('{http://www.portalfiscal.inf.br/nfe}cBenef')
+                                cbenef_elem.text = cbenef
+                                # Inserir após CST (posição 2, já que 0=orig, 1=CST)
+                                cst_index = list(target_elem).index(cst_elem)
+                                target_elem.insert(cst_index + 1, cbenef_elem)
+                                print(f"  ✅ [cBenef] Item {idx} - <cBenef>{cbenef}</cBenef> adicionado")
             
             # IMPORTANTE: Adicionar infAdic ANTES de infRespTec (ordem correta do leiaute)
             inf_cpl_text = form_data.get('infCpl', '').strip()
