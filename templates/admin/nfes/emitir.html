@@ -1808,8 +1808,12 @@ function recalcularTotais() {
     
     // Atualizar valor do pagamento com o total final
     const campoPagamento = document.getElementById('valorPagamento');
-    campoPagamento.value = totalNFe.toFixed(2);
-    campoPagamento.setAttribute('data-valor-real', totalNFe.toFixed(2));
+    if (campoPagamento) {
+        campoPagamento.value = totalNFe.toFixed(2);
+        campoPagamento.setAttribute('data-valor-real', totalNFe.toFixed(2));
+        // Disparar evento para atualizar visualmente
+        campoPagamento.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     
     console.log(`💰 Totais: Produtos=${totalProdutos.toFixed(2)} + Frete=${vFrete.toFixed(2)} + Seguro=${vSeg.toFixed(2)} - Desconto=${vDesc.toFixed(2)} = Total NFe=${totalNFe.toFixed(2)}`);
 }
