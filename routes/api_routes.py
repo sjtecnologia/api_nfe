@@ -563,6 +563,42 @@ def gerar_resposta_assistente(pergunta, crt, uf, regime, nfe_info):
     """
     pergunta_lower = pergunta.lower()
     
+    # 📦 Perguntas sobre emissão/venda dentro ou fora do estado
+    if ('emitir' in pergunta_lower or 'venda' in pergunta_lower or 'vender' in pergunta_lower) and ('dentro' in pergunta_lower or 'mesmo estado' in pergunta_lower):
+        return f"""✅ <strong>Como emitir venda dentro de {uf} (mesmo estado):</strong><br><br>
+<strong>1. CFOP a usar:</strong><br>
+• <strong>5102</strong> - Venda de mercadoria adquirida de terceiros<br>
+• <strong>5405</strong> - Venda com mercadoria sujeita ao ST<br><br>
+<strong>2. Para Simples Nacional (seu caso):</strong><br>
+• CSOSN: <strong>102</strong> (mais comum)<br>
+• Origem: <strong>0</strong> (Nacional)<br>
+• Não precisa calcular ICMS manualmente!<br><br>
+<strong>3. Passo a passo:</strong><br>
+1. Selecione o destinatário (mesmo UF que você)<br>
+2. Adicione o produto<br>
+3. CFOP: <strong>5102</strong><br>
+4. CSOSN: <strong>102</strong><br>
+5. Sistema calcula automaticamente<br><br>
+💡 O número <strong>5</strong> inicial indica operação <strong>dentro</strong> do estado."""
+    
+    if ('emitir' in pergunta_lower or 'venda' in pergunta_lower or 'vender' in pergunta_lower) and ('fora' in pergunta_lower or 'outro estado' in pergunta_lower or 'interestadual' in pergunta_lower):
+        return f"""✅ <strong>Como emitir venda para outro estado (interestadual):</strong><br><br>
+<strong>1. CFOP a usar:</strong><br>
+• <strong>6102</strong> - Venda de mercadoria para outro estado<br>
+• <strong>6405</strong> - Venda com mercadoria sujeita ao ST<br><br>
+<strong>2. Para Simples Nacional (seu caso):</strong><br>
+• CSOSN: <strong>102</strong> ou <strong>103</strong><br>
+• Origem: <strong>0</strong> (Nacional)<br>
+• Sistema calcula DIFAL automaticamente para consumidor final<br><br>
+<strong>3. Passo a passo:</strong><br>
+1. Selecione destinatário em <strong>outro UF</strong><br>
+2. Adicione o produto<br>
+3. CFOP: <strong>6102</strong><br>
+4. CSOSN: <strong>102</strong><br>
+5. Se for consumidor final, marque "Consumidor Final"<br><br>
+💡 O número <strong>6</strong> inicial indica operação <strong>interestadual</strong>.<br>
+⚠️ Para consumidor final, há DIFAL (diferencial de alíquota)."""
+    
     # 📦 CFOP - Perguntas sobre CFOP
     if 'cfop' in pergunta_lower:
         if 'dentro' in pergunta_lower or 'mesmo estado' in pergunta_lower:
