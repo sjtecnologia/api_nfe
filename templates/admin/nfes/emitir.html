@@ -286,6 +286,34 @@ input[readonly] {
                             </select>
                         </div>
                     </div>
+                    
+                    <!-- Valores de Frete, Seguro e Desconto -->
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="vFrete">Valor do Frete (R$)</label>
+                                <input type="number" step="0.01" min="0" class="form-control" name="vFrete" id="vFrete" 
+                                       value="0.00" placeholder="0,00" onchange="recalcularTotais()">
+                                <small class="form-text text-muted">Valor total do frete da NFe</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="vSeg">Valor do Seguro (R$)</label>
+                                <input type="number" step="0.01" min="0" class="form-control" name="vSeg" id="vSeg" 
+                                       value="0.00" placeholder="0,00" onchange="recalcularTotais()">
+                                <small class="form-text text-muted">Valor total do seguro da NFe</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="vDesc">Valor do Desconto (R$)</label>
+                                <input type="number" step="0.01" min="0" class="form-control" name="vDesc" id="vDesc" 
+                                       value="0.00" placeholder="0,00" onchange="recalcularTotais()">
+                                <small class="form-text text-muted">Valor total de desconto da NFe</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Dados da Transportadora (oculto por padrão) -->
@@ -1721,10 +1749,25 @@ function calcularTotalGeral() {
         currency: 'BRL'
     });
     
-    // Atualizar valor do pagamento
-    document.getElementById('valorPagamento').value = total.toFixed(2);
+    // Calcular total da NFe considerando frete, seguro e desconto
+    recalcularTotais();
     
     totalGeral = total;
+}
+
+// Recalcular totais da NFe com frete, seguro e desconto
+function recalcularTotais() {
+    const totalProdutos = totalGeral || 0;
+    const vFrete = parseFloat(document.getElementById('vFrete')?.value || 0);
+    const vSeg = parseFloat(document.getElementById('vSeg')?.value || 0);
+    const vDesc = parseFloat(document.getElementById('vDesc')?.value || 0);
+    
+    const totalNFe = totalProdutos + vFrete + vSeg - vDesc;
+    
+    // Atualizar valor do pagamento com o total final
+    document.getElementById('valorPagamento').value = totalNFe.toFixed(2);
+    
+    console.log(`💰 Totais: Produtos=${totalProdutos.toFixed(2)} + Frete=${vFrete.toFixed(2)} + Seguro=${vSeg.toFixed(2)} - Desconto=${vDesc.toFixed(2)} = Total NFe=${totalNFe.toFixed(2)}`);
 }
 
 // Variável global para armazenar o número sugerido

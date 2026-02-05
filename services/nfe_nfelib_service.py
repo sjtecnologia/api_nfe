@@ -722,9 +722,14 @@ def generate_nfe_xml_nfelib(
         
         det_list.append(det)
     
-    v_nf_total = v_prod_total
+    # Calcular valor total da NFe considerando frete, seguro e desconto
+    v_frete = Decimal(str(form_data.get('vFrete', '0.00')))
+    v_seg = Decimal(str(form_data.get('vSeg', '0.00')))
+    v_desc = Decimal(str(form_data.get('vDesc', '0.00')))
+    v_nf_total = v_prod_total + v_frete + v_seg - v_desc
     
     print(f"✅ [NFELIB] {len(det_list)} itens criados")
+    print(f"💰 [NFELIB] Valores: Produtos={v_prod_total:.2f} + Frete={v_frete:.2f} + Seguro={v_seg:.2f} - Desconto={v_desc:.2f} = Total NFe={v_nf_total:.2f}")
     
     # 10. Criar TOTAL
     icms_tot = Nfe.InfNfe.Total.Icmstot(
@@ -740,9 +745,9 @@ def generate_nfe_xml_nfelib(
         vFCPST="0.00",
         vFCPSTRet="0.00",
         vProd=f"{v_prod_total:.2f}",
-        vFrete="0.00",
-        vSeg="0.00",
-        vDesc="0.00",
+        vFrete=f"{float(form_data.get('vFrete', '0.00')):.2f}",
+        vSeg=f"{float(form_data.get('vSeg', '0.00')):.2f}",
+        vDesc=f"{float(form_data.get('vDesc', '0.00')):.2f}",
         vII="0.00",
         vIPI=f"{v_ipi_total:.2f}",
         vIPIDevol="0.00",

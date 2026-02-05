@@ -137,6 +137,9 @@ def emitir_nfe():
                 'formaPagamento': request.form.get('formaPagamento'),
                 'valorPagamento': request.form.get('valorPagamento'),
                 'modFrete': request.form.get('modFrete', '9'),
+                'vFrete': request.form.get('vFrete', '0.00'),
+                'vSeg': request.form.get('vSeg', '0.00'),
+                'vDesc': request.form.get('vDesc', '0.00'),
                 # Dados da Transportadora
                 'transportadoraNome': request.form.get('transportadoraNome', ''),
                 'transportadoraCnpjCpf': request.form.get('transportadoraCnpjCpf', ''),
