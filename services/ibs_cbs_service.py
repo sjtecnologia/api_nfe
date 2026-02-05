@@ -163,8 +163,7 @@ def gerar_xml_totais_ibscbs(totais_ibs: Dict[str, Any], totais_cbs: Dict[str, An
 <vCredPres>0.00</vCredPres>
 <vCredPresCondSus>0.00</vCredPresCondSus>
 </gCBS>
-</IBSCBSTot>
-<vNFTot>{totais_ibs['vBCTotal']:.2f}</vNFTot>"""
+</IBSCBSTot>"""
     return xml
 
 
