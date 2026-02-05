@@ -663,6 +663,9 @@ def generate_nfe_xml_nfelib(
         ibs_cbs_xml = None
         classificacao_ibs_cbs_id = item.get('classificacao_ibs_cbs_id')
         
+        # DEBUG: Sempre mostrar se campo IBS/CBS foi recebido
+        print(f"  [IBS/CBS] Item {idx} - CRT={crt_int}, classificacao_ibs_cbs_id='{classificacao_ibs_cbs_id}'")
+        
         # Verificar se é CRT=3 (Lucro Real/Presumido) e tem classificação
         if crt_int == 3 and classificacao_ibs_cbs_id:
             try:
