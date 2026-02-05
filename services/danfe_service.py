@@ -157,6 +157,22 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
         # Garantir que xml_content é string
         xml_str = xml_content.decode('utf-8') if isinstance(xml_content, bytes) else xml_content
         
+        # ⚠️ CORREÇÃO: Remover tags IBS/CBS temporariamente para compatibilidade com nfelib
+        # A biblioteca ainda não suporta essas tags da LC 214/2025
+        if '<IBSCBS>' in xml_str or '<IBSCBSTot>' in xml_str:
+            print("[!] Removendo tags IBS/CBS para compatibilidade com nfelib...")
+            logger.info("[!] XML contém tags IBS/CBS - removendo para gerar DANFE")
+            
+            # Remover tags <IBSCBS> dos itens
+            import re
+            xml_str = re.sub(r'<IBSCBS>.*?</IBSCBS>', '', xml_str, flags=re.DOTALL)
+            
+            # Remover tags <IBSCBSTot> e <vNFTot> dos totais
+            xml_str = re.sub(r'<IBSCBSTot>.*?</IBSCBSTot>', '', xml_str, flags=re.DOTALL)
+            xml_str = re.sub(r'<vNFTot>.*?</vNFTot>', '', xml_str, flags=re.DOTALL)
+            
+            print("[OK] Tags IBS/CBS removidas para geração do DANFE")
+        
         # Verificar se já é nfeProc ou se precisa extrair NFe
         is_nfeproc = "<nfeProc" in xml_str
         print(f"[?] XML tipo: {'nfeProc (com protocolo)' if is_nfeproc else 'NFe simples'}")
