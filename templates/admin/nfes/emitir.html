@@ -2387,7 +2387,18 @@ function previewDANFE() {
     .then(data => {
         console.log('[DANFE PREVIEW] Response data:', data);
         
-        if (data.pdf) {
+        if (data.success && data.pdf_base64) {
+            // Converter base64 para blob e abrir em nova aba
+            const binaryString = atob(data.pdf_base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            console.log('[DANFE PREVIEW] PDF aberto em nova aba');
+        } else if (data.pdf) {
             // PDF já foi aberto
             console.log('[DANFE PREVIEW] PDF aberto em nova aba');
         } else if (data.success && data.danfe_url) {

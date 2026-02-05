@@ -164,12 +164,13 @@ def emitir_nfe():
             # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
             action = request.form.get('action')
             preview_only = request.form.get('preview_only') == 'true'
+            preview_danfe = request.form.get('preview_danfe') == 'true'
             
             # Usar ambiente do cliente (1=Produção, 2=Homologação - padrão SEFAZ)
             tp_amb = emitente_data.ambiente
             ambiente = 'producao' if tp_amb == 1 else 'homologacao'
             
-            print(f" DEBUG - Ação recebida: {action}, Preview: {preview_only}, Ambiente: {ambiente} (tpAmb={tp_amb})")
+            print(f" DEBUG - Ação recebida: {action}, Preview: {preview_only}, Preview DANFE: {preview_danfe}, Ambiente: {ambiente} (tpAmb={tp_amb})")
             
             # OK: INICIALIZAR VARIÁVEIS OBRIGATÓRIAS
             destinatario_data = {}
@@ -243,6 +244,100 @@ def emitir_nfe():
                     import traceback
                     traceback.print_exc()
                     return jsonify({'success': False, 'message': f'Erro ao gerar preview: {str(e)}'}), 500
+            
+            # MODO PREVIEW DANFE: Gerar XML e DANFE em PDF sem salvar no banco
+            if preview_danfe:
+                print(" === MODO PREVIEW DANFE ===")
+                try:
+                    # BUSCAR DESTINATÁRIO
+                    destinatario_id = request.form.get('destinatario')
+                    if not destinatario_id:
+                        return jsonify({'success': False, 'message': 'Destinatário é obrigatório'}), 400
+                    
+                    destinatario = db.query(DestinatarioNFe).filter_by(
+                        destinatario_id=destinatario_id,
+                        cliente_id=emitente_cliente_id
+                    ).first()
+                    
+                    if not destinatario:
+                        return jsonify({'success': False, 'message': 'Destinatário não encontrado'}), 404
+                    
+                    destinatario_data = {
+                        'nome_razao_social': destinatario.nome_razao_social,
+                        'cpf_cnpj': destinatario.cpf_cnpj,
+                        'logradouro': destinatario.logradouro,
+                        'numero': destinatario.numero,
+                        'bairro': destinatario.bairro,
+                        'cep': destinatario.cep,
+                        'codigo_municipio': destinatario.codigo_municipio,
+                        'nome_municipio': destinatario.nome_municipio,
+                        'uf': destinatario.uf
+                    }
+                    
+                    # PROCESSAR ITENS
+                    item_index = 0
+                    while f'items[{item_index}][json]' in request.form:
+                        item_json = request.form[f'items[{item_index}][json]']
+                        if item_json:
+                            item_data = json.loads(item_json)
+                            nfe_items.append(item_data)
+                        item_index += 1
+                    
+                    if not nfe_items:
+                        return jsonify({'success': False, 'message': 'Adicione pelo menos um item'}), 400
+                    
+                    # GERAR XML (sem assinatura)
+                    xml_nfe = generate_nfe_xml(
+                        form_data_initial,
+                        emitente_data_for_template,
+                        destinatario_data,
+                        nfe_items,
+                        tp_amb,
+                        'preview'
+                    )
+                    
+                    # GERAR DANFE em PDF
+                    from services.danfe_service import gerar_danfe_pdf
+                    
+                    # Dados mockados para preview (sem protocolo real)
+                    nfe_data_preview = {
+                        'chave_acesso': '99999999999999999999999999999999999999999999',
+                        'numero_nfe': form_data_initial.get('numero_nfe', '1'),
+                        'serie': form_data_initial.get('serie', '1'),
+                        'data_emissao': form_data_initial.get('dataEmissao', datetime.now().strftime('%Y-%m-%dT%H:%M')),
+                        'protocolo': '999999999999999',
+                        'data_autorizacao': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+                        'ambiente': ambiente
+                    }
+                    
+                    pdf_bytes = gerar_danfe_pdf(
+                        xml_nfe,
+                        emitente_data_for_template,
+                        destinatario_data,
+                        nfe_items,
+                        nfe_data_preview
+                    )
+                    
+                    # Retornar PDF como base64 para exibir no frontend
+                    import base64
+                    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+                    
+                    print(f"✅ DANFE preview gerado: {len(pdf_bytes)} bytes")
+                    return jsonify({
+                        'success': True,
+                        'pdf_base64': pdf_base64,
+                        'message': 'DANFE preview gerado com sucesso'
+                    })
+                    
+                except ValueError as ve:
+                    erro_msg = str(ve)
+                    print(f"❌ ERRO DE VALIDAÇÃO: {erro_msg}")
+                    return jsonify({'success': False, 'message': erro_msg}), 400
+                except Exception as e:
+                    print(f"❌ ERRO: Erro no preview DANFE: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return jsonify({'success': False, 'message': f'Erro ao gerar DANFE preview: {str(e)}'}), 500
             
             if action == 'emitir':
                 print(" === PROCESSANDO EMISSÃO ===")
