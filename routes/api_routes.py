@@ -511,3 +511,317 @@ def validar_regra_servico_ia():
             "error": "Erro inesperado",
             "details": str(e)
         }), 500
+
+
+@api_bp.route('/assistente-ia', methods=['POST'])
+@login_required
+def assistente_ia():
+    """
+    🤖 Assistente IA EmiteMax - Responde perguntas sobre emissão de NFe
+    """
+    try:
+        data = request.get_json()
+        pergunta = data.get('pergunta', '').strip()
+        contexto = data.get('contexto', {})
+        
+        if not pergunta:
+            return jsonify({"success": False, "error": "Pergunta não fornecida"}), 400
+        
+        # Extrair contexto da empresa e NFe
+        empresa = contexto.get('empresa', {})
+        nfe_info = contexto.get('nfe', {})
+        
+        crt = empresa.get('crt', 1)
+        uf = empresa.get('uf', 'SP')
+        regime = empresa.get('regime', 'Simples Nacional')
+        
+        print(f"[ASSISTENTE IA] Pergunta: {pergunta}")
+        print(f"[ASSISTENTE IA] Contexto: CRT={crt}, UF={uf}, Regime={regime}")
+        
+        # Base de conhecimento estruturada por tipo de pergunta
+        respostas = gerar_resposta_assistente(pergunta, crt, uf, regime, nfe_info)
+        
+        return jsonify({
+            "success": True,
+            "resposta": respostas
+        }), 200
+        
+    except Exception as e:
+        print(f"[ASSISTENTE IA] Erro: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "Erro ao processar pergunta",
+            "details": str(e)
+        }), 500
+
+
+def gerar_resposta_assistente(pergunta, crt, uf, regime, nfe_info):
+    """
+    Gera resposta baseada em base de conhecimento estruturada
+    """
+    pergunta_lower = pergunta.lower()
+    
+    # 📦 CFOP - Perguntas sobre CFOP
+    if 'cfop' in pergunta_lower:
+        if 'dentro' in pergunta_lower or 'mesmo estado' in pergunta_lower:
+            return f"""✅ <strong>CFOP para venda dentro de {uf}:</strong><br><br>
+<strong>5102</strong> - Venda de mercadoria adquirida de terceiros<br>
+<strong>5405</strong> - Venda de mercadoria adquirida de terceiros em operação com mercadoria sujeita ao regime de substituição tributária<br><br>
+📋 <strong>Como preencher:</strong><br>
+1. No campo CFOP do produto, selecione <strong>5102</strong><br>
+2. Para produtos com ST, use <strong>5405</strong><br><br>
+💡 O número <strong>5</strong> inicial indica operação dentro do estado."""
+        
+        elif 'fora' in pergunta_lower or 'outro estado' in pergunta_lower or 'interestadual' in pergunta_lower:
+            return f"""✅ <strong>CFOP para venda interestadual (fora de {uf}):</strong><br><br>
+<strong>6102</strong> - Venda de mercadoria adquirida de terceiros<br>
+<strong>6405</strong> - Venda com mercadoria sujeita ao regime de ST<br><br>
+📋 <strong>Como preencher:</strong><br>
+1. No campo CFOP do produto, selecione <strong>6102</strong><br>
+2. Para produtos com ST, use <strong>6405</strong><br><br>
+💡 O número <strong>6</strong> inicial indica operação interestadual.<br>
+⚠️ <strong>ATENÇÃO:</strong> Operações interestaduais exigem cálculo de DIFAL (Diferencial de Alíquota) para consumidor final."""
+        
+        elif 'diferença' in pergunta_lower or '5102' in pergunta_lower or '6102' in pergunta_lower:
+            return """✅ <strong>Diferença entre CFOP 5102 e 6102:</strong><br><br>
+<strong>5102</strong> = Venda <strong>DENTRO</strong> do estado (Ex: SP → SP)<br>
+<strong>6102</strong> = Venda para <strong>OUTRO</strong> estado (Ex: SP → RJ)<br><br>
+📌 <strong>Regra simples:</strong><br>
+• Se cliente no mesmo estado que você → Use <strong>5xxx</strong><br>
+• Se cliente em outro estado → Use <strong>6xxx</strong><br><br>
+💡 O sistema detecta automaticamente baseado no UF do destinatário!"""
+    
+    # 🧮 CSOSN - Simples Nacional
+    if ('csosn' in pergunta_lower or 'simples nacional' in pergunta_lower) and crt == 1:
+        if 'qual' in pergunta_lower or 'usar' in pergunta_lower or 'número' in pergunta_lower:
+            return """✅ <strong>CSOSN mais comuns no Simples Nacional:</strong><br><br>
+<strong>102</strong> - Tributada pelo Simples Nacional sem permissão de crédito<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Mais usado! Para maioria das vendas normais<br><br>
+<strong>103</strong> - Isenção do ICMS para faixa de receita bruta<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Empresas com receita menor<br><br>
+<strong>500</strong> - ICMS cobrado anteriormente por ST<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Quando já foi pago ICMS por substituição<br><br>
+<strong>900</strong> - Outros (operações especiais)<br><br>
+📋 <strong>Como preencher:</strong><br>
+1. Campo "CSOSN ICMS": selecione <strong>102</strong> (padrão)<br>
+2. O sistema calcula automaticamente<br><br>
+💡 <strong>Dica:</strong> No Simples Nacional, você NÃO precisa calcular ICMS manualmente!"""
+        
+        return f"""✅ <strong>CSOSN - Código de Situação da Operação no Simples Nacional</strong><br><br>
+Empresas do <strong>Simples Nacional (CRT=1)</strong> usam CSOSN ao invés de CST.<br><br>
+<strong>Códigos principais:</strong><br>
+• <strong>102</strong> - Tributada sem crédito (mais comum)<br>
+• <strong>103</strong> - Isenção<br>
+• <strong>400</strong> - Não tributada<br>
+• <strong>500</strong> - ICMS ST<br><br>
+💡 Seu regime atual: <strong>{regime}</strong>"""
+    
+    # 🏷️ CST - Regime Normal
+    if ('cst' in pergunta_lower or 'regime normal' in pergunta_lower) and crt == 3:
+        if '00' in pergunta_lower or '20' in pergunta_lower or '40' in pergunta_lower:
+            return """✅ <strong>CST - Código de Situação Tributária (Regime Normal):</strong><br><br>
+<strong>00</strong> - Tributada integralmente<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Venda normal com ICMS cheio (12%, 18%, etc)<br><br>
+<strong>20</strong> - Com redução de base de cálculo<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Quando há benefício fiscal (ex: redução de 60%)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;⚠️ <strong>Requer código de benefício (cBenef)</strong><br><br>
+<strong>40</strong> - Isenta<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Operação isenta de ICMS por lei<br><br>
+<strong>41</strong> - Não tributada<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Operação que não incide ICMS<br><br>
+<strong>50</strong> - Suspensão<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 ICMS suspenso por decisão judicial/lei<br><br>
+<strong>60</strong> - ICMS cobrado anteriormente por ST<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Produto já teve ICMS retido<br><br>
+<strong>70</strong> - Com redução de BC e cobrança do ICMS por ST<br>
+&nbsp;&nbsp;&nbsp;&nbsp;📌 Casos específicos de ST com redução<br><br>
+📋 <strong>Como preencher:</strong><br>
+1. Campo "CST ICMS": selecione conforme operação<br>
+2. Se CST 20, 30, 40, 50, 70 → preencha também o <strong>cBenef</strong>"""
+        
+        return """✅ <strong>CST no Regime Normal (CRT=3):</strong><br><br>
+O CST indica a situação tributária do ICMS:<br><br>
+• <strong>00</strong> = Tributado normalmente<br>
+• <strong>20</strong> = Tributado com redução<br>
+• <strong>40</strong> = Isento<br>
+• <strong>60</strong> = ICMS ST<br><br>
+📌 Escolha conforme a operação fiscal do produto."""
+    
+    # 💰 ICMS - Cálculos
+    if 'icms' in pergunta_lower and ('calcular' in pergunta_lower or 'como' in pergunta_lower):
+        if 'interestadual' in pergunta_lower or 'outro estado' in pergunta_lower:
+            return f"""✅ <strong>Cálculo de ICMS Interestadual:</strong><br><br>
+<strong>Operação de {uf} para outro estado:</strong><br><br>
+<strong>1. ICMS Origem (seu estado):</strong><br>
+&nbsp;&nbsp;&nbsp;&nbsp;Alíquota interestadual (geralmente 12% ou 7%)<br><br>
+<strong>2. DIFAL (Diferencial de Alíquota):</strong><br>
+&nbsp;&nbsp;&nbsp;&nbsp;Diferença entre alíquota interna do destino e origem<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Parte para Estado de destino<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Parte para Estado de origem<br><br>
+📋 <strong>O sistema calcula automaticamente!</strong><br><br>
+💡 <strong>Exemplo:</strong><br>
+Venda SP → RJ de R$ 100,00<br>
+• ICMS interestadual (12%): R$ 12,00<br>
+• Alíquota interna RJ (20%): R$ 20,00<br>
+• DIFAL: R$ 8,00 (20% - 12%)<br><br>
+⚠️ DIFAL só para <strong>consumidor final</strong> (indFinal=1)"""
+        
+        if regime == "Simples Nacional":
+            return """✅ <strong>ICMS no Simples Nacional:</strong><br><br>
+<strong>Boa notícia!</strong> No Simples Nacional você NÃO precisa calcular ICMS manualmente! 🎉<br><br>
+📌 <strong>Como funciona:</strong><br>
+1. Você paga ICMS junto com DAS (guia única)<br>
+2. Na NFe, apenas informe o CSOSN correto<br>
+3. O sistema preenche automaticamente<br><br>
+<strong>Campos a preencher:</strong><br>
+• CSOSN: Geralmente <strong>102</strong> ou <strong>103</strong><br>
+• Origem: <strong>0</strong> (Nacional)<br>
+• Pronto! ✅<br><br>
+💡 Muito mais simples que Regime Normal!"""
+        
+        return """✅ <strong>Cálculo de ICMS (Regime Normal):</strong><br><br>
+<strong>Fórmula básica:</strong><br>
+ICMS = Valor do Produto × Alíquota ICMS<br><br>
+<strong>Alíquotas comuns:</strong><br>
+• 18% - Padrão SP<br>
+• 12% - Operações interestaduais<br>
+• 7% - Operações interestaduais (Sul/Sudeste)<br><br>
+📋 <strong>O sistema calcula automaticamente</strong> baseado no UF de destino!<br><br>
+⚠️ Com CST 20 (redução), aplica-se % de redução antes."""
+    
+    # 🎁 cBenef - Código de Benefício Fiscal
+    if 'cbenef' in pergunta_lower or 'beneficio' in pergunta_lower or 'benefício' in pergunta_lower:
+        return """✅ <strong>cBenef - Código de Benefício Fiscal:</strong><br><br>
+Obrigatório quando usar CST que indica benefício fiscal:<br>
+• CST <strong>20</strong> (redução de BC)<br>
+• CST <strong>30</strong> (isenta ou não tributada com ST)<br>
+• CST <strong>40</strong> (isenta)<br>
+• CST <strong>41</strong> (não tributada)<br>
+• CST <strong>50</strong> (suspensão)<br>
+• CST <strong>70</strong> (redução com ST)<br><br>
+📋 <strong>Como preencher:</strong><br>
+1. Preencha o CST correspondente<br>
+2. No campo "Cód. Benef. Fiscal", informe o código<br><br>
+📌 <strong>Exemplo de códigos SP:</strong><br>
+• SP000001 a SP999999<br><br>
+⚠️ <strong>Onde encontrar seu código?</strong><br>
+• Consulte RICMS-SP Anexo II Art. 77<br>
+• Pergunte ao seu contador<br>
+• Site da SEFAZ-SP<br><br>
+💡 <strong>Campo já está disponível no formulário!</strong>"""
+    
+    # 👤 Consumidor Final
+    if 'consumidor final' in pergunta_lower or 'cpf' in pergunta_lower or 'pessoa fisica' in pergunta_lower or 'pessoa física' in pergunta_lower:
+        return """✅ <strong>Emissão para Consumidor Final (CPF):</strong><br><br>
+📋 <strong>Passo a passo:</strong><br><br>
+<strong>1. Dados do Destinatário:</strong><br>
+• CPF (não CNPJ)<br>
+• Nome completo<br>
+• Endereço completo<br><br>
+<strong>2. Indicador de Consumidor Final:</strong><br>
+• Marque <strong>SIM</strong> no campo "Consumidor Final"<br>
+• Isso define indFinal = 1<br><br>
+<strong>3. Indicador de Presença:</strong><br>
+• <strong>1</strong> - Operação presencial<br>
+• <strong>2</strong> - Internet<br>
+• <strong>3</strong> - Telefone<br>
+• <strong>9</strong> - Outros<br><br>
+<strong>4. CFOP:</strong><br>
+• Dentro do estado: <strong>5102</strong><br>
+• Fora do estado: <strong>6102</strong><br><br>
+⚠️ <strong>ATENÇÃO venda interestadual:</strong><br>
+Sistema calcula automaticamente DIFAL (diferencial de alíquota)!"""
+    
+    # 🚚 Tipo de operação (entrada/saída)
+    if 'entrada' in pergunta_lower or 'saída' in pergunta_lower or 'saida' in pergunta_lower:
+        return """✅ <strong>Tipo de Operação - Entrada vs Saída:</strong><br><br>
+<strong>0 - Entrada:</strong><br>
+📥 Você está RECEBENDO mercadoria<br>
+• Compra de fornecedor<br>
+• Devolução de cliente<br>
+• Transferência recebida<br><br>
+<strong>1 - Saída:</strong><br>
+📤 Você está ENVIANDO mercadoria<br>
+• Venda para cliente<br>
+• Devolução para fornecedor<br>
+• Transferência enviada<br><br>
+💡 <strong>Na maioria dos casos:</strong><br>
+Você vai usar <strong>SAÍDA (1)</strong> para vendas!<br><br>
+📋 Este campo fica em "Identificação da NFe"."""
+    
+    # 📦 Produtos
+    if 'produto' in pergunta_lower and ('adicionar' in pergunta_lower or 'preencher' in pergunta_lower):
+        return """✅ <strong>Como adicionar produtos na NFe:</strong><br><br>
+📋 <strong>Passo a passo:</strong><br><br>
+<strong>1. Clique em "Adicionar Produto"</strong><br><br>
+<strong>2. Preencha os campos obrigatórios:</strong><br>
+• Código do produto<br>
+• Descrição<br>
+• NCM (8 dígitos)<br>
+• CFOP<br>
+• Quantidade<br>
+• Valor unitário<br><br>
+<strong>3. Campos tributários:</strong><br>
+• Origem da mercadoria (geralmente 0)<br>
+• CSOSN ou CST (conforme seu regime)<br>
+• Alíquota ICMS (se aplicável)<br><br>
+<strong>4. Clique em "Salvar Item"</strong><br><br>
+💡 <strong>Dica:</strong> Você pode cadastrar produtos previamente no menu "Produtos" para não precisar preencher toda vez!"""
+    
+    # 💳 Pagamento
+    if 'pagamento' in pergunta_lower or 'valor' in pergunta_lower and 'pagar' in pergunta_lower:
+        return """✅ <strong>Como preencher dados de pagamento:</strong><br><br>
+📋 <strong>Campos importantes:</strong><br><br>
+<strong>1. Forma de Pagamento:</strong><br>
+• Dinheiro<br>
+• Cartão de Crédito<br>
+• Cartão de Débito<br>
+• PIX<br>
+• Boleto<br>
+• Transferência<br><br>
+<strong>2. Valor do Pagamento:</strong><br>
+⚡ <strong>Atualiza automaticamente!</strong><br>
+Sistema soma produtos + frete - desconto<br><br>
+<strong>3. Indicador de Pagamento:</strong><br>
+• <strong>0</strong> - À vista<br>
+• <strong>1</strong> - À prazo<br>
+• <strong>2</strong> - Outros<br><br>
+💡 <strong>O valor é calculado automaticamente!</strong><br>
+Você só precisa escolher a forma de pagamento."""
+    
+    # 🚚 Transporte e Frete
+    if 'frete' in pergunta_lower or 'transporte' in pergunta_lower:
+        return """✅ <strong>Modalidade de Frete:</strong><br><br>
+<strong>0 - Por conta do Emitente (CIF)</strong><br>
+📦 VOCÊ paga o frete<br>
+Valor do frete entra na NFe<br><br>
+<strong>1 - Por conta do Destinatário (FOB)</strong><br>
+📦 CLIENTE paga o frete<br>
+Cliente paga frete direto à transportadora<br><br>
+<strong>2 - Por conta de Terceiros</strong><br>
+📦 Outra empresa paga<br><br>
+<strong>9 - Sem Frete</strong><br>
+📦 Não há transporte<br>
+Ex: Retirada no local, venda digital<br><br>
+📋 <strong>Como preencher:</strong><br>
+1. Selecione modalidade<br>
+2. Se houver valor de frete, preencha<br>
+3. Dados da transportadora (opcional)<br><br>
+💡 O valor do frete entra no total da NFe automaticamente!"""
+    
+    # ❓ Pergunta genérica
+    return f"""🤖 <strong>Assistente EmiteMax</strong><br><br>
+Desculpe, não encontrei uma resposta específica para sua pergunta.<br><br>
+📌 <strong>Informações do seu contexto:</strong><br>
+• Regime: <strong>{regime}</strong><br>
+• UF: <strong>{uf}</strong><br>
+• CRT: <strong>{crt}</strong><br><br>
+💡 <strong>Tente perguntas como:</strong><br>
+• "Como emitir venda dentro do estado?"<br>
+• "Qual CFOP usar?"<br>
+• "O que é CSOSN?"<br>
+• "Como calcular ICMS?"<br>
+• "Como preencher para consumidor final?"<br><br>
+⚠️ Para dúvidas complexas, consulte seu contador!"""
