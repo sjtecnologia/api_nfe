@@ -899,8 +899,15 @@ def generate_nfe_xml_nfelib(
         if inf_nfe_elem is not None:
             
             # REFORMA TRIBUTÁRIA: Adicionar IBS/CBS aos itens e totalizadores
+            # ⚠️ ATENÇÃO: As tags IBSCBS só serão aceitas pela SEFAZ após publicação
+            # da Nota Técnica com o Schema XSD atualizado (versão 4.01 ou superior).
+            # Até lá, as tags causarão rejeição "Falha no Schema XML".
+            # 
+            # Para testar NFe SEM IBS/CBS, deixe o campo "Classificação IBS/CBS" em branco
+            # no formulário de emissão.
             if itens_ibs_cbs:
                 print(f"🏛️ [IBS/CBS] Adicionando tags aos {len(itens_ibs_cbs)} itens com classificação")
+                print(f"⚠️  [IBS/CBS] AVISO: SEFAZ pode rejeitar se Schema XSD ainda não foi atualizado!")
                 
                 # Adicionar <IBSCBS> a cada <imposto> dos itens
                 det_elements = xml_tree.findall('.//nfe:det', ns)

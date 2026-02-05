@@ -258,8 +258,8 @@ input[readonly] {
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="valorPagamento">Valor do Pagamento *</label>
-                            <input type="number" step="0.01" class="form-control" name="valorPagamento" 
-                                   id="valorPagamento" placeholder="0,00" min="0.01" required>
+                            <input type="text" class="form-control" name="valorPagamento" 
+                                   id="valorPagamento" placeholder="0,00" data-valor-real="0.00" required>
                         </div>
                     </div>
                 </div>
@@ -292,24 +292,24 @@ input[readonly] {
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="vFrete">Valor do Frete (R$)</label>
-                                <input type="number" step="0.01" min="0" class="form-control" name="vFrete" id="vFrete" 
-                                       value="0.00" placeholder="0,00" onchange="recalcularTotais()">
+                                <input type="text" class="form-control" name="vFrete" id="vFrete" 
+                                       value="0.00" placeholder="0,00" data-valor-real="0.00" onblur="recalcularTotais()">
                                 <small class="form-text text-muted">Valor total do frete da NFe</small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="vSeg">Valor do Seguro (R$)</label>
-                                <input type="number" step="0.01" min="0" class="form-control" name="vSeg" id="vSeg" 
-                                       value="0.00" placeholder="0,00" onchange="recalcularTotais()">
+                                <input type="text" class="form-control" name="vSeg" id="vSeg" 
+                                       value="0.00" placeholder="0,00" data-valor-real="0.00" onblur="recalcularTotais()">
                                 <small class="form-text text-muted">Valor total do seguro da NFe</small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="vDesc">Valor do Desconto (R$)</label>
-                                <input type="number" step="0.01" min="0" class="form-control" name="vDesc" id="vDesc" 
-                                       value="0.00" placeholder="0,00" onchange="recalcularTotais()">
+                                <input type="text" class="form-control" name="vDesc" id="vDesc" 
+                                       value="0.00" placeholder="0,00" data-valor-real="0.00" onblur="recalcularTotais()">
                                 <small class="form-text text-muted">Valor total de desconto da NFe</small>
                             </div>
                         </div>
@@ -769,6 +769,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Buscar próximo número da NFe ao carregar página
     buscarProximoNumero();
+    
+    // Aplicar máscaras monetárias nos campos de valor
+    aplicarMascaraMoeda('vFrete');
+    aplicarMascaraMoeda('vSeg');
+    aplicarMascaraMoeda('vDesc');
+    aplicarMascaraMoeda('valorPagamento');
+    console.log('💰 Máscaras monetárias aplicadas');
     
     // Atualizar número quando modelo mudar
     document.getElementById('modelo').addEventListener('change', buscarProximoNumero);
@@ -1755,6 +1762,28 @@ function calcularTotalGeral() {
     totalGeral = total;
 }
 
+// Funções de formatação monetária
+function formatarValorInput(input) {
+    let valor = input.value.replace(/\D/g, ''); // Remove tudo que não é dígito
+    valor = (parseInt(valor) / 100).toFixed(2); // Divide por 100 e formata
+    input.value = valor;
+    input.setAttribute('data-valor-real', valor);
+}
+
+function aplicarMascaraMoeda(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    
+    input.addEventListener('input', function(e) {
+        formatarValorInput(this);
+    });
+    
+    input.addEventListener('blur', function() {
+        const valor = parseFloat(this.value || 0);
+        this.value = valor.toFixed(2);
+    });
+}
+
 // Recalcular totais da NFe com frete, seguro e desconto
 function recalcularTotais() {
     const totalProdutos = totalGeral || 0;
@@ -1765,7 +1794,9 @@ function recalcularTotais() {
     const totalNFe = totalProdutos + vFrete + vSeg - vDesc;
     
     // Atualizar valor do pagamento com o total final
-    document.getElementById('valorPagamento').value = totalNFe.toFixed(2);
+    const campoPagamento = document.getElementById('valorPagamento');
+    campoPagamento.value = totalNFe.toFixed(2);
+    campoPagamento.setAttribute('data-valor-real', totalNFe.toFixed(2));
     
     console.log(`💰 Totais: Produtos=${totalProdutos.toFixed(2)} + Frete=${vFrete.toFixed(2)} + Seguro=${vSeg.toFixed(2)} - Desconto=${vDesc.toFixed(2)} = Total NFe=${totalNFe.toFixed(2)}`);
 }
