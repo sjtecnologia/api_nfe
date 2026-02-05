@@ -664,7 +664,7 @@ def generate_nfe_xml_nfelib(
         classificacao_ibs_cbs_id = item.get('classificacao_ibs_cbs_id')
         
         # DEBUG: Sempre mostrar se campo IBS/CBS foi recebido
-        print(f"  [IBS/CBS] Item {idx} - CRT={crt_int}, classificacao_ibs_cbs_id='{classificacao_ibs_cbs_id}'")
+        print(f"  [IBS/CBS] Item {idx} - CRT={crt_int}, classificacao_ibs_cbs_id='{classificacao_ibs_cbs_id}' (tipo: {type(classificacao_ibs_cbs_id).__name__})")
         
         # Verificar se é CRT=3 (Lucro Real/Presumido) e tem classificação
         if crt_int == 3 and classificacao_ibs_cbs_id:
@@ -672,8 +672,12 @@ def generate_nfe_xml_nfelib(
                 from database.connection import get_db
                 db = next(get_db())
                 
+                # ⚠️ CORREÇÃO: Converter para inteiro (vem como string do formulário)
+                classificacao_id_int = int(classificacao_ibs_cbs_id)
+                print(f"  [IBS/CBS] Item {idx} - Convertido para int: {classificacao_id_int}")
+                
                 # Calcular IBS/CBS
-                ibs_cbs_data = calcular_ibs_cbs(valor_total, classificacao_ibs_cbs_id, db)
+                ibs_cbs_data = calcular_ibs_cbs(valor_total, classificacao_id_int, db)
                 
                 # Gerar XML IBS/CBS
                 ibs_cbs_xml = gerar_xml_ibscbs(ibs_cbs_data)
