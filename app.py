@@ -34,6 +34,7 @@ from routes.api_v2_routes import api_v2_bp
 from routes.webhooks_routes import webhooks_bp
 from routes.nfse_routes import nfse_bp
 from routes.regras_servicos_routes import regras_servicos_bp
+from routes.classificacao_ibs_cbs_routes import classificacao_ibs_cbs_bp
 
 # Configurar Flask-Login
 from auth.login_manager import init_login_manager
@@ -84,6 +85,7 @@ app.register_blueprint(home_bp)
 app.register_blueprint(llm_api_bp)  # API específica para LLM
 app.register_blueprint(nfse_bp)  # NFS-e Nacional
 app.register_blueprint(regras_servicos_bp)  # Regras Tributárias de Serviços
+app.register_blueprint(classificacao_ibs_cbs_bp)  # Classificações IBS/CBS - Reforma Tributária
 
 import re
 from markupsafe import Markup, escape
