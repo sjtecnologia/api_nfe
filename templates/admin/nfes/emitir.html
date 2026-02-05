@@ -955,8 +955,8 @@ let totalGeral = 0;
 let currentNcmItemId = null;
 
 // 🤖 Assistente IA - Variáveis globais
-let empresaCRT = {{ emitente_data.crt if emitente_data else 1 }};
-let empresaUF = "{{ emitente_data.uf if emitente_data else 'SP' }}";
+let empresaCRT = {% if emitente_data and emitente_data.crt %}{{ emitente_data.crt }}{% else %}1{% endif %};
+let empresaUF = "{% if emitente_data and emitente_data.uf %}{{ emitente_data.uf }}{% else %}SP{% endif %}";
 let empresaRegime = empresaCRT === 1 ? "Simples Nacional" : "Regime Normal";
 
 // Perguntas contextuais por CRT
