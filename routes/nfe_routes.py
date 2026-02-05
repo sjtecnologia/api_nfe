@@ -296,27 +296,22 @@ def emitir_nfe():
                         'preview'
                     )
                     
-                    # GERAR DANFE em PDF
-                    from services.danfe_service import gerar_danfe_pdf
+                    # GERAR DANFE em PDF usando o serviço existente
+                    from services.danfe_service import generate_danfe
                     
-                    # Dados mockados para preview (sem protocolo real)
-                    nfe_data_preview = {
-                        'chave_acesso': '99999999999999999999999999999999999999999999',
-                        'numero_nfe': form_data_initial.get('numero_nfe', '1'),
-                        'serie': form_data_initial.get('serie', '1'),
-                        'data_emissao': form_data_initial.get('dataEmissao', datetime.now().strftime('%Y-%m-%dT%H:%M')),
-                        'protocolo': '999999999999999',
-                        'data_autorizacao': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-                        'ambiente': ambiente
-                    }
+                    # Gerar DANFE usando ID temporário (não será salvo no banco)
+                    # O generate_danfe retorna o caminho do arquivo PDF gerado
+                    pdf_path = generate_danfe(xml_nfe, 'preview', emitente_cliente_id)
                     
-                    pdf_bytes = gerar_danfe_pdf(
-                        xml_nfe,
-                        emitente_data_for_template,
-                        destinatario_data,
-                        nfe_items,
-                        nfe_data_preview
-                    )
+                    # Ler o PDF e converter para bytes
+                    with open(pdf_path, 'rb') as f:
+                        pdf_bytes = f.read()
+                    
+                    # Limpar arquivo temporário
+                    try:
+                        os.remove(pdf_path)
+                    except:
+                        pass
                     
                     # Retornar PDF como base64 para exibir no frontend
                     import base64
