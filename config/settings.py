@@ -10,6 +10,13 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo250
 SEFAZ_AMBIENTE_HOMOLOGACAO = True  # True = Homologação, False = Produção
 USAR_CERTIFICADO_REAL = True  # True = Usar certificado real, False = Simulado
 
+# ⚠️ REFORMA TRIBUTÁRIA - IBS/CBS (LC 214/2025)
+# Habilitar/desabilitar tags IBS/CBS no XML da NFe
+# ATENÇÃO: A SEFAZ-SP (homologação) ainda pode estar rejeitando essas tags
+# mesmo que a Reforma já esteja em vigor. Desabilitar temporariamente
+# se houver erro "Falha no Schema XML" relacionado ao IBS/CBS
+HABILITAR_IBS_CBS = False  # True = Incluir tags IBS/CBS, False = Não incluir
+
 # Configurações de Debug
 DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 HOST = os.getenv('FLASK_HOST', '0.0.0.0')
