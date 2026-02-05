@@ -636,6 +636,44 @@
 </script>
 
 <script>
+    // Função para copiar texto para a área de transferência
+    function copyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function() {
+                // Mostrar mensagem de sucesso
+                const originalContent = event.target.innerHTML;
+                event.target.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+                event.target.classList.add('btn-success');
+                event.target.classList.remove('btn-outline-secondary');
+                
+                setTimeout(function() {
+                    event.target.innerHTML = originalContent;
+                    event.target.classList.remove('btn-success');
+                    event.target.classList.add('btn-outline-secondary');
+                }, 2000);
+            }).catch(function(err) {
+                console.error('Erro ao copiar:', err);
+                alert('Erro ao copiar para a área de transferência');
+            });
+        } else {
+            // Fallback para navegadores antigos
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                alert('Texto copiado para a área de transferência!');
+            } catch (err) {
+                console.error('Erro ao copiar:', err);
+                alert('Erro ao copiar para a área de transferência');
+            }
+            document.body.removeChild(textArea);
+        }
+    }
+    
     // Variáveis globais JavaScript
     var nfeId = window.nfeConfig.id;
     var danfePdfUrl = null;
