@@ -196,6 +196,7 @@ def emitir_nfe():
                     destinatario_data = {
                         'nome_razao_social': destinatario.nome_razao_social,
                         'cpf_cnpj': destinatario.cpf_cnpj,
+                        'inscricao_estadual': destinatario.inscricao_estadual,
                         'logradouro': destinatario.logradouro,
                         'numero': destinatario.numero,
                         'bairro': destinatario.bairro,
@@ -265,6 +266,7 @@ def emitir_nfe():
                     destinatario_data = {
                         'nome_razao_social': destinatario.nome_razao_social,
                         'cpf_cnpj': destinatario.cpf_cnpj,
+                        'inscricao_estadual': destinatario.inscricao_estadual,
                         'logradouro': destinatario.logradouro,
                         'numero': destinatario.numero,
                         'bairro': destinatario.bairro,
@@ -383,6 +385,7 @@ def emitir_nfe():
                     destinatario_data = {
                         'nome_razao_social': destinatario.nome_razao_social,
                         'cpf_cnpj': destinatario.cpf_cnpj,
+                        'inscricao_estadual': destinatario.inscricao_estadual,
                         'logradouro': destinatario.logradouro,
                         'numero': destinatario.numero,
                         'bairro': destinatario.bairro,
@@ -393,6 +396,7 @@ def emitir_nfe():
                     }
                     
                     print(f" Destinatário data: {destinatario_data}")
+                    print(f"🔍 [DEBUG] IE do destinatário: {destinatario.inscricao_estadual}")
                     
                     # OK: PROCESSAR ITENS DA NFE
                     print(" === PROCESSANDO ITENS ===")
