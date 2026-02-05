@@ -897,8 +897,8 @@ input[readonly] {
             <div class="chat-header">
                 <h5 style="margin: 0;">🤖 Assistente EmiteMax</h5>
                 <small>Tire suas dúvidas sobre emissão de NFe</small>
-                <button type="button" class="close" data-dismiss="modal" style="position: absolute; right: 15px; top: 15px; color: white; opacity: 1;">
-                    <span>&times;</span>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar" id="btnFecharAssistente" style="position: absolute; right: 15px; top: 15px; color: white; opacity: 1; font-size: 2rem; background: none; border: none; cursor: pointer;">
+                    <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             
@@ -3660,6 +3660,16 @@ $(document).ready(function() {
             }
         });
         console.log('✅ Event listener Enter registrado');
+    }
+    
+    // Event listener para botão fechar modal
+    const btnFechar = document.getElementById('btnFecharAssistente');
+    if (btnFechar) {
+        btnFechar.addEventListener('click', function() {
+            console.log('❌ Botão fechar clicado!');
+            $('#modalAssistenteIA').modal('hide');
+        });
+        console.log('✅ Event listener fechar modal registrado');
     }
     
     // Limpar chat ao fechar modal
