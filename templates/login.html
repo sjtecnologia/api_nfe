@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="row justify-content-center align-items-center" style="min-height: 100vh; padding: 20px 0;">
         <div class="col-xl-4 col-lg-5 col-md-6 col-sm-8">
             
             
@@ -31,13 +31,13 @@
                 </div>
                 
                 <!-- ✅ CORPO DO FORMULÁRIO (SEM MENSAGENS DUPLICADAS) -->
-                <div class="card-body p-5">
+                <div class="card-body p-4">
                     
                     <!-- ✅ FORMULÁRIO HTML SIMPLES -->
                     <form method="POST" id="loginForm">
                         
                         <!-- Campo Email -->
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <label for="username" class="form-label text-dark font-weight-600">
                                 <i class="fas fa-envelope text-primary me-2"></i>
                                 Email
@@ -48,7 +48,7 @@
                         </div>
                         
                         <!-- Campo Password -->
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <label for="password" class="form-label text-dark font-weight-600">
                                 <i class="fas fa-lock text-primary me-2"></i>
                                 Senha
@@ -67,7 +67,7 @@
                         </div>
                         
                         <!-- Checkbox Remember Me -->
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <div class="custom-control custom-checkbox">
                                 <input type="checkbox" class="custom-control-input" id="remember_me" name="remember_me">
                                 <label class="custom-control-label" for="remember_me">
@@ -77,7 +77,7 @@
                         </div>
                         
                         <!-- Botão de Submit -->
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <button type="submit" class="btn btn-primary btn-lg btn-block" 
                                     style="border-radius: 10px; padding: 15px; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 4px 15px rgba(0, 188, 212, 0.4); transition: all 0.3s ease;">
                                 <span class="btn-text">Entrar</span>
@@ -106,27 +106,27 @@
             </div>
             
             <!-- ✅ INFORMAÇÕES ADICIONAIS -->
-            <div class="text-center mt-4">
+            <div class="text-center mt-3">
                 <div class="row">
                     <div class="col-4">
                         <div class="text-center">
-                            <i class="fas fa-lock" style="font-size: 1.5rem; color: var(--sj-success); margin-bottom: 5px;"></i>
+                            <i class="fas fa-lock" style="font-size: 1.2rem; color: var(--sj-success); margin-bottom: 3px;"></i>
                             <br>
-                            <small class="text-muted">Seguro</small>
+                            <small class="text-muted" style="font-size: 0.75rem;">Seguro</small>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="text-center">
-                            <i class="fas fa-cloud" style="font-size: 1.5rem; color: var(--sj-primary); margin-bottom: 5px;"></i>
+                            <i class="fas fa-cloud" style="font-size: 1.2rem; color: var(--sj-primary); margin-bottom: 3px;"></i>
                             <br>
-                            <small class="text-muted">Cloud</small>
+                            <small class="text-muted" style="font-size: 0.75rem;">Cloud</small>
                         </div>
                     </div>
                     <div class="col-4">
                         <div class="text-center">
-                            <i class="fas fa-mobile-alt" style="font-size: 1.5rem; color: var(--sj-secondary); margin-bottom: 5px;"></i>
+                            <i class="fas fa-mobile-alt" style="font-size: 1.2rem; color: var(--sj-secondary); margin-bottom: 3px;"></i>
                             <br>
-                            <small class="text-muted">Mobile</small>
+                            <small class="text-muted" style="font-size: 0.75rem;">Mobile</small>
                         </div>
                     </div>
                 </div>
@@ -250,7 +250,7 @@ body {
 /* ===== RESPONSIVIDADE ===== */
 @media (max-width: 768px) {
     .card-body {
-        padding: 2rem !important;
+        padding: 1.5rem !important;
     }
     
     .alerts-container {

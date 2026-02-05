@@ -94,7 +94,10 @@ def login():
             )
             
             print("[AUTH] Fazendo login do usuário...")
-            login_user(user)
+            # Verificar se o checkbox 'remember_me' foi marcado
+            remember = request.form.get('remember_me') == 'on'
+            print(f"[REMEMBER] Lembrar de mim por 30 dias: {remember}")
+            login_user(user, remember=remember)
             
             print(f"[OK] LOGIN: Usuario {user_data.email} (ID: {user_data.id}) logado com roles {[r['name'] for r in user_roles]}")
             

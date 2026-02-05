@@ -50,6 +50,13 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True  # Proteção contra XSS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Compatível com iOS
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hora
 
+# Configurações do Flask-Login "Remember Me"
+from datetime import timedelta
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)  # 30 dias
+app.config['REMEMBER_COOKIE_SECURE'] = True  # Apenas HTTPS
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Proteção contra XSS
+app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'  # Compatível com iOS
+
 # Configurar CORS - Permitir acesso de qualquer origem
 CORS(app, 
      resources={r"/*": {"origins": "*"}},
