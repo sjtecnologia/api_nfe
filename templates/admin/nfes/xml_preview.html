@@ -640,17 +640,8 @@
     function copyToClipboard(text) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(function() {
-                // Mostrar mensagem de sucesso
-                const originalContent = event.target.innerHTML;
-                event.target.innerHTML = '<i class="fas fa-check"></i> Copiado!';
-                event.target.classList.add('btn-success');
-                event.target.classList.remove('btn-outline-secondary');
-                
-                setTimeout(function() {
-                    event.target.innerHTML = originalContent;
-                    event.target.classList.remove('btn-success');
-                    event.target.classList.add('btn-outline-secondary');
-                }, 2000);
+                // Mostrar notificação de sucesso
+                showCopySuccess();
             }).catch(function(err) {
                 console.error('Erro ao copiar:', err);
                 alert('Erro ao copiar para a área de transferência');
@@ -665,13 +656,35 @@
             textArea.select();
             try {
                 document.execCommand('copy');
-                alert('Texto copiado para a área de transferência!');
+                showCopySuccess();
             } catch (err) {
                 console.error('Erro ao copiar:', err);
                 alert('Erro ao copiar para a área de transferência');
             }
             document.body.removeChild(textArea);
         }
+    }
+    
+    // Função para mostrar mensagem de sucesso ao copiar
+    function showCopySuccess() {
+        // Criar toast de notificação
+        const toast = document.createElement('div');
+        toast.className = 'alert alert-success';
+        toast.style.position = 'fixed';
+        toast.style.top = '20px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '9999';
+        toast.style.minWidth = '200px';
+        toast.innerHTML = '<i class="fas fa-check"></i> Copiado para a área de transferência!';
+        document.body.appendChild(toast);
+        
+        setTimeout(function() {
+            toast.style.transition = 'opacity 0.5s';
+            toast.style.opacity = '0';
+            setTimeout(function() {
+                document.body.removeChild(toast);
+            }, 500);
+        }, 2000);
     }
     
     // Variáveis globais JavaScript
