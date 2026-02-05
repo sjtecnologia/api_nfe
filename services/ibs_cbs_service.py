@@ -72,7 +72,8 @@ def gerar_xml_ibscbs(ibs_cbs_data: Dict[str, Any]) -> str:
     Returns:
         String XML formatada
     """
-    # Estrutura conforme Schema XSD NFe 4.0 com IBS/CBS (Informe Técnico 2025.002)
+    # Estrutura mínima obrigatória conforme Schema XSD NFe 4.0 + Reforma Tributária
+    # Removidas tags opcionais vDif e vDevTrib que podem estar causando rejeição
     xml = f"""<IBSCBS>
 <CST>{ibs_cbs_data['CST']}</CST>
 <cClassTrib>{ibs_cbs_data['cClassTrib']}</cClassTrib>
@@ -81,22 +82,16 @@ def gerar_xml_ibscbs(ibs_cbs_data: Dict[str, Any]) -> str:
 <pAliq>{ibs_cbs_data['pIBSUF'] + ibs_cbs_data['pCBS']:.2f}</pAliq>
 <gIBS>
 <gIBSUF>
-<vDif>0.00</vDif>
-<vDevTrib>0.00</vDevTrib>
 <pIBS>{ibs_cbs_data['pIBSUF']:.2f}</pIBS>
 <vIBS>{ibs_cbs_data['vIBSUF']:.2f}</vIBS>
 </gIBSUF>
 <gIBSMun>
-<vDif>0.00</vDif>
-<vDevTrib>0.00</vDevTrib>
 <pIBS>{ibs_cbs_data['pIBSMun']:.2f}</pIBS>
 <vIBS>{ibs_cbs_data['vIBSMun']:.2f}</vIBS>
 </gIBSMun>
 <vIBS>{ibs_cbs_data['vIBS']:.2f}</vIBS>
 </gIBS>
 <gCBS>
-<vDif>0.00</vDif>
-<vDevTrib>0.00</vDevTrib>
 <pCBS>{ibs_cbs_data['pCBS']:.2f}</pCBS>
 <vCBS>{ibs_cbs_data['vCBS']:.2f}</vCBS>
 </gCBS>
@@ -149,30 +144,20 @@ def gerar_xml_totais_ibscbs(totais_ibs: Dict[str, Any], totais_cbs: Dict[str, An
     Returns:
         String XML formatada
     """
-    # Estrutura conforme Schema XSD NFe 4.0 com IBS/CBS (Informe Técnico 2025.002)
+    # Estrutura mínima obrigatória conforme Schema XSD
     xml = f"""<IBSCBSTot>
 <vBCIBSCBS>{totais_ibs['vBCTotal']:.2f}</vBCIBSCBS>
 <gIBS>
 <gIBSUF>
-<vDif>0.00</vDif>
-<vDevTrib>0.00</vDevTrib>
 <vIBS>{totais_ibs['vIBSUF']:.2f}</vIBS>
 </gIBSUF>
 <gIBSMun>
-<vDif>0.00</vDif>
-<vDevTrib>0.00</vDevTrib>
 <vIBS>{totais_ibs['vIBSMun']:.2f}</vIBS>
 </gIBSMun>
 <vIBS>{totais_ibs['vIBS']:.2f}</vIBS>
-<vCredPres>0.00</vCredPres>
-<vCredPresCondSus>0.00</vCredPresCondSus>
 </gIBS>
 <gCBS>
-<vDif>0.00</vDif>
-<vDevTrib>0.00</vDevTrib>
 <vCBS>{totais_cbs['vCBS']:.2f}</vCBS>
-<vCredPres>0.00</vCredPres>
-<vCredPresCondSus>0.00</vCredPresCondSus>
 </gCBS>
 </IBSCBSTot>"""
     return xml
