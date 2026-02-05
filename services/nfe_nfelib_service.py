@@ -572,12 +572,6 @@ def generate_nfe_xml_nfelib(
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS20=icms_obj)
                 v_bc_icms_total += bc_icms
                 v_icms_total += valor_icms
-                
-                # Armazenar cBenef para adicionar manualmente ao XML
-                if cbenef:
-                    if not hasattr(det, '_cbenef_manual'):
-                        det._cbenef_manual = {}
-                    det._cbenef_manual[idx] = cbenef
             elif cst_item in ['40', '41', '50']:
                 # Isenta, não tributada ou suspensão
                 motivo_deson = item.get('motivo_desoneracao_icms')
@@ -595,12 +589,6 @@ def generate_nfe_xml_nfelib(
                 
                 icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms40(**icms40_params)
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMS40=icms_obj)
-                
-                # Armazenar cBenef para adicionar manualmente ao XML
-                if cbenef:
-                    if not hasattr(det, '_cbenef_manual'):
-                        det._cbenef_manual = {}
-                    det._cbenef_manual[idx] = cbenef
             else:
                 # Fallback: usar CST 20
                 icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms20(
