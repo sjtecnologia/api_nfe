@@ -72,21 +72,31 @@ def gerar_xml_ibscbs(ibs_cbs_data: Dict[str, Any]) -> str:
     Returns:
         String XML formatada
     """
+    # Estrutura conforme Schema XSD NFe 4.0 com IBS/CBS (Informe Técnico 2025.002)
     xml = f"""<IBSCBS>
 <CST>{ibs_cbs_data['CST']}</CST>
 <cClassTrib>{ibs_cbs_data['cClassTrib']}</cClassTrib>
 <gIBSCBS>
 <vBC>{ibs_cbs_data['vBC']:.2f}</vBC>
+<pAliq>{ibs_cbs_data['pIBSUF'] + ibs_cbs_data['pCBS']:.2f}</pAliq>
+<gIBS>
 <gIBSUF>
-<pIBSUF>{ibs_cbs_data['pIBSUF']:.2f}</pIBSUF>
-<vIBSUF>{ibs_cbs_data['vIBSUF']:.2f}</vIBSUF>
+<vDif>0.00</vDif>
+<vDevTrib>0.00</vDevTrib>
+<pIBS>{ibs_cbs_data['pIBSUF']:.2f}</pIBS>
+<vIBS>{ibs_cbs_data['vIBSUF']:.2f}</vIBS>
 </gIBSUF>
 <gIBSMun>
-<pIBSMun>{ibs_cbs_data['pIBSMun']:.2f}</pIBSMun>
-<vIBSMun>{ibs_cbs_data['vIBSMun']:.2f}</vIBSMun>
+<vDif>0.00</vDif>
+<vDevTrib>0.00</vDevTrib>
+<pIBS>{ibs_cbs_data['pIBSMun']:.2f}</pIBS>
+<vIBS>{ibs_cbs_data['vIBSMun']:.2f}</vIBS>
 </gIBSMun>
 <vIBS>{ibs_cbs_data['vIBS']:.2f}</vIBS>
+</gIBS>
 <gCBS>
+<vDif>0.00</vDif>
+<vDevTrib>0.00</vDevTrib>
 <pCBS>{ibs_cbs_data['pCBS']:.2f}</pCBS>
 <vCBS>{ibs_cbs_data['vCBS']:.2f}</vCBS>
 </gCBS>
@@ -139,18 +149,19 @@ def gerar_xml_totais_ibscbs(totais_ibs: Dict[str, Any], totais_cbs: Dict[str, An
     Returns:
         String XML formatada
     """
+    # Estrutura conforme Schema XSD NFe 4.0 com IBS/CBS (Informe Técnico 2025.002)
     xml = f"""<IBSCBSTot>
 <vBCIBSCBS>{totais_ibs['vBCTotal']:.2f}</vBCIBSCBS>
 <gIBS>
 <gIBSUF>
 <vDif>0.00</vDif>
 <vDevTrib>0.00</vDevTrib>
-<vIBSUF>{totais_ibs['vIBSUF']:.2f}</vIBSUF>
+<vIBS>{totais_ibs['vIBSUF']:.2f}</vIBS>
 </gIBSUF>
 <gIBSMun>
 <vDif>0.00</vDif>
 <vDevTrib>0.00</vDevTrib>
-<vIBSMun>{totais_ibs['vIBSMun']:.2f}</vIBSMun>
+<vIBS>{totais_ibs['vIBSMun']:.2f}</vIBS>
 </gIBSMun>
 <vIBS>{totais_ibs['vIBS']:.2f}</vIBS>
 <vCredPres>0.00</vCredPres>
