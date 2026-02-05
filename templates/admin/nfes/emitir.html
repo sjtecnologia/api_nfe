@@ -2386,26 +2386,38 @@ function previewDANFE() {
     })
     .then(data => {
         console.log('[DANFE PREVIEW] Response data:', data);
+        console.log('[DANFE PREVIEW] data.success:', data.success);
+        console.log('[DANFE PREVIEW] data.pdf_base64 existe?', !!data.pdf_base64);
+        console.log('[DANFE PREVIEW] Tamanho pdf_base64:', data.pdf_base64 ? data.pdf_base64.length : 0);
         
         if (data.success && data.pdf_base64) {
+            console.log('[DANFE PREVIEW] Convertendo base64 para blob...');
             // Converter base64 para blob e abrir em nova aba
-            const binaryString = atob(data.pdf_base64);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+            try {
+                const binaryString = atob(data.pdf_base64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                console.log('[DANFE PREVIEW] Abrindo URL:', url);
+                window.open(url, '_blank');
+                console.log('[DANFE PREVIEW] PDF aberto em nova aba');
+            } catch (error) {
+                console.error('[DANFE PREVIEW] Erro ao converter base64:', error);
+                alert('Erro ao abrir PDF: ' + error.message);
             }
-            const blob = new Blob([bytes], { type: 'application/pdf' });
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            console.log('[DANFE PREVIEW] PDF aberto em nova aba');
         } else if (data.pdf) {
             // PDF já foi aberto
-            console.log('[DANFE PREVIEW] PDF aberto em nova aba');
+            console.log('[DANFE PREVIEW] PDF já foi aberto');
         } else if (data.success && data.danfe_url) {
             // Abrir URL do DANFE em nova aba
+            console.log('[DANFE PREVIEW] Abrindo URL do DANFE:', data.danfe_url);
             window.open(data.danfe_url, '_blank');
         } else if (data.success) {
-            alert('DANFE gerado com sucesso!');
+            console.warn('[DANFE PREVIEW] Sucesso mas sem PDF - data:', data);
+            alert('DANFE gerado com sucesso, mas PDF não foi retornado. Verifique o console.');
         } else {
             const errorMsg = data.message || 'Erro desconhecido';
             console.error('[DANFE PREVIEW] Erro:', errorMsg);
