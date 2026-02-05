@@ -73,25 +73,25 @@ def gerar_xml_ibscbs(ibs_cbs_data: Dict[str, Any]) -> str:
         String XML formatada
     """
     xml = f"""<IBSCBS>
-        <CST>{ibs_cbs_data['CST']}</CST>
-        <cClassTrib>{ibs_cbs_data['cClassTrib']}</cClassTrib>
-        <gIBSCBS>
-            <vBC>{ibs_cbs_data['vBC']:.2f}</vBC>
-            <gIBSUF>
-                <pIBSUF>{ibs_cbs_data['pIBSUF']:.2f}</pIBSUF>
-                <vIBSUF>{ibs_cbs_data['vIBSUF']:.2f}</vIBSUF>
-            </gIBSUF>
-            <gIBSMun>
-                <pIBSMun>{ibs_cbs_data['pIBSMun']:.2f}</pIBSMun>
-                <vIBSMun>{ibs_cbs_data['vIBSMun']:.2f}</vIBSMun>
-            </gIBSMun>
-            <vIBS>{ibs_cbs_data['vIBS']:.2f}</vIBS>
-            <gCBS>
-                <pCBS>{ibs_cbs_data['pCBS']:.2f}</pCBS>
-                <vCBS>{ibs_cbs_data['vCBS']:.2f}</vCBS>
-            </gCBS>
-        </gIBSCBS>
-    </IBSCBS>"""
+<CST>{ibs_cbs_data['CST']}</CST>
+<cClassTrib>{ibs_cbs_data['cClassTrib']}</cClassTrib>
+<gIBSCBS>
+<vBC>{ibs_cbs_data['vBC']:.2f}</vBC>
+<gIBSUF>
+<pIBSUF>{ibs_cbs_data['pIBSUF']:.2f}</pIBSUF>
+<vIBSUF>{ibs_cbs_data['vIBSUF']:.2f}</vIBSUF>
+</gIBSUF>
+<gIBSMun>
+<pIBSMun>{ibs_cbs_data['pIBSMun']:.2f}</pIBSMun>
+<vIBSMun>{ibs_cbs_data['vIBSMun']:.2f}</vIBSMun>
+</gIBSMun>
+<vIBS>{ibs_cbs_data['vIBS']:.2f}</vIBS>
+<gCBS>
+<pCBS>{ibs_cbs_data['pCBS']:.2f}</pCBS>
+<vCBS>{ibs_cbs_data['vCBS']:.2f}</vCBS>
+</gCBS>
+</gIBSCBS>
+</IBSCBS>"""
     return xml
 
 
@@ -140,31 +140,31 @@ def gerar_xml_totais_ibscbs(totais_ibs: Dict[str, Any], totais_cbs: Dict[str, An
         String XML formatada
     """
     xml = f"""<IBSCBSTot>
-        <vBCIBSCBS>{totais_ibs['vBCTotal']:.2f}</vBCIBSCBS>
-        <gIBS>
-            <gIBSUF>
-                <vDif>0.00</vDif>
-                <vDevTrib>0.00</vDevTrib>
-                <vIBSUF>{totais_ibs['vIBSUF']:.2f}</vIBSUF>
-            </gIBSUF>
-            <gIBSMun>
-                <vDif>0.00</vDif>
-                <vDevTrib>0.00</vDevTrib>
-                <vIBSMun>{totais_ibs['vIBSMun']:.2f}</vIBSMun>
-            </gIBSMun>
-            <vIBS>{totais_ibs['vIBS']:.2f}</vIBS>
-            <vCredPres>0.00</vCredPres>
-            <vCredPresCondSus>0.00</vCredPresCondSus>
-        </gIBS>
-        <gCBS>
-            <vDif>0.00</vDif>
-            <vDevTrib>0.00</vDevTrib>
-            <vCBS>{totais_cbs['vCBS']:.2f}</vCBS>
-            <vCredPres>0.00</vCredPres>
-            <vCredPresCondSus>0.00</vCredPresCondSus>
-        </gCBS>
-    </IBSCBSTot>
-    <vNFTot>{totais_ibs['vBCTotal']:.2f}</vNFTot>"""
+<vBCIBSCBS>{totais_ibs['vBCTotal']:.2f}</vBCIBSCBS>
+<gIBS>
+<gIBSUF>
+<vDif>0.00</vDif>
+<vDevTrib>0.00</vDevTrib>
+<vIBSUF>{totais_ibs['vIBSUF']:.2f}</vIBSUF>
+</gIBSUF>
+<gIBSMun>
+<vDif>0.00</vDif>
+<vDevTrib>0.00</vDevTrib>
+<vIBSMun>{totais_ibs['vIBSMun']:.2f}</vIBSMun>
+</gIBSMun>
+<vIBS>{totais_ibs['vIBS']:.2f}</vIBS>
+<vCredPres>0.00</vCredPres>
+<vCredPresCondSus>0.00</vCredPresCondSus>
+</gIBS>
+<gCBS>
+<vDif>0.00</vDif>
+<vDevTrib>0.00</vDevTrib>
+<vCBS>{totais_cbs['vCBS']:.2f}</vCBS>
+<vCredPres>0.00</vCredPres>
+<vCredPresCondSus>0.00</vCredPresCondSus>
+</gCBS>
+</IBSCBSTot>
+<vNFTot>{totais_ibs['vBCTotal']:.2f}</vNFTot>"""
     return xml
 
 
