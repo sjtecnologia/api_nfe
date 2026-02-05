@@ -4,9 +4,10 @@ Reforma Tributária LC 214/2025
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import login_required
 from database.connection import get_db
 from database.models import ClassificacaoIBSCBS
-from auth.decorators import login_required, permission_required
+from auth.decorators import permission_required
 from sqlalchemy import func
 
 classificacao_ibs_cbs_bp = Blueprint('classificacao_ibs_cbs', __name__, url_prefix='/admin/classificacoes-ibs-cbs')
