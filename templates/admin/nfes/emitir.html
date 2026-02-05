@@ -1129,12 +1129,28 @@ function adicionarItem() {
     
     // Atualizar visibilidade dos campos IBS/CBS para o novo item
     const itemIbsCbs = itemDiv.querySelector('.item-ibs-cbs');
+    console.log(`🔍 [DEBUG] Item ${itemCounter} - Elemento .item-ibs-cbs encontrado:`, !!itemIbsCbs);
+    
     if (itemIbsCbs) {
         // Verificar se regime requer IBS/CBS (baseado na visibilidade da seção ICMS60)
         const secaoIcms60 = document.getElementById('secao-icms60');
+        console.log(`🔍 [DEBUG] secao-icms60 encontrada:`, !!secaoIcms60);
+        console.log(`🔍 [DEBUG] secao-icms60 display:`, secaoIcms60?.style.display);
+        
         const requerIBS = secaoIcms60 && secaoIcms60.style.display !== 'none';
         itemIbsCbs.style.display = requerIBS ? 'block' : 'none';
-        console.log(`🔄 Item ${itemCounter}: IBS/CBS ${requerIBS ? 'VISÍVEL' : 'OCULTO'}`);
+        
+        console.log(`🔄 Item ${itemCounter}: IBS/CBS ${requerIBS ? 'VISÍVEL ✅' : 'OCULTO ❌'}`);
+        
+        // Se deve mostrar, também carregar as opções do select
+        if (requerIBS) {
+            const select = itemIbsCbs.querySelector('.js-select2-classificacao-ibs');
+            if (select) {
+                console.log(`📋 Select de classificação encontrado no item ${itemCounter}, opções:`, select.options.length);
+            }
+        }
+    } else {
+        console.warn(`⚠️ Elemento .item-ibs-cbs NÃO encontrado no item ${itemCounter}`);
     }
     
     // Inicializar Select2 para os novos elementos do item
@@ -2602,14 +2618,24 @@ async function verificarRegimeTributario() {
         if (data.success) {
             const requerIBS = data.requer_ibs_cbs;
             console.log(`🔍 Regime Tributário: ${data.regime_nome} (CRT=${data.crt})`);
-            console.log(`📋 Requer IBS/CBS: ${requerIBS ? 'SIM' : 'NÃO'}`);
+            console.log(`📋 Requer IBS/CBS: ${requerIBS ? 'SIM ✅' : 'NÃO ❌'}`);
             
             // Mostrar/ocultar seções (apenas ICMS60 no final da página)
-            document.getElementById('secao-icms60').style.display = requerIBS ? 'block' : 'none';
+            const secaoIcms60 = document.getElementById('secao-icms60');
+            if (secaoIcms60) {
+                secaoIcms60.style.display = requerIBS ? 'block' : 'none';
+                console.log(`📐 secao-icms60 display definido como: ${secaoIcms60.style.display}`);
+            } else {
+                console.error('❌ Elemento secao-icms60 NÃO encontrado!');
+            }
             
             // Mostrar/ocultar campos IBS/CBS nos itens (item por item)
-            document.querySelectorAll('.item-ibs-cbs').forEach(el => {
+            const itensIbsCbs = document.querySelectorAll('.item-ibs-cbs');
+            console.log(`🔍 Encontrados ${itensIbsCbs.length} elementos .item-ibs-cbs`);
+            
+            itensIbsCbs.forEach((el, idx) => {
                 el.style.display = requerIBS ? 'block' : 'none';
+                console.log(`  Item ${idx + 1}: display = ${el.style.display}`);
             });
             
             // Se mostrar, carregar classificações IBS/CBS para os selects dos itens
