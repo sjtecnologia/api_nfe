@@ -467,50 +467,6 @@ input[readonly] {
                 </div>
             </div>
         </div>
-
-        <!-- ✅ IBS/CBS - REFORMA TRIBUTÁRIA (Visível apenas para CRT=3) -->
-        <div id="secao-ibs-cbs" class="card mt-3" style="display: none;">
-            <div class="card-header bg-info text-white">
-                <h5><i class="fas fa-balance-scale"></i> IBS/CBS - Reforma Tributária</h5>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> 
-                    <strong>Regime Tributário:</strong> <span id="regime-nome"></span><br>
-                    Classificação IBS/CBS é <strong>obrigatória</strong> para este tipo de regime.
-                </div>
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="select-classificacao-ibs">Classificação Tributária IBS/CBS *</label>
-                            <select id="select-classificacao-ibs" name="classificacao_ibs_cbs_id" class="form-control">
-                                <option value="">Carregando...</option>
-                            </select>
-                            <small class="text-muted">Selecione a classificação tributária aplicável aos produtos</small>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>% IBS UF</label>
-                            <input type="number" name="aliquota_ibs_uf" step="0.01" value="0.10" class="form-control" readonly>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>% IBS Municipal</label>
-                            <input type="number" name="aliquota_ibs_mun" step="0.01" value="0.00" class="form-control" readonly>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="form-group">
-                            <label>% CBS</label>
-                            <input type="number" name="aliquota_cbs" step="0.01" value="0.90" class="form-control" readonly>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- ✅ ICMS SUBSTITUIÇÃO TRIBUTÁRIA (Visível apenas para CRT=3) -->
         <div id="secao-icms60" class="card mt-3" style="display: none;">
             <div class="card-header bg-warning">
@@ -2613,26 +2569,17 @@ async function verificarRegimeTributario() {
             console.log(`🔍 Regime Tributário: ${data.regime_nome} (CRT=${data.crt})`);
             console.log(`📋 Requer IBS/CBS: ${requerIBS ? 'SIM' : 'NÃO'}`);
             
-            // Mostrar/ocultar seções
-            document.getElementById('secao-ibs-cbs').style.display = requerIBS ? 'block' : 'none';
+            // Mostrar/ocultar seções (apenas ICMS60 no final da página)
             document.getElementById('secao-icms60').style.display = requerIBS ? 'block' : 'none';
             
-            // Mostrar/ocultar campos IBS/CBS nos itens
+            // Mostrar/ocultar campos IBS/CBS nos itens (item por item)
             document.querySelectorAll('.item-ibs-cbs').forEach(el => {
                 el.style.display = requerIBS ? 'block' : 'none';
             });
             
-            // Atualizar nome do regime
-            const regimeNomeSpan = document.getElementById('regime-nome');
-            if (regimeNomeSpan) {
-                regimeNomeSpan.textContent = data.regime_nome;
-            }
-            
-            // Se mostrar, carregar classificações IBS/CBS
+            // Se mostrar, carregar classificações IBS/CBS para os selects dos itens
             if (requerIBS) {
                 await carregarClassificacoesIBS();
-                // Tornar campo obrigatório
-                document.getElementById('select-classificacao-ibs').required = true;
             }
         }
     } catch (error) {
@@ -2640,53 +2587,34 @@ async function verificarRegimeTributario() {
     }
 }
 
-// Carregar classificações IBS/CBS
+// Carregar classificações IBS/CBS para os selects dos itens
 async function carregarClassificacoesIBS() {
     try {
         const response = await fetch('/admin/api/classificacoes-ibs-cbs');
         const data = await response.json();
         
         if (data.success) {
-            const select = document.getElementById('select-classificacao-ibs');
-            select.innerHTML = '<option value="">Selecione uma classificação...</option>';
-            
-            data.data.forEach(c => {
-                const option = document.createElement('option');
-                option.value = c.id;
-                option.textContent = `${c.codigo} - ${c.descricao}`;
-                option.dataset.aliquotaIbsUf = c.aliquota_ibs_uf;
-                option.dataset.aliquotaIbsMun = c.aliquota_ibs_mun;
-                option.dataset.aliquotaCbs = c.aliquota_cbs;
-                select.appendChild(option);
+            // Atualizar todos os selects de classificação IBS/CBS dos itens
+            document.querySelectorAll('.js-select2-classificacao-ibs').forEach(select => {
+                select.innerHTML = '<option value="">Nenhuma (opcional)</option>';
+                
+                data.data.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.id;
+                    option.textContent = `${c.codigo} - ${c.descricao}`;
+                    option.dataset.aliquotaIbsUf = c.aliquota_ibs_uf;
+                    option.dataset.aliquotaIbsMun = c.aliquota_ibs_mun;
+                    option.dataset.aliquotaCbs = c.aliquota_cbs;
+                    select.appendChild(option);
+                });
             });
             
-            console.log(`✅ ${data.data.length} classificações IBS/CBS carregadas`);
+            console.log(`✅ ${data.data.length} classificações IBS/CBS carregadas para os itens`);
         }
     } catch (error) {
         console.error('❌ Erro ao carregar classificações IBS/CBS:', error);
-        const select = document.getElementById('select-classificacao-ibs');
-        select.innerHTML = '<option value="">Erro ao carregar classificações</option>';
     }
 }
-
-// Auto-preencher alíquotas ao selecionar classificação
-document.addEventListener('DOMContentLoaded', function() {
-    const selectClassificacao = document.getElementById('select-classificacao-ibs');
-    
-    if (selectClassificacao) {
-        selectClassificacao.addEventListener('change', function() {
-            const option = this.options[this.selectedIndex];
-            
-            if (option.value) {
-                document.querySelector('input[name="aliquota_ibs_uf"]').value = option.dataset.aliquotaIbsUf;
-                document.querySelector('input[name="aliquota_ibs_mun"]').value = option.dataset.aliquotaIbsMun;
-                document.querySelector('input[name="aliquota_cbs"]').value = option.dataset.aliquotaCbs;
-                
-                console.log(`✅ Alíquotas atualizadas: IBS UF=${option.dataset.aliquotaIbsUf}%, CBS=${option.dataset.aliquotaCbs}%`);
-            }
-        });
-    }
-});
 
 // Executar verificação ao carregar página
 document.addEventListener('DOMContentLoaded', function() {
