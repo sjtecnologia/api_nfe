@@ -1655,7 +1655,9 @@ function atualizarItemJSON(itemId) {
         aliquota_cofins: document.querySelector(`input[name="aliquota_cofins_${itemId}"]`)?.value || '0.00',
         // IPI
         cst_ipi: document.querySelector(`select[name="cst_ipi_${itemId}"]`)?.value || '',
-        aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00'
+        aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00',
+        // IBS/CBS (Reforma Tributária - CRT=3)
+        classificacao_ibs_cbs_id: document.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`)?.value || ''
     };
     
     // ⭐ CORREÇÃO: Capturar SEMPRE os valores que estão na tela (editados pelo usuário)
