@@ -19,6 +19,194 @@ import os
 api_v2_bp = Blueprint('api_v2', __name__, url_prefix='/api/v2')
 
 
+# ==================== FUNÇÕES AUXILIARES ====================
+
+def buscar_e_aplicar_regra_tributaria_automatica(item, cliente_id, uf_destino, db):
+    """
+    Busca regra tributária automaticamente e aplica nos itens que não têm dados completos
+    
+    Args:
+        item: Dicionário com dados do item (deve conter pelo menos 'ncm' e 'cfop')
+        cliente_id: ID do cliente emitente
+        uf_destino: UF do destinatário
+        db: Sessão do banco de dados
+    
+    Returns:
+        item modificado com dados tributários aplicados
+    """
+    from sqlalchemy import text, or_
+    from database.models import RegraTributacao, Cliente
+    
+    # Se item já tem dados tributários completos, não busca
+    tem_icms = item.get('cst_icms') or item.get('csosn_icms')
+    tem_pis = item.get('cst_pis')
+    tem_cofins = item.get('cst_cofins')
+    
+    if tem_icms and tem_pis and tem_cofins:
+        print(f"[API v2] [REGRA] Item já possui dados tributários completos, pulando busca automática")
+        return item
+    
+    # Buscar dados do emitente para pegar regime tributário e UF
+    cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+    if not cliente:
+        print(f"[API v2] [REGRA] Cliente não encontrado para busca de regra")
+        return item
+    
+    ncm_codigo = item.get('ncm')
+    cfop_codigo = item.get('cfop')
+    
+    if not ncm_codigo or not cfop_codigo:
+        print(f"[API v2] [REGRA] NCM ou CFOP não fornecidos, impossível buscar regra")
+        return item
+    
+    print(f"[API v2] [REGRA] Buscando regra tributária automática...")
+    print(f"[API v2] [REGRA]   Cliente ID: {cliente_id}")
+    print(f"[API v2] [REGRA]   Regime: {cliente.regime_tributario_id}")
+    print(f"[API v2] [REGRA]   NCM: {ncm_codigo}")
+    print(f"[API v2] [REGRA]   CFOP: {cfop_codigo}")
+    print(f"[API v2] [REGRA]   UF: {cliente.uf} → {uf_destino}")
+    
+    try:
+        # Buscar regra usando a mesma lógica da API de busca
+        from sqlalchemy.orm import joinedload
+        
+        query = db.query(RegraTributacao).options(
+            joinedload(RegraTributacao.regime_tributario),
+            joinedload(RegraTributacao.cfop),
+            joinedload(RegraTributacao.ncm)
+        ).filter(RegraTributacao.ativo == True)
+        
+        # Filtrar por cliente (específico ou genérico)
+        query = query.filter(
+            or_(
+                RegraTributacao.cliente_id == cliente_id,
+                RegraTributacao.cliente_id.is_(None)
+            )
+        )
+        
+        # Filtrar por regime tributário
+        if cliente.regime_tributario_id:
+            query = query.filter(RegraTributacao.regime_tributario_id == cliente.regime_tributario_id)
+        
+        # Filtrar por CFOP
+        from database.models import Cfop, Ncm
+        cfop_obj = db.query(Cfop).filter(Cfop.cfop == cfop_codigo).first()
+        if cfop_obj:
+            query = query.filter(
+                or_(
+                    RegraTributacao.cfop_id == cfop_obj.cfop_id,
+                    RegraTributacao.cfop_id.is_(None)
+                )
+            )
+        
+        # Filtrar por NCM
+        ncm_obj = db.query(Ncm).filter(Ncm.codigo == ncm_codigo).first()
+        if ncm_obj:
+            query = query.filter(
+                or_(
+                    RegraTributacao.ncm_id == ncm_obj.ncm_id,
+                    RegraTributacao.ncm_id.is_(None)
+                )
+            )
+        
+        # Filtrar por UF origem/destino
+        query = query.filter(
+            or_(
+                RegraTributacao.uf_origem == cliente.uf,
+                RegraTributacao.uf_origem.is_(None)
+            )
+        )
+        query = query.filter(
+            or_(
+                RegraTributacao.uf_destino == uf_destino,
+                RegraTributacao.uf_destino.is_(None)
+            )
+        )
+        
+        # Filtrar por tipo item (Produto por padrão)
+        tipo_item = item.get('tipo_item', 'Produto')
+        query = query.filter(
+            or_(
+                RegraTributacao.tipo_item == tipo_item,
+                RegraTributacao.tipo_item.is_(None)
+            )
+        )
+        
+        # Ordenar por prioridade
+        query = query.order_by(
+            RegraTributacao.prioridade.desc(),
+            RegraTributacao.cliente_id.desc().nullslast(),
+            RegraTributacao.cfop_id.desc().nullslast(),
+            RegraTributacao.ncm_id.desc().nullslast(),
+            RegraTributacao.uf_origem.desc().nullslast(),
+            RegraTributacao.uf_destino.desc().nullslast()
+        )
+        
+        regra = query.first()
+        
+        if regra:
+            print(f"[API v2] [REGRA] ✅ Regra encontrada: ID {regra.regra_tributacao_id}")
+            print(f"[API v2] [REGRA]   Descrição: {regra.descricao_regra}")
+            
+            # Aplicar dados da regra no item
+            # ICMS
+            if not tem_icms:
+                if regra.csosn_icms:
+                    item['csosn_icms'] = regra.csosn_icms
+                    print(f"[API v2] [REGRA]   → CSOSN ICMS: {regra.csosn_icms}")
+                elif regra.cst_icms:
+                    item['cst_icms'] = regra.cst_icms
+                    print(f"[API v2] [REGRA]   → CST ICMS: {regra.cst_icms}")
+                
+                if regra.aliquota_icms:
+                    item['aliquota_icms'] = float(regra.aliquota_icms)
+                    print(f"[API v2] [REGRA]   → Alíquota ICMS: {regra.aliquota_icms}%")
+                
+                if regra.reducao_base_icms:
+                    item['reducao_base_icms'] = float(regra.reducao_base_icms)
+                
+                if regra.modalidade_bc_icms:
+                    item['modalidade_bc_icms'] = regra.modalidade_bc_icms
+                
+                if regra.motivo_desoneracao_icms:
+                    item['motivo_desoneracao_icms'] = regra.motivo_desoneracao_icms
+            
+            # PIS
+            if not tem_pis and regra.cst_pis:
+                item['cst_pis'] = regra.cst_pis
+                print(f"[API v2] [REGRA]   → CST PIS: {regra.cst_pis}")
+                if regra.aliquota_pis:
+                    item['aliquota_pis'] = float(regra.aliquota_pis)
+                    print(f"[API v2] [REGRA]   → Alíquota PIS: {regra.aliquota_pis}%")
+            
+            # COFINS
+            if not tem_cofins and regra.cst_cofins:
+                item['cst_cofins'] = regra.cst_cofins
+                print(f"[API v2] [REGRA]   → CST COFINS: {regra.cst_cofins}")
+                if regra.aliquota_cofins:
+                    item['aliquota_cofins'] = float(regra.aliquota_cofins)
+                    print(f"[API v2] [REGRA]   → Alíquota COFINS: {regra.aliquota_cofins}%")
+            
+            # IPI
+            if regra.cst_ipi:
+                item['cst_ipi'] = regra.cst_ipi
+                print(f"[API v2] [REGRA]   → CST IPI: {regra.cst_ipi}")
+                if regra.aliquota_ipi:
+                    item['aliquota_ipi'] = float(regra.aliquota_ipi)
+                    print(f"[API v2] [REGRA]   → Alíquota IPI: {regra.aliquota_ipi}%")
+            
+        else:
+            print(f"[API v2] [REGRA] ⚠️ Nenhuma regra encontrada para os critérios")
+            print(f"[API v2] [REGRA] ℹ️ Item será processado com valores padrão ou fornecidos")
+    
+    except Exception as e:
+        print(f"[API v2] [REGRA] ❌ Erro ao buscar regra tributária: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return item
+
+
 # ==================== EMISSÃO DE NFE ====================
 
 @api_v2_bp.route('/nfe/emitir', methods=['POST'])
@@ -176,7 +364,24 @@ def emit_nfe():
             valor_total += quantidade * valor_unitario
         print(f"[API v2] [OK] Valor total calculado: R$ {valor_total}")
         
-        # Preparar dados da NFe com destinatário e itens
+        # ======================================================================
+        # 🤖 APLICAR REGRAS TRIBUTÁRIAS AUTOMATICAMENTE
+        # ======================================================================
+        print(f"[API v2] [AUTO] Aplicando regras tributárias automaticamente nos itens...")
+        itens_processados = []
+        for idx, item in enumerate(data['itens'], 1):
+            print(f"[API v2] [AUTO] Processando item {idx}/{len(data['itens'])}...")
+            item_com_regra = buscar_e_aplicar_regra_tributaria_automatica(
+                item=item,
+                cliente_id=cliente_id,
+                uf_destino=destinatario.uf,
+                db=db
+            )
+            itens_processados.append(item_com_regra)
+        
+        print(f"[API v2] [AUTO] ✅ Regras aplicadas em {len(itens_processados)} item(ns)")
+        
+        # Preparar dados da NFe com destinatário e itens (agora com tributação automática)
         nfe_data = {
             'cliente_id': cliente_id,
             'destinatario_id': destinatario.destinatario_id,
@@ -205,7 +410,7 @@ def emit_nfe():
                 'codigo_municipio': destinatario.codigo_municipio,
                 'uf': destinatario.uf
             },
-            'itens': data['itens']
+            'itens': itens_processados  # Usar itens com regras aplicadas
         }
         print(f"[API v2] [DB] Criando NFe no banco: Número {proximo_numero}, Série 1...")
         # Converter informacoes_adicionais para JSON string se for dict
@@ -248,7 +453,8 @@ def emit_nfe():
             print(f"[API v2] [INFO] Itens: {len(data['itens'])} item(ns)")
             
             print("[API v2] [PROC] Chamando nfe_service.processar_nfe()...")
-            resultado = nfe_service.processar_nfe(nfe_data, data['itens'], cliente_id, nfe.nfe_emitida_id)
+            # Usar itens_processados com regras tributárias aplicadas
+            resultado = nfe_service.processar_nfe(nfe_data, itens_processados, cliente_id, nfe.nfe_emitida_id)
             print(f"[API v2] [OK] processar_nfe() retornou: {resultado.get('success')}")
             
             print(f"[API] Resultado do processamento: success={resultado.get('success')}, status={resultado.get('status')}")
