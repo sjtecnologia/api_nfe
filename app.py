@@ -1,11 +1,11 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, redirect, url_for
 from flask_cors import CORS
 from datetime import datetime
 from config.settings import SECRET_KEY, DEBUG, HOST, PORT
 from database.connection import get_db
 from auth.login_manager import init_login_manager
 from auth.permissions import has_permission
-from flask_login import current_user
+from flask_login import current_user, login_required
 from models.user import User
 
 # Configurar encoding UTF-8 no stdout para Windows
@@ -239,12 +239,30 @@ def handle_exception(e):
     return internal_error(e)
 
 @app.route('/docs/<path:filename>')
+@login_required
 def serve_docs(filename):
-    """Serve arquivos de documentação"""
-    from flask import send_from_directory
-    import os
-    docs_dir = os.path.join(app.root_path, 'docs')
-    return send_from_directory(docs_dir, filename)
+    """
+    Rota legada - Redireciona para documentação protegida
+    Mantida para compatibilidade com links antigos
+    """
+    # Redirecionar para o novo sistema de documentação
+    # Remove extensão .md se houver
+    doc_name = filename.replace('.md', '').replace('API_', '').replace('_MANUAL', '').lower()
+    
+    # Mapear nomes antigos para novos
+    doc_mapping = {
+        'integracao': 'integracao',
+        'tributacao_automatica': 'tributacao-automatica',
+        'tributacao_automatica_completo': 'tributacao-completo'
+    }
+    
+    mapped_name = doc_mapping.get(doc_name, None)
+    
+    if mapped_name:
+        return redirect(url_for('api_keys.api_documentation', doc_name=mapped_name))
+    else:
+        # Se não encontrar mapeamento, vai para o índice
+        return redirect(url_for('api_keys.api_documentation'))
 
 def list_routes():
     """Lista todas as rotas registradas na aplicação"""
