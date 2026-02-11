@@ -9,14 +9,21 @@
 ## 🌐 Infraestrutura AWS
 
 ### Servidor EC2
-- **IP Público:** 3.87.73.106
+- **Elastic IP:** 100.26.12.107 ✅ (PERMANENTE - eipalloc-0596db42f622a3ddc)
+- **Instance ID:** i-0213ce1ecb50e0bf3
+- **DNS Público:** ec2-100-26-12-107.compute-1.amazonaws.com
+- **IP Privado:** 172.30.1.214
 - **Sistema Operacional:** Ubuntu 24.04.3 LTS
 - **SSH Key:** ~/Downloads/nfe-new-api-key.pem
 - **Usuário:** ubuntu
 - **Comando de acesso:**
   ```bash
-  ssh -i ~/Downloads/nfe-new-api-key.pem ubuntu@3.87.73.106
+  ssh -i ~/Downloads/nfe-new-api-key.pem ubuntu@100.26.12.107
   ```
+- **Histórico de IPs:**
+  - 3.87.73.106 (IP temporário até 11/02/2026)
+  - 34.203.236.152 (IP temporário 11/02/2026 manhã)
+  - 100.26.12.107 (Elastic IP desde 11/02/2026) ✅
 
 ### Banco de Dados - RDS PostgreSQL
 - **Endpoint:** nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com

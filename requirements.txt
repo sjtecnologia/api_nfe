@@ -62,3 +62,6 @@ requests>=2.31.0
 
 # Suporte a certificados A3 (tokens/smartcards) via PKCS#11
 PyKCS11>=1.5.12
+
+# Markdown para renderizar documentação
+markdown>=3.5.0

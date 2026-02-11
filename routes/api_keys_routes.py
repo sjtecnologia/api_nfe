@@ -1,7 +1,7 @@
 """
 Rotas para gerenciamento de API Keys
 """
-from flask import Blueprint, jsonify, request, render_template, flash, redirect, url_for
+from flask import Blueprint, jsonify, request, render_template, flash, redirect, url_for, abort, Markup
 from flask_login import login_required, current_user
 from database.connection import get_db
 from database.models import ApiKey, ApiUsageLog, Webhook, WebhookQueue
@@ -9,6 +9,9 @@ from auth.permissions import get_accessible_client_ids
 from auth.api_key_auth import generate_api_key, require_api_key
 from datetime import datetime, timedelta
 import json
+import markdown
+import os
+from pathlib import Path
 
 api_keys_bp = Blueprint('api_keys', __name__, url_prefix='/admin/api-keys')
 
@@ -39,6 +42,73 @@ def list_api_keys(cliente_id):
                          cliente=cliente,
                          api_keys=api_keys,
                          cliente_id=cliente_id,
+                         now=datetime.now())
+
+
+@api_keys_bp.route('/docs', methods=['GET'])
+@api_keys_bp.route('/docs/<path:doc_name>', methods=['GET'])
+@login_required
+def api_documentation(doc_name=None):
+    """Exibe a documentação da API em HTML"""
+    # Documentações disponíveis
+    docs_disponiveis = {
+        'tributacao-automatica': {
+            'arquivo': 'API_TRIBUTACAO_AUTOMATICA.md',
+            'titulo': 'API v2 - Tributação Automática',
+            'descricao': 'Guia completo para usar a API v2 com busca automática de regras tributárias'
+        },
+        'tributacao-completo': {
+            'arquivo': 'TRIBUTACAO_AUTOMATICA_COMPLETO.md',
+            'titulo': 'Sistema de Tributação Automática - Documentação Completa',
+            'descricao': 'Documentação técnica detalhada do sistema de tributação automática'
+        },
+        'integracao': {
+            'arquivo': 'API_INTEGRACAO_MANUAL.md',
+            'titulo': 'Manual de Integração da API',
+            'descricao': 'Manual completo para integração com a API do sistema'
+        }
+    }
+    
+    # Se não especificou, mostra lista de documentações
+    if not doc_name:
+        return render_template('admin/api_keys/docs_index.html',
+                             docs=docs_disponiveis)
+    
+    # Buscar a documentação solicitada
+    if doc_name not in docs_disponiveis:
+        abort(404)
+    
+    doc_info = docs_disponiveis[doc_name]
+    
+    # Ler arquivo markdown
+    docs_path = Path(__file__).parent.parent / 'docs' / doc_info['arquivo']
+    
+    if not docs_path.exists():
+        flash(f'Arquivo de documentação não encontrado: {doc_info["arquivo"]}', 'error')
+        abort(404)
+    
+    with open(docs_path, 'r', encoding='utf-8') as f:
+        conteudo_md = f.read()
+    
+    # Converter markdown para HTML com extensões
+    html_content = markdown.markdown(
+        conteudo_md,
+        extensions=[
+            'fenced_code',
+            'codehilite',
+            'tables',
+            'toc',
+            'nl2br',
+            'sane_lists'
+        ]
+    )
+    
+    return render_template('admin/api_keys/docs_viewer.html',
+                         titulo=doc_info['titulo'],
+                         descricao=doc_info['descricao'],
+                         conteudo=Markup(html_content),
+                         doc_name=doc_name,
+                         docs=docs_disponiveis,
                          now=datetime.now())
 
 

@@ -1,0 +1,315 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<!-- Highlight.js para syntax highlighting de código -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<style>
+/* Estilos para documentação */
+.doc-content {
+    font-size: 16px;
+    line-height: 1.7;
+    color: #333;
+}
+
+.doc-content h1 {
+    font-size: 2.5rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    border-bottom: 3px solid #0d6efd;
+    padding-bottom: 0.5rem;
+}
+
+.doc-content h2 {
+    font-size: 2rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #dee2e6;
+    padding-bottom: 0.5rem;
+}
+
+.doc-content h3 {
+    font-size: 1.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: #0d6efd;
+}
+
+.doc-content h4 {
+    font-size: 1.25rem;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.doc-content p {
+    margin-bottom: 1rem;
+}
+
+.doc-content code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.875em;
+    color: #e83e8c;
+}
+
+.doc-content pre {
+    background-color: #0d1117;
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.doc-content pre code {
+    background-color: transparent;
+    color: #c9d1d9;
+    padding: 0;
+}
+
+.doc-content table {
+    width: 100%;
+    margin: 1.5rem 0;
+    border-collapse: collapse;
+}
+
+.doc-content table thead {
+    background-color: #f8f9fa;
+}
+
+.doc-content table th,
+.doc-content table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.doc-content table th {
+    font-weight: 600;
+    text-align: left;
+}
+
+.doc-content ul, .doc-content ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+.doc-content li {
+    margin-bottom: 0.5rem;
+}
+
+.doc-content blockquote {
+    border-left: 4px solid #0d6efd;
+    padding-left: 1rem;
+    margin: 1.5rem 0;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.doc-content img {
+    max-width: 100%;
+    height: auto;
+    margin: 1rem 0;
+}
+
+.doc-content hr {
+    margin: 2rem 0;
+    border: 0;
+    border-top: 2px solid #dee2e6;
+}
+
+.doc-content a {
+    color: #0d6efd;
+    text-decoration: none;
+}
+
+.doc-content a:hover {
+    text-decoration: underline;
+}
+
+/* Ícones nos títulos */
+.doc-content h1::before {
+    content: "📘 ";
+}
+
+.doc-content h2::before {
+    content: "📖 ";
+}
+
+/* Sidebar sticky */
+.doc-sidebar {
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+}
+
+.doc-nav-link {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: #495057;
+    text-decoration: none;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+}
+
+.doc-nav-link:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+    color: #0d6efd;
+}
+
+.doc-nav-link.active {
+    background-color: #e7f1ff;
+    border-left-color: #0d6efd;
+    color: #0d6efd;
+    font-weight: 500;
+}
+
+/* Badges personalizados */
+.badge-code {
+    background-color: #0d1117;
+    color: #58a6ff;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+}
+
+/* Print styles */
+@media print {
+    .doc-sidebar,
+    .btn,
+    .navbar {
+        display: none !important;
+    }
+    
+    .doc-content {
+        max-width: 100% !important;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Sidebar com navegação -->
+        <div class="col-lg-3 d-none d-lg-block">
+            <div class="doc-sidebar">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">
+                            <i class="fas fa-list"></i> Navegação
+                        </h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <nav class="nav flex-column">
+                            {% for key, info in docs.items() %}
+                            <a href="{{ url_for('api_keys.api_documentation', doc_name=key) }}" 
+                               class="doc-nav-link {% if key == doc_name %}active{% endif %}">
+                                {% if key == 'tributacao-automatica' %}
+                                    <i class="fas fa-star text-warning"></i>
+                                {% elif key == 'tributacao-completo' %}
+                                    <i class="fas fa-file-alt"></i>
+                                {% else %}
+                                    <i class="fas fa-book"></i>
+                                {% endif %}
+                                {{ info.titulo|truncate(30) }}
+                            </a>
+                            {% endfor %}
+                            <a href="{{ url_for('api_keys.api_documentation') }}" class="doc-nav-link">
+                                <i class="fas fa-home"></i> Todas as Documentações
+                            </a>
+                        </nav>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mt-3">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="fas fa-info-circle text-info"></i> Sobre
+                        </h6>
+                        <p class="small text-muted mb-0">
+                            Esta documentação contém informações detalhadas sobre a integração com nossa API.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conteúdo principal -->
+        <div class="col-lg-9">
+            <div class="card shadow">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-1">
+                                <i class="fas fa-book-open text-primary"></i> {{ titulo }}
+                            </h4>
+                            <p class="text-muted small mb-0">{{ descricao }}</p>
+                        </div>
+                        <div>
+                            <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="doc-content">
+                        {{ conteudo }}
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{{ url_for('api_keys.api_documentation') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                        <small class="text-muted">
+                            <i class="fas fa-calendar"></i> Última atualização: {{ now.strftime('%d/%m/%Y') }}
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rodapé com informações úteis -->
+            <div class="alert alert-info mt-4">
+                <h6 class="alert-heading">
+                    <i class="fas fa-lightbulb"></i> Dica
+                </h6>
+                <p class="mb-0 small">
+                    Para testar os endpoints da API, você pode usar ferramentas como 
+                    <strong>Postman</strong>, <strong>Insomnia</strong> ou <strong>curl</strong>.
+                    Não se esqueça de incluir sua API Key no header de autenticação!
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Inicializar highlight.js para syntax highlighting
+document.addEventListener('DOMContentLoaded', (event) => {
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+});
+
+// Scroll suave para âncoras
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

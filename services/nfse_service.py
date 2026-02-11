@@ -38,6 +38,7 @@ class NFSeService:
     NS_DSIG = "http://www.w3.org/2000/09/xmldsig#"
     
     # URLs do webservice - GISS Online (Atualizado conforme documentação oficial)
+    # NT007 v1.03.00 - Reforma Tributária (LC 214/2025)
     URLS_SJRP = {
         "homologacao": {
             "base": "https://ws-homologacao-rtc.giss.com.br/",
@@ -45,7 +46,10 @@ class NFSeService:
             "enviar_lote": "service-ws/nf/nfse-ws",
             "consultar_lote": "service-ws/nf/nfse-ws",
             "consultar_nfse": "service-ws/nf/nfse-ws",
-            "cancelar": "service-ws/nf/nfse-ws"
+            "cancelar": "service-ws/nf/nfse-ws",
+            # Versões dos layouts (NT007)
+            "versao_layout_rtc": "1.03.00",  # AnexoVI - Layout RN RTC IBS/CBS
+            "versao_anexo_vii": "1.01.00"    # AnexoVII - IndOp_IBSCBS
         },
         "producao": {
             "base": "https://ws-rtc.giss.com.br/",
@@ -53,7 +57,10 @@ class NFSeService:
             "enviar_lote": "service-ws/nf/nfse-ws",
             "consultar_lote": "service-ws/nf/nfse-ws",
             "consultar_nfse": "service-ws/nf/nfse-ws",
-            "cancelar": "service-ws/nf/nfse-ws"
+            "cancelar": "service-ws/nf/nfse-ws",
+            # Versões dos layouts (NT007)
+            "versao_layout_rtc": "1.03.00",  # AnexoVI - Layout RN RTC IBS/CBS
+            "versao_anexo_vii": "1.01.00"    # AnexoVII - IndOp_IBSCBS
         }
     }
     
@@ -237,7 +244,34 @@ class NFSeService:
         if nfse.servico.desconto_condicionado > 0:
             etree.SubElement(valores, "{%s}DescontoCondicionado" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.desconto_condicionado)
         
-        # FIM dos Valores - REMOVER trib e IBSCBS temporariamente (não estão no exemplo básico)
+        # =============================================================================================
+        # REFORMA TRIBUTÁRIA (LC 214/2025) - NT007 v1.03.00
+        # Implementado: 09/02/2026
+        # Referência: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc
+        # =============================================================================================
+        
+        # 1. TRIBUTOS TOTAIS (pTotTribFed, pTotTribEst, pTotTribMun)
+        # Obrigatório conforme Anexo VI - Layout RTC IBS/CBS v1.03.00
+        if (nfse.servico.percentual_total_tributos_federais > 0 or 
+            nfse.servico.percentual_total_tributos_estaduais > 0 or 
+            nfse.servico.percentual_total_tributos_municipais > 0):
+            
+            trib = etree.SubElement(valores, "{%s}trib" % self.NS_TIPOS)
+            trib_tot = etree.SubElement(trib, "{%s}tribTot" % self.NS_TIPOS)
+            
+            # Percentual de Tributos Federais (PIS, COFINS, IR, CSLL, etc.)
+            etree.SubElement(trib_tot, "{%s}pTotTribFed" % self.NS_TIPOS).text = \
+                f"{nfse.servico.percentual_total_tributos_federais:.2f}"
+            
+            # Percentual de Tributos Estaduais (ICMS - não aplicável a serviços, geralmente 0.00)
+            etree.SubElement(trib_tot, "{%s}pTotTribEst" % self.NS_TIPOS).text = \
+                f"{nfse.servico.percentual_total_tributos_estaduais:.2f}"
+            
+            # Percentual de Tributos Municipais (ISS)
+            etree.SubElement(trib_tot, "{%s}pTotTribMun" % self.NS_TIPOS).text = \
+                f"{nfse.servico.percentual_total_tributos_municipais:.2f}"
+        
+        # FIM da tag <Valores>
         
         # p1:IssRetido
         etree.SubElement(servico_el, "{%s}IssRetido" % self.NS_TIPOS).text = "1" if nfse.servico.iss_retido else "2"
@@ -272,6 +306,49 @@ class NFSeService:
         
         # p1:MunicipioIncidencia - GISS exige (código IBGE do município)
         etree.SubElement(servico_el, "{%s}MunicipioIncidencia" % self.NS_TIPOS).text = codigo_municipio
+        
+        # =============================================================================================
+        # 2. IBS/CBS - REFORMA TRIBUTÁRIA (NT007 v1.03.00)
+        # Tag obrigatória conforme Anexo VI - Layout RTC IBS/CBS v1.03.00
+        # Anexo VII v1.01.00 - Indicadores de Operação
+        # =============================================================================================
+        ibscbs = etree.SubElement(servico_el, "{%s}IBSCBS" % self.NS_TIPOS)
+        
+        # tpOp - Tipo de Operação / Finalidade da NFS-e
+        # 0=Normal, 1=Complementar, 2=Ajuste, 3=Substituição
+        etree.SubElement(ibscbs, "{%s}tpOp" % self.NS_TIPOS).text = nfse.servico.finalidade_nfse
+        
+        # indIni - Indicador de Consumidor Final
+        # 0=Não é consumidor final, 1=Consumidor final
+        etree.SubElement(ibscbs, "{%s}indIni" % self.NS_TIPOS).text = nfse.servico.indicador_consumidor_final
+        
+        # indFin - Indicador de Destinatário
+        # 0=Operação interna no município, 1=Interestadual, 2=Exterior
+        etree.SubElement(ibscbs, "{%s}indFin" % self.NS_TIPOS).text = nfse.servico.indicador_destinatario
+        
+        # cIndOp - Código do Indicador de Operação (6 dígitos)
+        # Conforme Anexo VII v1.01.00 - IndOp_IBSCBS
+        # Exemplos: 000001=Interna, 000002=Interestadual, 000003=Exportação
+        etree.SubElement(ibscbs, "{%s}cIndOp" % self.NS_TIPOS).text = nfse.servico.codigo_indicador_operacao
+        
+        # cst - Código de Situação Tributária IBS/CBS (3 dígitos)
+        # 001=Tributação normal, 002=Tributação com redução de BC, 003=Diferimento, etc.
+        etree.SubElement(ibscbs, "{%s}cst" % self.NS_TIPOS).text = nfse.servico.cst_ibs_cbs
+        
+        # cClassTrib - Código de Classificação Tributária (6 dígitos)
+        # Define o regime de tributação IBS/CBS aplicável ao serviço
+        etree.SubElement(ibscbs, "{%s}cClassTrib" % self.NS_TIPOS).text = nfse.servico.codigo_classificacao_tributaria
+        
+        # cLocInc - Código da Localidade de Incidência (código IBGE 7 dígitos)
+        # Município onde incide o IBS/CBS
+        etree.SubElement(ibscbs, "{%s}cLocInc" % self.NS_TIPOS).text = nfse.servico.codigo_localidade_incidencia
+        
+        # pRedBC - Percentual de Redução da Base de Cálculo (opcional, 0 a 100%)
+        # Só incluir se houver redução de base (valor > 0)
+        if nfse.servico.percentual_redutor > 0:
+            etree.SubElement(ibscbs, "{%s}pRedBC" % self.NS_TIPOS).text = f"{nfse.servico.percentual_redutor:.2f}"
+        
+        # FIM da tag <IBSCBS> - Finaliza elemento Serviço
         
         # p1:Prestador
         prestador_el = etree.SubElement(inf_rps, "{%s}Prestador" % self.NS_TIPOS)

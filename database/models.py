@@ -1086,3 +1086,94 @@ class WebhookQueue(Base):
     
     def __repr__(self):
         return f"<WebhookQueue(id={self.queue_id}, evento='{self.evento}', status='{self.status}', tentativas={self.tentativas})>"
+
+
+# =============================================================================
+# MODELOS PARA REFORMA TRIBUTÁRIA - NT007 v1.03.00
+# Data: 09/02/2026
+# =============================================================================
+
+class IndicadorOperacaoIBSCBS(Base):
+    """Indicadores de Operação IBS/CBS conforme AnexoVII v1.01.00"""
+    __tablename__ = 'indicadores_operacao_ibscbs'
+    
+    codigo_indicador = Column(String(6), primary_key=True)
+    descricao = Column(String(200), nullable=False)
+    tipo_operacao = Column(String(50), nullable=False)  # Interna, Interestadual, Exterior
+    categoria = Column(String(100))
+    versao_anexo_vii = Column(String(10), nullable=False, default='v1.01.00')
+    ativo = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def to_dict(self):
+        return serialize_sqla_object(self)
+    
+    def __repr__(self):
+        return f"<IndicadorOperacaoIBSCBS(codigo='{self.codigo_indicador}', tipo='{self.tipo_operacao}')>"
+
+
+class ClassificacaoTributariaNFSe(Base):
+    """Classificação Tributária para NFS-e (cClassTrib)"""
+    __tablename__ = 'classificacao_tributaria_nfse'
+    
+    codigo_classificacao = Column(String(6), primary_key=True)
+    descricao = Column(String(200), nullable=False)
+    categoria = Column(String(100))
+    aliquota_sugerida_ibs = Column(Numeric(5, 2))
+    aliquota_sugerida_cbs = Column(Numeric(5, 2))
+    observacoes = Column(Text)
+    versao_anexo = Column(String(10), nullable=False, default='v1.03.00')
+    ativo = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def to_dict(self):
+        return serialize_sqla_object(self)
+    
+    def __repr__(self):
+        return f"<ClassificacaoTributariaNFSe(codigo='{self.codigo_classificacao}', categoria='{self.categoria}')>"
+
+
+class CSTIBSCBS(Base):
+    """Códigos de Situação Tributária IBS/CBS"""
+    __tablename__ = 'cst_ibs_cbs'
+    
+    codigo_cst = Column(String(3), primary_key=True)
+    descricao = Column(String(200), nullable=False)
+    categoria = Column(String(50))
+    permite_credito = Column(Boolean, default=True)
+    calcula_ibs = Column(Boolean, default=True)
+    calcula_cbs = Column(Boolean, default=True)
+    observacoes = Column(Text)
+    ativo = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    def to_dict(self):
+        return serialize_sqla_object(self)
+    
+    def __repr__(self):
+        return f"<CSTIBSCBS(codigo='{self.codigo_cst}', descricao='{self.descricao}')>"
+
+
+class NomenclaturaBrasileiraServicos(Base):
+    """Nomenclatura Brasileira de Serviços (NBS)"""
+    __tablename__ = 'nomenclatura_brasileira_servicos'
+    
+    codigo_nbs = Column(String(9), primary_key=True)
+    descricao = Column(Text, nullable=False)
+    codigo_lc116 = Column(String(5))  # Correlação com LC 116/2003
+    categoria = Column(String(100))
+    subcategoria = Column(String(100))
+    palavras_chave = Column(Text)
+    ativo = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        data['descricao_completa'] = f"{self.codigo_nbs} - {self.descricao}"
+        return data
+    
+    def __repr__(self):
+        return f"<NomenclaturaBrasileiraServicos(codigo='{self.codigo_nbs}', lc116='{self.codigo_lc116}')>"
