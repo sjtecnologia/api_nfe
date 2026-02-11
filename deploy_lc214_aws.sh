@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 # Configurações do servidor
 SSH_KEY="$HOME/Downloads/nfe-new-api-key.pem"
 SERVER_USER="ubuntu"
-SERVER_IP="3.87.73.106"
+SERVER_IP="100.26.12.107"
 SERVER_PATH="/home/ubuntu/api_nfe"
 SSH_CMD="ssh -i $SSH_KEY $SERVER_USER@$SERVER_IP"
 SCP_CMD="scp -i $SSH_KEY"
