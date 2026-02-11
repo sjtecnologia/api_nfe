@@ -1,13 +1,17 @@
 """
 Rotas para gerenciamento de API Keys
 """
-from flask import Blueprint, jsonify, request, render_template, flash, redirect, url_for, abort, Markup
+from flask import Blueprint, jsonify, request, render_template, flash, redirect, url_for, abort
+from markupsafe import Markup
 from flask_login import login_required, current_user
 from database.connection import get_db
 from database.models import ApiKey, ApiUsageLog, Webhook, WebhookQueue
 from auth.permissions import get_accessible_client_ids
 from auth.api_key_auth import generate_api_key, require_api_key
 from datetime import datetime, timedelta
+import markdown
+import os
+from pathlib import Path
 import json
 import markdown
 import os
