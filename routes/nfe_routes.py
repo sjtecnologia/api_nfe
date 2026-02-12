@@ -4001,8 +4001,8 @@ def detalhes_inutilizacao(inutilizacao_id):
             return jsonify({'success': False, 'message': 'Inutilização não encontrada'}), 404
         
         # Verificar permissões
-        user_client_ids = [uc.cliente_id for uc in current_user.user_clients]
-        if not current_user.is_super_admin() and inut.cliente_id not in user_client_ids:
+        accessible_clients = get_accessible_client_ids(db)
+        if inut.cliente_id not in accessible_clients:
             db.close()
             return jsonify({'success': False, 'message': 'Sem permissão'}), 403
         
@@ -4055,8 +4055,8 @@ def download_xml_inutilizacao(inutilizacao_id, tipo):
             return redirect(url_for('nfe.list_nfes'))
         
         # Verificar permissões
-        user_client_ids = [uc.cliente_id for uc in current_user.user_clients]
-        if not current_user.is_super_admin() and inut.cliente_id not in user_client_ids:
+        accessible_clients = get_accessible_client_ids(db)
+        if inut.cliente_id not in accessible_clients:
             db.close()
             flash('Sem permissão para acessar', 'danger')
             return redirect(url_for('nfe.list_nfes'))
