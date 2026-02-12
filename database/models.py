@@ -49,7 +49,7 @@ class UserModel(Base):
     username = Column(String(255), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    _is_active = Column('is_active', Boolean, default=True, nullable=False)
+    _is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # [OK] Relacionamentos usando strings para evitar import circular
