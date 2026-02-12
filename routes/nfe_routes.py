@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import text, func
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
-from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
+from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, NFeInutilizacao
 from database.models import UserModel, UserClient
 from auth.decorators import (
     admin_required,
@@ -3856,7 +3856,6 @@ def processar_inutilizacao():
                 status_sefaz = 'ERRO'
             
             # Salvar no banco
-            from database.models import NFeInutilizacao
             inutilizacao = NFeInutilizacao(
                 cliente_id=cliente_id,
                 modelo=modelo,
@@ -3941,8 +3940,6 @@ def listar_inutilizacoes():
             return redirect(url_for('nfe.list_nfes'))
         
         # Buscar inutilizações
-        from database.models import NFeInutilizacao, Cliente
-        
         inutilizacoes = db.query(NFeInutilizacao).options(
             joinedload(NFeInutilizacao.created_by_user)
         ).filter(
