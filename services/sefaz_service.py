@@ -20,9 +20,15 @@ class SefazService:
         'status_servico': 'https://nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx'
     }
     
-    def __init__(self, ambiente='homologacao', cert_path=None, key_path=None):
+    def __init__(self, ambiente='homologacao', cert_path=None, key_path=None, urls_override=None):
         self.ambiente = ambiente
-        self.urls = self.URLS_HOMOLOGACAO if ambiente == 'homologacao' else self.URLS_PRODUCAO
+        # Permitir override de URLs para contingência SVC-AN/SVC-RS
+        if urls_override:
+            self.urls = urls_override
+            self._modo_contingencia = True
+        else:
+            self.urls = self.URLS_HOMOLOGACAO if ambiente == 'homologacao' else self.URLS_PRODUCAO
+            self._modo_contingencia = False
         self.cert_path = cert_path
         self.key_path = key_path
         
@@ -33,7 +39,9 @@ class SefazService:
             # Fallback para certificados do sistema se bundle não existir
             self.ca_bundle = True
             
-        print(f"[?] SefazService inicializado - Ambiente: {ambiente}")
+        modo_str = 'CONTINGÊNCIA' if self._modo_contingencia else 'NORMAL'
+        print(f"[?] SefazService inicializado - Ambiente: {ambiente} - Modo: {modo_str}")
+        print(f"[?] URL autorizacao: {self.urls.get('autorizacao', 'N/A')}")
         print(f"[?] CA Bundle: {self.ca_bundle}")
         if cert_path:
             print(f"[?] Certificado digital configurado")
@@ -213,6 +221,7 @@ class SefazService:
                 
                 if codigo_status in codigos_sucesso:
                     return {
+                        'success': True,
                         'status': 'AUTORIZADA',
                         'codigo': codigo_status,
                         'mensagem': motivo,
@@ -224,6 +233,7 @@ class SefazService:
                 elif codigo_status in codigos_processamento:
                     # Lote em processamento - aguardar consulta posterior
                     return {
+                        'success': False,
                         'status': 'PROCESSANDO',
                         'codigo': codigo_status,
                         'mensagem': f'Lote em processamento - Consulte o status posteriormente. {motivo}',
@@ -233,6 +243,7 @@ class SefazService:
                 else:
                     # Rejeição
                     return {
+                        'success': False,
                         'status': 'REJEITADA',
                         'codigo': codigo_status,
                         'mensagem': motivo,
@@ -244,6 +255,7 @@ class SefazService:
                 print(f"[X] Não foi possível extrair status da resposta")
                 print(f"[DEBUG] XML completo: {resposta_xml}")
                 return {
+                    'success': False,
                     'status': 'ERRO_RESPOSTA',
                     'mensagem': 'Resposta da SEFAZ inválida - não foi possível extrair status',
                     'resposta_completa': resposta_xml
@@ -254,6 +266,7 @@ class SefazService:
             import traceback
             traceback.print_exc()
             return {
+                'success': False,
                 'status': 'ERRO_PROCESSAMENTO',
                 'mensagem': f'Erro ao processar resposta: {e}',
                 'resposta_completa': resposta_xml

@@ -774,7 +774,7 @@ input[readonly] {
                         <button type="button" class="btn btn-secondary" onclick="previewDANFE()">
                             <i class="fas fa-file-pdf"></i> Preview DANFE
                         </button>
-                        <button type="submit" name="action" value="emitir" class="btn btn-success" formnovalidate>
+                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled>
                             <i class="fas fa-paper-plane"></i> Emitir NFe
                         </button>
                         <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary">
@@ -1151,6 +1151,25 @@ document.addEventListener('DOMContentLoaded', function() {
     aplicarMascaraMoeda('vDesc');
     aplicarMascaraMoeda('valorPagamento');
     console.log('💰 Máscaras monetárias aplicadas');
+    
+    // Validar campos obrigatórios inicialmente
+    validarCamposObrigatorios();
+    
+    // Adicionar event listeners para validação em tempo real
+    const natOp = document.getElementById('natOp');
+    const valorPagamento = document.getElementById('valorPagamento');
+    
+    if (natOp) {
+        natOp.addEventListener('input', validarCamposObrigatorios);
+        natOp.addEventListener('blur', validarCamposObrigatorios);
+    }
+    
+    if (valorPagamento) {
+        valorPagamento.addEventListener('input', validarCamposObrigatorios);
+        valorPagamento.addEventListener('change', validarCamposObrigatorios);
+    }
+    
+    console.log('✅ Validação de campos obrigatórios ativada');
     
     // Atualizar número quando modelo mudar
     document.getElementById('modelo').addEventListener('change', buscarProximoNumero);
@@ -2125,6 +2144,7 @@ function removerItem(itemId) {
     if (itemDiv) {
         itemDiv.remove();
         calcularTotalGeral();
+        validarCamposObrigatorios();
     }
 }
 
@@ -2148,6 +2168,9 @@ function calcularTotalGeral() {
     recalcularTotais();
     
     totalGeral = total;
+    
+    // Validar campos obrigatórios
+    validarCamposObrigatorios();
 }
 
 // Funções de formatação monetária
@@ -2183,14 +2206,19 @@ function recalcularTotais() {
     
     // Atualizar valor do pagamento com o total final
     const campoPagamento = document.getElementById('valorPagamento');
-    if (campoPagamento) {
-        campoPagamento.value = totalNFe.toFixed(2);
-        campoPagamento.setAttribute('data-valor-real', totalNFe.toFixed(2));
-        // Disparar evento para atualizar visualmente
-        campoPagamento.dispatchEvent(new Event('change', { bubbles: true }));
+    if (campoPagamento && totalNFe > 0) {
+        // Remover os event listeners temporariamente para evitar formatação incorreta
+        const valorFormatado = totalNFe.toFixed(2);
+        campoPagamento.value = valorFormatado;
+        campoPagamento.setAttribute('data-valor-real', valorFormatado);
+        
+        console.log(`💳 Valor do Pagamento atualizado: R$ ${valorFormatado}`);
     }
     
     console.log(`💰 Totais: Produtos=${totalProdutos.toFixed(2)} + Frete=${vFrete.toFixed(2)} + Seguro=${vSeg.toFixed(2)} - Desconto=${vDesc.toFixed(2)} = Total NFe=${totalNFe.toFixed(2)}`);
+    
+    // Validar campos obrigatórios após atualizar totais
+    validarCamposObrigatorios();
 }
 
 // Variável global para armazenar o número sugerido
@@ -2277,6 +2305,45 @@ function validarFormulario() {
     });
     
     return true;
+}
+
+// Validar campos obrigatórios e habilitar/desabilitar botão Emitir
+function validarCamposObrigatorios() {
+    const btnEmitir = document.getElementById('btnEmitir');
+    if (!btnEmitir) return;
+    
+    // Campos obrigatórios principais
+    const natOp = document.getElementById('natOp')?.value?.trim();
+    const valorPagamento = parseFloat(document.getElementById('valorPagamento')?.value || 0);
+    
+    // Verificar se tem pelo menos um item
+    const itens = document.querySelectorAll('[id^="item-"]');
+    const temItens = itens.length > 0;
+    
+    // Validar se todos os campos estão preenchidos
+    const todosPreenchidos = natOp && natOp.length > 0 && valorPagamento > 0 && temItens;
+    
+    // Habilitar/desabilitar botão
+    if (todosPreenchidos) {
+        btnEmitir.disabled = false;
+        btnEmitir.classList.remove('btn-secondary');
+        btnEmitir.classList.add('btn-success');
+        btnEmitir.title = 'Emitir NFe';
+    } else {
+        btnEmitir.disabled = true;
+        btnEmitir.classList.remove('btn-success');
+        btnEmitir.classList.add('btn-secondary');
+        
+        // Mensagem específica do que falta
+        let faltam = [];
+        if (!natOp || natOp.length === 0) faltam.push('Natureza da Operação');
+        if (valorPagamento <= 0) faltam.push('Valor do Pagamento');
+        if (!temItens) faltam.push('Adicionar pelo menos um item');
+        
+        btnEmitir.title = 'Preencha: ' + faltam.join(', ');
+    }
+    
+    console.log(`🔒 Validação: natOp=${!!natOp}, valorPagamento=${valorPagamento}, itens=${itens.length}, habilitado=${!btnEmitir.disabled}`);
 }
 
 // Detectar mudança de modelo e redirecionar
