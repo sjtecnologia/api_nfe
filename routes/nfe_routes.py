@@ -3772,6 +3772,9 @@ def processar_inutilizacao():
                 'message': 'Você não tem acesso a este cliente'
             }), 403
         
+        # Obter ID do usuário logado
+        user_id = current_user.id
+        
         # Buscar cliente/emitente
         from database.models import Cliente
         cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()

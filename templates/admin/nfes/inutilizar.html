@@ -198,7 +198,7 @@
             </div>
             <div class="modal-body" id="modalResultadoBody"></div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" id="btnFecharResultado">Fechar</button>
                 <a href="{{ url_for('nfe.listar_inutilizacoes', cliente_id=cliente_id) }}" 
                    class="btn btn-primary" id="btnVerInutilizacoes" style="display:none">
                     <i class="fas fa-list"></i> Ver Inutilizações
@@ -289,10 +289,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
+            console.error('Erro:', error);
             $('#modalProcessando').modal('hide');
             mostrarResultado(false, {
                 message: 'Erro ao processar requisição: ' + error.message
             });
+            btnEnviar.disabled = false;
         });
     });
 
@@ -336,6 +338,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Recarregar página após 3 segundos
             setTimeout(() => {
+                modal.modal('hide');
                 window.location.reload();
             }, 3000);
         } else {
@@ -355,6 +358,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         modal.modal('show');
     }
+    
+    // Adicionar listener para botão fechar do modal de resultado
+    $('#modalResultado').on('hidden.bs.modal', function () {
+        btnEnviar.disabled = false;
+    });
 });
 </script>
 {% endblock %}
