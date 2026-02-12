@@ -2,6 +2,27 @@
 
 {% block title %}Inutilizações de Numeração - EmiteMax{% endblock %}
 
+{% block extra_css %}
+<style>
+    .badge-status-autorizada {
+        background-color: #28a745 !important;
+        color: white !important;
+    }
+    .badge-status-rejeitada {
+        background-color: #dc3545 !important;
+        color: white !important;
+    }
+    .badge-status-processando {
+        background-color: #ffc107 !important;
+        color: #212529 !important;
+    }
+    .badge-status-erro {
+        background-color: #6c757d !important;
+        color: white !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-4">
     <div class="row">
@@ -166,15 +187,15 @@
                                     </td>
                                     <td>
                                         {% if inut.status == 'AUTORIZADA' %}
-                                            <span class="badge badge-success text-white">
+                                            <span class="badge badge-status-autorizada">
                                                 <i class="fas fa-check-circle"></i> Autorizada
                                             </span>
                                         {% elif inut.status == 'REJEITADA' %}
-                                            <span class="badge badge-danger text-white">
+                                            <span class="badge badge-status-rejeitada">
                                                 <i class="fas fa-times-circle"></i> Rejeitada
                                             </span>
                                         {% elif inut.status == 'PROCESSANDO' %}
-                                            <span class="badge badge-warning text-dark">
+                                            <span class="badge badge-status-processando">
                                                 <i class="fas fa-clock"></i> Processando
                                             </span>
                                         {% else %}
@@ -357,12 +378,12 @@ function verDetalhes(inutilizacaoId) {
                                 <dt class="col-sm-4">Status:</dt>
                                 <dd class="col-sm-8">
                                     ${inut.status === 'AUTORIZADA' ? 
-                                        '<span class="badge badge-success text-white">Autorizada</span>' :
+                                        '<span class="badge badge-status-autorizada">Autorizada</span>' :
                                     inut.status === 'REJEITADA' ?
-                                        '<span class="badge badge-danger text-white">Rejeitada</span>' :
+                                        '<span class="badge badge-status-rejeitada">Rejeitada</span>' :
                                     inut.status === 'PROCESSANDO' ?
-                                        '<span class="badge badge-warning text-dark">Processando</span>' :
-                                        '<span class="badge badge-secondary text-white">Erro</span>'}
+                                        '<span class="badge badge-status-processando">Processando</span>' :
+                                        '<span class="badge badge-status-erro">Erro</span>'}
                                 </dd>
                                 
                                 <dt class="col-sm-4">Código:</dt>
