@@ -48,6 +48,38 @@ class SefazService:
         if cert_path:
             print(f"[?] Certificado digital configurado")
     
+    def _assinar_xml(self, xml_content, ref_uri):
+        """
+        Assina XML usando XMLSigner
+        
+        Args:
+            xml_content: Conteúdo XML a ser assinado
+            ref_uri: URI de referência para assinatura (ex: ID da inutilização)
+        
+        Returns:
+            XML assinado ou None em caso de erro
+        """
+        try:
+            from services.xml_signer import XMLSigner
+            
+            # Preparar certificado como dicionário
+            certificado =  {
+                'cert_path': self.cert_path,
+                'key_path': self.key_path,
+                'ref_uri': ref_uri
+            }
+            
+            signer = XMLSigner()
+            xml_assinado = signer.assinar_xml(xml_content, certificado)
+            
+            return xml_assinado
+            
+        except Exception as e:
+            print(f"[X] Erro ao assinar XML: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
     def enviar_nfe(self, xml_assinado, chave_acesso):
         """
         Envia NFe para autorização na SEFAZ
@@ -363,14 +395,14 @@ class SefazService:
             if len(justificativa) < 15:
                 return {
                     'success': False,
-                    'status': 'ERRO_VALIDACAO',
+                    'status': 'ERRO',
                     'mensagem': 'Justificativa deve ter no mínimo 15 caracteres'
                 }
             
             if numero_final < numero_inicial:
                 return {
                     'success': False,
-                    'status': 'ERRO_VALIDACAO',
+                    'status': 'ERRO',
                     'mensagem': 'Número final deve ser maior ou igual ao número inicial'
                 }
             
@@ -406,6 +438,19 @@ class SefazService:
   </infInut>
 </inutNFe>'''
             
+            print(f"[INUTILIZAR] XML criado, assinando...")
+            
+            # Assinar XML
+            xml_assinado = self._assinar_xml(xml_inutilizacao, id_inutilizacao)
+            if not xml_assinado:
+                return {
+                    'success': False,
+                    'status': 'ERRO',
+                    'mensagem': 'Erro ao assinar XML de inutilização'
+                }
+            
+            print(f"[INUTILIZAR] XML assinado com sucesso")
+            
             # Criar envelope SOAP
             envelope_soap = f'''<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
@@ -418,7 +463,7 @@ class SefazService:
     </nfeCabecMsg>
   </soap12:Header>
   <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">{xml_inutilizacao}</nfeDadosMsg>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">{xml_assinado}</nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>'''
             
@@ -453,14 +498,15 @@ class SefazService:
             print(f"[INUTILIZAR] Status HTTP: {response.status_code}")
             
             if response.status_code == 200:
-                return self._processar_resposta_inutilizacao(response.text, xml_inutilizacao, id_inutilizacao)
+                return self._processar_resposta_inutilizacao(response.text, xml_assinado, id_inutilizacao)
             else:
                 print(f"[X] Erro HTTP: {response.status_code}")
+                print(f"[X] Resposta: {response.text[:500]}")
                 return {
                     'success': False,
-                    'status': 'ERRO_HTTP',
+                    'status': 'ERRO',
                     'mensagem': f'Erro HTTP {response.status_code}',
-                    'xml_pedido': xml_inutilizacao,
+                    'xml_pedido': xml_assinado,
                     'xml_resposta': response.text
                 }
                 
@@ -470,7 +516,7 @@ class SefazService:
             traceback.print_exc()
             return {
                 'success': False,
-                'status': 'ERRO_EXCEPTION',
+                'status': 'ERRO',
                 'mensagem': f'Erro ao processar inutilização: {str(e)}'
             }
     
@@ -495,7 +541,7 @@ class SefazService:
                 print(f"[X] Tag retInutNFe não encontrada")
                 return {
                     'success': False,
-                    'status': 'ERRO_RESPOSTA',
+                    'status': 'ERRO',
                     'mensagem': 'Resposta da SEFAZ inválida',
                     'xml_pedido': xml_pedido,
                     'xml_resposta': resposta_xml
@@ -542,7 +588,7 @@ class SefazService:
             traceback.print_exc()
             return {
                 'success': False,
-                'status': 'ERRO_PROCESSAMENTO',
+                'status': 'ERRO',
                 'mensagem': f'Erro ao processar resposta: {str(e)}',
                 'xml_pedido': xml_pedido,
                 'xml_resposta': resposta_xml
