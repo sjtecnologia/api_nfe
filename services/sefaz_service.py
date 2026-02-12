@@ -10,14 +10,16 @@ class SefazService:
     URLS_HOMOLOGACAO = {
         'autorizacao': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx',
         'consulta': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx',
-        'status_servico': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx'
+        'status_servico': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx',
+        'inutilizacao': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeinutilizacao4.asmx'
     }
     
     # URLs SEFAZ-SP Produção 
     URLS_PRODUCAO = {
         'autorizacao': 'https://nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx',
         'consulta': 'https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx',
-        'status_servico': 'https://nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx'
+        'status_servico': 'https://nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx',
+        'inutilizacao': 'https://nfe.fazenda.sp.gov.br/ws/nfeinutilizacao4.asmx'
     }
     
     def __init__(self, ambiente='homologacao', cert_path=None, key_path=None, urls_override=None):
@@ -334,3 +336,214 @@ class SefazService:
         except Exception as e:
             print(f"[X] Erro na consulta de status: {e}")
             return {'status': 'ERRO', 'mensagem': str(e)}
+    
+    def inutilizar_numeracao(self, cnpj_emitente, modelo, serie, numero_inicial, numero_final, ano, justificativa):
+        """
+        Inutiliza numeração de NFe/NFCe na SEFAZ
+        
+        Args:
+            cnpj_emitente: CNPJ do emitente (14 dígitos)
+            modelo: 55=NFe, 65=NFCe
+            serie: Série da nota
+            numero_inicial: Primeiro número a inutilizar
+            numero_final: Último número a inutilizar
+            ano: Ano com 2 dígitos (ex: 26 para 2026)
+            justificativa: Justificativa (mínimo 15 caracteres)
+        
+        Returns:
+            dict com status, protocolo, mensagem, xml_pedido e xml_resposta
+        """
+        try:
+            print(f"[INUTILIZAR] === INUTILIZANDO NUMERAÇÃO ===")
+            print(f"[INUTILIZAR] Modelo: {modelo}, Série: {serie}")
+            print(f"[INUTILIZAR] Números: {numero_inicial} a {numero_final}")
+            print(f"[INUTILIZAR] Justificativa: {justificativa}")
+            
+            # Validações
+            if len(justificativa) < 15:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'mensagem': 'Justificativa deve ter no mínimo 15 caracteres'
+                }
+            
+            if numero_final < numero_inicial:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'mensagem': 'Número final deve ser maior ou igual ao número inicial'
+                }
+            
+            # Gerar ID da inutilização
+            # Formato: ID + cUF(2) + AA(2) + CNPJ(14) + mod(2) + serie(3) + nNFIni(9) + nNFFin(9)
+            # Total: 43 caracteres
+            cuf = '35'  # São Paulo
+            cnpj_limpo = cnpj_emitente.replace('.', '').replace('/', '').replace('-', '').zfill(14)
+            serie_fmt = str(serie).zfill(3)
+            num_ini_fmt = str(numero_inicial).zfill(9)
+            num_fin_fmt = str(numero_final).zfill(9)
+            
+            id_inutilizacao = f"ID{cuf}{ano}{cnpj_limpo}{modelo}{serie_fmt}{num_ini_fmt}{num_fin_fmt}"
+            print(f"[INUTILIZAR] ID gerado: {id_inutilizacao}")
+            
+            # tpAmb: 1=Produção, 2=Homologação
+            tp_amb = '1' if self.ambiente == 'producao' else '2'
+            
+            # Criar XML de inutilização
+            xml_inutilizacao = f'''<?xml version="1.0" encoding="UTF-8"?>
+<inutNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <infInut Id="{id_inutilizacao}">
+    <tpAmb>{tp_amb}</tpAmb>
+    <xServ>INUTILIZAR</xServ>
+    <cUF>{cuf}</cUF>
+    <ano>{ano}</ano>
+    <CNPJ>{cnpj_limpo}</CNPJ>
+    <mod>{modelo}</mod>
+    <serie>{serie}</serie>
+    <nNFIni>{numero_inicial}</nNFIni>
+    <nNFFin>{numero_final}</nNFFin>
+    <xJust>{justificativa}</xJust>
+  </infInut>
+</inutNFe>'''
+            
+            # Criar envelope SOAP
+            envelope_soap = f'''<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+                xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+                xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Header>
+    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">
+      <cUF>{cuf}</cUF>
+      <versaoDados>4.00</versaoDados>
+    </nfeCabecMsg>
+  </soap12:Header>
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">{xml_inutilizacao}</nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>'''
+            
+            # URL de inutilização
+            url_inutilizacao = self.urls.get('inutilizacao', 
+                'https://nfe.fazenda.sp.gov.br/ws/nfeinutilizacao4.asmx' if self.ambiente == 'producao' 
+                else 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeinutilizacao4.asmx')
+            
+            print(f"[INUTILIZAR] Enviando para: {url_inutilizacao}")
+            
+            # Headers
+            headers = {
+                'Content-Type': 'application/soap+xml; charset=utf-8',
+            }
+            
+            # Fazer requisição
+            request_kwargs = {
+                'data': envelope_soap.encode('utf-8'),
+                'headers': headers,
+                'timeout': 30,
+                'verify': self.ca_bundle
+            }
+            
+            # Adicionar certificado digital se disponível
+            if self.cert_path and self.key_path:
+                request_kwargs['cert'] = (self.cert_path, self.key_path)
+            else:
+                print(f"[!] AVISO: Certificado digital não configurado")
+            
+            response = requests.post(url_inutilizacao, **request_kwargs)
+            
+            print(f"[INUTILIZAR] Status HTTP: {response.status_code}")
+            
+            if response.status_code == 200:
+                return self._processar_resposta_inutilizacao(response.text, xml_inutilizacao, id_inutilizacao)
+            else:
+                print(f"[X] Erro HTTP: {response.status_code}")
+                return {
+                    'success': False,
+                    'status': 'ERRO_HTTP',
+                    'mensagem': f'Erro HTTP {response.status_code}',
+                    'xml_pedido': xml_inutilizacao,
+                    'xml_resposta': response.text
+                }
+                
+        except Exception as e:
+            print(f"[X] Erro ao inutilizar: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'status': 'ERRO_EXCEPTION',
+                'mensagem': f'Erro ao processar inutilização: {str(e)}'
+            }
+    
+    def _processar_resposta_inutilizacao(self, resposta_xml, xml_pedido, id_inutilizacao):
+        """Processa resposta da SEFAZ para inutilização"""
+        try:
+            print(f"[INUTILIZAR] Processando resposta...")
+            print(f"[DEBUG] Resposta (primeiros 500 chars): {resposta_xml[:500]}")
+            
+            # Parse do XML
+            root = ET.fromstring(resposta_xml)
+            
+            # Namespaces
+            ns = {
+                'soap': 'http://www.w3.org/2003/05/soap-envelope',
+                'nfe': 'http://www.portalfiscal.inf.br/nfe'
+            }
+            
+            # Buscar retorno
+            ret_inut = root.find('.//nfe:retInutNFe', ns)
+            if ret_inut is None:
+                print(f"[X] Tag retInutNFe não encontrada")
+                return {
+                    'success': False,
+                    'status': 'ERRO_RESPOSTA',
+                    'mensagem': 'Resposta da SEFAZ inválida',
+                    'xml_pedido': xml_pedido,
+                    'xml_resposta': resposta_xml
+                }
+            
+            # Extrair informações  
+            cstat_element = ret_inut.find('nfe:infInut/nfe:cStat', ns)
+            xmotivo_element = ret_inut.find('nfe:infInut/nfe:xMotivo', ns)
+            protocolo_element = ret_inut.find('nfe:infInut/nfe:nProt', ns)
+            
+            codigo_status = cstat_element.text if cstat_element is not None else None
+            motivo = xmotivo_element.text if xmotivo_element is not None else 'Sem motivo'
+            protocolo = protocolo_element.text if protocolo_element is not None else None
+            
+            print(f"[INUTILIZAR] Código: {codigo_status} - {motivo}")
+            
+            # 102 = Inutilização de número homologado
+            if codigo_status == '102':
+                return {
+                    'success': True,
+                    'status': 'AUTORIZADA',
+                    'codigo': codigo_status,
+                    'mensagem': motivo,
+                    'protocolo': protocolo,
+                    'chave_inutilizacao': id_inutilizacao,
+                    'xml_pedido': xml_pedido,
+                    'xml_resposta': resposta_xml
+                }
+            else:
+                return {
+                    'success': False,
+                    'status': 'REJEITADA',
+                    'codigo': codigo_status,
+                    'mensagem': motivo,
+                    'protocolo': protocolo,
+                    'chave_inutilizacao': id_inutilizacao,
+                    'xml_pedido': xml_pedido,
+                    'xml_resposta': resposta_xml
+                }
+                
+        except Exception as e:
+            print(f"[X] Erro ao processar resposta: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'status': 'ERRO_PROCESSAMENTO',
+                'mensagem': f'Erro ao processar resposta: {str(e)}',
+                'xml_pedido': xml_pedido,
+                'xml_resposta': resposta_xml
+            }

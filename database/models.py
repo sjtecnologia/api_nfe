@@ -583,6 +583,47 @@ class NFeEmitidas(Base):
     def __repr__(self):
         return f"<NFeEmitidas(id={self.nfe_emitida_id}, tipo_nfe='{self.tipo_nfe}', cliente_id={self.cliente_id})>"
 
+class NFeInutilizacao(Base):
+    """Modelo para inutilização de numeração de NFe"""
+    __tablename__ = 'nfe_inutilizacoes'
+    
+    inutilizacao_id = Column(BigInteger, primary_key=True, index=True)
+    cliente_id = Column(BigInteger, ForeignKey('clientes.cliente_id'), nullable=False)
+    modelo = Column(String(2), nullable=False)  # 55=NFe, 65=NFCe
+    serie = Column(Integer, nullable=False)
+    numero_inicial = Column(Integer, nullable=False)
+    numero_final = Column(Integer, nullable=False)
+    ano = Column(String(2), nullable=False)  # Ano com 2 dígitos (ex: 26 para 2026)
+    justificativa = Column(Text, nullable=False)  # Min 15 caracteres
+    
+    # Dados da resposta SEFAZ
+    status = Column(String(50), default='PROCESSANDO')  # PROCESSANDO, AUTORIZADA, REJEITADA
+    protocolo = Column(String(15), nullable=True)
+    chave_inutilizacao = Column(String(44), nullable=True)  # ID da inutilização
+    codigo_status = Column(String(3), nullable=True)  # 102 = Inutilização autorizada
+    mensagem_sefaz = Column(Text, nullable=True)
+    xml_pedido = Column(Text, nullable=True)  # XML do pedido enviado
+    xml_resposta = Column(Text, nullable=True)  # XML da resposta SEFAZ
+    
+    # Auditoria
+    data_criacao = Column(DateTime, default=datetime_now_brt, nullable=False)
+    data_inutilizacao = Column(DateTime, nullable=True)  # Data da autorização SEFAZ
+    created_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True)
+    
+    # Relacionamentos
+    cliente = relationship('Cliente')
+    created_by_user = relationship('UserModel', foreign_keys=[created_by_user_id])
+    
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        if self.cliente:
+            data['cliente_nome'] = self.cliente.nome_razao_social
+        return data
+    
+    def __repr__(self):
+        return f"<NFeInutilizacao(id={self.inutilizacao_id}, modelo={self.modelo}, serie={self.serie}, " \
+               f"numeros={self.numero_inicial}-{self.numero_final}, status='{self.status}')>"
+
 class Ncm(Base):
     __tablename__ = 'ncms'
     ncm_id = Column(Integer, primary_key=True)
