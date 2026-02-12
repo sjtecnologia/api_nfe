@@ -3795,8 +3795,8 @@ def processar_inutilizacao():
                 'message': 'Certificado digital não configurado ou em modo simulado'
             }), 400
         
-        # Determinar ambiente
-        ambiente = cliente.ambiente_sefaz or 'homologacao'
+        # Determinar ambiente (1=Produção, 2=Homologação)
+        ambiente = 'producao' if cliente.ambiente == 1 else 'homologacao'
         
         # Extrair certificado em arquivos temporários
         import tempfile
