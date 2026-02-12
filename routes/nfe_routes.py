@@ -8,12 +8,11 @@ from sqlalchemy import text, func
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
 from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
-from models.user import UserModel, UserClient
+from database.models import UserModel, UserClient
 from auth.decorators import (
     admin_required,
     block_viewer_access,
     editor_or_admin_required,
-    editor_or_higher_required,
     viewer_or_higher_required
 )
 from auth.permissions import get_accessible_client_ids
@@ -3980,7 +3979,7 @@ def listar_inutilizacoes():
 
 @nfe_bp.route('/inutilizacao/<int:inutilizacao_id>/detalhes', methods=['GET'])
 @login_required
-@viewer_or_higher_required
+@viewer_or_higher_required()
 def detalhes_inutilizacao(inutilizacao_id):
     """Retorna detalhes de uma inutilização em JSON"""
     try:
@@ -4033,7 +4032,7 @@ def detalhes_inutilizacao(inutilizacao_id):
 
 @nfe_bp.route('/inutilizacao/<int:inutilizacao_id>/xml/<tipo>', methods=['GET'])
 @login_required
-@viewer_or_higher_required
+@viewer_or_higher_required()
 def download_xml_inutilizacao(inutilizacao_id, tipo):
     """Baixa XML de pedido ou resposta da inutilização"""
     try:
