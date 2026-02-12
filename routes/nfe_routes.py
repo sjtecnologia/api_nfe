@@ -3993,7 +3993,9 @@ def detalhes_inutilizacao(inutilizacao_id):
     try:
         db = next(get_db())
         
-        inut = db.query(NFeInutilizacao).filter_by(
+        inut = db.query(NFeInutilizacao).options(
+            joinedload(NFeInutilizacao.created_by_user)
+        ).filter_by(
             inutilizacao_id=inutilizacao_id
         ).first()
         
