@@ -3828,7 +3828,13 @@ def processar_inutilizacao():
         try:
             # Inicializar serviço SEFAZ
             from services.sefaz_service import SefazService
-            sefaz = SefazService(ambiente=ambiente, cert_path=cert_path, key_path=key_path)
+            sefaz = SefazService(
+                ambiente=ambiente, 
+                cert_path=cert_path, 
+                key_path=key_path,
+                cert_pfx_data=cert_data,  # Manter dados originais para assinatura
+                cert_pfx_password=certificado['password']
+            )
             
             # Enviar inutilização para SEFAZ
             resultado = sefaz.inutilizar_numeracao(

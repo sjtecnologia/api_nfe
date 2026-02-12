@@ -22,7 +22,7 @@ class SefazService:
         'inutilizacao': 'https://nfe.fazenda.sp.gov.br/ws/nfeinutilizacao4.asmx'
     }
     
-    def __init__(self, ambiente='homologacao', cert_path=None, key_path=None, urls_override=None):
+    def __init__(self, ambiente='homologacao', cert_path=None, key_path=None, urls_override=None, cert_pfx_data=None, cert_pfx_password=None):
         self.ambiente = ambiente
         # Permitir override de URLs para contingência SVC-AN/SVC-RS
         if urls_override:
@@ -33,6 +33,8 @@ class SefazService:
             self._modo_contingencia = False
         self.cert_path = cert_path
         self.key_path = key_path
+        self.cert_pfx_data = cert_pfx_data  # Dados originais do .pfx
+        self.cert_pfx_password = cert_pfx_password  # Senha do .pfx
         
         # Usar bundle de certificados que inclui ICP-Brasil
         # Caminho absoluto para o bundle customizado no servidor
@@ -62,10 +64,13 @@ class SefazService:
         try:
             from services.xml_signer import XMLSigner
             
-            # Preparar certificado como dicionário
-            certificado =  {
-                'cert_path': self.cert_path,
-                'key_path': self.key_path,
+            # Preparar certificado como dicionário com dados .pfx originais
+            if not self.cert_pfx_data or not self.cert_pfx_password:
+                raise Exception("Certificado PFX não disponível para assinatura")
+            
+            certificado = {
+                'cert_data': self.cert_pfx_data,
+                'password': self.cert_pfx_password,
                 'ref_uri': ref_uri
             }
             

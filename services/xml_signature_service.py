@@ -105,6 +105,74 @@ class XMLSignatureService:
             import traceback
             traceback.print_exc()
             raise Exception(f"Falha na assinatura: {str(e)}")
+    
+    def assinar_xml(self, xml_content, certificado):
+        """
+        Assina XML genérico usando PyNFe (para inutilização, consulta, etc)
+        
+        Args:
+            xml_content: String ou bytes do XML
+            certificado: Dict com cert_path e key_path ou cert_data e password
+        """
+        try:
+            print("[PYNFE] === ASSINATURA XML GENÉRICO ===")
+            
+            # Verificar se certificado tem arquivos .pem ou dados .pfx
+            cert_path = certificado.get('cert_path')
+            key_path = certificado.get('key_path')
+            
+            if cert_path and key_path:
+                # Certificado já extraído em arquivos PEM temporários
+                # Precisamos recriar .pfx para PyNFe
+                print(f"[PYNFE] Usando certificado de arquivos: {cert_path}")
+                
+                # Por enquanto, PyNFe não suporta PEM diretamente
+                # Retornar erro para usar método alternativo
+                raise Exception("Certificado em formato PEM não suportado para inutilização. Use sign_nfe_xml com db_session.")
+            
+            # Se tiver cert_data/password, usar direto
+            cert_data = certificado.get('cert_data')
+            cert_senha = certificado.get('password')
+            
+            if not cert_data or not cert_senha:
+                raise Exception("Certificado requer 'cert_data' e 'password' em formato .pfx")
+            
+            # Salvar certificado em arquivo temporário
+            with tempfile.NamedTemporaryFile(suffix='.pfx', delete=False) as tmp_file:
+                if isinstance(cert_data, bytes):
+                    tmp_file.write(cert_data)
+                else:
+                    import base64
+                    tmp_file.write(base64.b64decode(cert_data))
+                cert_file_path = tmp_file.name
+            
+            print(f"[PYNFE] Certificado salvo em: {cert_file_path}")
+            
+            # Criar assinador
+            assinador = AssinaturaA1(cert_file_path, cert_senha)
+            
+            # Parsear XML
+            if isinstance(xml_content, str):
+                xml_element = etree.fromstring(xml_content.encode('utf-8'))
+            elif isinstance(xml_content, bytes):
+                xml_element = etree.fromstring(xml_content)
+            else:
+                xml_element = xml_content
+            
+            print("[PYNFE] Assinando XML...")
+            xml_assinado = assinador.assinar(xml_element, retorna_string=True)
+            
+            # Limpar arquivo temporário
+            os.unlink(cert_file_path)
+            
+            print(f"[PYNFE] ✅ XML assinado: {len(xml_assinado)} caracteres")
+            return xml_assinado
+            
+        except Exception as e:
+            print(f"[PYNFE] ❌ ERRO ao assinar: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
 
 # Instância singleton para compatibilidade com código existente
