@@ -3658,7 +3658,7 @@ def form_inutilizar():
             return redirect(url_for('nfe.list_nfes'))
         
         # Verificar acesso do usuário ao cliente
-        db = get_db()
+        db = next(get_db())
         user_id = session.get('user_id')
         
         # Admin pode acessar qualquer cliente
@@ -3771,7 +3771,7 @@ def processar_inutilizacao():
             }), 400
         
         # Abrir conexão com banco
-        db = get_db()
+        db = next(get_db())
         user_id = session.get('user_id')
         
         # Buscar cliente/emitente
@@ -3919,7 +3919,7 @@ def listar_inutilizacoes():
             flash('Cliente não especificado', 'danger')
             return redirect(url_for('nfe.list_nfes'))
         
-        db = get_db()
+        db = next(get_db())
         user_id = session.get('user_id')
         
         # Verificar acesso
@@ -3983,7 +3983,7 @@ def listar_inutilizacoes():
 def detalhes_inutilizacao(inutilizacao_id):
     """Retorna detalhes de uma inutilização em JSON"""
     try:
-        db = get_db()
+        db = next(get_db())
         
         inut = db.query(NFeInutilizacao).filter_by(
             inutilizacao_id=inutilizacao_id
@@ -4036,7 +4036,7 @@ def detalhes_inutilizacao(inutilizacao_id):
 def download_xml_inutilizacao(inutilizacao_id, tipo):
     """Baixa XML de pedido ou resposta da inutilização"""
     try:
-        db = get_db()
+        db = next(get_db())
         
         inut = db.query(NFeInutilizacao).filter_by(
             inutilizacao_id=inutilizacao_id
