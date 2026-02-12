@@ -166,15 +166,15 @@
                                     </td>
                                     <td>
                                         {% if inut.status == 'AUTORIZADA' %}
-                                            <span class="badge badge-success">
+                                            <span class="badge badge-success text-white">
                                                 <i class="fas fa-check-circle"></i> Autorizada
                                             </span>
                                         {% elif inut.status == 'REJEITADA' %}
-                                            <span class="badge badge-danger">
+                                            <span class="badge badge-danger text-white">
                                                 <i class="fas fa-times-circle"></i> Rejeitada
                                             </span>
                                         {% elif inut.status == 'PROCESSANDO' %}
-                                            <span class="badge badge-warning">
+                                            <span class="badge badge-warning text-dark">
                                                 <i class="fas fa-clock"></i> Processando
                                             </span>
                                         {% else %}
@@ -357,8 +357,12 @@ function verDetalhes(inutilizacaoId) {
                                 <dt class="col-sm-4">Status:</dt>
                                 <dd class="col-sm-8">
                                     ${inut.status === 'AUTORIZADA' ? 
-                                        '<span class="badge badge-success">Autorizada</span>' :
-                                        '<span class="badge badge-danger">Rejeitada</span>'}
+                                        '<span class="badge badge-success text-white">Autorizada</span>' :
+                                    inut.status === 'REJEITADA' ?
+                                        '<span class="badge badge-danger text-white">Rejeitada</span>' :
+                                    inut.status === 'PROCESSANDO' ?
+                                        '<span class="badge badge-warning text-dark">Processando</span>' :
+                                        '<span class="badge badge-secondary text-white">Erro</span>'}
                                 </dd>
                                 
                                 <dt class="col-sm-4">Código:</dt>
