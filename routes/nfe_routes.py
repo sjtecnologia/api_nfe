@@ -3659,20 +3659,11 @@ def form_inutilizar():
         
         # Verificar acesso do usuário ao cliente
         db = next(get_db())
-        user_id = session.get('user_id')
+        accessible_clients = get_accessible_client_ids(db)
         
-        # Admin pode acessar qualquer cliente
-        user = db.query(UserModel).filter_by(id=user_id).first()
-        if user.role != 'Admin':
-            # Verificar se usuário tem acesso ao cliente
-            user_client = db.query(UserClient).filter_by(
-                user_id=user_id,
-                client_id=cliente_id
-            ).first()
-            
-            if not user_client:
-                flash('Acesso negado a este cliente', 'danger')
-                return redirect(url_for('nfe.list_nfes'))
+        if cliente_id not in accessible_clients:
+            flash('Você não tem acesso a este cliente.', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
         
         # Buscar dados do cliente/emitente
         from database.models import Cliente
@@ -3772,7 +3763,14 @@ def processar_inutilizacao():
         
         # Abrir conexão com banco
         db = next(get_db())
-        user_id = session.get('user_id')
+        
+        # Verificar acesso do usuário ao cliente
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            return jsonify({
+                'success': False,
+                'message': 'Você não tem acesso a este cliente'
+            }), 403
         
         # Buscar cliente/emitente
         from database.models import Cliente
@@ -3920,19 +3918,12 @@ def listar_inutilizacoes():
             return redirect(url_for('nfe.list_nfes'))
         
         db = next(get_db())
-        user_id = session.get('user_id')
         
-        # Verificar acesso
-        user = db.query(UserModel).filter_by(id=user_id).first()
-        if user.role != 'Admin':
-            user_client = db.query(UserClient).filter_by(
-                user_id=user_id,
-                client_id=cliente_id
-            ).first()
-            
-            if not user_client:
-                flash('Acesso negado a este cliente', 'danger')
-                return redirect(url_for('nfe.list_nfes'))
+        # Verificar acesso do usuário ao cliente
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            flash('Você não tem acesso a este cliente.', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
         
         # Buscar inutilizações
         from database.models import NFeInutilizacao, Cliente
