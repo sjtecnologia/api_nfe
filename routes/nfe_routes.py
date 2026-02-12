@@ -3943,7 +3943,9 @@ def listar_inutilizacoes():
         # Buscar inutilizações
         from database.models import NFeInutilizacao, Cliente
         
-        inutilizacoes = db.query(NFeInutilizacao).filter(
+        inutilizacoes = db.query(NFeInutilizacao).options(
+            joinedload(NFeInutilizacao.created_by_user)
+        ).filter(
             NFeInutilizacao.cliente_id == cliente_id
         ).order_by(
             NFeInutilizacao.data_criacao.desc()
