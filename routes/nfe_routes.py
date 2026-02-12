@@ -3724,7 +3724,7 @@ def form_inutilizar():
 
 @nfe_bp.route('/inutilizar', methods=['POST'])
 @login_required
-@editor_or_higher_required()
+@editor_or_admin_required()
 def processar_inutilizacao():
     """Processa inutilização de numeração na SEFAZ"""
     db = None
