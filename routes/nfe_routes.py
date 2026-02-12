@@ -3783,7 +3783,7 @@ def processar_inutilizacao():
             }), 404
         
         # Obter CNPJ do emitente
-        cnpj_emitente = cliente.cnpj_cpf
+        cnpj_emitente = cliente.cnpj
         
         # Obter certificado digital
         from services.certificate_service import get_active_certificate_for_client
