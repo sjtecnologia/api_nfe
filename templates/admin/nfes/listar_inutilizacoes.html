@@ -314,7 +314,7 @@ function verDetalhes(inutilizacaoId) {
     modal.modal('show');
 
     // Buscar detalhes no servidor
-    fetch(`/nfe/inutilizacao/${inutilizacaoId}/detalhes`)
+    fetch(`/admin/nfe/inutilizacao/${inutilizacaoId}/detalhes`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -420,7 +420,7 @@ function verDetalhes(inutilizacaoId) {
 
 // Baixar XML
 function baixarXML(inutilizacaoId, tipo) {
-    window.open(`/nfe/inutilizacao/${inutilizacaoId}/xml/${tipo}`, '_blank');
+    window.open(`/admin/nfe/inutilizacao/${inutilizacaoId}/xml/${tipo}`, '_blank');
 }
 </script>
 {% endblock %}
