@@ -3843,6 +3843,12 @@ def processar_inutilizacao():
             
             print(f"[INUTILIZAR] Resultado SEFAZ: {resultado.get('status')}")
             
+            # Normalizar status para valores válidos do banco
+            # Constraint aceita: 'PROCESSANDO', 'AUTORIZADA', 'REJEITADA', 'ERRO'
+            status_sefaz = resultado.get('status', 'ERRO')
+            if status_sefaz not in ['PROCESSANDO', 'AUTORIZADA', 'REJEITADA']:
+                status_sefaz = 'ERRO'
+            
             # Salvar no banco
             from database.models import NFeInutilizacao
             inutilizacao = NFeInutilizacao(
@@ -3853,7 +3859,7 @@ def processar_inutilizacao():
                 numero_final=numero_final,
                 ano=ano,
                 justificativa=justificativa,
-                status=resultado.get('status', 'ERRO'),
+                status=status_sefaz,
                 protocolo=resultado.get('protocolo'),
                 chave_inutilizacao=resultado.get('chave_inutilizacao'),
                 codigo_status=resultado.get('codigo'),

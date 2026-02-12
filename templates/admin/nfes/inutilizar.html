@@ -278,10 +278,16 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(response => {
+            // Sempre fechar modal de processamento
             $('#modalProcessando').modal('hide');
-
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
             if (data.success) {
                 mostrarResultado(true, data);
             } else {
@@ -290,9 +296,10 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             console.error('Erro:', error);
+            // Garantir que modal de processamento está fechado
             $('#modalProcessando').modal('hide');
             mostrarResultado(false, {
-                message: 'Erro ao processar requisição: ' + error.message
+                message: 'Erro ao processar: ' + error.message
             });
             btnEnviar.disabled = false;
         });
@@ -362,6 +369,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Adicionar listener para botão fechar do modal de resultado
     $('#modalResultado').on('hidden.bs.modal', function () {
         btnEnviar.disabled = false;
+        // Remover backdrop se ainda existir
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        $('body').css('padding-right', '');
+    });
+    
+    // Adicionar listener para botão fechar do modal de processamento
+    $('#modalProcessando').on('hidden.bs.modal', function () {
+        // Remover backdrop se ainda existir
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        $('body').css('padding-right', '');
     });
 });
 </script>
