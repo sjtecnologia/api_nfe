@@ -83,12 +83,16 @@ class XMLSignatureService:
             print("[PYNFE] Assinando XML com PyNFe AssinaturaA1...")
             xml_assinado = assinador.assinar(xml_element, retorna_string=True)
             
+            # Limpar espaços e quebras de linha entre tags
+            import re
+            xml_assinado = re.sub(r'>\s+<', '><', xml_assinado.strip())
+            
             # Limpar arquivo temporário
             import os
             os.unlink(cert_file_path)
             print("[PYNFE] Arquivo temporário removido")
             
-            print(f"[PYNFE] ✅ Assinatura criada: {len(xml_assinado)} caracteres")
+            print(f"[PYNFE] ✅ Assinatura criada e XML limpo: {len(xml_assinado)} caracteres")
             
             # DEBUG: Salvar XML para análise
             try:
@@ -162,10 +166,14 @@ class XMLSignatureService:
             print("[PYNFE] Assinando XML...")
             xml_assinado = assinador.assinar(xml_element, retorna_string=True)
             
+            # Limpar espaços e quebras de linha entre tags
+            import re
+            xml_assinado = re.sub(r'>\s+<', '><', xml_assinado.strip())
+            
             # Limpar arquivo temporário
             os.unlink(cert_file_path)
             
-            print(f"[PYNFE] ✅ XML assinado: {len(xml_assinado)} caracteres")
+            print(f"[PYNFE] ✅ XML assinado e limpo: {len(xml_assinado)} caracteres")
             return xml_assinado
             
         except Exception as e:

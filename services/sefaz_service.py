@@ -426,22 +426,13 @@ class SefazService:
             # tpAmb: 1=Produção, 2=Homologação
             tp_amb = '1' if self.ambiente == 'producao' else '2'
             
-            # Criar XML de inutilização
-            xml_inutilizacao = f'''<?xml version="1.0" encoding="UTF-8"?>
-<inutNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-  <infInut Id="{id_inutilizacao}">
-    <tpAmb>{tp_amb}</tpAmb>
-    <xServ>INUTILIZAR</xServ>
-    <cUF>{cuf}</cUF>
-    <ano>{ano}</ano>
-    <CNPJ>{cnpj_limpo}</CNPJ>
-    <mod>{modelo}</mod>
-    <serie>{serie}</serie>
-    <nNFIni>{numero_inicial}</nNFIni>
-    <nNFFin>{numero_final}</nNFFin>
-    <xJust>{justificativa}</xJust>
-  </infInut>
-</inutNFe>'''
+            # Limpar justificativa de caracteres inválidos
+            import re
+            justificativa_limpa = re.sub(r'[^\w\s\.\,\-]', '', justificativa)  # Remover caracteres especiais
+            justificativa_limpa = ' '.join(justificativa_limpa.split())  # Normalizar espaços
+            
+            # Criar XML de inutilização SEM espaços extras ou indentação
+            xml_inutilizacao = f'<?xml version="1.0" encoding="UTF-8"?><inutNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><infInut Id="{id_inutilizacao}"><tpAmb>{tp_amb}</tpAmb><xServ>INUTILIZAR</xServ><cUF>{cuf}</cUF><ano>{ano}</ano><CNPJ>{cnpj_limpo}</CNPJ><mod>{modelo}</mod><serie>{serie}</serie><nNFIni>{numero_inicial}</nNFIni><nNFFin>{numero_final}</nNFFin><xJust>{justificativa_limpa}</xJust></infInut></inutNFe>'
             
             print(f"[INUTILIZAR] XML criado, assinando...")
             
@@ -454,23 +445,15 @@ class SefazService:
                     'mensagem': 'Erro ao assinar XML de inutilização'
                 }
             
-            print(f"[INUTILIZAR] XML assinado com sucesso")
+            # Limpar XML assinado de espaços extras e quebras de linha entre tags
+            import re
+            xml_assinado = re.sub(r'>\s+<', '><', xml_assinado.strip())
             
-            # Criar envelope SOAP
-            envelope_soap = f'''<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-                xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
-                xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Header>
-    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">
-      <cUF>{cuf}</cUF>
-      <versaoDados>4.00</versaoDados>
-    </nfeCabecMsg>
-  </soap12:Header>
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">{xml_assinado}</nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>'''
+            print(f"[INUTILIZAR] XML assinado e limpo com sucesso")
+            print(f"[DEBUG] XML assinado (primeiros 200 chars): {xml_assinado[:200]}")
+            
+            # Criar envelope SOAP (limpo, sem espaços desnecessários)
+            envelope_soap = f'<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Header><nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4"><cUF>{cuf}</cUF><versaoDados>4.00</versaoDados></nfeCabecMsg></soap12:Header><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">{xml_assinado}</nfeDadosMsg></soap12:Body></soap12:Envelope>'
             
             # URL de inutilização
             url_inutilizacao = self.urls.get('inutilizacao', 
