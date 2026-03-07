@@ -1,9 +1,5 @@
 {% extends "base.html" %}
 
-{% block title %}
-    {% if cliente.cliente_id %}Editar Cliente: {{ cliente.razao_social }}{% else %}Novo Cliente{% endif %}
-{% endblock %}
-
 {% block content %}
     <h1 class="mb-4">
         {% if cliente.cliente_id %}Editar Cliente: {{ cliente.razao_social }}{% else %}Novo Cliente{% endif %}
@@ -15,7 +11,7 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="cliente-tab" data-bs-toggle="tab" data-bs-target="#cliente-pane" type="button" role="tab" aria-controls="cliente-pane" aria-selected="true">Dados do Cliente</button>
                 </li>
-                {% if cliente.cliente_id %} {# Apenas mostra as abas de associação se for edição de cliente existente #}
+                {% if cliente.cliente_id %}
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos-pane" type="button" role="tab" aria-controls="produtos-pane" aria-selected="false">Produtos</button>
                 </li>
@@ -26,7 +22,7 @@
                     <button class="nav-link" id="regras-tab" data-bs-toggle="tab" data-bs-target="#regras-pane" type="button" role="tab" aria-controls="regras-pane" aria-selected="false">Regras Tributárias</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="destinatarios-tab" data-bs-toggle="tab" data-bs-target="#destinatarios-pane" type="button" role="tab" aria-controls="destinatarios-pane" aria-selected="false">Destinatários NF-e</button>
+                    <button class="nav-link" id="destinatarios-tab" data-bs-toggle="tab" data-bs-target="#destinatarios-pane" type="button" role="tab" aria-controls="destinatarios-pane" aria-selected="false">Destinatários/Tomadores</button>
                 </li>
                 {% endif %}
             </ul>
@@ -35,14 +31,10 @@
             <div class="tab-content" id="clienteTabsContent">
                 <!-- Aba: Dados do Cliente -->
                 <div class="tab-pane fade show active" id="cliente-pane" role="tabpanel" aria-labelledby="cliente-tab" tabindex="0">
-                    <form action="{{ url_for('admin.salvar_cliente') }}" method="post" enctype="multipart/form-data">
-                        {% if cliente.cliente_id %}
-                        <input type="hidden" name="cliente_id" value="{{ cliente.cliente_id }}">
-                        {% endif %}
-                        {# Campos do Cliente #}
+                    <form action="{{ url_for('admin.edit_cliente', cliente_id=cliente.cliente_id) if cliente.cliente_id else url_for('admin.create_cliente') }}" method="post" enctype="multipart/form-data">
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="razao_social" class="form-label">Razão Social / Nome *</label>
+                                <label for="razao_social" class="form-label">Razão Social</label>
                                 <input type="text" class="form-control" id="razao_social" name="razao_social" value="{{ form_data.razao_social | default('') }}" required>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -50,44 +42,30 @@
                                 <input type="text" class="form-control" id="nome_fantasia" name="nome_fantasia" value="{{ form_data.nome_fantasia | default('') }}">
                             </div>
                         </div>
-
-                        {# --- TIPO DE EMITENTE --- #}
-                        <div class="row mb-3">
-                            <div class="col-md-12">
+                        <div class="row">
+                            <!-- Produtor Rural toggle -->
+                            <div class="col-md-12 mb-2">
                                 <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="produtor_rural" name="produtor_rural"
-                                        {% if form_data.produtor_rural %}checked{% endif %}
-                                        onchange="toggleTipoEmitente(this.checked)">
-                                    <label class="form-check-label fw-bold text-success" for="produtor_rural">
-                                        🌾 Emitente é Produtor Rural (CPF — sem CNPJ)
+                                    <input class="form-check-input" type="checkbox" id="produtor_rural" name="produtor_rural"
+                                           {% if form_data.produtor_rural %}checked{% endif %}
+                                           onchange="toggleProdutorRural()">
+                                    <label class="form-check-label fw-semibold" for="produtor_rural">
+                                        🌾 Emitente é Produtor Rural (CPF sem CNPJ)
                                     </label>
                                 </div>
-                                <small class="text-muted">Ative apenas se o emitente for uma Pessoa Física Produtora Rural que não tem CNPJ.</small>
                             </div>
-                        </div>
-
-                        <div class="row">
-                            {# CAMPO CNPJ — oculto p/ produtor rural #}
-                            <div class="col-md-4 mb-3" id="campo_cnpj">
-                                <label for="cnpj" class="form-label">CNPJ *</label>
-                                <input type="text" class="form-control" id="cnpj" name="cnpj"
-                                       value="{{ form_data.cnpj | default('') }}"
-                                       placeholder="00.000.000/0000-00" maxlength="18">
-                                <small class="text-muted">Apenas números. 14 dígitos.</small>
+                            <!-- CNPJ (empresa) -->
+                            <div class="col-md-4 mb-3" id="div_cnpj">
+                                <label for="cnpj" class="form-label">CNPJ</label>
+                                <input type="text" class="form-control" id="cnpj" name="cnpj" value="{{ form_data.cnpj | default('') }}" placeholder="00.000.000/0000-00">
                             </div>
-                            {# CAMPO CPF — visível somente p/ produtor rural #}
-                            <div class="col-md-4 mb-3" id="campo_cpf" style="display:none;">
-                                <label for="cpf" class="form-label">CPF do Produtor Rural *</label>
-                                <input type="text" class="form-control" id="cpf" name="cpf"
-                                       value="{{ form_data.cpf | default('') }}"
-                                       placeholder="000.000.000-00" maxlength="14">
-                                <small class="text-muted">Apenas números. 11 dígitos.</small>
+                            <!-- CPF (produtor rural) -->
+                            <div class="col-md-4 mb-3" id="div_cpf" style="display:none;">
+                                <label for="cpf" class="form-label">CPF (Produtor Rural)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" value="{{ form_data.cpf | default('') }}" placeholder="000.000.000-00">
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label for="inscricao_estadual" class="form-label">
-                                    Inscrição Estadual
-                                    <span id="ie_obs" class="text-muted small">(opcional p/ Produtor Rural)</span>
-                                </label>
+                                <label for="inscricao_estadual" class="form-label">Inscrição Estadual</label>
                                 <input type="text" class="form-control" id="inscricao_estadual" name="inscricao_estadual" value="{{ form_data.inscricao_estadual | default('') }}">
                             </div>
                             <div class="col-md-4 mb-3">
@@ -97,7 +75,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="regime_tributario_id" class="form-label">Regime Tributário</label>
-                            <select class="form-select select2-searchable" id="regime_tributario_id" name="regime_tributario_id" required> {# Adicionado select2-searchable #}
+                            <select class="form-select select2-searchable" id="regime_tributario_id" name="regime_tributario_id" required>
                                 <option value="">Selecione um Regime Tributário...</option>
                                 {% for regime in regimes_tributarios %}
                                     <option value="{{ regime.regime_tributario_id }}" {% if form_data.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}>
@@ -105,6 +83,17 @@
                                     </option>
                                 {% endfor %}
                             </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="ambiente" class="form-label">Ambiente de Emissão de NFe *</label>
+                            <select class="form-select" id="ambiente" name="ambiente" required>
+                                <option value="1" {% if form_data.ambiente == 1 %}selected{% endif %}>1 - Produção (NFe Válida)</option>
+                                <option value="2" {% if form_data.ambiente == 2 or not form_data.ambiente %}selected{% endif %}>2 - Homologação (Testes)</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i> <strong>Produção:</strong> NFe válida fiscalmente (requer certificado válido e aprovação da SEFAZ). 
+                                <strong>Homologação:</strong> Para testes (NFe não tem valor fiscal).
+                            </small>
                         </div>
                         <div class="mb-3">
                             <label for="cnae" class="form-label">CNAE</label>
@@ -167,6 +156,26 @@
                             </div>
                         </fieldset>
                         
+                        <fieldset class="mb-3">
+                            <legend>Logo do Cliente</legend>
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label for="logo_file" class="form-label">Arquivo de Logo (PNG, JPG ou GIF)</label>
+                                    <input class="form-control" type="file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/jpg,image/gif">
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-info-circle"></i> A logo será exibida no DANFE (PDF da NFe). Tamanho recomendado: 300x100 pixels.
+                                    </small>
+                                    {% if form_data.logo_path %}
+                                    <div class="mt-2">
+                                        <p class="mb-1"><strong>Logo atual:</strong></p>
+                                        <img src="{{ url_for('static', filename=form_data.logo_path) }}" alt="Logo" style="max-width: 200px; max-height: 80px;" class="border p-2">
+                                        <p class="text-muted mt-1"><small>Selecione um novo arquivo acima para substituir</small></p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </fieldset>
+                        
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
                             <label class="form-check-label" for="ativo">
@@ -174,8 +183,6 @@
                             </label>
                         </div>
                         
-                        {# Campos para upload de certificado no CADASTRO de Cliente, para o PRIMEIRO certificado #}
-                        {# No EDITAR, o upload de novo certificado será na aba de certificados #}
                         {% if not cliente.cliente_id %}
                         <fieldset class="mb-3">
                             <legend>Certificado Digital (Opcional - Primeiro Certificado)</legend>
@@ -194,7 +201,6 @@
                                 </label>
                             </div>
                             <input type="hidden" name="cert_nome_arquivo_original" value="Upload Inicial">
-                            {# Validade será extraída do arquivo #}
                         </fieldset>
                         {% endif %}
 
@@ -203,67 +209,81 @@
                     </form>
                 </div>
 
-                <!-- Aba: Produtos -->
                 {% if cliente.cliente_id %}
                 <div class="tab-pane fade" id="produtos-pane" role="tabpanel" aria-labelledby="produtos-tab" tabindex="0">
-                    <h5 class="mt-3">Produtos Associados</h5>
-                    <p>Gerencie os produtos específicos deste cliente.</p>
-                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
-                        Adicionar Novo Produto
-                    </button>
-                    
-                    {% include 'admin_produtos_list_partial.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-box me-2"></i>Produtos Associados</span>
+                            {% if can_create() %}
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Produto
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="card-body pt-3">
+                            {% set cliente_id = cliente.cliente_id %}
+                            {% include 'admin/produtos/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Aba: Certificados -->
                 <div class="tab-pane fade" id="certificados-pane" role="tabpanel" aria-labelledby="certificados-tab" tabindex="0">
-                    <h5 class="mt-3">Certificados Associados</h5>
-                    <p>Gerencie os certificados digitais deste cliente.</p>
-                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
-                        Adicionar Novo Certificado
-                    </button>
-                    
-                    {# Formulário de Upload Rápido de Certificado - Pode ser feito no próprio modal #}
-                    {# Para simplificar, vou remover o "Upload Rápido" duplicado aqui, pois o modal já faz isso #}
-                    {# Se precisar, pode ser re-adicionado com AJAX POST direto para admin_clientes_edit #}
-
-                    {% include 'admin_certificados_list_partial.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-certificate me-2"></i>Certificados Associados</span>
+                            {% if can_create() %}
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Certificado
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/certificados/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Aba: Regras Tributárias -->
                 <div class="tab-pane fade" id="regras-pane" role="tabpanel" aria-labelledby="regras-tab" tabindex="0">
-                    <h5 class="mt-3">Regras Tributárias Associadas</h5>
-                    <p>Configure as regras tributárias específicas para este cliente.</p>
-                    <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Nova Regra Tributária" data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
-                        Adicionar Nova Regra
-                    </button>
-                    
-                    {% include 'admin_regras_tributacao_list_partial.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-balance-scale me-2"></i>Regras Tributárias Associadas</span>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Nova Regra Tributária" data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Nova Regra
+                            </button>
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/regras_tributacao/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Aba: Destinatários NF-e -->
                 <div class="tab-pane fade" id="destinatarios-pane" role="tabpanel" aria-labelledby="destinatarios-tab" tabindex="0">
-                    <h5 class="mt-3">Destinatários NF-e Associados</h5>
-                    <p>Gerencie os destinatários de NF-e para este cliente.</p>
-                    {# Por enquanto, manter o link para o formulário de destinatário, mas pode ser convertido para modal também #}
-                    <a href="{{ url_for('admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary btn-sm mb-3">Adicionar Novo Destinatário</a>
-                    
-                    {% include 'admin_destinatario_list.html' %}
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-users me-2"></i>Destinatários/Tomadores Associados</span>
+                            {% if can_create() %}
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Destinatário/Tomador" data-modal-url="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Destinatário/Tomador
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/destinatarios/list_partial.html' %}
+                        </div>
+                    </div>
                 </div>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    {# Overlay de carregamento para a busca de CEP #}
-    <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner"></div>
         <p class="mt-3">Buscando CEP...</p>
     </div>
 
-    {# MODAL GENÉRICO PARA ADIÇÃO DE PRODUTOS/CERTIFICADOS/REGRAS #}
     <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xxl" style="max-width: 98vw; margin: 0 auto;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="addModalLabel"></h5>
@@ -274,7 +294,6 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                    <!-- O botão de submit será parte do formulário carregado dinamicamente -->
                 </div>
             </div>
         </div>
@@ -283,110 +302,189 @@
 
 {% block scripts %}
 <script>
-    // ===== PRODUTOR RURAL: Alterna campos CPF / CNPJ =====
-    function toggleTipoEmitente(isProdutorRural) {
-        const campoCnpj = document.getElementById('campo_cnpj');
-        const campoCpf  = document.getElementById('campo_cpf');
-        const inputCnpj = document.getElementById('cnpj');
-        const inputCpf  = document.getElementById('cpf');
-        const ieObs     = document.getElementById('ie_obs');
+document.addEventListener('DOMContentLoaded', function() {
+    // === Toggle Produtor Rural ===
+    var _cnpjMask = null, _cpfMask = null;
 
-        if (isProdutorRural) {
-            campoCnpj.style.display = 'none';
-            campoCpf.style.display  = 'block';
-            inputCnpj.removeAttribute('required');
-            inputCpf.setAttribute('required', 'required');
-            if (ieObs) ieObs.style.display = 'inline';
-        } else {
-            campoCnpj.style.display = 'block';
-            campoCpf.style.display  = 'none';
-            inputCnpj.setAttribute('required', 'required');
-            inputCpf.removeAttribute('required');
-            if (ieObs) ieObs.style.display = 'none';
-        }
+    function toggleProdutorRural() {
+        var isRural = document.getElementById('produtor_rural').checked;
+        var cnpjEl = document.getElementById('cnpj');
+        var cpfEl = document.getElementById('cpf');
+        document.getElementById('div_cnpj').style.display = isRural ? 'none' : '';
+        document.getElementById('div_cpf').style.display = isRural ? '' : 'none';
+        // Desabilitar campo oculto para nao enviar valor conflitante
+        cnpjEl.disabled = isRural;
+        if (cpfEl) cpfEl.disabled = !isRural;
+        cnpjEl.required = !isRural;
+        if (cpfEl) cpfEl.required = isRural;
     }
 
-    // Inicializa estado ao carregar a página (modo edição de produtor rural)
-    document.addEventListener('DOMContentLoaded', function () {
-        const chk = document.getElementById('produtor_rural');
-        if (chk) toggleTipoEmitente(chk.checked);
+    // Expor globalmente para o atributo onchange
+    window.toggleProdutorRural = toggleProdutorRural;
 
-        // Ativa a aba correta se houver um fragmento de URL
-        const hash = window.location.hash;
-        if (hash) {
-            let tabId = hash.substring(1);
-            const map = { produtos: 'produtos-tab', certificados: 'certificados-tab',
-                          regras: 'regras-tab', destinatarios: 'destinatarios-tab' };
-            tabId = map[tabId];
-            if (tabId) {
-                const tabButton = document.getElementById(tabId);
-                if (tabButton && typeof bootstrap !== 'undefined') {
-                    new bootstrap.Tab(tabButton).show();
-                }
+    // Aplicar mascaras
+    var cnpjInput = document.getElementById('cnpj');
+    if (cnpjInput && window.IMask) {
+        _cnpjMask = IMask(cnpjInput, { mask: '00.000.000/0000-00' });
+    }
+    var cpfInput = document.getElementById('cpf');
+    if (cpfInput && window.IMask) {
+        _cpfMask = IMask(cpfInput, { mask: '000.000.000-00' });
+    }
+
+    // Restaurar estado inicial ao carregar pagina (modo edicao)
+    if (document.getElementById('produtor_rural') &&
+        document.getElementById('produtor_rural').checked) {
+        toggleProdutorRural();
+    }
+    // Máscara CEP
+    var cepInput = document.getElementById('cep');
+    if (cepInput && window.IMask) {
+        IMask(cepInput, { mask: '00000-000' });
+    }
+    // Máscara Telefone
+    var telInput = document.getElementById('telefone_contato');
+    if (telInput && window.IMask) {
+        IMask(telInput, { mask: '(00) 0000-0000' });
+    }
+
+    // Busca CEP
+    var btnBuscarCep = document.getElementById('btn-buscar-cep');
+    if (btnBuscarCep && cepInput) {
+        btnBuscarCep.addEventListener('click', function() {
+            var cep = cepInput.value.replace(/\D/g, '');
+            var loadingOverlay = document.getElementById('loadingOverlay');
+            if (cep.length !== 8) {
+                alert('Por favor, digite um CEP válido com 8 dígitos.');
+                return;
             }
-        }
-    });
-
-    // Máscaras de campo
-    if (typeof $ !== 'undefined') {
-        $(document).ready(function () {
-            $('#cnpj').on('input', function () {
-                let v = this.value.replace(/\D/g, '');
-                v = v.replace(/^(\d{2})(\d)/, '$1.$2');
-                v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
-                v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
-                v = v.replace(/(\d{4})(\d)/, '$1-$2');
-                this.value = v.substring(0, 18);
-            });
-            $('#cpf').on('input', function () {
-                let v = this.value.replace(/\D/g, '');
-                v = v.replace(/(\d{3})(\d)/, '$1.$2');
-                v = v.replace(/(\d{3})(\d)/, '$1.$2');
-                v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-                this.value = v.substring(0, 14);
-            });
-            $('#cep').on('input', function () {
-                let v = this.value.replace(/\D/g, '');
-                v = v.replace(/(\d{5})(\d)/, '$1-$2');
-                this.value = v.substring(0, 9);
-            });
-            $('#telefone_contato').on('input', function () {
-                let v = this.value.replace(/\D/g, '');
-                if (v.length <= 10) {
-                    v = v.replace(/(\d{2})(\d)/, '($1) $2');
-                    v = v.replace(/(\d{4})(\d)/, '$1-$2');
-                } else {
-                    v = v.replace(/(\d{2})(\d)/, '($1) $2');
-                    v = v.replace(/(\d{5})(\d)/, '$1-$2');
-                }
-                this.value = v.substring(0, 15);
-            });
+            if (loadingOverlay) loadingOverlay.classList.add('active');
+            fetch('https://viacep.com.br/ws/' + cep + '/json/')
+                .then(response => response.json())
+                .then(data => {
+                    if (loadingOverlay) loadingOverlay.classList.remove('active');
+                    if (data.erro) {
+                        alert('CEP não encontrado.');
+                    } else {
+                        document.getElementById('logradouro').value = data.logradouro || '';
+                        document.getElementById('complemento').value = data.complemento || '';
+                        document.getElementById('bairro').value = data.bairro || '';
+                        document.getElementById('nome_municipio').value = data.localidade || '';
+                        document.getElementById('codigo_municipio').value = data.ibge || '';
+                        document.getElementById('uf').value = data.uf || '';
+                        document.getElementById('numero').focus();
+                    }
+                })
+                .catch(function() {
+                    if (loadingOverlay) loadingOverlay.classList.remove('active');
+                    alert('Ocorreu um erro ao buscar o CEP. Tente novamente mais tarde.');
+                });
         });
     }
+    // Tabs via hash
+    const hash = window.location.hash;
+    if (hash) {
+        let tabId = hash.substring(1);
+        if (tabId === 'produtos') tabId = 'produtos-tab';
+        else if (tabId === 'certificados') tabId = 'certificados-tab';
+        else if (tabId === 'regras') tabId = 'regras-tab';
+        else if (tabId === 'destinatarios') tabId = 'destinatarios-tab';
+        else return;
+        const tabButton = document.getElementById(tabId);
+        if (tabButton) {
+            const tab = new bootstrap.Tab(tabButton);
+            tab.show();
+        }
+    }
 
-    // Busca de CEP via ViaCEP
-    document.addEventListener('DOMContentLoaded', function () {
-        const btnCep = document.getElementById('btn-buscar-cep');
-        if (!btnCep) return;
-        btnCep.addEventListener('click', function () {
-            const cep = document.getElementById('cep').value.replace(/\D/g, '');
-            if (cep.length !== 8) { alert('Digite um CEP válido com 8 dígitos.'); return; }
-            btnCep.disabled = true;
-            fetch(`https://viacep.com.br/ws/${cep}/json/`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.erro) { alert('CEP não encontrado.'); return; }
-                    document.getElementById('logradouro').value    = data.logradouro  || '';
-                    document.getElementById('complemento').value   = data.complemento || '';
-                    document.getElementById('bairro').value        = data.bairro      || '';
-                    document.getElementById('nome_municipio').value= data.localidade  || '';
-                    document.getElementById('codigo_municipio').value = data.ibge     || '';
-                    document.getElementById('uf').value            = data.uf          || '';
-                    document.getElementById('numero').focus();
-                })
-                .catch(() => alert('Erro ao buscar CEP.'))
-                .finally(() => { btnCep.disabled = false; });
+    // Modal AJAX
+    const addModal = document.getElementById('addModal');
+    if (addModal) {
+        const modalBody = addModal.querySelector('.modal-body');
+        const modalTitle = addModal.querySelector('.modal-title');
+        let currentModalForm = null;
+
+        addModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const url = button.getAttribute('data-modal-url');
+            const title = button.getAttribute('data-modal-title');
+
+            modalTitle.textContent = title;
+            modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Carregando formulário...</p></div>';
+
+            fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.text())
+            .then(html => {
+                modalBody.innerHTML = html;
+                currentModalForm = modalBody.querySelector('form');
+
+                if (currentModalForm) {
+                    currentModalForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const form = this;
+                        const formData = new FormData(form);
+                        const formAction = form.action;
+                        const submitButton = form.querySelector('button[type="submit"]');
+                        if(submitButton) {
+                            submitButton.disabled = true;
+                            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
+                        }
+                        fetch(formAction, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert(data.message);
+                                bootstrap.Modal.getInstance(addModal).hide();
+                                // Força reload completo para atualizar a lista
+                                // Sempre usa reload(true) para garantir atualização da página
+                                window.location.reload(true);
+                            } else {
+                                alert('Erro: ' + data.message);
+                                if(submitButton) {
+                                    submitButton.disabled = false;
+                                    submitButton.innerHTML = 'Salvar';
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Erro na submissão AJAX:', error);
+                            alert('Ocorreu um erro ao salvar. Verifique o console para mais detalhes.');
+                            if(submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.innerHTML = 'Salvar';
+                            }
+                        });
+                    });
+                }
+                // Máscaras nos campos do modal
+                var cnpjModal = document.getElementById('cnpj_modal');
+                if (cnpjModal) IMask(cnpjModal, { mask: '00.000.000/0000-00' });
+                var cepModal = document.getElementById('cep_modal');
+                if (cepModal) IMask(cepModal, { mask: '00000-000' });
+                var telModal = document.getElementById('telefone_modal');
+                if (telModal) IMask(telModal, { mask: '(00) 0000-0000' });
+            })
+            .catch(error => {
+                modalBody.innerHTML = '<p class="text-danger">Erro ao carregar o formulário: ' + error + '</p>';
+                console.error('Erro ao carregar formulário no modal:', error);
+            });
         });
-    });
+
+        addModal.addEventListener('hidden.bs.modal', function () {
+            modalBody.innerHTML = '';
+            currentModalForm = null;
+        });
+    }
+});
 </script>
 {% endblock %}

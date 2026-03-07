@@ -7,7 +7,7 @@
     <!-- Botão Voltar -->
     <div class="row mb-3">
         <div class="col-12">
-            <a href="{{ url_for('cliente.dashboard', cliente_id=cliente.cliente_id) }}" 
+            <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(cliente.cliente_id)) }}" 
                class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
             </a>
@@ -32,8 +32,13 @@
                             <p>{{ cliente.nome_fantasia }}</p>
                             {% endif %}
 
-                            <h6><strong>CNPJ:</strong></h6>
+						{% if cliente.produtor_rural and cliente.cpf %}
+						<h6><strong>CPF:</strong></h6>
+						<p>{{ cliente.cpf[:3] }}.{{ cliente.cpf[3:6] }}.{{ cliente.cpf[6:9] }}-{{ cliente.cpf[9:] }}</p>
+						{% elif cliente.cnpj %}
+						<h6><strong>CNPJ:</strong></h6>
                             <p>{{ cliente.cnpj[:2] }}.{{ cliente.cnpj[2:5] }}.{{ cliente.cnpj[5:8] }}/{{ cliente.cnpj[8:12] }}-{{ cliente.cnpj[12:] }}</p>
+                            {% endif %}
 
                             {% if cliente.ie %}
                             <h6><strong>Inscrição Estadual:</strong></h6>
@@ -81,14 +86,16 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <a href="{{ url_for('cliente.dashboard', cliente_id=cliente.cliente_id) }}" 
+                        <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(cliente.cliente_id)) }}" 
                            class="btn btn-primary">
                             <i class="fas fa-tachometer-alt"></i> Dashboard
                         </a>
+                        {% if can_create() %}
                         <a href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ cliente.cliente_id }}" 
                            class="btn btn-success">
                             <i class="fas fa-plus-circle"></i> Nova NFe
                         </a>
+                        {% endif %}
                         <a href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ cliente.cliente_id }}" 
                            class="btn btn-info">
                             <i class="fas fa-list"></i> Ver NFes
@@ -97,9 +104,9 @@
                            class="btn btn-warning">
                             <i class="fas fa-boxes"></i> Produtos
                         </a>
-                        <a href="{{ url_for('admin.list_destinatarios') }}?cliente_id={{ cliente.cliente_id }}" 
+                        <a href="{{ url_for('admin.list_destinatarios', cliente_id=cliente.cliente_id) }}" 
                            class="btn btn-secondary">
-                            <i class="fas fa-address-book"></i> Destinatários
+                            <i class="fas fa-address-book"></i> Destinatários/Tomadores
                         </a>
                     </div>
                 </div>
