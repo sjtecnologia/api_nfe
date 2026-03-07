@@ -95,8 +95,12 @@ def gerar_chave_acesso(emitente_data: Dict[str, Any], form_data: Dict[str, Any],
     # 2. AAMM (4 dígitos)
     aamm = data_emissao.strftime('%y%m')
     
-    # 3. CNPJ (14 dígitos)
-    cnpj = limpar_cnpj_cpf(emitente_data.get('cnpj', '')).zfill(14)
+    # 3. CNPJ/CPF (14 dígitos) — Produtor Rural usa CPF padded para 14 dígitos
+    if bool(emitente_data.get('produtor_rural', False)):
+        _cpf_key = limpar_cnpj_cpf(emitente_data.get('cpf', '') or '')
+        cnpj = _cpf_key.zfill(14)  # CPF (11 digits) padded to 14
+    else:
+        cnpj = limpar_cnpj_cpf(emitente_data.get('cnpj', '') or '').zfill(14)
     
     # 4. mod (2 dígitos)
     mod = "55"
