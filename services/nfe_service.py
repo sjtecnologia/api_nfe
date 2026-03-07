@@ -19,8 +19,16 @@ def generate_nfe_xml(form_data, emitente_data, destinatario_data, nfe_items_data
         ET.SubElement(ide_elem, "tpNF").text = form_data.get('tpNF', '1')
         
         emit_elem = ET.SubElement(root, "emit")
-        ET.SubElement(emit_elem, "CNPJ").text = emitente_data['cnpj']
+        # Produtor Rural usa CPF; demais emitentes usam CNPJ
+        if emitente_data.get('produtor_rural'):
+            ET.SubElement(emit_elem, "CPF").text = emitente_data.get('cpf', '')
+        else:
+            ET.SubElement(emit_elem, "CNPJ").text = emitente_data.get('cnpj', '')
         ET.SubElement(emit_elem, "xNome").text = emitente_data['razao_social']
+        # IE é opcional para Produtor Rural
+        ie = emitente_data.get('inscricao_estadual', '') or ''
+        if ie:
+            ET.SubElement(emit_elem, "IE").text = ie
         
         for idx, item in enumerate(nfe_items_data, 1):
             det_elem = ET.SubElement(root, "det", nItem=str(idx))

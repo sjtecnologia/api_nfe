@@ -3,50 +3,85 @@
 {% block title %}Clientes - Admin{% endblock %}
 
 {% block content %}
-    <h1>Administração de Clientes</h1>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3">Clientes</h1>
+        <a href="{{ url_for('admin.create_cliente') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Cliente
+        </a>
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
             {% endfor %}
         {% endif %}
     {% endwith %}
 
-    <p><a href="{{ url_for('admin.create_cliente') }}" class="btn">Adicionar Novo Cliente</a></p>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Razão Social</th>
-                <th>CNPJ</th>
-                <th>E-mail</th>
-                <th>Telefone</th>
-                <th>Ativo</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for cliente in clientes %}
-            <tr>
-                <td>{{ cliente.cliente_id }}</td>
-                <td>{{ cliente.razao_social }}</td>
-                <td>{{ cliente.cnpj }}</td>
-                <td>{{ cliente.email_contato }}</td>
-                <td>{{ cliente.telefone_contato }}</td>
-                <td>{{ 'Sim' if cliente.ativo else 'Não' }}</td>
-                <td>
-                    <a href="{{ url_for('admin.edit_cliente', cliente_id=cliente.cliente_id) }}" class="btn btn-warning">Editar</a>
-                    <form action="{{ url_for('admin.delete_cliente', cliente_id=cliente.cliente_id) }}" method="post" style="display:inline;">
-                        <button type="submit" class="btn btn-danger" onclick="return confirm('Tem certeza que deseja excluir o cliente {{ cliente.razao_social }}?');">Excluir</button>
-                    </form>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7">Nenhum cliente cadastrado.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Razão Social</th>
+                            <th>CNPJ / CPF</th>
+                            <th>UF</th>
+                            <th>E-mail</th>
+                            <th>Telefone</th>
+                            <th class="text-center">Ativo</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cliente in clientes %}
+                        <tr>
+                            <td>{{ cliente.cliente_id }}</td>
+                            <td>
+                                {{ cliente.razao_social }}
+                                {% if cliente.nome_fantasia %}
+                                <br><small class="text-muted">{{ cliente.nome_fantasia }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if cliente.produtor_rural %}
+                                    <span class="badge bg-success">🌾 Produtor Rural</span><br>
+                                    <small>CPF: {{ cliente.cpf }}</small>
+                                {% else %}
+                                    {{ cliente.cnpj or '-' }}
+                                {% endif %}
+                            </td>
+                            <td>{{ cliente.uf }}</td>
+                            <td>{{ cliente.email_contato or '-' }}</td>
+                            <td>{{ cliente.telefone_contato or '-' }}</td>
+                            <td class="text-center">
+                                {% if cliente.ativo %}
+                                    <span class="badge bg-success">Sim</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ url_for('admin.edit_cliente', cliente_id=cliente.cliente_id) }}"
+                                   class="btn btn-sm btn-warning" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">Nenhum cliente cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

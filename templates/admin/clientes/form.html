@@ -35,11 +35,14 @@
             <div class="tab-content" id="clienteTabsContent">
                 <!-- Aba: Dados do Cliente -->
                 <div class="tab-pane fade show active" id="cliente-pane" role="tabpanel" aria-labelledby="cliente-tab" tabindex="0">
-                    <form action="{{ url_for('admin.edit_cliente', cliente_id=cliente.cliente_id) if cliente.cliente_id else url_for('admin.create_cliente') }}" method="post" enctype="multipart/form-data">
+                    <form action="{{ url_for('admin.salvar_cliente') }}" method="post" enctype="multipart/form-data">
+                        {% if cliente.cliente_id %}
+                        <input type="hidden" name="cliente_id" value="{{ cliente.cliente_id }}">
+                        {% endif %}
                         {# Campos do Cliente #}
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="razao_social" class="form-label">Razão Social</label>
+                                <label for="razao_social" class="form-label">Razão Social / Nome *</label>
                                 <input type="text" class="form-control" id="razao_social" name="razao_social" value="{{ form_data.razao_social | default('') }}" required>
                             </div>
                             <div class="col-md-6 mb-3">
@@ -47,13 +50,44 @@
                                 <input type="text" class="form-control" id="nome_fantasia" name="nome_fantasia" value="{{ form_data.nome_fantasia | default('') }}">
                             </div>
                         </div>
+
+                        {# --- TIPO DE EMITENTE --- #}
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="produtor_rural" name="produtor_rural"
+                                        {% if form_data.produtor_rural %}checked{% endif %}
+                                        onchange="toggleTipoEmitente(this.checked)">
+                                    <label class="form-check-label fw-bold text-success" for="produtor_rural">
+                                        🌾 Emitente é Produtor Rural (CPF — sem CNPJ)
+                                    </label>
+                                </div>
+                                <small class="text-muted">Ative apenas se o emitente for uma Pessoa Física Produtora Rural que não tem CNPJ.</small>
+                            </div>
+                        </div>
+
                         <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label for="cnpj" class="form-label">CNPJ</label>
-                                <input type="text" class="form-control" id="cnpj" name="cnpj" value="{{ form_data.cnpj | default('') }}" placeholder="00.000.000/0000-00" required>
+                            {# CAMPO CNPJ — oculto p/ produtor rural #}
+                            <div class="col-md-4 mb-3" id="campo_cnpj">
+                                <label for="cnpj" class="form-label">CNPJ *</label>
+                                <input type="text" class="form-control" id="cnpj" name="cnpj"
+                                       value="{{ form_data.cnpj | default('') }}"
+                                       placeholder="00.000.000/0000-00" maxlength="18">
+                                <small class="text-muted">Apenas números. 14 dígitos.</small>
+                            </div>
+                            {# CAMPO CPF — visível somente p/ produtor rural #}
+                            <div class="col-md-4 mb-3" id="campo_cpf" style="display:none;">
+                                <label for="cpf" class="form-label">CPF do Produtor Rural *</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf"
+                                       value="{{ form_data.cpf | default('') }}"
+                                       placeholder="000.000.000-00" maxlength="14">
+                                <small class="text-muted">Apenas números. 11 dígitos.</small>
                             </div>
                             <div class="col-md-4 mb-3">
-                                <label for="inscricao_estadual" class="form-label">Inscrição Estadual</label>
+                                <label for="inscricao_estadual" class="form-label">
+                                    Inscrição Estadual
+                                    <span id="ie_obs" class="text-muted small">(opcional p/ Produtor Rural)</span>
+                                </label>
                                 <input type="text" class="form-control" id="inscricao_estadual" name="inscricao_estadual" value="{{ form_data.inscricao_estadual | default('') }}">
                             </div>
                             <div class="col-md-4 mb-3">
@@ -249,161 +283,110 @@
 
 {% block scripts %}
 <script>
-    // Ativa a aba correta se houver um fragmento de URL (ancora)
-    document.addEventListener('DOMContentLoaded', function() {
+    // ===== PRODUTOR RURAL: Alterna campos CPF / CNPJ =====
+    function toggleTipoEmitente(isProdutorRural) {
+        const campoCnpj = document.getElementById('campo_cnpj');
+        const campoCpf  = document.getElementById('campo_cpf');
+        const inputCnpj = document.getElementById('cnpj');
+        const inputCpf  = document.getElementById('cpf');
+        const ieObs     = document.getElementById('ie_obs');
+
+        if (isProdutorRural) {
+            campoCnpj.style.display = 'none';
+            campoCpf.style.display  = 'block';
+            inputCnpj.removeAttribute('required');
+            inputCpf.setAttribute('required', 'required');
+            if (ieObs) ieObs.style.display = 'inline';
+        } else {
+            campoCnpj.style.display = 'block';
+            campoCpf.style.display  = 'none';
+            inputCnpj.setAttribute('required', 'required');
+            inputCpf.removeAttribute('required');
+            if (ieObs) ieObs.style.display = 'none';
+        }
+    }
+
+    // Inicializa estado ao carregar a página (modo edição de produtor rural)
+    document.addEventListener('DOMContentLoaded', function () {
+        const chk = document.getElementById('produtor_rural');
+        if (chk) toggleTipoEmitente(chk.checked);
+
+        // Ativa a aba correta se houver um fragmento de URL
         const hash = window.location.hash;
         if (hash) {
-            let tabId = hash.substring(1); // Remove o '#'
-            // Mapeia fragmentos para IDs de abas/botões de abas (com o "-pane" adicionado)
-            if (tabId === 'produtos') tabId = 'produtos-tab';
-            else if (tabId === 'certificados') tabId = 'certificados-tab';
-            else if (tabId === 'regras') tabId = 'regras-tab';
-            else if (tabId === 'destinatarios') tabId = 'destinatarios-tab';
-            else return; // Não faz nada se o fragmento não for reconhecido
-
-            const tabButton = document.getElementById(tabId);
-            if (tabButton) {
-                const tab = new bootstrap.Tab(tabButton);
-                tab.show();
-            }
-        }
-    });
-
-    // jQuery Mask
-    $(document).ready(function(){
-        $('#cnpj').mask('00.000.000/0000-00');
-        $('#cep').mask('00000-000');
-        $('#telefone_contato').mask('(00) 0000-0000'); // Adapte para 9 dígitos se necessário '(00) 00000-0000'
-    });
-
-    // Função de buscar CEP
-    document.getElementById('btn-buscar-cep').addEventListener('click', function() {
-        const cepInput = document.getElementById('cep');
-        const cep = cepInput.value.replace(/\D/g, ''); // Remove caracteres não numéricos
-        const loadingOverlay = document.getElementById('loadingOverlay');
-
-        if (cep.length !== 8) {
-            alert('Por favor, digite um CEP válido com 8 dígitos.');
-            return;
-        }
-
-        loadingOverlay.classList.remove('hidden');
-
-        fetch(`https://viacep.com.br/ws/${cep}/json/`)
-            .then(response => response.json())
-            .then(data => {
-                loadingOverlay.classList.add('hidden');
-                if (data.erro) {
-                    alert('CEP não encontrado.');
-                } else {
-                    document.getElementById('logradouro').value = data.logradouro;
-                    document.getElementById('complemento').value = data.complemento;
-                    document.getElementById('bairro').value = data.bairro;
-                    document.getElementById('nome_municipio').value = data.localidade;
-                    document.getElementById('codigo_municipio').value = data.ibge;
-                    document.getElementById('uf').value = data.uf;
-                    document.getElementById('numero').focus(); // Foca no campo número
+            let tabId = hash.substring(1);
+            const map = { produtos: 'produtos-tab', certificados: 'certificados-tab',
+                          regras: 'regras-tab', destinatarios: 'destinatarios-tab' };
+            tabId = map[tabId];
+            if (tabId) {
+                const tabButton = document.getElementById(tabId);
+                if (tabButton && typeof bootstrap !== 'undefined') {
+                    new bootstrap.Tab(tabButton).show();
                 }
-            })
-            .catch(error => {
-                loadingOverlay.classList.add('hidden');
-                console.error('Erro ao buscar CEP:', error);
-                alert('Ocorreu um erro ao buscar o CEP. Tente novamente mais tarde.');
-            });
+            }
+        }
     });
 
-    // Lógica para carregar formulários via AJAX em um Modal
-    const addModal = document.getElementById('addModal');
-    const modalBody = addModal.querySelector('.modal-body');
-    const modalTitle = addModal.querySelector('.modal-title');
-    let currentModalForm = null; // Armazena a referência ao formulário atual no modal
+    // Máscaras de campo
+    if (typeof $ !== 'undefined') {
+        $(document).ready(function () {
+            $('#cnpj').on('input', function () {
+                let v = this.value.replace(/\D/g, '');
+                v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+                v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+                v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+                v = v.replace(/(\d{4})(\d)/, '$1-$2');
+                this.value = v.substring(0, 18);
+            });
+            $('#cpf').on('input', function () {
+                let v = this.value.replace(/\D/g, '');
+                v = v.replace(/(\d{3})(\d)/, '$1.$2');
+                v = v.replace(/(\d{3})(\d)/, '$1.$2');
+                v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                this.value = v.substring(0, 14);
+            });
+            $('#cep').on('input', function () {
+                let v = this.value.replace(/\D/g, '');
+                v = v.replace(/(\d{5})(\d)/, '$1-$2');
+                this.value = v.substring(0, 9);
+            });
+            $('#telefone_contato').on('input', function () {
+                let v = this.value.replace(/\D/g, '');
+                if (v.length <= 10) {
+                    v = v.replace(/(\d{2})(\d)/, '($1) $2');
+                    v = v.replace(/(\d{4})(\d)/, '$1-$2');
+                } else {
+                    v = v.replace(/(\d{2})(\d)/, '($1) $2');
+                    v = v.replace(/(\d{5})(\d)/, '$1-$2');
+                }
+                this.value = v.substring(0, 15);
+            });
+        });
+    }
 
-    addModal.addEventListener('show.bs.modal', function (event) {
-        // Botão que disparou o modal
-        const button = event.relatedTarget;
-        // Pega as informações dos atributos data-*
-        const url = button.getAttribute('data-modal-url');
-        const title = button.getAttribute('data-modal-title');
-
-        modalTitle.textContent = title;
-        modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Carregando formulário...</p></div>';
-
-        // Carrega o conteúdo do formulário via AJAX
-        fetch(url, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest' // Indica que é uma requisição AJAX
-            }
-        })
-        .then(response => response.text())
-        .then(html => {
-            modalBody.innerHTML = html;
-            currentModalForm = modalBody.querySelector('form'); // Pega o formulário recém-carregado
-
-            if (currentModalForm) {
-                // Adiciona um listener para a submissão do formulário dentro do modal
-                currentModalForm.addEventListener('submit', function(e) {
-                    e.preventDefault(); // Impede a submissão padrão do formulário
-
-                    const form = this;
-                    const formData = new FormData(form);
-                    const formAction = form.action;
-
-                    // Desabilita o botão de submit e mostra um spinner (opcional)
-                    const submitButton = form.querySelector('button[type="submit"]');
-                    if(submitButton) {
-                        submitButton.disabled = true;
-                        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
-                    }
-
-                    fetch(formAction, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest' // Indica que é uma submissão AJAX
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert(data.message);
-                            bootstrap.Modal.getInstance(addModal).hide(); // Esconde o modal
-                            // Recarrega a página do cliente para atualizar as listas
-                            window.location.href = data.redirect_url || window.location.href; // Redireciona se houver URL no retorno
-                        } else {
-                            alert('Erro: ' + data.message);
-                            if(submitButton) {
-                                submitButton.disabled = false;
-                                submitButton.innerHTML = 'Salvar';
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Erro na submissão AJAX:', error);
-                        alert('Ocorreu um erro ao salvar. Verifique o console para mais detalhes.');
-                        if(submitButton) {
-                            submitButton.disabled = false;
-                            submitButton.innerHTML = 'Salvar';
-                        }
-                    });
-                });
-            }
-            // Re-aplicar máscaras se o formulário carregado tiver campos mascarados
-            $('#cnpj_modal').mask('00.000.000/0000-00'); // Exemplo: se houver um CNPJ no modal
-            $('#cep_modal').mask('00000-000');
-            $('#telefone_modal').mask('(00) 0000-0000');
-            // ... adicione outras máscaras conforme necessário
-        })
-        .catch(error => {
-            modalBody.innerHTML = '<p class="text-danger">Erro ao carregar o formulário: ' + error + '</p>';
-            console.error('Erro ao carregar formulário no modal:', error);
+    // Busca de CEP via ViaCEP
+    document.addEventListener('DOMContentLoaded', function () {
+        const btnCep = document.getElementById('btn-buscar-cep');
+        if (!btnCep) return;
+        btnCep.addEventListener('click', function () {
+            const cep = document.getElementById('cep').value.replace(/\D/g, '');
+            if (cep.length !== 8) { alert('Digite um CEP válido com 8 dígitos.'); return; }
+            btnCep.disabled = true;
+            fetch(`https://viacep.com.br/ws/${cep}/json/`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.erro) { alert('CEP não encontrado.'); return; }
+                    document.getElementById('logradouro').value    = data.logradouro  || '';
+                    document.getElementById('complemento').value   = data.complemento || '';
+                    document.getElementById('bairro').value        = data.bairro      || '';
+                    document.getElementById('nome_municipio').value= data.localidade  || '';
+                    document.getElementById('codigo_municipio').value = data.ibge     || '';
+                    document.getElementById('uf').value            = data.uf          || '';
+                    document.getElementById('numero').focus();
+                })
+                .catch(() => alert('Erro ao buscar CEP.'))
+                .finally(() => { btnCep.disabled = false; });
         });
     });
-
-    // Limpa o conteúdo do modal ao escondê-lo para evitar formulários duplicados
-    addModal.addEventListener('hidden.bs.modal', function () {
-        modalBody.innerHTML = '';
-        currentModalForm = null;
-    });
-
 </script>
 {% endblock %}

@@ -340,7 +340,10 @@ class MotivoDesoneracao(Base):
 class Cliente(Base):
     __tablename__ = 'clientes'
     cliente_id = Column(Integer, primary_key=True)
-    cnpj = Column(String(18), unique=True, nullable=False) 
+    # Para Produtor Rural: cnpj é NULL e cpf é preenchido
+    cnpj = Column(String(18), unique=True, nullable=True)
+    cpf = Column(String(11), unique=True, nullable=True)
+    produtor_rural = Column(Boolean, default=False, nullable=False)
     razao_social = Column(String(255), nullable=False) 
     nome_fantasia = Column(String(255), nullable=True)
     inscricao_estadual = Column(String(14), nullable=True)
@@ -395,6 +398,7 @@ class DestinatarioNFe(Base):
     cpf_cnpj = Column(String(14), unique=True, nullable=False)
     ie = Column(String(14), nullable=True) 
     ie_indicador_nfe = Column(String(1), default='C', nullable=False) 
+    produtor_rural = Column(Boolean, default=False, nullable=False)
     email = Column(String(255), nullable=True)
     telefone = Column(String(20), nullable=True)
 

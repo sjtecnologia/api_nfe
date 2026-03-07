@@ -50,11 +50,11 @@ def admin_home():
         
         # Últimos clientes cadastrados
         ultimos_clientes = db.execute(text("""
-            SELECT cliente_id, razao_social, nome_fantasia, cnpj, data_cadastro
-            FROM clientes 
+            SELECT cliente_id, razao_social, nome_fantasia,
+                   cnpj, cpf, produtor_rural, data_cadastro
+            FROM clientes
             WHERE ativo = true
-            ORDER BY data_cadastro DESC 
-            
+            ORDER BY data_cadastro DESC
         """))
         
         return render_template('admin/dashboard.html', 
@@ -615,6 +615,8 @@ def list_destinatarios():
                 d.nome_razao_social,
                 d.tipo_pessoa,
                 d.ie,
+                d.ie_indicador_nfe,
+                d.produtor_rural,
                 d.email,
                 d.telefone,
                 d.logradouro,
@@ -718,7 +720,7 @@ def salvar_destinatario():
         uf = request.form.get('uf', 'SP')
         codigo_uf = UF_CODES.get(uf, 35)  # Default SP = 35
         
-        # Validar tamanhos
+        # Validar tamanhos do CEP
         if len(cep) > 8:
             flash(f'CEP muito longo: {cep}. Máximo 8 caracteres.', 'error')
             return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
@@ -727,12 +729,33 @@ def salvar_destinatario():
             flash(f'CPF/CNPJ muito longo: {cpf_cnpj}. Máximo 14 caracteres.', 'error')
             return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
         
+        if len(cpf_cnpj) not in (11, 14):
+            flash(f'CPF deve ter 11 dígitos ou CNPJ deve ter 14 dígitos. Informado: {len(cpf_cnpj)}.', 'error')
+            return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
+        
         print(f"🔧 Dados limpos - CEP: '{cep}', CPF/CNPJ: '{cpf_cnpj}', UF: '{uf}', Código UF: {codigo_uf}")
         
         connection = next(get_db())
         
+        # ✅ CALCULAR produtor_rural - vem do checkbox do formulário
+        produtor_rural = request.form.get('produtor_rural') == 'on'
+        
+        # Produtor Rural SEMPRE é Pessoa Física com CPF
+        tipo_pessoa = request.form.get('tipo_pessoa', 'J')
+        if produtor_rural:
+            tipo_pessoa = 'F'
+        
+        # Validar tamanho do CPF/CNPJ conforme tipo
+        if tipo_pessoa == 'F' and len(cpf_cnpj) != 11:
+            flash(f'Pessoa Física (CPF) deve ter exatamente 11 dígitos. Informado: {len(cpf_cnpj)} dígito(s).', 'error')
+            return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
+        
+        if tipo_pessoa == 'J' and len(cpf_cnpj) != 14:
+            flash(f'Pessoa Jurídica (CNPJ) deve ter exatamente 14 dígitos. Informado: {len(cpf_cnpj)} dígito(s).', 'error')
+            return redirect(url_for('admin.novo_destinatario', cliente_id=cliente_id))
+        
         if destinatario_id:
-            # ✅ EDITAR - INCLUIR UF E CODIGO_UF
+            # ✅ EDITAR - INCLUIR produtor_rural, UF E CODIGO_UF
             query = text("""
                 UPDATE destinatarios_nfe SET
                     cpf_cnpj = :cpf_cnpj,
@@ -740,6 +763,7 @@ def salvar_destinatario():
                     tipo_pessoa = :tipo_pessoa,
                     ie = :ie,
                     ie_indicador_nfe = :ie_indicador_nfe,
+                    produtor_rural = :produtor_rural,
                     email = :email,
                     telefone = :telefone,
                     logradouro = :logradouro,
@@ -757,9 +781,10 @@ def salvar_destinatario():
             connection.execute(query, {
                 'cpf_cnpj': cpf_cnpj,
                 'nome_razao_social': request.form.get('nome_razao_social'),
-                'tipo_pessoa': request.form.get('tipo_pessoa', 'J'),
+                'tipo_pessoa': tipo_pessoa,
                 'ie': request.form.get('ie'),
                 'ie_indicador_nfe': request.form.get('ie_indicador_nfe', 'C'),
+                'produtor_rural': produtor_rural,
                 'email': request.form.get('email'),
                 'telefone': telefone,
                 'logradouro': request.form.get('logradouro'),
@@ -777,16 +802,16 @@ def salvar_destinatario():
             
             flash('Destinatário atualizado com sucesso!', 'success')
         else:
-            # ✅ CRIAR NOVO - INCLUIR UF E CODIGO_UF
+            # ✅ CRIAR NOVO - INCLUIR produtor_rural, UF E CODIGO_UF
             query = text("""
                 INSERT INTO destinatarios_nfe (
                     cliente_id, cpf_cnpj, nome_razao_social, tipo_pessoa,
-                    ie, ie_indicador_nfe, email, telefone,
+                    ie, ie_indicador_nfe, produtor_rural, email, telefone,
                     logradouro, numero, complemento, bairro, cep,
                     codigo_municipio, nome_municipio, uf, codigo_uf
                 ) VALUES (
                     :cliente_id, :cpf_cnpj, :nome_razao_social, :tipo_pessoa,
-                    :ie, :ie_indicador_nfe, :email, :telefone,
+                    :ie, :ie_indicador_nfe, :produtor_rural, :email, :telefone,
                     :logradouro, :numero, :complemento, :bairro, :cep,
                     :codigo_municipio, :nome_municipio, :uf, :codigo_uf
                 )
@@ -796,9 +821,10 @@ def salvar_destinatario():
                 'cliente_id': cliente_id,
                 'cpf_cnpj': cpf_cnpj,
                 'nome_razao_social': request.form.get('nome_razao_social'),
-                'tipo_pessoa': request.form.get('tipo_pessoa', 'J'),
+                'tipo_pessoa': tipo_pessoa,
                 'ie': request.form.get('ie'),
                 'ie_indicador_nfe': request.form.get('ie_indicador_nfe', 'C'),
+                'produtor_rural': produtor_rural,
                 'email': request.form.get('email'),
                 'telefone': telefone,
                 'logradouro': request.form.get('logradouro'),
@@ -1577,3 +1603,218 @@ def excluir_regra_tributacao(regra_id):
     finally:
         if connection:
             connection.close()
+
+
+# ========== CLIENTES ==========
+
+@admin_bp.route('/clientes')
+@login_required
+@admin_required()
+def list_clientes():
+    """Lista todos os clientes"""
+    db = None
+    try:
+        db = next(get_db())
+        result = db.execute(text("""
+            SELECT cliente_id, razao_social, nome_fantasia,
+                   cnpj, cpf, produtor_rural,
+                   inscricao_estadual, uf, ativo, data_cadastro,
+                   email_contato, telefone_contato
+            FROM clientes
+            ORDER BY razao_social
+        """))
+        clientes = [dict(row._mapping) for row in result]
+        return render_template('admin/clientes/list.html', clientes=clientes)
+    except Exception as e:
+        flash(f'Erro ao carregar clientes: {str(e)}', 'error')
+        return render_template('admin/clientes/list.html', clientes=[])
+    finally:
+        if db:
+            db.close()
+
+
+@admin_bp.route('/clientes/novo')
+@login_required
+@admin_required()
+def create_cliente():
+    """Formulário para criar novo cliente"""
+    db = None
+    try:
+        db = next(get_db())
+        regimes = db.execute(text(
+            "SELECT regime_tributario_id, nome FROM regimes_tributarios ORDER BY nome"
+        ))
+        regimes_tributarios = [dict(r._mapping) for r in regimes]
+        return render_template('admin/clientes/form.html',
+                               cliente={},
+                               form_data={},
+                               regimes_tributarios=regimes_tributarios)
+    except Exception as e:
+        flash(f'Erro ao abrir formulário: {str(e)}', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    finally:
+        if db:
+            db.close()
+
+
+@admin_bp.route('/clientes/<int:cliente_id>/editar')
+@login_required
+@admin_required()
+def edit_cliente(cliente_id):
+    """Formulário para editar cliente existente"""
+    db = None
+    try:
+        db = next(get_db())
+        row = db.execute(text("""
+            SELECT cliente_id, razao_social, nome_fantasia,
+                   cnpj, cpf, produtor_rural,
+                   inscricao_estadual, inscricao_municipal,
+                   regime_tributario_id, cnae,
+                   logradouro, numero, complemento, bairro,
+                   codigo_municipio, nome_municipio, uf, cep,
+                   email_contato, telefone_contato, ativo
+            FROM clientes WHERE cliente_id = :id
+        """), {'id': cliente_id}).first()
+
+        if not row:
+            flash('Cliente não encontrado.', 'error')
+            return redirect(url_for('admin.list_clientes'))
+
+        cliente = dict(row._mapping)
+        regimes = db.execute(text(
+            "SELECT regime_tributario_id, nome FROM regimes_tributarios ORDER BY nome"
+        ))
+        regimes_tributarios = [dict(r._mapping) for r in regimes]
+        return render_template('admin/clientes/form.html',
+                               cliente=cliente,
+                               form_data=cliente,
+                               regimes_tributarios=regimes_tributarios)
+    except Exception as e:
+        flash(f'Erro ao carregar cliente: {str(e)}', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    finally:
+        if db:
+            db.close()
+
+
+@admin_bp.route('/clientes/salvar', methods=['POST'])
+@login_required
+@admin_required()
+def salvar_cliente():
+    """Salva (cria ou edita) um cliente"""
+    db = None
+    try:
+        db = next(get_db())
+        cliente_id = request.form.get('cliente_id') or None
+        produtor_rural = request.form.get('produtor_rural') == 'on'
+
+        # Limpar documento
+        cnpj_raw = request.form.get('cnpj', '').replace('.', '').replace('/', '').replace('-', '').strip()
+        cpf_raw = request.form.get('cpf', '').replace('.', '').replace('-', '').strip()
+
+        if produtor_rural:
+            if len(cpf_raw) != 11:
+                flash('CPF do Produtor Rural deve ter 11 dígitos.', 'error')
+                return redirect(url_for('admin.create_cliente') if not cliente_id
+                                else url_for('admin.edit_cliente', cliente_id=cliente_id))
+            cnpj_val = None
+            cpf_val = cpf_raw
+        else:
+            if len(cnpj_raw) != 14:
+                flash('CNPJ deve ter 14 dígitos.', 'error')
+                return redirect(url_for('admin.create_cliente') if not cliente_id
+                                else url_for('admin.edit_cliente', cliente_id=cliente_id))
+            cnpj_val = cnpj_raw
+            cpf_val = None
+
+        uf = request.form.get('uf', '').strip().upper()
+        cep = request.form.get('cep', '').replace('-', '').strip()
+        ativo = request.form.get('ativo') == 'on'
+
+        params = {
+            'razao_social': request.form.get('razao_social', '').strip(),
+            'nome_fantasia': request.form.get('nome_fantasia', '').strip() or None,
+            'cnpj': cnpj_val,
+            'cpf': cpf_val,
+            'produtor_rural': produtor_rural,
+            'inscricao_estadual': request.form.get('inscricao_estadual', '').strip() or None,
+            'inscricao_municipal': request.form.get('inscricao_municipal', '').strip() or None,
+            'regime_tributario_id': int(request.form.get('regime_tributario_id')),
+            'cnae': request.form.get('cnae', '').strip() or None,
+            'logradouro': request.form.get('logradouro', '').strip(),
+            'numero': request.form.get('numero', '').strip(),
+            'complemento': request.form.get('complemento', '').strip() or None,
+            'bairro': request.form.get('bairro', '').strip(),
+            'codigo_municipio': request.form.get('codigo_municipio', '').strip(),
+            'nome_municipio': request.form.get('nome_municipio', '').strip(),
+            'uf': uf,
+            'cep': cep,
+            'email_contato': request.form.get('email_contato', '').strip() or None,
+            'telefone_contato': request.form.get('telefone_contato', '').strip() or None,
+            'ativo': ativo,
+        }
+
+        if cliente_id:
+            params['cliente_id'] = int(cliente_id)
+            db.execute(text("""
+                UPDATE clientes SET
+                    razao_social = :razao_social,
+                    nome_fantasia = :nome_fantasia,
+                    cnpj = :cnpj,
+                    cpf = :cpf,
+                    produtor_rural = :produtor_rural,
+                    inscricao_estadual = :inscricao_estadual,
+                    inscricao_municipal = :inscricao_municipal,
+                    regime_tributario_id = :regime_tributario_id,
+                    cnae = :cnae,
+                    logradouro = :logradouro,
+                    numero = :numero,
+                    complemento = :complemento,
+                    bairro = :bairro,
+                    codigo_municipio = :codigo_municipio,
+                    nome_municipio = :nome_municipio,
+                    uf = :uf,
+                    cep = :cep,
+                    email_contato = :email_contato,
+                    telefone_contato = :telefone_contato,
+                    ativo = :ativo,
+                    data_atualizacao = NOW()
+                WHERE cliente_id = :cliente_id
+            """), params)
+            flash('Cliente atualizado com sucesso!', 'success')
+        else:
+            db.execute(text("""
+                INSERT INTO clientes (
+                    razao_social, nome_fantasia, cnpj, cpf, produtor_rural,
+                    inscricao_estadual, inscricao_municipal,
+                    regime_tributario_id, cnae,
+                    logradouro, numero, complemento, bairro,
+                    codigo_municipio, nome_municipio, uf, cep,
+                    email_contato, telefone_contato, ativo,
+                    data_cadastro, data_atualizacao
+                ) VALUES (
+                    :razao_social, :nome_fantasia, :cnpj, :cpf, :produtor_rural,
+                    :inscricao_estadual, :inscricao_municipal,
+                    :regime_tributario_id, :cnae,
+                    :logradouro, :numero, :complemento, :bairro,
+                    :codigo_municipio, :nome_municipio, :uf, :cep,
+                    :email_contato, :telefone_contato, :ativo,
+                    NOW(), NOW()
+                )
+            """), params)
+            flash('Cliente criado com sucesso!', 'success')
+
+        db.commit()
+        return redirect(url_for('admin.list_clientes'))
+
+    except Exception as e:
+        if db:
+            db.rollback()
+        print(f"❌ Erro ao salvar cliente: {e}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Erro ao salvar cliente: {str(e)}', 'error')
+        return redirect(url_for('admin.list_clientes'))
+    finally:
+        if db:
+            db.close()

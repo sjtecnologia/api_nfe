@@ -48,6 +48,8 @@ def emitir_nfe():
             "cliente_id": emitente_data.cliente_id,
             "razao_social": emitente_data.razao_social,
             "cnpj": emitente_data.cnpj,
+            "cpf": emitente_data.cpf,
+            "produtor_rural": emitente_data.produtor_rural,
             "inscricao_estadual": emitente_data.inscricao_estadual,
             "logradouro": emitente_data.logradouro,
             "numero": emitente_data.numero,
