@@ -32,8 +32,13 @@
                             <p>{{ cliente.nome_fantasia }}</p>
                             {% endif %}
 
-                            <h6><strong>CNPJ:</strong></h6>
+						{% if cliente.produtor_rural and cliente.cpf %}
+						<h6><strong>CPF:</strong></h6>
+						<p>{{ cliente.cpf[:3] }}.{{ cliente.cpf[3:6] }}.{{ cliente.cpf[6:9] }}-{{ cliente.cpf[9:] }}</p>
+						{% elif cliente.cnpj %}
+						<h6><strong>CNPJ:</strong></h6>
                             <p>{{ cliente.cnpj[:2] }}.{{ cliente.cnpj[2:5] }}.{{ cliente.cnpj[5:8] }}/{{ cliente.cnpj[8:12] }}-{{ cliente.cnpj[12:] }}</p>
+                            {% endif %}
 
                             {% if cliente.ie %}
                             <h6><strong>Inscrição Estadual:</strong></h6>

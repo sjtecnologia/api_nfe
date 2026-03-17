@@ -105,39 +105,14 @@ def login():
             print("[START] Determinando redirecionamento...")
             
             if user.is_super_admin():
-                # Super admin vai para dashboard que mostra dados de todos os clientes
-                print("--> Super Admin detectado, redirecionando para admin.dashboard")
+                # Apenas Super_Admin vai direto para dashboard administrativo
+                print("--> Super_Admin detectado, redirecionando para admin.dashboard")
                 return redirect(url_for('admin.dashboard'))
             else:
-                print("[SEARCH] Usuário comum ou admin, buscando clientes acessíveis...")
-                # Buscar todos os clientes acessíveis do usuário
-                clientes_result = db.execute(text("""
-                    SELECT c.cliente_id, c.razao_social
-                    FROM user_clients uc
-                    JOIN clientes c ON c.cliente_id = uc.client_id
-                    WHERE uc.user_id = :user_id AND c.ativo = true
-                    ORDER BY c.razao_social ASC
-                """), {"user_id": user_data.id})
-                clientes_acessiveis = [dict(row._mapping) for row in clientes_result]
-                print(f"[LIST] Clientes encontrados: {len(clientes_acessiveis)}")
-                if clientes_acessiveis:
-                    primeiro_cliente = clientes_acessiveis[0]
-                    print(f"[CLIENT] Primeiro cliente: {primeiro_cliente['razao_social']} (ID: {primeiro_cliente['cliente_id']})")
-                    
-                    print("[SAVE] Salvando cliente na sessão...")
-                    session['current_client_id'] = primeiro_cliente['cliente_id']
-                    session['current_client_name'] = primeiro_cliente['razao_social']
-                    
-                    print(f"[OK] Cliente padrão atribuído: {primeiro_cliente['razao_social']} (ID: {primeiro_cliente['cliente_id']})")
-                    print(f"--> Redirecionando para cliente.dashboard com cliente_id={primeiro_cliente['cliente_id']}")
-                    print("="*80 + "\n")
-                    from utils.id_encoder import encode_id
-                    return redirect(url_for('cliente.dashboard', cliente_hash=encode_id(primeiro_cliente['cliente_id'])))
-                else:
-                    print(f"[!] Nenhum cliente encontrado para user_id {user_data.id}")
-                    print("="*80 + "\n")
-                    flash('Nenhum cliente encontrado no sistema.', 'warning')
-                    return redirect(url_for('home.home'))
+                # Todos os outros (incluindo Admin comum) vão para home que gerencia a seleção de clientes
+                print("--> Redirecionando para home (seleção de cliente)")
+                print("="*80 + "\n")
+                return redirect(url_for('home.home'))
                 
         except Exception as e:
             print("\n" + "="*80)

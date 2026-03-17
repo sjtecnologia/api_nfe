@@ -2258,16 +2258,6 @@ Para dúvidas, sugestões ou suporte técnico:
 - ✅ Rate limiting configurável por cliente
 - ✅ Documentação OpenAPI/Swagger parcial
 
-### Próximas Versões (Roadmap)
-
-- 🔜 API v3 com GraphQL
-- 🔜 Integração com mais prefeituras (NFS-e)
-- 🔜 CT-e (Conhecimento de Transporte Eletrônico)
-- 🔜 MDF-e (Manifesto de Documentos Fiscais Eletrônico)
-- 🔜 Emissão de NFS-e em lote
-- 🔜 Importação automática de XMLs de terceiros
-- 🔜 Dashboard analytics em tempo real
-
 ---
 
-**© 2024 EmiteMax - Sistema de Gestão Fiscal**
+**© 2026 EmiteMax - Sistema de Gestão Fiscal**

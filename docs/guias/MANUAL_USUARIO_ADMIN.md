@@ -918,7 +918,7 @@ Use este checklist ao configurar um novo cliente:
 
 ---
 
-**© 2025 SJ Tecnologia - Todos os direitos reservados**
+**© 2026 SJ Tecnologia - Todos os direitos reservados**
 
 ---
 

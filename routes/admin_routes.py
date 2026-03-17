@@ -2675,7 +2675,11 @@ def create_cliente():
             # Limpar CNPJ (remover formatação)
             cnpj_raw = request.form.get('cnpj', '')
             cnpj_limpo = ''.join(filter(str.isdigit, cnpj_raw))
-            
+
+            # Limpar CPF (remover formatacao)
+            cpf_raw = request.form.get('cpf', '')
+            cpf_limpo = ''.join(filter(str.isdigit, cpf_raw)) or None
+
             # Processar upload da logo (se enviada)
             logo_path = None
             logo_file = request.files.get('logo_file')
@@ -2700,10 +2704,17 @@ def create_cliente():
                     logo_path = f"logos/{unique_filename}"  # Caminho relativo
             
             # Dados do cliente
+            _is_rural = request.form.get('produtor_rural') == 'on'
+            # Mutualmente exclusivo: produtor rural usa CPF (sem CNPJ); empresa usa CNPJ (sem CPF)
+            _cnpj_save = None if _is_rural else (cnpj_limpo or None)
+            # Se rural e CPF nao preenchido, tenta usar cnpj_limpo se tiver 11 digitos
+            _cpf_save = (cpf_limpo or (cnpj_limpo if cnpj_limpo and len(cnpj_limpo) == 11 else None)) if _is_rural else None
             data = {
                 'razao_social': request.form.get('razao_social'),
                 'nome_fantasia': request.form.get('nome_fantasia'),
-                'cnpj': cnpj_limpo,  # Limpo
+                'cnpj': _cnpj_save,
+                'cpf': _cpf_save,
+                'produtor_rural': _is_rural,
                 'inscricao_estadual': request.form.get('inscricao_estadual'),
                 'inscricao_municipal': request.form.get('inscricao_municipal'),
                 'regime_tributario_id': request.form.get('regime_tributario_id'),
@@ -2728,11 +2739,11 @@ def create_cliente():
                 # Salva cliente e recupera o cliente_id
                 result = db.execute(text("""
                     INSERT INTO clientes (
-                        razao_social, nome_fantasia, cnpj, inscricao_estadual, inscricao_municipal,
+                        razao_social, nome_fantasia, cnpj, cpf, produtor_rural, inscricao_estadual, inscricao_municipal,
                         regime_tributario_id, ambiente, cnae, cep, logradouro, numero, complemento, bairro,
                         nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, logo_path, ativo, data_cadastro, created_by_user_id
                     ) VALUES (
-                        :razao_social, :nome_fantasia, :cnpj, :inscricao_estadual, :inscricao_municipal,
+                        :razao_social, :nome_fantasia, :cnpj, :cpf, :produtor_rural, :inscricao_estadual, :inscricao_municipal,
                         :regime_tributario_id, :ambiente, :cnae, :cep, :logradouro, :numero, :complemento, :bairro,
                         :nome_municipio, :codigo_municipio, :uf, :email_contato, :telefone_contato, :logo_path, :ativo, :data_cadastro, :created_by_user_id
                     ) RETURNING cliente_id
@@ -2862,7 +2873,9 @@ def _cliente_to_form_data(cliente_row):
     return {
         'razao_social': cliente_row.get('razao_social', ''),
         'nome_fantasia': cliente_row.get('nome_fantasia', ''),
-        'cnpj': cliente_row.get('cnpj', ''),
+        'cnpj': cliente_row.get('cnpj', '') or '',
+        'cpf': cliente_row.get('cpf', '') or '',
+        'produtor_rural': bool(cliente_row.get('produtor_rural', False)),
         'inscricao_estadual': cliente_row.get('inscricao_estadual', ''),
         'inscricao_municipal': cliente_row.get('inscricao_municipal', ''),
         'regime_tributario_id': cliente_row.get('regime_tributario_id', ''),
@@ -2908,7 +2921,11 @@ def edit_cliente(cliente_id: int):
                 # Limpar CNPJ (remover formatação)
                 cnpj_raw = request.form.get('cnpj', '')
                 cnpj_limpo = ''.join(filter(str.isdigit, cnpj_raw))
-                
+
+                # Limpar CPF (remover formatacao)
+                cpf_raw = request.form.get('cpf', '')
+                cpf_limpo = ''.join(filter(str.isdigit, cpf_raw)) or None
+
                 # Processar upload da logo (se enviada)
                 logo_path = cliente.get('logo_path')  # Manter logo existente
                 logo_file = request.files.get('logo_file')
@@ -2941,10 +2958,17 @@ def edit_cliente(cliente_id: int):
                         logo_file.save(logo_full_path)
                         logo_path = f"logos/{unique_filename}"  # Caminho relativo
                 
+                _is_rural = request.form.get('produtor_rural') == 'on'
+                # Mutualmente exclusivo: produtor rural usa CPF (sem CNPJ); empresa usa CNPJ (sem CPF)
+                _cnpj_save = None if _is_rural else (cnpj_limpo or None)
+                # Se rural e CPF nao preenchido, tenta usar cnpj_limpo se tiver 11 digitos
+                _cpf_save = (cpf_limpo or (cnpj_limpo if cnpj_limpo and len(cnpj_limpo) == 11 else None)) if _is_rural else None
                 data = {
                     'razao_social': request.form.get('razao_social'),
                     'nome_fantasia': request.form.get('nome_fantasia'),
-                    'cnpj': cnpj_limpo,  # Limpo
+                    'cnpj': _cnpj_save,
+                    'cpf': _cpf_save,
+                    'produtor_rural': _is_rural,
                     'inscricao_estadual': request.form.get('inscricao_estadual'),
                     'inscricao_municipal': request.form.get('inscricao_municipal'),
                     'regime_tributario_id': request.form.get('regime_tributario_id'),
@@ -2970,6 +2994,8 @@ def edit_cliente(cliente_id: int):
                         razao_social = :razao_social,
                         nome_fantasia = :nome_fantasia,
                         cnpj = :cnpj,
+                        cpf = :cpf,
+                        produtor_rural = :produtor_rural,
                         inscricao_estadual = :inscricao_estadual,
                         inscricao_municipal = :inscricao_municipal,
                         regime_tributario_id = :regime_tributario_id,

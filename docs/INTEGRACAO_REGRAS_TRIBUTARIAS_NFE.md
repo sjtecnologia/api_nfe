@@ -450,13 +450,6 @@ CREATE TABLE nfe_regras_aplicadas (
 - `06` = Operação tributável (alíquota zero)
 - `07` = Operação isenta da contribuição
 
-## 🔗 Referências
-
-- [API Buscar Regra Tributação](routes/api_routes.py#L58) - Linha 58
-- [API Get Produto](routes/api_routes.py#L58) - Novo endpoint
-- [Template NFe Emitir](templates/admin/nfes/emitir.html) - Linha 787+
-- [CRUD Regras Tributação](routes/admin_routes.py#L3353) - Gerenciamento completo
-
 ---
 
 **Status Final:** ✅ Implementação completa e pronta para testes  

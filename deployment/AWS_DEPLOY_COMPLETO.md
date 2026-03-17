@@ -1850,7 +1850,7 @@ Cole o seguinte código:
     </section>
 
     <footer id="contato">
-        <p>&copy; 2025 EmiteMax - Sistema de Emissão de NF-e. Todos os direitos reservados.</p>
+        <p>&copy; 2026 EmiteMax - Sistema de Emissão de NF-e. Todos os direitos reservados.</p>
         <p>Contato: contato@emitemax.com.br</p>
     </footer>
 </body>

@@ -43,9 +43,26 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-4 mb-3">
+                            <!-- Produtor Rural toggle -->
+                            <div class="col-md-12 mb-2">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="produtor_rural" name="produtor_rural"
+                                           {% if form_data.produtor_rural %}checked{% endif %}
+                                           onchange="toggleProdutorRural()">
+                                    <label class="form-check-label fw-semibold" for="produtor_rural">
+                                        🌾 Emitente é Produtor Rural (CPF sem CNPJ)
+                                    </label>
+                                </div>
+                            </div>
+                            <!-- CNPJ (empresa) -->
+                            <div class="col-md-4 mb-3" id="div_cnpj">
                                 <label for="cnpj" class="form-label">CNPJ</label>
-                                <input type="text" class="form-control" id="cnpj" name="cnpj" value="{{ form_data.cnpj | default('') }}" placeholder="00.000.000/0000-00" required>
+                                <input type="text" class="form-control" id="cnpj" name="cnpj" value="{{ form_data.cnpj | default('') }}" placeholder="00.000.000/0000-00">
+                            </div>
+                            <!-- CPF (produtor rural) -->
+                            <div class="col-md-4 mb-3" id="div_cpf" style="display:none;">
+                                <label for="cpf" class="form-label">CPF (Produtor Rural)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" value="{{ form_data.cpf | default('') }}" placeholder="000.000.000-00">
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label for="inscricao_estadual" class="form-label">Inscrição Estadual</label>
@@ -286,10 +303,39 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Máscara CNPJ
+    // === Toggle Produtor Rural ===
+    var _cnpjMask = null, _cpfMask = null;
+
+    function toggleProdutorRural() {
+        var isRural = document.getElementById('produtor_rural').checked;
+        var cnpjEl = document.getElementById('cnpj');
+        var cpfEl = document.getElementById('cpf');
+        document.getElementById('div_cnpj').style.display = isRural ? 'none' : '';
+        document.getElementById('div_cpf').style.display = isRural ? '' : 'none';
+        // Desabilitar campo oculto para nao enviar valor conflitante
+        cnpjEl.disabled = isRural;
+        if (cpfEl) cpfEl.disabled = !isRural;
+        cnpjEl.required = !isRural;
+        if (cpfEl) cpfEl.required = isRural;
+    }
+
+    // Expor globalmente para o atributo onchange
+    window.toggleProdutorRural = toggleProdutorRural;
+
+    // Aplicar mascaras
     var cnpjInput = document.getElementById('cnpj');
     if (cnpjInput && window.IMask) {
-        IMask(cnpjInput, { mask: '00.000.000/0000-00' });
+        _cnpjMask = IMask(cnpjInput, { mask: '00.000.000/0000-00' });
+    }
+    var cpfInput = document.getElementById('cpf');
+    if (cpfInput && window.IMask) {
+        _cpfMask = IMask(cpfInput, { mask: '000.000.000-00' });
+    }
+
+    // Restaurar estado inicial ao carregar pagina (modo edicao)
+    if (document.getElementById('produtor_rural') &&
+        document.getElementById('produtor_rural').checked) {
+        toggleProdutorRural();
     }
     // Máscara CEP
     var cepInput = document.getElementById('cep');

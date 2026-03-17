@@ -475,14 +475,6 @@ curl -X POST https://api.emitemax.com.br/api/v2/nfe/emitir \
 
 ---
 
-## 📚 Documentos Relacionados
-
-- [Manual de API v2](API_V2.md)
-- [Guia de Regras Tributárias](INTEGRACAO_REGRAS_TRIBUTARIAS_NFE.md)
-- [Exemplos de Integração](EXEMPLO_INTEGRACAO_PLANOS.py)
-
----
-
 **Desenvolvido por:** EmiteMax  
 **Última atualização:** 11 de fevereiro de 2026  
 **Versão da API:** 2.0

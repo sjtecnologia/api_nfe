@@ -174,6 +174,16 @@ def diagnostico():
     """Página de diagnóstico para verificar conectividade"""
     return render_template('diagnostico.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    """Rota para favicon - retorna o arquivo ou 204 se não existir"""
+    from flask import send_from_directory
+    import os
+    favicon_path = os.path.join(app.root_path, 'static', 'img', 'Logonew.ico')
+    if os.path.exists(favicon_path):
+        return send_from_directory(os.path.join(app.root_path, 'static', 'img'), 'Logonew.ico', mimetype='image/vnd.microsoft.icon')
+    return '', 204
+
 @app.errorhandler(500)
 def internal_error(error):
     """Handler para erro 500 - loga detalhes completos"""

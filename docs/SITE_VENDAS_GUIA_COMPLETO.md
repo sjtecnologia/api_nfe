@@ -273,7 +273,7 @@ export default function Home() {
       <footer className="bg-gray-900 text-white py-12">
         <div className="container mx-auto px-4 text-center">
           <p className="text-gray-400">
-            © 2025 EmiteMax. Todos os direitos reservados.
+            © 2026 EmiteMax. Todos os direitos reservados.
           </p>
           <div className="mt-4 space-x-6">
             <Link href="/terms" className="text-gray-400 hover:text-white">

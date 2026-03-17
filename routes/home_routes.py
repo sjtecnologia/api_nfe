@@ -51,6 +51,12 @@ def select_client(cliente_id):
                 if client['cliente_id'] == cliente_id:
                     session['current_client_name'] = client.get('razao_social') or client.get('nome_fantasia') or ''
                     break
+            
+            # Verificar se há URL de retorno salva
+            next_url = session.pop('next_url', None)
+            if next_url:
+                return redirect(next_url)
+            
             return redirect(url_for('cliente.dashboard', cliente_hash=encode_id(cliente_id)))
     
     flash('Você não tem acesso a este cliente.', 'error')

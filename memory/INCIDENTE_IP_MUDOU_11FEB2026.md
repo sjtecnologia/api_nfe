@@ -25,9 +25,11 @@ Timeout: https://api.emitemax.com.br/
 **Instância EC2 sem Elastic IP** → IP público muda a cada reinício
 
 ### IPs
-- **IP Antigo:** 3.87.73.106 ❌
-- **IP Novo:** 34.203.236.152 ✅
-- **DNS:** Ainda aponta para IP antigo
+- **IP Antigo (antigo Elastic IP):** 3.87.73.106 ❌
+- **IP Temporário (11/02 manhã):** 34.203.236.152 ❌
+- **IP Usado Incorretamente:** 52.202.76.201 ❌ (erro de documentação - descoberto em 12/02/2026)
+- **IP Atual (Elastic IP Permanente):** 100.26.12.107 ✅ **USE SEMPRE ESTE**
+- **DNS:** api.emitemax.com.br → Atualizado para 100.26.12.107
 
 ---
 
