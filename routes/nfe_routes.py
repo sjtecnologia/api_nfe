@@ -643,6 +643,11 @@ def emitir_nfe():
                             data_emissao_nfe = datetime.now(brasilia_tz)
                             print(f"📅 [DEBUG] Sem dataEmissao, usando now(): {data_emissao_nfe.isoformat()}")
                         
+                        # Truncar mensagem de erro se necessário (limite 255 caracteres)
+                        mensagem_sefaz = resultado_sefaz.get('message', '')
+                        if mensagem_sefaz and len(mensagem_sefaz) > 250:
+                            mensagem_sefaz = mensagem_sefaz[:247] + '...'
+                        
                         nova_nfe = NFeEmitidas(
                             cliente_id=emitente_cliente_id,
                             numero=int(form_data_initial.get('numero_nfe', '1')),
@@ -665,7 +670,7 @@ def emitir_nfe():
                             status=status_nfe,
                             chave_acesso=resultado_sefaz.get('chave_acesso'),
                             protocolo_sefaz=resultado_sefaz.get('protocolo'),
-                            mensagem_sefaz=resultado_sefaz.get('message'),
+                            mensagem_sefaz=mensagem_sefaz,
                             data_criacao=datetime.now(),
                             data_autorizacao=data_autorizacao_nfe,
                             created_by_user_id=current_user.id,
@@ -3508,7 +3513,9 @@ def consultar_status_sefaz(nfe_id):
             'message': f'Erro interno: {str(e)}'
         }), 500
     finally:
-        db.close()@nfe_bp.route('/cancelar/<int:nfe_id>', methods=['POST'])
+        db.close()
+
+@nfe_bp.route('/cancelar/<int:nfe_id>', methods=['POST'])
 @login_required
 @editor_or_admin_required()
 def cancelar_nfe(nfe_id):
@@ -3576,6 +3583,13 @@ def cancelar_nfe(nfe_id):
         if not certificado:
             return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
         
+        # Extrair dados do certificado PFX
+        cert_data = certificado.get('cert_data') or certificado.get('arquivo_certificado')
+        cert_senha = certificado.get('password') or certificado.get('senha_certificado')
+        
+        if not cert_data or not cert_senha:
+            return jsonify({'success': False, 'message': 'Dados do certificado incompletos'}), 400
+        
         # Cancelar na SEFAZ
         from services.sefaz_service import SefazService
         
@@ -3589,7 +3603,9 @@ def cancelar_nfe(nfe_id):
             chave_nfe=chave_acesso,
             protocolo=protocolo,
             justificativa=justificativa,
-            cnpj_emitente=nfe_data['emitente_cnpj']
+            cnpj_emitente=nfe_data['emitente_cnpj'],
+            certificado_pfx=cert_data,
+            senha_certificado=cert_senha
         )
         
         if resultado.get('success'):
@@ -3633,3 +3649,308 @@ def cancelar_nfe(nfe_id):
         }), 500
     finally:
         db.close()
+
+@nfe_bp.route('/duplicar/<int:nfe_id>', methods=['POST'])
+@login_required
+@editor_or_admin_required()
+def duplicar_nfe(nfe_id):
+    """Duplicar NFe e emitir automaticamente"""
+    db = next(get_db())
+    try:
+        print(f"[DUPLICAR] Iniciando duplicação da NFe ID: {nfe_id}")
+        
+        # 1. Buscar NFe original com todos os dados
+        query = text("""
+            SELECT ne.*, c.razao_social as cliente_nome 
+            FROM nfe_emitidas ne
+            JOIN clientes c ON ne.cliente_id = c.cliente_id
+            WHERE ne.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe_original = result.fetchone()
+        
+        if not nfe_original:
+            return jsonify({'success': False, 'message': 'NFe original não encontrada'}), 404
+        
+        # Converter para dict
+        if hasattr(nfe_original, '_mapping'):
+            nfe_data = dict(nfe_original._mapping)
+        else:
+            nfe_data = dict(nfe_original)
+        
+        cliente_id = nfe_data['cliente_id']
+        print(f"[DUPLICAR] NFe original encontrada: #{nfe_data.get('numero')}")
+        
+        # Verificar se tem dados JSON
+        if not nfe_data.get('json_nfe'):
+            return jsonify({'success': False, 'message': 'NFe original sem dados completos para duplicação'}), 400
+        
+        # 2. Obter próximo número da sequência
+        query_next_num = text("""
+            SELECT COALESCE(MAX(numero), 0) + 1 as proximo_numero
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+        """)
+        result_num = db.execute(query_next_num, {'cliente_id': cliente_id})
+        proximo_numero = result_num.scalar()
+        print(f"[DUPLICAR] Próximo número: {proximo_numero}")
+        
+        # 3. Buscar dados do emitente
+        emitente_data = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        if not emitente_data:
+            return jsonify({'success': False, 'message': 'Dados do emitente não encontrados'}), 400
+        
+        # Converter emitente para dicionário
+        emitente_dict = {
+            'cliente_id': emitente_data.cliente_id,
+            'razao_social': emitente_data.razao_social,
+            'cnpj': emitente_data.cnpj,
+            'nome_fantasia': emitente_data.nome_fantasia,
+            'logradouro': emitente_data.logradouro,
+            'numero': emitente_data.numero,
+            'bairro': emitente_data.bairro,
+            'cep': emitente_data.cep,
+            'codigo_municipio': emitente_data.codigo_municipio,
+            'nome_municipio': emitente_data.nome_municipio,
+            'uf': emitente_data.uf,
+            'inscricao_estadual': emitente_data.inscricao_estadual,
+            'regime_tributario_id': emitente_data.regime_tributario_id,
+            'ambiente': emitente_data.ambiente
+        }
+        
+        # 4. Extrair form_data da NFE original e atualizar número
+        import json
+        from copy import deepcopy
+        json_nfe_original = nfe_data.get('json_nfe', {})
+        form_data = deepcopy(json_nfe_original.get('form_data', {}))
+        
+        # Atualizar data de emissão (número será definido no loop de tentativas)
+        from datetime import datetime
+        form_data['dataEmissao'] = datetime.now().strftime('%Y-%m-%d')
+        
+        # Adicionar CNPJ/CPF do destinatário que processar_nfe() espera encontrar
+        cnpj_cpf_dest = nfe_data.get('destinatario_cnpj_cpf')
+        if cnpj_cpf_dest:
+            form_data['destinatario_cnpj_cpf'] = cnpj_cpf_dest
+        
+        print(f"[DUPLICAR] Form data preparado, número inicial: {proximo_numero}")
+        print(f"[DUPLICAR] Destinatário CNPJ/CPF: {cnpj_cpf_dest}")
+        
+        # 5. Buscar destinatário
+        destinatario_id = form_data.get('destinatario')
+        destinatario_data = {}
+        
+        if destinatario_id:
+            try:
+                dest_query = text("""
+                    SELECT destinatario_id, nome_razao_social, cpf_cnpj, ie,
+                           logradouro, numero, bairro, cep, codigo_municipio, 
+                           nome_municipio, uf
+                    FROM destinatarios_nfe 
+                    WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
+                """)
+                dest_result = db.execute(dest_query, {
+                    'dest_id': destinatario_id,
+                    'cliente_id': cliente_id
+                }).fetchone()
+                
+                if dest_result:
+                    dest_mapping = dest_result._mapping if hasattr(dest_result, '_mapping') else dest_result
+                    destinatario_data = {
+                        'nome_razao_social': dest_mapping['nome_razao_social'],
+                        'cpf_cnpj': dest_mapping['cpf_cnpj'],
+                        'inscricao_estadual': dest_mapping.get('ie'),
+                        'logradouro': dest_mapping['logradouro'],
+                        'numero': dest_mapping['numero'],
+                        'bairro': dest_mapping['bairro'],
+                        'cep': dest_mapping['cep'],
+                        'codigo_municipio': dest_mapping['codigo_municipio'],
+                        'nome_municipio': dest_mapping['nome_municipio'],
+                        'uf': dest_mapping['uf']
+                    }
+            except Exception as e:
+                print(f"Aviso: Erro ao buscar destinatário por ID: {e}")
+        
+        # Se não encontrou, usar dados armazenados na NFe
+        if not destinatario_data:
+            destinatario_data = {
+                'nome_razao_social': nfe_data.get('destinatario_razao_social'),
+                'cpf_cnpj': nfe_data.get('destinatario_cnpj_cpf'),
+                'inscricao_estadual': form_data.get('dest_ie'),
+                'logradouro': form_data.get('dest_logradouro', 'RUA TESTE'),
+                'numero': form_data.get('dest_numero', 'SN'),
+                'bairro': form_data.get('dest_bairro', 'CENTRO'),
+                'cep': form_data.get('dest_cep', '00000000'),
+                'codigo_municipio': form_data.get('dest_codigo_municipio', '3550308'),
+                'nome_municipio': form_data.get('dest_municipio', 'SAO PAULO'),
+                'uf': form_data.get('dest_uf', 'SP')
+            }
+        
+        # 6. Extrair produtos do JSON da NFe original
+        # Tentar buscar produtos de diferentes locais no JSON
+        items_data = []
+        
+        # Tentativa 1: items direto no raiz do JSON
+        if json_nfe_original.get('items'):
+            items_data = deepcopy(json_nfe_original['items'])
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items")
+        
+        # Tentativa 2: items_data direto
+        elif json_nfe_original.get('items_data'):
+            items_data = deepcopy(json_nfe_original['items_data'])
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items_data")
+        
+        # Tentativa 2: form_data.items
+        elif json_nfe_original.get('form_data', {}).get('items'):
+            items_raw = json_nfe_original['form_data']['items']
+            items_data = deepcopy(items_raw) if isinstance(items_raw, list) else []
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em form_data.items")
+        
+        # Tentativa 3: Processar do items[0][json], items[1][json]...
+        elif json_nfe_original.get('form_data'):
+            form_data_orig = json_nfe_original['form_data']
+            idx = 0
+            while f'items[{idx}][json]' in form_data_orig:
+                item_json_str = form_data_orig[f'items[{idx}][json]']
+                if item_json_str:
+                    try:
+                        item_data = json.loads(item_json_str) if isinstance(item_json_str, str) else item_json_str
+                        items_data.append(item_data)
+                    except:
+                        pass
+                idx += 1
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items[N][json]")
+        
+        if not items_data:
+            print(f"[DUPLICAR] ⚠️ Estrutura JSON da NFe: {list(json_nfe_original.keys())}")
+            return jsonify({'success': False, 'message': 'NFe original sem produtos no JSON'}), 400
+        
+        print(f"[DUPLICAR] Total de {len(items_data)} produtos para duplicar")
+        
+        # 7. Processar emissão completa usando o serviço existente
+        # IMPORTANTE: Usar processar_nfe() que salva no banco, não processar_emissao_completa()
+        from services.nfe_service import NFeService
+        
+        # Tentar emitir, se houver duplicidade, incrementar número e tentar novamente
+        max_tentativas = 5
+        tentativa = 0
+        
+        while tentativa < max_tentativas:
+            tentativa += 1
+            print(f"[DUPLICAR] Tentativa {tentativa} com número {proximo_numero}")
+            
+            # Atualizar número no form_data
+            form_data['numero_nfe'] = str(proximo_numero)
+            
+            nfe_service = NFeService(db)
+            
+            # processar_nfe() espera ambiente em form_data, não como parâmetro separado
+            # Não passar nfe_id para criar nova NFe
+            resultado = nfe_service.processar_nfe(
+                dados_nfe=form_data,
+                itens=items_data,
+                cliente_id=cliente_id,
+                nfe_id=None  # None = criar nova NFe
+            )
+            
+            # Se sucesso, sair do loop
+            if resultado.get('success'):
+                break
+            
+            # Se erro de duplicidade, incrementar número e tentar novamente
+            erro_msg = None
+            if resultado.get('errors') and isinstance(resultado['errors'], list):
+                erro_msg = ' '.join(resultado['errors'])
+            elif resultado.get('message'):
+                erro_msg = resultado['message']
+            
+            if erro_msg and ('Duplicidade' in erro_msg or 'já existe' in erro_msg):
+                print(f"[DUPLICAR] ⚠️ Número {proximo_numero} duplicado, tentando {proximo_numero + 1}")
+                proximo_numero += 1
+                continue
+            else:
+                # Outro tipo de erro, não tentar novamente
+                break
+        
+        if resultado.get('success'):
+            print(f"[DUPLICAR] ✅ NFe duplicada e emitida com sucesso!")
+            
+            nova_nfe_id = resultado.get('nfe_id') or resultado.get('nfe_emitida_id')
+            
+            # Buscar dados da nova NFe
+            if nova_nfe_id:
+                query_nova = text("""
+                    SELECT numero, chave_acesso, status
+                    FROM nfe_emitidas
+                    WHERE nfe_emitida_id = :nfe_id
+                """)
+                result_nova = db.execute(query_nova, {'nfe_id': nova_nfe_id})
+                nova_nfe = result_nova.first()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'NFe duplicada e emitida com sucesso!',
+                    'nfe_id': nova_nfe_id,
+                    'numero': nova_nfe.numero if nova_nfe else proximo_numero,
+                    'chave_acesso': nova_nfe.chave_acesso if nova_nfe else None,
+                    'status': nova_nfe.status if nova_nfe else 'AUTORIZADA'
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': 'NFe duplicada e emitida com sucesso!',
+                    'numero': proximo_numero,
+                    'chave_acesso': resultado.get('chave_acesso'),
+                    'status': resultado.get('status', 'AUTORIZADA')
+                })
+        else:
+            # Capturar mensagem de erro detalhada da SEFAZ
+            erro_msg = None
+            
+            # Tentar diferentes formatos de erro
+            if resultado.get('errors') and isinstance(resultado['errors'], list):
+                # Formato: {'errors': ['mensagem1', 'mensagem2']}
+                erro_msg = '; '.join(resultado['errors'])
+            elif resultado.get('message'):
+                erro_msg = resultado['message']
+            elif resultado.get('mensagem_sefaz'):
+                erro_msg = resultado['mensagem_sefaz']
+            elif resultado.get('erro'):
+                erro_msg = resultado['erro']
+            
+            # Se não tem mensagem, tenta extrair do status
+            if not erro_msg:
+                if resultado.get('status') == 'REJEITADA':
+                    erro_msg = 'NFe rejeitada pela SEFAZ'
+                elif resultado.get('status') == 'ERRO':
+                    erro_msg = 'Erro ao processar NFe'
+                else:
+                    erro_msg = 'Erro desconhecido na emissão'
+            
+            codigo_erro = resultado.get('codigo') or resultado.get('cStat') or resultado.get('codigo_sefaz')
+            
+            erro_detalhado = erro_msg
+            if codigo_erro:
+                erro_detalhado = f"Código {codigo_erro}: {erro_msg}"
+            
+            print(f"[DUPLICAR] ❌ Erro na emissão: {erro_detalhado}")
+            print(f"[DUPLICAR] ❌ Resultado completo: {resultado}")
+            
+            return jsonify({
+                'success': False,
+                'message': f"Erro ao emitir NFe duplicada: {erro_detalhado}"
+            }), 400
+            
+    except Exception as e:
+        if hasattr(db, 'rollback'):
+            db.rollback()
+        print(f"[DUPLICAR] ❌ Erro ao duplicar NFe: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao duplicar: {str(e)}'
+        }), 500
+    finally:
+        if hasattr(db, 'close'):
+            db.close()

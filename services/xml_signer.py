@@ -9,7 +9,17 @@ class XMLSigner:
             from services.xml_signature_service import XMLSignatureService
             
             signature_service = XMLSignatureService()
-            xml_assinado = signature_service.assinar_xml(xml_content, certificado)
+            
+            # CORREÇÃO: XMLSignatureService usa sign_nfe_xml(), não assinar_xml()
+            # Precisa de db_session e cliente_id
+            db_session = certificado.get('db_session')
+            cliente_id = certificado.get('cliente_id')
+            
+            if not db_session or not cliente_id:
+                print(f"[XMLSigner] AVISO: db_session ou cliente_id faltando, usando fallback")
+                return None
+            
+            xml_assinado = signature_service.sign_nfe_xml(xml_content, db_session, cliente_id)
             
             return xml_assinado
             

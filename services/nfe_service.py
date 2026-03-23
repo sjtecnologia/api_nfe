@@ -770,13 +770,13 @@ class NFeService:
             insert_query = text("""
                 INSERT INTO nfe_emitidas (
                     cliente_id, numero, serie, modelo, chave_acesso, protocolo_sefaz,
-                    data_emissao, data_autorizacao, status, valor_total,
+                    data_emissao, data_autorizacao, data_criacao, status, valor_total,
                     natureza_operacao, tipo_nfe, finalidade_emissao,
                     destinatario_razao_social, destinatario_cnpj_cpf,
                     informacoes_adicionais, mensagem_sefaz, json_nfe
                 ) VALUES (
                     :cliente_id, :numero, :serie, :modelo, :chave_acesso, :protocolo_sefaz,
-                    :data_emissao, :data_autorizacao, :status, :valor_total,
+                    :data_emissao, :data_autorizacao, :data_criacao, :status, :valor_total,
                     :natureza_operacao, :tipo_nfe, :finalidade_emissao,
                     :destinatario_razao_social, :destinatario_cnpj_cpf,
                     :informacoes_adicionais, :mensagem_sefaz, :json_nfe
@@ -812,6 +812,7 @@ class NFeService:
                 'protocolo_sefaz': resultado.get('protocolo'),
                 'data_emissao': dt,
                 'data_autorizacao': datetime.now() if resultado['success'] else None,
+                'data_criacao': datetime.now(),
                 'status': 'AUTORIZADA' if resultado['success'] else 'REJEITADA',
                 'valor_total': valor_total,
                 'natureza_operacao': dados_nfe.get('natOp', ''),
@@ -871,6 +872,10 @@ class NFeService:
                 return {'success': False, 'errors': ['Certificado não encontrado']}
             
             print(f"OK: Certificado encontrado: {certificado.get('nome_arquivo_original', 'N/A')}")
+            
+            # Adicionar db_session e cliente_id para XMLSignatureService
+            certificado['db_session'] = self.db
+            certificado['cliente_id'] = cliente_id
             
             # 3. ASSINAR XML
             xml_assinado = self._assinar_xml_real(xml_nfe, certificado)

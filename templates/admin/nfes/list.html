@@ -256,6 +256,13 @@
                                                             title="Cancelar NFe">
                                                         <i class="fas fa-ban"></i>
                                                     </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-info btn-duplicar-nfe"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            data-numero="{{ nfe.numero }}"
+                                                            title="Duplicar e Emitir Automaticamente">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
                                                     {% endif %}
                                                 </div>
                                             </td>
@@ -693,6 +700,80 @@ async function confirmarCancelamento(nfeId) {
         if (btnConfirmar) {
             btnConfirmar.disabled = false;
             btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Confirmar Cancelamento';
+        }
+    }
+}
+
+// ==================== DUPLICAR NFE ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Botões de duplicar NFe
+    document.querySelectorAll('.btn-duplicar-nfe').forEach(button => {
+        button.addEventListener('click', function() {
+            const nfeId = this.dataset.nfeId;
+            const numero = this.dataset.numero;
+            duplicarNfe(nfeId, numero);
+        });
+    });
+});
+
+async function duplicarNfe(nfeId, numeroOriginal) {
+    // Confirmar duplicação
+    const confirmar = confirm(
+        `Deseja duplicar a NFe ${numeroOriginal}?\n\n` +
+        `A nova NFe será criada com os mesmos dados (produtos, destinatário, valores) ` +
+        `e será ENVIADA AUTOMATICAMENTE para a SEFAZ com o próximo número da sequência.`
+    );
+    
+    if (!confirmar) return;
+    
+    try {
+        // Mostrar loading
+        const btn = document.querySelector(`button[data-nfe-id="${nfeId}"].btn-duplicar-nfe`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        }
+        
+        // Fazer requisição
+        const response = await fetch(`/admin/nfe/duplicar/${nfeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Sucesso
+            alert(
+                `✅ NFe duplicada e emitida com sucesso!\n\n` +
+                `Número: ${result.numero}\n` +
+                `Chave: ${result.chave_acesso || 'N/A'}\n` +
+                `Status: ${result.status}`
+            );
+            
+            // Recarregar página
+            location.reload();
+        } else {
+            alert(`Erro ao duplicar NFe: ${result.message || 'Erro desconhecido'}`);
+            
+            // Restaurar botão
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-copy"></i>';
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao duplicar NFe:', error);
+        alert(`Erro ao duplicar NFe: ${error.message}`);
+        
+        // Restaurar botão
+        const btn = document.querySelector(`button[data-nfe-id="${nfeId}"].btn-duplicar-nfe`);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-copy"></i>';
         }
     }
 }
