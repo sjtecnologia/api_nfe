@@ -343,6 +343,7 @@
 // Variáveis globais para o modal DANFE
 let nfeIdAtual = null;
 let danfeCaminhoAtual = null;
+let emailDestinatarioAtual = '';
 
 document.addEventListener('DOMContentLoaded', function() {
     // Verificar se há parâmetros de DANFE gerado na URL
@@ -350,10 +351,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const danfeGerado = urlParams.get('danfe_gerado');
     const nfeId = urlParams.get('nfe_id');
     const danfePath = urlParams.get('danfe_path');
+    const emailDest = urlParams.get('email_dest') || '';
     
     if (danfeGerado === 'true' && nfeId && danfePath) {
         console.log('[DEBUG] DANFE gerado detectado, abrindo modal...');
-        mostrarModalAcoesDanfe(nfeId, danfePath);
+        mostrarModalAcoesDanfe(nfeId, danfePath, emailDest);
         
         // Limpar URL sem recarregar a página
         const cleanUrl = window.location.pathname + (urlParams.get('cliente_id') ? '?cliente_id=' + urlParams.get('cliente_id') : '');
@@ -403,9 +405,10 @@ function gerarDANFE(nfeId, buttonEl) {
 }
 
 // Função para mostrar modal de ações pós-DANFE
-function mostrarModalAcoesDanfe(nfeId, danfeCaminho) {
+function mostrarModalAcoesDanfe(nfeId, danfeCaminho, emailDest) {
     nfeIdAtual = nfeId;
     danfeCaminhoAtual = danfeCaminho;
+    emailDestinatarioAtual = emailDest || '';
     const modal = new bootstrap.Modal(document.getElementById('modalAcoesDanfe'));
     modal.show();
 }
@@ -449,49 +452,44 @@ async function enviarEmailDanfe() {
         alert('Erro: ID da NFe não encontrado');
         return;
     }
-    
-    // Solicitar email do destinatário
-    const emailDestinatario = prompt('Digite o email do destinatário:');
-    
-    if (!emailDestinatario || !emailDestinatario.includes('@')) {
-        alert('Email inválido!');
-        return;
-    }
-    
-    // Validar formato do email
+
+    let emailDestinatario = emailDestinatarioAtual;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailDestinatario)) {
-        alert('Por favor, informe um email válido');
-        return;
+
+    if (emailDestinatario && emailRegex.test(emailDestinatario)) {
+        // Destinatário já tem email cadastrado — enviar diretamente
+        if (!confirm(`Enviar DANFE para ${emailDestinatario}?`)) return;
+    } else {
+        // Sem email cadastrado — solicitar
+        emailDestinatario = prompt('Digite o email do destinatário:');
+        if (!emailDestinatario || !emailRegex.test(emailDestinatario)) {
+            alert('Email inválido!');
+            return;
+        }
     }
-    
+
+    await _enviarEmailParaNfe(nfeIdAtual, emailDestinatario, 'modalAcoesDanfe');
+}
+
+async function _enviarEmailParaNfe(nfeId, email, modalId) {
     try {
-        // Usar a rota compartilhar (mesma do xml_preview.html)
-        const response = await fetch(`/admin/nfe/compartilhar/${nfeIdAtual}`, {
+        const response = await fetch(`/admin/nfe/compartilhar/${nfeId}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email: emailDestinatario,
-                include_danfe: true,
-                include_xml: false
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, include_danfe: true, include_xml: false })
         });
-        
+
         const result = await response.json();
-        
+
         if (response.ok && result.success) {
-            // Fechar modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modalAcoesDanfe'));
-            if (modal) modal.hide();
-            
-            // Mostrar mensagem de sucesso
-            alert(`DANFE enviado com sucesso para ${emailDestinatario}!`);
+            if (modalId) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById(modalId));
+                if (modal) modal.hide();
+            }
+            alert(`DANFE enviado com sucesso para ${email}!`);
         } else {
             alert(`Erro ao enviar email: ${result.message || 'Erro desconhecido'}`);
         }
-        
     } catch (error) {
         console.error('Erro ao enviar email:', error);
         alert(`Erro ao enviar email: ${error.message}`);
@@ -745,14 +743,33 @@ async function duplicarNfe(nfeId, numeroOriginal) {
         const result = await response.json();
         
         if (response.ok && result.success) {
-            // Sucesso
-            alert(
+            // Sucesso — verificar se há email do destinatário para envio automático
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const emailDuplicar = result.email_destinatario || '';
+
+            const mensagemSucesso =
                 `✅ NFe duplicada e emitida com sucesso!\n\n` +
                 `Número: ${result.numero}\n` +
                 `Chave: ${result.chave_acesso || 'N/A'}\n` +
-                `Status: ${result.status}`
-            );
-            
+                `Status: ${result.status}`;
+
+            if (emailDuplicar && emailRegex.test(emailDuplicar)) {
+                // Email cadastrado: perguntar se quer enviar
+                const enviar = confirm(mensagemSucesso + `\n\nDeseja enviar o DANFE para ${emailDuplicar}?`);
+                if (enviar && result.nfe_id) {
+                    await _enviarEmailParaNfe(result.nfe_id, emailDuplicar, null);
+                }
+            } else {
+                // Sem email: mostrar sucesso e perguntar se quer informar email
+                const digitarEmail = confirm(mensagemSucesso + `\n\nDeseja enviar o DANFE por email?`);
+                if (digitarEmail && result.nfe_id) {
+                    const emailDigitado = prompt('Digite o email do destinatário:');
+                    if (emailDigitado && emailRegex.test(emailDigitado)) {
+                        await _enviarEmailParaNfe(result.nfe_id, emailDigitado, null);
+                    }
+                }
+            }
+
             // Recarregar página
             location.reload();
         } else {

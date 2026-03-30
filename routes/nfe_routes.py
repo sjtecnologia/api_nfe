@@ -966,12 +966,19 @@ def emitir_nfe():
                     try:
                         # Se DANFE foi gerado, adicionar parâmetros para abrir modal
                         if danfe_gerado_com_sucesso:
+                            # Obter email do destinatário (se cadastrado)
+                            email_dest_param = ''
+                            try:
+                                email_dest_param = destinatario.email or ''
+                            except Exception:
+                                pass
                             # Converter cliente_id para int e garantir que nfe_id também é int
                             return redirect(url_for('nfe.list_nfes', 
                                                    cliente_id=int(emitente_cliente_id),
                                                    danfe_gerado='true',
                                                    nfe_id=int(nfe_id),
-                                                   danfe_path=caminho_danfe.replace('\\', '/')))
+                                                   danfe_path=caminho_danfe.replace('\\', '/'),
+                                                   email_dest=email_dest_param))
                         else:
                             return redirect(url_for('nfe.list_nfes', cliente_id=int(emitente_cliente_id)))
                     except Exception as redirect_error:
@@ -3869,13 +3876,14 @@ def duplicar_nfe(nfe_id):
         # 5. Buscar destinatário
         destinatario_id = form_data.get('destinatario')
         destinatario_data = {}
+        email_destinatario_duplicar = ''
         
         if destinatario_id:
             try:
                 dest_query = text("""
                     SELECT destinatario_id, nome_razao_social, cpf_cnpj, ie,
                            logradouro, numero, bairro, cep, codigo_municipio, 
-                           nome_municipio, uf
+                           nome_municipio, uf, email
                     FROM destinatarios_nfe 
                     WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
                 """)
@@ -3886,6 +3894,7 @@ def duplicar_nfe(nfe_id):
                 
                 if dest_result:
                     dest_mapping = dest_result._mapping if hasattr(dest_result, '_mapping') else dest_result
+                    email_destinatario_duplicar = dest_mapping.get('email') or ''
                     destinatario_data = {
                         'nome_razao_social': dest_mapping['nome_razao_social'],
                         'cpf_cnpj': dest_mapping['cpf_cnpj'],
@@ -4023,7 +4032,8 @@ def duplicar_nfe(nfe_id):
                     'nfe_id': nova_nfe_id,
                     'numero': nova_nfe.numero if nova_nfe else proximo_numero,
                     'chave_acesso': nova_nfe.chave_acesso if nova_nfe else None,
-                    'status': nova_nfe.status if nova_nfe else 'AUTORIZADA'
+                    'status': nova_nfe.status if nova_nfe else 'AUTORIZADA',
+                    'email_destinatario': email_destinatario_duplicar
                 })
             else:
                 return jsonify({
@@ -4031,7 +4041,8 @@ def duplicar_nfe(nfe_id):
                     'message': 'NFe duplicada e emitida com sucesso!',
                     'numero': proximo_numero,
                     'chave_acesso': resultado.get('chave_acesso'),
-                    'status': resultado.get('status', 'AUTORIZADA')
+                    'status': resultado.get('status', 'AUTORIZADA'),
+                    'email_destinatario': email_destinatario_duplicar
                 })
         else:
             # Capturar mensagem de erro detalhada da SEFAZ
