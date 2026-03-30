@@ -46,6 +46,12 @@ def get_uf_ibge_code(uf_abbr):
     }
     return uf_codes.get(uf_abbr.upper(), 99)
 
+def limpar_cnpj_cpf(documento):
+    """Remove formatação de CNPJ ou CPF, retornando apenas dígitos"""
+    if not documento:
+        return ""
+    return ''.join(filter(str.isdigit, str(documento)))
+
 def format_cnpj_cpf(documento):
     """Formata CNPJ ou CPF adicionando máscaras"""
     if not documento:
