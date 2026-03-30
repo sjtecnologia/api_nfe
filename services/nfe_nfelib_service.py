@@ -82,12 +82,8 @@ def calcular_dv_chave_acesso(chave_sem_dv: str) -> str:
 
 
 def gerar_chave_acesso(emitente_data: Dict[str, Any], form_data: Dict[str, Any], 
-                       numero_nfe: int, data_emissao: datetime, tp_emis: str = "1") -> str:
-    """Gera a chave de acesso de 44 dígitos da NFe
-    
-    Args:
-        tp_emis: Tipo de emissão - 1=Normal, 6=SVC-AN, 7=SVC-RS
-    """
+                       numero_nfe: int, data_emissao: datetime) -> str:
+    """Gera a chave de acesso de 44 dígitos da NFe"""
     
     # 1. cUF (2 dígitos)
     cuf = str(get_uf_ibge_code(emitente_data.get('uf', 'SP'))).zfill(2)
@@ -95,12 +91,8 @@ def gerar_chave_acesso(emitente_data: Dict[str, Any], form_data: Dict[str, Any],
     # 2. AAMM (4 dígitos)
     aamm = data_emissao.strftime('%y%m')
     
-    # 3. CNPJ/CPF (14 dígitos) — Produtor Rural usa CPF padded para 14 dígitos
-    if bool(emitente_data.get('produtor_rural', False)):
-        _cpf_key = limpar_cnpj_cpf(emitente_data.get('cpf', '') or '')
-        cnpj = _cpf_key.zfill(14)  # CPF (11 digits) padded to 14
-    else:
-        cnpj = limpar_cnpj_cpf(emitente_data.get('cnpj', '') or '').zfill(14)
+    # 3. CNPJ (14 dígitos)
+    cnpj = limpar_cnpj_cpf(emitente_data.get('cnpj', '')).zfill(14)
     
     # 4. mod (2 dígitos)
     mod = "55"
@@ -111,10 +103,8 @@ def gerar_chave_acesso(emitente_data: Dict[str, Any], form_data: Dict[str, Any],
     # 6. nNF (9 dígitos)
     nnf = str(numero_nfe).zfill(9)
     
-    # 7. tpEmis (1 dígito) - Agora configurável para contingência
-    # 1=Normal, 6=SVC-AN, 7=SVC-RS
-    if tp_emis not in ('1', '6', '7'):
-        tp_emis = '1'
+    # 7. tpEmis (1 dígito)
+    tp_emis = "1"  # Emissão normal
     
     # 8. cNF (8 dígitos)
     cnf = form_data.get('codigo_numerico', str(abs(hash(str(numero_nfe))) % 100000000)).zfill(8)
@@ -259,7 +249,7 @@ def generate_nfe_xml_nfelib(
         idDest=id_dest,  # Agora dinâmico baseado no CFOP e UF
         cMunFG=str(emitente_data.get('codigo_municipio', '3550308')),
         tpImp="1",
-        tpEmis=str(form_data.get('tpEmis', '1')),
+        tpEmis="1",
         cDV=cdv,  # Dígito verificador da chave de acesso
         tpAmb=str(form_data.get('tpAmb', 2)),
         finNFe=str(form_data.get('finNFe', '1')),
@@ -289,62 +279,39 @@ def generate_nfe_xml_nfelib(
         xPais="BRASIL"
     )
     
-    # 6. Criar EMIT (emitente) com endereço — suporta CNPJ (empresa) ou CPF (produtor rural)
-    _is_rural = bool(emitente_data.get('produtor_rural', False))
-    _cpf_raw = limpar_cnpj_cpf(emitente_data.get('cpf', '') or '')
-    _cnpj_raw = limpar_cnpj_cpf(emitente_data.get('cnpj', '') or '')
-
-    if _is_rural:
-        # Produtor Rural: usa CPF na tag <CPF>
-        if not _cpf_raw:
-            if _cnpj_raw and len(_cnpj_raw) == 11:
-                _cpf_raw = _cnpj_raw
-            else:
-                raise ValueError(
-                    f"CPF do emitente (produtor rural) invalido ou vazio: {emitente_data.get('cpf', 'N/A')}"
-                )
-        cpf_emitente = _cpf_raw.zfill(11)
-        print(f"[NFELIB] CPF Emitente (Produtor Rural): {cpf_emitente}")
-    else:
-        # Empresa: usa CNPJ na tag <CNPJ>
-        cnpj_emitente = _cnpj_raw
-        if not cnpj_emitente or cnpj_emitente == '0' * 14:
-            raise ValueError(f"CNPJ do emitente invalido ou vazio: {emitente_data.get('cnpj', 'N/A')}")
-        cnpj_emitente = cnpj_emitente.zfill(14)
-        print(f"[NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} digitos)")
-
+    # 6. Criar EMIT (emitente) com endereço
+    cnpj_emitente = limpar_cnpj_cpf(emitente_data.get('cnpj', ''))
+    if not cnpj_emitente or cnpj_emitente == '0' * 14:
+        raise ValueError(f"CNPJ do emitente inválido ou vazio: {emitente_data.get('cnpj', 'N/A')}")
+    cnpj_emitente = cnpj_emitente.zfill(14)
+    
+    # IMPORTANTE: Em homologação, usar o CNPJ REAL para que corresponda ao certificado digital
+    # O CNPJ do certificado DEVE corresponder ao CNPJ do emitente no XML
+    print(f"✅ [NFELIB] CNPJ Emitente: {cnpj_emitente} ({len(cnpj_emitente)} dígitos)")
     if tp_amb == 2:
-        doc_tipo = 'CPF' if _is_rural else 'CNPJ'
-        print(f"[HOMOLOGACAO] Usando {doc_tipo} real para corresponder ao certificado digital")
-
+        print(f"⚠️  [HOMOLOGAÇÃO] Usando CNPJ real para corresponder ao certificado digital")
+    
     # Buscar IE (pode estar como 'ie' ou 'inscricao_estadual')
     ie_emitente = (emitente_data.get('ie') or emitente_data.get('inscricao_estadual') or '').strip()
-    if not ie_emitente and not _is_rural:
-        raise ValueError("Inscricao Estadual do emitente e obrigatoria")
-    print(f"[NFELIB] IE Emitente: {ie_emitente or 'ISENTO (produtor rural)'}")
-
-    # Buscar regime tributario
-    crt_emitente = str(emitente_data.get('regime_tributario') or
+    if not ie_emitente:
+        raise ValueError("Inscrição Estadual do emitente é obrigatória")
+    
+    # IMPORTANTE: Em homologação, usar IE REAL do emitente!
+    # A SEFAZ valida a IE mesmo em ambiente de homologação
+    print(f"📋 [NFELIB] IE Emitente: {ie_emitente}")
+    
+    # Buscar regime tributário (pode estar em diferentes campos)
+    crt_emitente = str(emitente_data.get('regime_tributario') or 
                       emitente_data.get('regime_tributario_id') or '1')
-
-    if _is_rural:
-        emit = Nfe.InfNfe.Emit(
-            CPF=cpf_emitente,
-            xNome=emitente_data.get('razao_social', '')[:60],
-            xFant=emitente_data.get('nome_fantasia', '')[:60] if emitente_data.get('nome_fantasia') else None,
-            enderEmit=ender_emit,
-            IE=ie_emitente if ie_emitente else None,
-            CRT=crt_emitente
-        )
-    else:
-        emit = Nfe.InfNfe.Emit(
-            CNPJ=cnpj_emitente,
-            xNome=emitente_data.get('razao_social', '')[:60],
-            xFant=emitente_data.get('nome_fantasia', '')[:60] if emitente_data.get('nome_fantasia') else None,
-            enderEmit=ender_emit,
-            IE=ie_emitente,
-            CRT=crt_emitente
-        )
+    
+    emit = Nfe.InfNfe.Emit(
+        CNPJ=cnpj_emitente,
+        xNome=emitente_data.get('razao_social', '')[:60],
+        xFant=emitente_data.get('nome_fantasia', '')[:60] if emitente_data.get('nome_fantasia') else None,
+        enderEmit=ender_emit,
+        IE=ie_emitente,
+        CRT=crt_emitente
+    )
     
     print("✅ [NFELIB] EMIT criado")
     

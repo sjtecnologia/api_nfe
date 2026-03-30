@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Selecionar Cliente{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="mb-4"><i class="fas fa-exchange-alt"></i> Trocar Cliente</h2>
+    <div class="list-group">
+        {% for cliente in clientes_do_usuario %}
+            <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(cliente.cliente_id)) }}" class="list-group-item list-group-item-action">
+                <i class="fas fa-building"></i> {{ cliente.razao_social }}
+            </a>
+        {% else %}
+            <div class="alert alert-warning">Nenhum cliente disponível para este usuário.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

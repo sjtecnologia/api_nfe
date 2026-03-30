@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Classificações IBS/CBS - Reforma Tributária{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2><i class="fas fa-receipt"></i> Classificações IBS/CBS</h2>
+                    <p class="text-muted">
+                        Gerenciar classificações tributárias para Lucro Real e Presumido (CRT=3)
+                        <br>
+                        <small>IBS = Imposto sobre Bens e Serviços | CBS = Contribuição sobre Bens e Serviços</small>
+                    </p>
+                </div>
+                <a href="{{ url_for('admin.criar_classificacao_ibs_cbs') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Nova Classificação
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Código</label>
+                    <input type="text" name="codigo" class="form-control" value="{{ request.args.get('codigo', '') }}" placeholder="Ex: 000001">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Descrição</label>
+                    <input type="text" name="descricao" class="form-control" value="{{ request.args.get('descricao', '') }}" placeholder="Buscar...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="ativo" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if request.args.get('ativo') == '1' %}selected{% endif %}>Ativos</option>
+                        <option value="0" {% if request.args.get('ativo') == '0' %}selected{% endif %}>Inativos</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-secondary w-100">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Classificações -->
+    <div class="card">
+        <div class="card-body">
+            {% if classificacoes %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 100px;">Código</th>
+                                <th>Descrição</th>
+                                <th class="text-center" style="width: 100px;">IBS UF (%)</th>
+                                <th class="text-center" style="width: 100px;">IBS Mun (%)</th>
+                                <th class="text-center" style="width: 100px;">CBS (%)</th>
+                                <th class="text-center" style="width: 80px;">Status</th>
+                                <th class="text-center" style="width: 150px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in classificacoes %}
+                            <tr>
+                                <td><code>{{ c.codigo }}</code></td>
+                                <td>{{ c.descricao }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-info">{{ "%.2f"|format(c.aliquota_ibs_uf) }}%</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-info">{{ "%.2f"|format(c.aliquota_ibs_mun) }}%</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary">{{ "%.2f"|format(c.aliquota_cbs) }}%</span>
+                                </td>
+                                <td class="text-center">
+                                    {% if c.ativo is none %}
+                                        <span class="badge bg-warning">Indefinido</span>
+                                    {% elif c.ativo %}
+                                        <span class="badge bg-success">Ativo</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{{ url_for('admin.editar_classificacao_ibs_cbs', classificacao_id=c.classificacao_id) }}" 
+                                           class="btn btn-outline-primary" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-outline-{{ 'danger' if c.ativo else 'success' }}" 
+                                                onclick="toggleStatus({{ c.classificacao_id }}, {{ 'false' if c.ativo else 'true' }})"
+                                                title="{{ 'Desativar' if c.ativo else 'Ativar' }}">
+                                            <i class="fas fa-{{ 'times' if c.ativo else 'check' }}"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Estatísticas -->
+                <div class="mt-3">
+                    <small class="text-muted">
+                        Total: <strong>{{ classificacoes|length }}</strong> classificação(ões)
+                    </small>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    Nenhuma classificação encontrada.
+                    {% if request.args %}
+                        <a href="{{ url_for('admin.list_classificacoes_ibs_cbs') }}" class="alert-link">Limpar filtros</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Card Informativo -->
+    <div class="card mt-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-info-circle"></i> Sobre as Classificações IBS/CBS
+        </div>
+        <div class="card-body">
+            <p>
+                As classificações IBS/CBS são parte da <strong>Reforma Tributária (LC 214/2025)</strong> 
+                e aplicam-se exclusivamente a empresas com <strong>CRT=3</strong> (Lucro Real ou Presumido).
+            </p>
+            <ul class="mb-0">
+                <li><strong>IBS UF:</strong> Imposto sobre Bens e Serviços - Estadual</li>
+                <li><strong>IBS Municipal:</strong> Imposto sobre Bens e Serviços - Municipal</li>
+                <li><strong>CBS:</strong> Contribuição sobre Bens e Serviços (federal)</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleStatus(classificacaoId, novoStatus) {
+    if (confirm('Confirma alterar o status desta classificação?')) {
+        fetch(`/admin/classificacoes-ibs-cbs/${classificacaoId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ativo: novoStatus })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao alterar status');
+        });
+    }
+}
+</script>
+{% endblock %}

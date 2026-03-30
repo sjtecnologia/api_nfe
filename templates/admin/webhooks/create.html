@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+
+{% block title %}Criar Webhook - {{ cliente.razao_social }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-plus-circle text-primary"></i> Novo Webhook
+            </h1>
+            <p class="text-muted mb-0">{{ cliente.razao_social }}</p>
+        </div>
+        <a href="{{ url_for('webhooks.list_webhooks', cliente_id=cliente_id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message|safe }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog"></i> Configurações do Webhook
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('webhooks.create_webhook', cliente_id=cliente_id) }}">
+                        
+                        <!-- URL -->
+                        <div class="mb-3">
+                            <label for="url" class="form-label">
+                                <i class="fas fa-link"></i> URL do Webhook <span class="text-danger">*</span>
+                            </label>
+                            <input type="url" 
+                                   class="form-control" 
+                                   id="url" 
+                                   name="url" 
+                                   placeholder="https://seu-servidor.com/webhook"
+                                   required
+                                   maxlength="500">
+                            <small class="form-text text-muted">
+                                URL completa (com https://) onde as notificações serão enviadas
+                            </small>
+                        </div>
+
+                        <!-- Eventos -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-bell"></i> Eventos <span class="text-danger">*</span>
+                            </label>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="evento_nfe_autorizada" 
+                                                       name="eventos" 
+                                                       value="nfe.autorizada"
+                                                       checked>
+                                                <label class="form-check-label" for="evento_nfe_autorizada">
+                                                    <span class="badge bg-success">nfe.autorizada</span>
+                                                    <br><small class="text-muted">NFe autorizada pela SEFAZ</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="evento_nfe_rejeitada" 
+                                                       name="eventos" 
+                                                       value="nfe.rejeitada">
+                                                <label class="form-check-label" for="evento_nfe_rejeitada">
+                                                    <span class="badge bg-danger">nfe.rejeitada</span>
+                                                    <br><small class="text-muted">NFe rejeitada pela SEFAZ</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="evento_nfe_cancelada" 
+                                                       name="eventos" 
+                                                       value="nfe.cancelada">
+                                                <label class="form-check-label" for="evento_nfe_cancelada">
+                                                    <span class="badge bg-warning text-dark">nfe.cancelada</span>
+                                                    <br><small class="text-muted">NFe foi cancelada</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="evento_nfe_inutilizada" 
+                                                       name="eventos" 
+                                                       value="nfe.inutilizada">
+                                                <label class="form-check-label" for="evento_nfe_inutilizada">
+                                                    <span class="badge bg-secondary">nfe.inutilizada</span>
+                                                    <br><small class="text-muted">Numeração inutilizada</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="evento_nfce_autorizada" 
+                                                       name="eventos" 
+                                                       value="nfce.autorizada">
+                                                <label class="form-check-label" for="evento_nfce_autorizada">
+                                                    <span class="badge bg-info">nfce.autorizada</span>
+                                                    <br><small class="text-muted">NFCe autorizada</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="evento_nfce_cancelada" 
+                                                       name="eventos" 
+                                                       value="nfce.cancelada">
+                                                <label class="form-check-label" for="evento_nfce_cancelada">
+                                                    <span class="badge bg-dark">nfce.cancelada</span>
+                                                    <br><small class="text-muted">NFCe cancelada</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">
+                                Selecione os eventos que você deseja monitorar
+                            </small>
+                        </div>
+
+                        <!-- Secret -->
+                        <div class="mb-3">
+                            <label for="secret" class="form-label">
+                                <i class="fas fa-shield-alt"></i> Secret (Opcional, mas recomendado)
+                            </label>
+                            <div class="input-group">
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="secret" 
+                                       name="secret" 
+                                       placeholder="Digite um secret seguro ou gere um automaticamente"
+                                       maxlength="200">
+                                <button type="button" 
+                                        class="btn btn-outline-secondary" 
+                                        id="generateSecret"
+                                        title="Gerar secret aleatório">
+                                    <i class="fas fa-dice"></i> Gerar
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                Secret usado para assinar as requisições com HMAC-SHA256. Guarde-o para validar as notificações.
+                            </small>
+                        </div>
+
+                        <!-- Configurações Avançadas -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-sliders-h"></i> Configurações Avançadas
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="retry_count" class="form-label">
+                                                <i class="fas fa-redo"></i> Número de Tentativas
+                                            </label>
+                                            <select class="form-select" id="retry_count" name="retry_count">
+                                                <option value="1">1 tentativa</option>
+                                                <option value="2">2 tentativas</option>
+                                                <option value="3">3 tentativas</option>
+                                                <option value="4" selected>4 tentativas (recomendado)</option>
+                                                <option value="5">5 tentativas</option>
+                                            </select>
+                                            <small class="form-text text-muted">
+                                                Quantas vezes tentar enviar em caso de falha
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="timeout_seconds" class="form-label">
+                                                <i class="fas fa-clock"></i> Timeout (segundos)
+                                            </label>
+                                            <select class="form-select" id="timeout_seconds" name="timeout_seconds">
+                                                <option value="10">10 segundos</option>
+                                                <option value="20">20 segundos</option>
+                                                <option value="30" selected>30 segundos (recomendado)</option>
+                                                <option value="60">60 segundos</option>
+                                            </select>
+                                            <small class="form-text text-muted">
+                                                Tempo máximo de espera por resposta
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('webhooks.list_webhooks', cliente_id=cliente_id) }}" 
+                               class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Criar Webhook
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar com informações -->
+        <div class="col-lg-4">
+            <div class="card bg-light">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-lightbulb text-warning"></i> Como Funcionam os Webhooks
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ol class="small mb-0">
+                        <li class="mb-2">
+                            <strong>Configure a URL:</strong> Seu servidor deve ter um endpoint que aceite POST requests
+                        </li>
+                        <li class="mb-2">
+                            <strong>Selecione eventos:</strong> Escolha quais eventos você quer monitorar
+                        </li>
+                        <li class="mb-2">
+                            <strong>Configure secret:</strong> Use um secret para validar a autenticidade
+                        </li>
+                        <li class="mb-2">
+                            <strong>Responda rápido:</strong> Seu endpoint deve responder em até 30 segundos com status 2xx
+                        </li>
+                        <li class="mb-2">
+                            <strong>Valide a assinatura:</strong> Verifique o header X-EmiteMax-Signature
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="card bg-info text-white mt-3">
+                <div class="card-body">
+                    <h6 class="text-white">
+                        <i class="fas fa-code"></i> Exemplo de Payload
+                    </h6>
+                    <pre class="text-white small mb-0"><code>{
+  "evento": "nfe.autorizada",
+  "timestamp": "2024-12-18T10:30:00",
+  "webhook_id": 5,
+  "nfe_id": 123,
+  "numero": 456,
+  "chave_acesso": "35240...",
+  "valor_total": 1500.50
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-shield-alt"></i> Validação de Assinatura
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small mb-2">Python:</p>
+                    <pre class="bg-dark text-light p-2 rounded small"><code>import hmac
+import hashlib
+
+signature = request.headers.get(
+    'X-EmiteMax-Signature'
+).replace('sha256=', '')
+
+payload = request.get_data(as_text=True)
+
+expected = hmac.new(
+    secret.encode(),
+    payload.encode(),
+    hashlib.sha256
+).hexdigest()
+
+is_valid = hmac.compare_digest(
+    expected, signature
+)</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gerar secret aleatório
+    document.getElementById('generateSecret').addEventListener('click', function() {
+        const length = 40;
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let secret = '';
+        for (let i = 0; i < length; i++) {
+            secret += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        document.getElementById('secret').value = secret;
+    });
+
+    // Validação do formulário
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const eventos = document.querySelectorAll('input[name="eventos"]:checked');
+        if (eventos.length === 0) {
+            e.preventDefault();
+            alert('Selecione pelo menos um evento para o webhook.');
+            return false;
+        }
+
+        const url = document.getElementById('url').value;
+        if (!url.startsWith('https://') && !url.startsWith('http://')) {
+            e.preventDefault();
+            alert('A URL deve começar com http:// ou https://');
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

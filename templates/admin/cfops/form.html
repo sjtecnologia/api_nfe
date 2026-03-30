@@ -3,49 +3,57 @@
 {% block title %}{% if cfop %}Editar CFOP{% else %}Novo CFOP{% endif %}{% endblock %}
 
 {% block content %}
-    <h1>{% if cfop %}Editando CFOP ({{ cfop.cfop }}){% else %}Novo CFOP{% endif %}</h1>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <form method="POST">
-        <fieldset>
-            <legend>Dados do CFOP</legend>
-
-            <div class="form-group">
-                <label for="cfop">CFOP:</label>
-                <input type="text" id="cfop" name="cfop" placeholder="Ex: 5102" value="{{ cfop.cfop if cfop else (form_data.cfop if form_data else '') }}" maxlength="5" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="descricao">Descrição:</label>
-                <textarea id="descricao" name="descricao" placeholder="Descrição completa do CFOP" required>{{ cfop.descricao if cfop else (form_data.descricao if form_data else '') }}</textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="observacao">Observação:</label>
-                <textarea id="observacao" name="observacao" placeholder="Observações adicionais" required>{{ cfop.observacao if cfop else (form_data.observacao if form_data else '') }}</textarea>
-            </div>
-
-            <div class="form-group">
-                <label for="tipooperacao">Tipo de Operação:</label>
-                <input type="text" id="tipooperacao" name="tipooperacao" placeholder="Ex: Entrada, Saída" value="{{ cfop.tipooperacao if cfop else (form_data.tipooperacao if form_data else '') }}">
-            </div>
-
-            <div class="form-group">
-                <label for="identificadordestinooperacao">Identificador de Destino da Operação:</label>
-                <input type="text" id="identificadordestinooperacao" name="identificadordestinooperacao" placeholder="Ex: Interna, Interestadual, Exterior" value="{{ cfop.identificadordestinooperacao if cfop else (form_data.identificadordestinooperacao if form_data else '') }}">
-            </div>
-        </fieldset>
-        
-        <div class="button-group">
-            <button type="submit" class="btn">Salvar CFOP</button>
-            <a href="{{ url_for('admin.list_cfops') }}" class="btn btn-secondary">Cancelar</a>
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+            <h1 class="h3 mb-4">{% if cfop %}Editar CFOP ({{ cfop.cfop }}){% else %}Novo CFOP{% endif %}</h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{% if cfop %}{{ url_for('admin.save_cfop', cfop_id=cfop.cfop_id) }}{% else %}{{ url_for('admin.save_cfop') }}{% endif %}" class="card p-4 shadow-sm">
+                {% if cfop %}
+                    <input type="hidden" name="cfop_id" value="{{ cfop.cfop_id }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label for="cfop" class="form-label">CFOP:</label>
+                    <input type="text" id="cfop" name="cfop" class="form-control" maxlength="5" required
+                        value="{{ cfop.cfop if cfop else (form_data.cfop if form_data else '') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição:</label>
+                    <textarea id="descricao" name="descricao" class="form-control" rows="3" required>{{ cfop.descricao if cfop else (form_data.descricao if form_data else '') }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="observacao" class="form-label">Observação:</label>
+                    <textarea id="observacao" name="observacao" class="form-control" rows="2">{{ cfop.observacao if cfop else (form_data.observacao if form_data else '') }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="tipooperacao" class="form-label">Tipo de Operação:</label>
+                    <input type="text" id="tipooperacao" name="tipooperacao" class="form-control"
+                        value="{{ cfop.tipooperacao if cfop else (form_data.tipooperacao if form_data else '') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="identificadordestinooperacao" class="form-label">Identificador de Destino da Operação:</label>
+                    <input type="text" id="identificadordestinooperacao" name="identificadordestinooperacao" class="form-control"
+                        value="{{ cfop.identificadordestinooperacao if cfop else (form_data.identificadordestinooperacao if form_data else '') }}">
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar CFOP
+                    </button>
+                    <a href="{{ url_for('admin.list_cfops') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
         </div>
-    </form>
+    </div>
+</div>
 {% endblock %}

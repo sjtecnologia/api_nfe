@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de Acesso - EmiteMax</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-ok {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        td:first-child {
+            font-weight: bold;
+            width: 200px;
+        }
+        h1 {
+            color: #333;
+        }
+        h2 {
+            color: #666;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Diagnóstico de Acesso - EmiteMax API</h1>
+    
+    <div class="card">
+        <h2>Status da Conexão</h2>
+        <p class="status-ok">✅ Você está conectado com sucesso!</p>
+        <p>Se você consegue ver esta página, o servidor está acessível do seu dispositivo.</p>
+    </div>
+
+    <div class="card">
+        <h2>Informações do Cliente</h2>
+        <table>
+            <tr>
+                <td>Endereço IP:</td>
+                <td id="ip">{{ request.remote_addr }}</td>
+            </tr>
+            <tr>
+                <td>User-Agent:</td>
+                <td id="user-agent">{{ request.headers.get('User-Agent', 'Não informado') }}</td>
+            </tr>
+            <tr>
+                <td>Protocolo:</td>
+                <td>{{ request.scheme.upper() }} ({% if request.is_secure %}Seguro ✅{% else %}Não Seguro ⚠️{% endif %})</td>
+            </tr>
+            <tr>
+                <td>Método:</td>
+                <td>{{ request.method }}</td>
+            </tr>
+            <tr>
+                <td>Host:</td>
+                <td>{{ request.host }}</td>
+            </tr>
+            <tr>
+                <td>URL Completa:</td>
+                <td>{{ request.url }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Headers Recebidos</h2>
+        <table>
+            {% for header, value in request.headers %}
+            <tr>
+                <td>{{ header }}:</td>
+                <td style="word-break: break-all;">{{ value }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Teste JavaScript</h2>
+        <p id="js-status" class="status-error">❌ JavaScript não está funcionando</p>
+        <script>
+            document.getElementById('js-status').innerHTML = '<span class="status-ok">✅ JavaScript está funcionando</span>';
+            document.getElementById('js-status').innerHTML += '<br>Data/Hora: ' + new Date().toLocaleString('pt-BR');
+        </script>
+    </div>
+
+    <div class="card">
+        <h2>Teste de Fetch API (CORS)</h2>
+        <p id="fetch-status">Testando...</p>
+        <pre id="fetch-result" style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;"></pre>
+        <script>
+            fetch('/health')
+                .then(response => {
+                    document.getElementById('fetch-status').innerHTML = '<span class="status-ok">✅ Fetch API funcionando</span>';
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('fetch-result').textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(error => {
+                    document.getElementById('fetch-status').innerHTML = '<span class="status-error">❌ Erro no Fetch: ' + error + '</span>';
+                    document.getElementById('fetch-result').textContent = 'Erro: ' + error;
+                });
+        </script>
+    </div>
+
+    <div class="card">
+        <h2>Cookies</h2>
+        <p id="cookies-status"></p>
+        <script>
+            if (document.cookie) {
+                document.getElementById('cookies-status').innerHTML = '<span class="status-ok">✅ Cookies habilitados</span><br>Cookies: ' + document.cookie;
+            } else {
+                document.getElementById('cookies-status').innerHTML = '<span class="status-error">⚠️ Nenhum cookie encontrado (pode estar no modo privado ou cookies bloqueados)</span>';
+            }
+        </script>
+    </div>
+
+    <div class="card">
+        <h2>Storage</h2>
+        <p id="storage-status"></p>
+        <script>
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+                sessionStorage.setItem('test', 'test');
+                sessionStorage.removeItem('test');
+                document.getElementById('storage-status').innerHTML = '<span class="status-ok">✅ LocalStorage e SessionStorage funcionando</span>';
+            } catch (e) {
+                document.getElementById('storage-status').innerHTML = '<span class="status-error">❌ Storage bloqueado: ' + e.message + '</span>';
+            }
+        </script>
+    </div>
+
+    <div class="card">
+        <h2>Ações</h2>
+        <a href="/auth/login" class="btn">Ir para Login</a>
+        <a href="/" class="btn" style="background: #28a745;">Ir para Home</a>
+    </div>
+
+    <div class="card" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+        <h2>ℹ️ Informações</h2>
+        <p><strong>Servidor:</strong> api.emitemax.com.br (3.87.73.106)</p>
+        <p><strong>Última Atualização:</strong> 04/01/2026 16:58 UTC</p>
+        <p><strong>Correções Aplicadas:</strong></p>
+        <ul>
+            <li>✅ CORS configurado para aceitar qualquer origem</li>
+            <li>✅ Cookies configurados para HTTPS (Secure, HttpOnly, SameSite=Lax)</li>
+            <li>✅ Compatibilidade com iOS/Safari</li>
+        </ul>
+    </div>
+</body>
+</html>

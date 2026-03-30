@@ -1,0 +1,490 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1 class="mb-4">
+        {% if cliente.cliente_id %}Editar Cliente: {{ cliente.razao_social }}{% else %}Novo Cliente{% endif %}
+    </h1>
+
+    <div class="card">
+        <div class="card-header">
+            <ul class="nav nav-tabs card-header-tabs" id="clienteTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="cliente-tab" data-bs-toggle="tab" data-bs-target="#cliente-pane" type="button" role="tab" aria-controls="cliente-pane" aria-selected="true">Dados do Cliente</button>
+                </li>
+                {% if cliente.cliente_id %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="produtos-tab" data-bs-toggle="tab" data-bs-target="#produtos-pane" type="button" role="tab" aria-controls="produtos-pane" aria-selected="false">Produtos</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="certificados-tab" data-bs-toggle="tab" data-bs-target="#certificados-pane" type="button" role="tab" aria-controls="certificados-pane" aria-selected="false">Certificados</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="regras-tab" data-bs-toggle="tab" data-bs-target="#regras-pane" type="button" role="tab" aria-controls="regras-pane" aria-selected="false">Regras Tributárias</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="destinatarios-tab" data-bs-toggle="tab" data-bs-target="#destinatarios-pane" type="button" role="tab" aria-controls="destinatarios-pane" aria-selected="false">Destinatários/Tomadores</button>
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+        <div class="card-body">
+            <div class="tab-content" id="clienteTabsContent">
+                <!-- Aba: Dados do Cliente -->
+                <div class="tab-pane fade show active" id="cliente-pane" role="tabpanel" aria-labelledby="cliente-tab" tabindex="0">
+                    <form action="{{ url_for('admin.edit_cliente', cliente_id=cliente.cliente_id) if cliente.cliente_id else url_for('admin.create_cliente') }}" method="post" enctype="multipart/form-data">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="razao_social" class="form-label">Razão Social</label>
+                                <input type="text" class="form-control" id="razao_social" name="razao_social" value="{{ form_data.razao_social | default('') }}" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="nome_fantasia" class="form-label">Nome Fantasia</label>
+                                <input type="text" class="form-control" id="nome_fantasia" name="nome_fantasia" value="{{ form_data.nome_fantasia | default('') }}">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <!-- Produtor Rural toggle -->
+                            <div class="col-md-12 mb-2">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="produtor_rural" name="produtor_rural"
+                                           {% if form_data.produtor_rural %}checked{% endif %}
+                                           onchange="toggleProdutorRural()">
+                                    <label class="form-check-label fw-semibold" for="produtor_rural">
+                                        🌾 Emitente é Produtor Rural (CPF sem CNPJ)
+                                    </label>
+                                </div>
+                            </div>
+                            <!-- CNPJ (empresa) -->
+                            <div class="col-md-4 mb-3" id="div_cnpj">
+                                <label for="cnpj" class="form-label">CNPJ</label>
+                                <input type="text" class="form-control" id="cnpj" name="cnpj" value="{{ form_data.cnpj | default('') }}" placeholder="00.000.000/0000-00">
+                            </div>
+                            <!-- CPF (produtor rural) -->
+                            <div class="col-md-4 mb-3" id="div_cpf" style="display:none;">
+                                <label for="cpf" class="form-label">CPF (Produtor Rural)</label>
+                                <input type="text" class="form-control" id="cpf" name="cpf" value="{{ form_data.cpf | default('') }}" placeholder="000.000.000-00">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="inscricao_estadual" class="form-label">Inscrição Estadual</label>
+                                <input type="text" class="form-control" id="inscricao_estadual" name="inscricao_estadual" value="{{ form_data.inscricao_estadual | default('') }}">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="inscricao_municipal" class="form-label">Inscrição Municipal</label>
+                                <input type="text" class="form-control" id="inscricao_municipal" name="inscricao_municipal" value="{{ form_data.inscricao_municipal | default('') }}">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="regime_tributario_id" class="form-label">Regime Tributário</label>
+                            <select class="form-select select2-searchable" id="regime_tributario_id" name="regime_tributario_id" required>
+                                <option value="">Selecione um Regime Tributário...</option>
+                                {% for regime in regimes_tributarios %}
+                                    <option value="{{ regime.regime_tributario_id }}" {% if form_data.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}>
+                                        {{ regime.nome }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="ambiente" class="form-label">Ambiente de Emissão de NFe *</label>
+                            <select class="form-select" id="ambiente" name="ambiente" required>
+                                <option value="1" {% if form_data.ambiente == 1 %}selected{% endif %}>1 - Produção (NFe Válida)</option>
+                                <option value="2" {% if form_data.ambiente == 2 or not form_data.ambiente %}selected{% endif %}>2 - Homologação (Testes)</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-info-circle"></i> <strong>Produção:</strong> NFe válida fiscalmente (requer certificado válido e aprovação da SEFAZ). 
+                                <strong>Homologação:</strong> Para testes (NFe não tem valor fiscal).
+                            </small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="cnae" class="form-label">CNAE</label>
+                            <input type="text" class="form-control" id="cnae" name="cnae" value="{{ form_data.cnae | default('') }}">
+                        </div>
+
+                        <fieldset class="mb-3">
+                            <legend>Endereço</legend>
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="cep" class="form-label">CEP</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="cep" name="cep" value="{{ form_data.cep | default('') }}" placeholder="00000-000" required>
+                                        <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep">Buscar</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-7 mb-3">
+                                    <label for="logradouro" class="form-label">Logradouro</label>
+                                    <input type="text" class="form-control" id="logradouro" name="logradouro" value="{{ form_data.logradouro | default('') }}" required>
+                                </div>
+                                <div class="col-md-2 mb-3">
+                                    <label for="numero" class="form-label">Número</label>
+                                    <input type="text" class="form-control" id="numero" name="numero" value="{{ form_data.numero | default('') }}" required>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="complemento" class="form-label">Complemento</label>
+                                    <input type="text" class="form-control" id="complemento" name="complemento" value="{{ form_data.complemento | default('') }}">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="bairro" class="form-label">Bairro</label>
+                                    <input type="text" class="form-control" id="bairro" name="bairro" value="{{ form_data.bairro | default('') }}" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="nome_municipio" class="form-label">Município</label>
+                                    <input type="text" class="form-control" id="nome_municipio" name="nome_municipio" value="{{ form_data.nome_municipio | default('') }}" required>
+                                    <input type="hidden" id="codigo_municipio" name="codigo_municipio" value="{{ form_data.codigo_municipio | default('') }}">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="uf" class="form-label">UF</label>
+                                    <input type="text" class="form-control" id="uf" name="uf" value="{{ form_data.uf | default('') }}" required>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="mb-3">
+                            <legend>Contato</legend>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="email_contato" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="email_contato" name="email_contato" value="{{ form_data.email_contato | default('') }}">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="telefone_contato" class="form-label">Telefone</label>
+                                    <input type="text" class="form-control" id="telefone_contato" name="telefone_contato" value="{{ form_data.telefone_contato | default('') }}" placeholder="(00) 0000-0000">
+                                </div>
+                            </div>
+                        </fieldset>
+                        
+                        <fieldset class="mb-3">
+                            <legend>Logo do Cliente</legend>
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label for="logo_file" class="form-label">Arquivo de Logo (PNG, JPG ou GIF)</label>
+                                    <input class="form-control" type="file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/jpg,image/gif">
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-info-circle"></i> A logo será exibida no DANFE (PDF da NFe). Tamanho recomendado: 300x100 pixels.
+                                    </small>
+                                    {% if form_data.logo_path %}
+                                    <div class="mt-2">
+                                        <p class="mb-1"><strong>Logo atual:</strong></p>
+                                        <img src="{{ url_for('static', filename=form_data.logo_path) }}" alt="Logo" style="max-width: 200px; max-height: 80px;" class="border p-2">
+                                        <p class="text-muted mt-1"><small>Selecione um novo arquivo acima para substituir</small></p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </fieldset>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
+                            <label class="form-check-label" for="ativo">
+                                Cliente Ativo
+                            </label>
+                        </div>
+                        
+                        {% if not cliente.cliente_id %}
+                        <fieldset class="mb-3">
+                            <legend>Certificado Digital (Opcional - Primeiro Certificado)</legend>
+                            <div class="mb-3">
+                                <label for="conteudo_certificado_file" class="form-label">Arquivo do Certificado (.pfx)</label>
+                                <input class="form-control" type="file" id="conteudo_certificado_file" name="conteudo_certificado_file" accept=".pfx">
+                            </div>
+                            <div class="mb-3">
+                                <label for="cert_senha_certificado" class="form-label">Senha do Certificado</label>
+                                <input type="password" class="form-control" id="cert_senha_certificado" name="cert_senha_certificado">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="cert_ativo" name="cert_ativo" checked>
+                                <label class="form-check-label" for="cert_ativo">
+                                    Certificado Ativo (ao fazer upload)
+                                </label>
+                            </div>
+                            <input type="hidden" name="cert_nome_arquivo_original" value="Upload Inicial">
+                        </fieldset>
+                        {% endif %}
+
+                        <button type="submit" class="btn btn-success">Salvar Cliente</button>
+                        <a href="{{ url_for('admin.list_clientes') }}" class="btn btn-secondary">Cancelar</a>
+                    </form>
+                </div>
+
+                {% if cliente.cliente_id %}
+                <div class="tab-pane fade" id="produtos-pane" role="tabpanel" aria-labelledby="produtos-tab" tabindex="0">
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-box me-2"></i>Produtos Associados</span>
+                            {% if can_create() %}
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Produto
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="card-body pt-3">
+                            {% set cliente_id = cliente.cliente_id %}
+                            {% include 'admin/produtos/list_partial.html' %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="certificados-pane" role="tabpanel" aria-labelledby="certificados-tab" tabindex="0">
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-certificate me-2"></i>Certificados Associados</span>
+                            {% if can_create() %}
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Certificado
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/certificados/list_partial.html' %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="regras-pane" role="tabpanel" aria-labelledby="regras-tab" tabindex="0">
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-balance-scale me-2"></i>Regras Tributárias Associadas</span>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Nova Regra Tributária" data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Nova Regra
+                            </button>
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/regras_tributacao/list_partial.html' %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="destinatarios-pane" role="tabpanel" aria-labelledby="destinatarios-tab" tabindex="0">
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-users me-2"></i>Destinatários/Tomadores Associados</span>
+                            {% if can_create() %}
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Destinatário/Tomador" data-modal-url="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id, modal=true) }}">
+                                <i class="fas fa-plus"></i> Adicionar Novo Destinatário/Tomador
+                            </button>
+                            {% endif %}
+                        </div>
+                        <div class="card-body pt-3">
+                            {% include 'admin/destinatarios/list_partial.html' %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p class="mt-3">Buscando CEP...</p>
+    </div>
+
+    <div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xxl" style="max-width: 98vw; margin: 0 auto;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addModalLabel"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- O conteúdo do formulário será carregado aqui via AJAX -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // === Toggle Produtor Rural ===
+    var _cnpjMask = null, _cpfMask = null;
+
+    function toggleProdutorRural() {
+        var isRural = document.getElementById('produtor_rural').checked;
+        var cnpjEl = document.getElementById('cnpj');
+        var cpfEl = document.getElementById('cpf');
+        document.getElementById('div_cnpj').style.display = isRural ? 'none' : '';
+        document.getElementById('div_cpf').style.display = isRural ? '' : 'none';
+        // Desabilitar campo oculto para nao enviar valor conflitante
+        cnpjEl.disabled = isRural;
+        if (cpfEl) cpfEl.disabled = !isRural;
+        cnpjEl.required = !isRural;
+        if (cpfEl) cpfEl.required = isRural;
+    }
+
+    // Expor globalmente para o atributo onchange
+    window.toggleProdutorRural = toggleProdutorRural;
+
+    // Aplicar mascaras
+    var cnpjInput = document.getElementById('cnpj');
+    if (cnpjInput && window.IMask) {
+        _cnpjMask = IMask(cnpjInput, { mask: '00.000.000/0000-00' });
+    }
+    var cpfInput = document.getElementById('cpf');
+    if (cpfInput && window.IMask) {
+        _cpfMask = IMask(cpfInput, { mask: '000.000.000-00' });
+    }
+
+    // Restaurar estado inicial ao carregar pagina (modo edicao)
+    if (document.getElementById('produtor_rural') &&
+        document.getElementById('produtor_rural').checked) {
+        toggleProdutorRural();
+    }
+    // Máscara CEP
+    var cepInput = document.getElementById('cep');
+    if (cepInput && window.IMask) {
+        IMask(cepInput, { mask: '00000-000' });
+    }
+    // Máscara Telefone
+    var telInput = document.getElementById('telefone_contato');
+    if (telInput && window.IMask) {
+        IMask(telInput, { mask: '(00) 0000-0000' });
+    }
+
+    // Busca CEP
+    var btnBuscarCep = document.getElementById('btn-buscar-cep');
+    if (btnBuscarCep && cepInput) {
+        btnBuscarCep.addEventListener('click', function() {
+            var cep = cepInput.value.replace(/\D/g, '');
+            var loadingOverlay = document.getElementById('loadingOverlay');
+            if (cep.length !== 8) {
+                alert('Por favor, digite um CEP válido com 8 dígitos.');
+                return;
+            }
+            if (loadingOverlay) loadingOverlay.classList.add('active');
+            fetch('https://viacep.com.br/ws/' + cep + '/json/')
+                .then(response => response.json())
+                .then(data => {
+                    if (loadingOverlay) loadingOverlay.classList.remove('active');
+                    if (data.erro) {
+                        alert('CEP não encontrado.');
+                    } else {
+                        document.getElementById('logradouro').value = data.logradouro || '';
+                        document.getElementById('complemento').value = data.complemento || '';
+                        document.getElementById('bairro').value = data.bairro || '';
+                        document.getElementById('nome_municipio').value = data.localidade || '';
+                        document.getElementById('codigo_municipio').value = data.ibge || '';
+                        document.getElementById('uf').value = data.uf || '';
+                        document.getElementById('numero').focus();
+                    }
+                })
+                .catch(function() {
+                    if (loadingOverlay) loadingOverlay.classList.remove('active');
+                    alert('Ocorreu um erro ao buscar o CEP. Tente novamente mais tarde.');
+                });
+        });
+    }
+    // Tabs via hash
+    const hash = window.location.hash;
+    if (hash) {
+        let tabId = hash.substring(1);
+        if (tabId === 'produtos') tabId = 'produtos-tab';
+        else if (tabId === 'certificados') tabId = 'certificados-tab';
+        else if (tabId === 'regras') tabId = 'regras-tab';
+        else if (tabId === 'destinatarios') tabId = 'destinatarios-tab';
+        else return;
+        const tabButton = document.getElementById(tabId);
+        if (tabButton) {
+            const tab = new bootstrap.Tab(tabButton);
+            tab.show();
+        }
+    }
+
+    // Modal AJAX
+    const addModal = document.getElementById('addModal');
+    if (addModal) {
+        const modalBody = addModal.querySelector('.modal-body');
+        const modalTitle = addModal.querySelector('.modal-title');
+        let currentModalForm = null;
+
+        addModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const url = button.getAttribute('data-modal-url');
+            const title = button.getAttribute('data-modal-title');
+
+            modalTitle.textContent = title;
+            modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Carregando formulário...</p></div>';
+
+            fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.text())
+            .then(html => {
+                modalBody.innerHTML = html;
+                currentModalForm = modalBody.querySelector('form');
+
+                if (currentModalForm) {
+                    currentModalForm.addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const form = this;
+                        const formData = new FormData(form);
+                        const formAction = form.action;
+                        const submitButton = form.querySelector('button[type="submit"]');
+                        if(submitButton) {
+                            submitButton.disabled = true;
+                            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
+                        }
+                        fetch(formAction, {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert(data.message);
+                                bootstrap.Modal.getInstance(addModal).hide();
+                                // Força reload completo para atualizar a lista
+                                // Sempre usa reload(true) para garantir atualização da página
+                                window.location.reload(true);
+                            } else {
+                                alert('Erro: ' + data.message);
+                                if(submitButton) {
+                                    submitButton.disabled = false;
+                                    submitButton.innerHTML = 'Salvar';
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Erro na submissão AJAX:', error);
+                            alert('Ocorreu um erro ao salvar. Verifique o console para mais detalhes.');
+                            if(submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.innerHTML = 'Salvar';
+                            }
+                        });
+                    });
+                }
+                // Máscaras nos campos do modal
+                var cnpjModal = document.getElementById('cnpj_modal');
+                if (cnpjModal) IMask(cnpjModal, { mask: '00.000.000/0000-00' });
+                var cepModal = document.getElementById('cep_modal');
+                if (cepModal) IMask(cepModal, { mask: '00000-000' });
+                var telModal = document.getElementById('telefone_modal');
+                if (telModal) IMask(telModal, { mask: '(00) 0000-0000' });
+            })
+            .catch(error => {
+                modalBody.innerHTML = '<p class="text-danger">Erro ao carregar o formulário: ' + error + '</p>';
+                console.error('Erro ao carregar formulário no modal:', error);
+            });
+        });
+
+        addModal.addEventListener('hidden.bs.modal', function () {
+            modalBody.innerHTML = '';
+            currentModalForm = null;
+        });
+    }
+});
+</script>
+{% endblock %}

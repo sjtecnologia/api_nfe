@@ -1,0 +1,269 @@
+{% extends "admin/base.html" %}
+
+{% block title %}DANFC-e - {{ nfce.numero }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        .no-print { display: none !important; }
+        body { margin: 0; padding: 0; }
+    }
+    
+    .danfce {
+        max-width: 300px;
+        margin: 20px auto;
+        border: 2px solid #000;
+        padding: 10px;
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+    }
+    
+    .danfce-header {
+        text-align: center;
+        border-bottom: 2px dashed #000;
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .danfce-logo {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .danfce-section {
+        margin-bottom: 10px;
+        border-bottom: 1px dashed #ccc;
+        padding-bottom: 10px;
+    }
+    
+    .danfce-section:last-child {
+        border-bottom: none;
+    }
+    
+    .danfce-title {
+        font-weight: bold;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+    
+    .danfce-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 3px;
+    }
+    
+    .danfce-qrcode {
+        text-align: center;
+        margin: 15px 0;
+    }
+    
+    .danfce-qrcode img {
+        max-width: 150px;
+        height: auto;
+    }
+    
+    .danfce-total {
+        font-size: 16px;
+        font-weight: bold;
+        text-align: center;
+        padding: 10px;
+        background: #f0f0f0;
+        margin: 10px 0;
+    }
+    
+    .danfce-chave {
+        word-break: break-all;
+        font-size: 9px;
+        text-align: center;
+    }
+    
+    .danfce-footer {
+        text-align: center;
+        font-size: 9px;
+        margin-top: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row no-print mb-3">
+        <div class="col-12 text-center">
+            <button onclick="window.print()" class="btn btn-primary">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+            <a href="{{ url_for('nfce.consultar_nfce', nfce_id=nfce.nfe_id) }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="danfce">
+        <!-- Cabeçalho -->
+        <div class="danfce-header">
+            <div class="danfce-logo">{{ emitente.nome_fantasia or emitente.razao_social }}</div>
+            <div>{{ emitente.razao_social }}</div>
+            <div>CNPJ: {{ emitente.cnpj }}</div>
+            <div>IE: {{ emitente.inscricao_estadual }}</div>
+            <div style="margin-top: 5px;">
+                {{ emitente.logradouro }}, {{ emitente.numero }}<br>
+                {{ emitente.bairro }} - {{ emitente.nome_municipio }}/{{ emitente.uf }}<br>
+                CEP: {{ emitente.cep }}
+            </div>
+        </div>
+
+        <!-- Tipo de Documento -->
+        <div class="danfce-section" style="text-align: center; font-size: 14px; font-weight: bold;">
+            NFC-e - Nota Fiscal de Consumidor Eletrônica
+        </div>
+
+        <!-- Número e Data -->
+        <div class="danfce-section">
+            <div class="danfce-item">
+                <span>Número:</span>
+                <strong>{{ nfce.numero }}</strong>
+            </div>
+            <div class="danfce-item">
+                <span>Série:</span>
+                <strong>{{ nfce.serie }}</strong>
+            </div>
+            <div class="danfce-item">
+                <span>Data:</span>
+                <strong>{{ nfce.data_emissao.strftime('%d/%m/%Y %H:%M') }}</strong>
+            </div>
+        </div>
+
+        <!-- Destinatário (se houver) -->
+        {% if dados.destinatario and dados.destinatario.cpf_cnpj %}
+        <div class="danfce-section">
+            <div class="danfce-title">Destinatário</div>
+            {% if dados.destinatario.nome %}
+            <div>{{ dados.destinatario.nome }}</div>
+            {% endif %}
+            <div>CPF/CNPJ: {{ dados.destinatario.cpf_cnpj }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Produtos -->
+        <div class="danfce-section">
+            <div class="danfce-title">Produtos</div>
+            {% for item in dados.produtos %}
+            <div style="margin-bottom: 8px;">
+                <div><strong>{{ item.produto.nome }}</strong></div>
+                <div class="danfce-item">
+                    <span>{{ item.quantidade }} x R$ {{ "%.2f"|format(item.valor_unitario) }}</span>
+                    <strong>R$ {{ "%.2f"|format(item.quantidade * item.valor_unitario - item.desconto) }}</strong>
+                </div>
+                {% if item.desconto > 0 %}
+                <div class="danfce-item" style="font-size: 9px;">
+                    <span>Desconto:</span>
+                    <span class="text-danger">-R$ {{ "%.2f"|format(item.desconto) }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Total -->
+        <div class="danfce-total">
+            TOTAL: R$ {{ "%.2f"|format(nfce.valor_total) }}
+        </div>
+
+        <!-- Forma de Pagamento -->
+        <div class="danfce-section">
+            <div class="danfce-title">Pagamento</div>
+            <div class="danfce-item">
+                <span>Forma:</span>
+                <strong>
+                    {% if dados.forma_pagamento == '01' %}Dinheiro
+                    {% elif dados.forma_pagamento == '03' %}Cartão de Crédito
+                    {% elif dados.forma_pagamento == '04' %}Cartão de Débito
+                    {% elif dados.forma_pagamento == '16' %}PIX
+                    {% else %}{{ dados.forma_pagamento }}
+                    {% endif %}
+                </strong>
+            </div>
+            {% if dados.valor_pago %}
+            <div class="danfce-item">
+                <span>Valor Pago:</span>
+                <strong>R$ {{ "%.2f"|format(dados.valor_pago) }}</strong>
+            </div>
+            {% endif %}
+            {% if dados.troco and dados.troco > 0 %}
+            <div class="danfce-item">
+                <span>Troco:</span>
+                <strong>R$ {{ "%.2f"|format(dados.troco) }}</strong>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Informações Adicionais -->
+        {% if dados.informacoes_adicionais %}
+        <div class="danfce-section">
+            <div class="danfce-title">Observações</div>
+            <div style="font-size: 9px;">{{ dados.informacoes_adicionais }}</div>
+        </div>
+        {% endif %}
+
+        <!-- QR Code -->
+        <div class="danfce-qrcode">
+            {% if nfce.qrcode_url %}
+            <img src="{{ nfce.qrcode_url }}" alt="QR Code">
+            <div style="margin-top: 5px; font-size: 10px;">
+                Consulte pela Chave de Acesso no site da SEFAZ ou pelo QR Code acima
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Chave de Acesso -->
+        <div class="danfce-section">
+            <div class="danfce-title" style="text-align: center;">Chave de Acesso</div>
+            <div class="danfce-chave">{{ nfce.chave_acesso }}</div>
+        </div>
+
+        <!-- Protocolo -->
+        {% if nfce.protocolo_autorizacao %}
+        <div class="danfce-section">
+            <div class="danfce-item">
+                <span>Protocolo:</span>
+                <span style="font-size: 9px;">{{ nfce.protocolo_autorizacao }}</span>
+            </div>
+            {% if nfce.data_autorizacao %}
+            <div class="danfce-item">
+                <span>Autorização:</span>
+                <span style="font-size: 9px;">{{ nfce.data_autorizacao.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Status -->
+        <div class="danfce-section" style="text-align: center;">
+            {% if nfce.status == 'Autorizada' %}
+            <div style="color: green; font-weight: bold;">✓ NFC-e AUTORIZADA</div>
+            {% elif nfce.status == 'Cancelada' %}
+            <div style="color: red; font-weight: bold;">✗ NFC-e CANCELADA</div>
+            {% if nfce.motivo_rejeicao %}
+            <div style="font-size: 9px; margin-top: 5px;">{{ nfce.motivo_rejeicao }}</div>
+            {% endif %}
+            {% else %}
+            <div style="color: orange; font-weight: bold;">{{ nfce.status }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Rodapé -->
+        <div class="danfce-footer">
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #000;">
+                DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRÔNICA
+            </div>
+            <div style="margin-top: 5px;">
+                Ambiente: {% if nfce.ambiente == 1 %}Produção{% else %}Homologação{% endif %}
+            </div>
+            <div style="margin-top: 5px;">
+                Emitido em {{ nfce.data_emissao.strftime('%d/%m/%Y às %H:%M:%S') }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

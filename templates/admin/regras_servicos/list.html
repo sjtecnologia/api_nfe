@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Regras Tributárias de Serviços (NFS-e){% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">📋 Regras Tributárias de Serviços</h1>
+                    <div class="page-subtitle">Configurações fiscais para emissão de NFS-e</div>
+                </div>
+                <div>
+                    {% if cliente_id %}
+                    <a href="{{ url_for('regras_servicos.nova_regra_servico', cliente_id=cliente_id) }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Nova Regra
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if not cliente_id %}
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i> Selecione um cliente para gerenciar as regras tributárias.
+    </div>
+    {% else %}
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="col-md-3">
+                    <label class="form-label">Código Serviço</label>
+                    <input type="text" class="form-control" name="codigo_servico" placeholder="Ex: 01.01" value="{{ request.args.get('codigo_servico', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Código NBS</label>
+                    <input type="text" class="form-control" name="codigo_nbs" placeholder="Código NBS" value="{{ request.args.get('codigo_nbs', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Descrição</label>
+                    <input type="text" class="form-control" name="descricao" placeholder="Descrição do serviço" value="{{ request.args.get('descricao', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" name="ativo">
+                        <option value="">Todos</option>
+                        <option value="1" {% if request.args.get('ativo') == '1' %}selected{% endif %}>Ativo</option>
+                        <option value="0" {% if request.args.get('ativo') == '0' %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    {% if request.args.get('codigo_servico') or request.args.get('codigo_nbs') or request.args.get('descricao') or (request.args.get('ativo') and request.args.get('ativo') != 'todos') %}
+                    <a href="{{ url_for('regras_servicos.list_regras_servicos') }}?cliente_id={{ cliente_id }}" class="btn btn-secondary ms-1">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if regras and regras|length > 0 %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="5%">Prioridade</th>
+                            <th width="10%">Código Serviço</th>
+                            <th width="10%">NBS</th>
+                            <th width="20%">Descrição</th>
+                            <th width="8%">ISS %</th>
+                            <th width="8%">Retido</th>
+                            <th width="10%">Regime</th>
+                            <th width="7%">Status</th>
+                            <th width="15%">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for regra in regras %}
+                        <tr>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ regra.prioridade }}</span>
+                            </td>
+                            <td><strong>{{ regra.codigo_servico_lc116 }}</strong></td>
+                            <td>{{ regra.codigo_nbs }}</td>
+                            <td>
+                                {% if regra.descricao_servico %}
+                                    <small>{{ regra.descricao_servico[:50] }}...</small>
+                                {% else %}
+                                    <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ regra.aliquota_iss }}%</td>
+                            <td class="text-center">
+                                {% if regra.iss_retido %}
+                                    <span class="badge bg-warning">Sim</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ regra.regime_tributario_nome or '-' }}</small></td>
+                            <td class="text-center">
+                                {% if regra.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('regras_servicos.editar_regra_servico', regra_id=regra.regra_id) }}" 
+                                   class="btn btn-sm btn-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button class="btn btn-sm btn-warning toggle-regra" 
+                                        data-regra-id="{{ regra.regra_id }}" 
+                                        title="{% if regra.ativo %}Desativar{% else %}Ativar{% endif %}">
+                                    <i class="fas fa-power-off"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger delete-regra" 
+                                        data-regra-id="{{ regra.regra_id }}"
+                                        data-codigo="{{ regra.codigo_servico_lc116 }}"
+                                        title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Nenhuma regra cadastrada para este cliente.</p>
+                <a href="{{ url_for('regras_servicos.nova_regra_servico', cliente_id=cliente_id) }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Criar Primeira Regra
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Toggle ativo/inativo
+document.querySelectorAll('.toggle-regra').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const regraId = this.dataset.regraId;
+        
+        if (confirm('Deseja alterar o status desta regra?')) {
+            try {
+                const response = await fetch(`/admin/regras-servicos/toggle/${regraId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Erro ao alterar status');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao alterar status');
+            }
+        }
+    });
+});
+
+// Excluir regra
+document.querySelectorAll('.delete-regra').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const regraId = this.dataset.regraId;
+        const codigo = this.dataset.codigo;
+        
+        if (confirm(`Deseja realmente excluir a regra do código ${codigo}?`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/admin/regras-servicos/excluir/${regraId}`;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+});
+</script>
+{% endblock %}

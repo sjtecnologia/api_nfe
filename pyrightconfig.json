@@ -1,0 +1,12 @@
+{
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "reportPossiblyUnboundVariable": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportAttributeAccessIssue": "warning",
+  "reportGeneralTypeIssues": "warning",
+  "reportArgumentType": "warning",
+  "reportCallIssue": "warning",
+  "typeCheckingMode": "basic",
+  "ignore": ["pynfe.utils.danfe", "pynfe.processamento.danfce"]
+}

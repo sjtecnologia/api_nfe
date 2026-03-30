@@ -1,0 +1,1325 @@
+{% extends "base.html" %}
+
+{% block title %}Emitir NFS-e{% endblock %}
+
+{% block extra_css %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<style>
+.card-header h5 {
+    margin: 0;
+}
+input[readonly] {
+    background-color: #f8f9fa;
+}
+.form-label {
+    font-weight: 500;
+}
+.required::after {
+    content: " *";
+    color: #dc3545;
+}
+.valor-display {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+/* Select2 customização */
+.select2-container--bootstrap-5 .select2-selection {
+    min-height: 38px;
+}
+.select2-container--bootstrap-5 .select2-selection--single {
+    padding: 0.375rem 0.75rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1 class="page-title">📄 Emitir NFS-e Nacional</h1>
+                <div class="page-subtitle">
+                    <strong>Prestador:</strong> {{ emitente.razao_social if emitente else 'N/D' }} - CNPJ: {{ emitente.cnpj if emitente else 'N/D' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" id="nfseForm" novalidate>
+        <!-- Identificação do RPS -->
+        <div class="card">
+            <div class="card-header">
+                <h5>🆔 Identificação do RPS</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="numero_rps">Número RPS *</label>
+                            <input type="number" class="form-control" name="numero_rps" id="numero_rps" 
+                                   value="{{ proximo_rps }}" min="1" required>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="serie_rps">Série *</label>
+                            <input type="text" class="form-control" name="serie_rps" id="serie_rps" 
+                                   value="1" required>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="tipo_rps">Tipo RPS</label>
+                            <select class="form-control" name="tipo_rps" id="tipo_rps">
+                                <option value="1" selected>RPS</option>
+                                <option value="2">Nota Fiscal Conjugada</option>
+                                <option value="3">Cupom</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_competencia">Data de Competência *</label>
+                            <input type="date" class="form-control" name="data_competencia" id="data_competencia" 
+                                   value="{{ today }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="natureza_operacao">Natureza da Operação</label>
+                            <select class="form-control" name="natureza_operacao" id="natureza_operacao">
+                                <option value="1" selected>Tributação no município</option>
+                                <option value="2">Tributação fora do município</option>
+                                <option value="3">Isenção</option>
+                                <option value="4">Imune</option>
+                                <option value="5">Exigibilidade suspensa por decisão judicial</option>
+                                <option value="6">Exigibilidade suspensa por procedimento administrativo</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="ambiente">Ambiente</label>
+                            <select class="form-control" name="ambiente" id="ambiente">
+                                <option value="homologacao" selected>Homologação (Testes)</option>
+                                <option value="producao">Produção</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dados do Tomador -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>👤 Dados do Tomador</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label for="tomador_select">Selecionar Tomador *</label>
+                            <select class="form-control" name="tomador_id" id="tomador_select" onchange="carregarTomador()" required>
+                                <option value="">Selecione um tomador...</option>
+                                {% for tomador in tomadores %}
+                                <option value="{{ tomador.destinatario_id }}" 
+                                        data-cpf-cnpj="{{ tomador.cpf_cnpj }}"
+                                        data-razao="{{ tomador.nome_razao_social }}"
+                                        data-inscricao="{{ tomador.inscricao_municipal or '' }}"
+                                        data-logradouro="{{ tomador.logradouro }}"
+                                        data-numero="{{ tomador.numero }}"
+                                        data-complemento="{{ tomador.complemento or '' }}"
+                                        data-bairro="{{ tomador.bairro }}"
+                                        data-municipio="{{ tomador.codigo_municipio }}"
+                                        data-municipio-nome="{{ tomador.nome_municipio }}"
+                                        data-uf="{{ tomador.uf }}"
+                                        data-cep="{{ tomador.cep }}"
+                                        data-email="{{ tomador.email or '' }}"
+                                        data-telefone="{{ tomador.telefone or '' }}">
+                                    {{ tomador.nome_razao_social }} - {{ tomador.cpf_cnpj }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Informações do tomador selecionado -->
+                <div id="tomadorInfo" style="display: none;" class="mt-3">
+                    <div class="alert alert-info">
+                        <strong>Tomador Selecionado:</strong><br>
+                        <span id="tomadorNome"></span><br>
+                        <span id="tomadorDocumento"></span><br>
+                        <span id="tomadorEndereco"></span><br>
+                        <span id="tomadorCidade"></span> - CEP: <span id="tomadorCep"></span><br>
+                        <span id="tomadorContato"></span>
+                    </div>
+                </div>
+                
+                <!-- Campos hidden para enviar no formulário -->
+                <input type="hidden" name="tomador_cpf_cnpj" id="tomador_cpf_cnpj">
+                <input type="hidden" name="tomador_razao_social" id="tomador_razao_social">
+                <input type="hidden" name="tomador_inscricao_municipal" id="tomador_inscricao_municipal">
+                <input type="hidden" name="tomador_logradouro" id="tomador_logradouro">
+                <input type="hidden" name="tomador_numero" id="tomador_numero">
+                <input type="hidden" name="tomador_complemento" id="tomador_complemento">
+                <input type="hidden" name="tomador_bairro" id="tomador_bairro">
+                <input type="hidden" name="tomador_codigo_municipio" id="tomador_codigo_municipio">
+                <input type="hidden" name="tomador_uf" id="tomador_uf">
+                <input type="hidden" name="tomador_cep" id="tomador_cep">
+                <input type="hidden" name="tomador_telefone" id="tomador_telefone">
+                <input type="hidden" name="tomador_email" id="tomador_email">
+            </div>
+        </div>
+
+        <!-- Dados do Serviço -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>🛠️ Dados do Serviço</h5>
+            </div>
+            <div class="card-body">
+                <!-- Alert de Regra Encontrada -->
+                <div id="alertRegra" class="alert alert-success d-none" role="alert">
+                    <i class="fas fa-check-circle"></i> <strong>Regra encontrada!</strong> Dados preenchidos automaticamente.
+                </div>
+                
+                <!-- Alert de Regra Não Encontrada -->
+                <div id="alertRegraNotFound" class="alert alert-warning d-none" role="alert">
+                    <i class="fas fa-exclamation-triangle"></i> <strong>Regra não encontrada!</strong> Preencha os dados manualmente.
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="codigo_servico">Código de Serviço (LC 116) *</label>
+                            <select class="form-control" name="codigo_servico" id="codigo_servico" 
+                                    onchange="atualizarAliquota(); buscarRegraTributaria();" required>
+                                <option value="">Selecione...</option>
+                                {% for codigo, descricao in codigos_servico.items() %}
+                                <option value="{{ codigo }}">{{ codigo }} - {{ descricao }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="codigo_nbs">Código NBS</label>
+                            <select class="form-control" name="codigo_nbs" id="codigo_nbs">
+                                <option value="">Selecione o serviço primeiro...</option>
+                            </select>
+                            <small class="text-muted">Nomenclatura Brasileira de Serviços</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="codigo_cnae">CNAE</label>
+                            <input type="text" class="form-control" name="codigo_cnae" id="codigo_cnae" 
+                                   placeholder="Código CNAE (opcional)">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="codigo_municipio_prestacao">Local de Prestação *</label>
+                            <select class="form-control" name="codigo_municipio_prestacao" id="codigo_municipio_prestacao" required>
+                                <option value="3549805" selected>São José do Rio Preto (3549805)</option>
+                                {% for codigo, nome in municipios.items() %}
+                                {% if codigo != '3549805' %}
+                                <option value="{{ codigo }}">{{ nome }} ({{ codigo }})</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="form-group">
+                            <label for="discriminacao">Discriminação do Serviço *</label>
+                            <textarea class="form-control" name="discriminacao" id="discriminacao" 
+                                      rows="4" placeholder="Descreva detalhadamente o serviço prestado..." required></textarea>
+                            <small class="text-muted">Máximo 2000 caracteres</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Valores e Tributos -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>💰 Valores e Tributos</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="valor_servico">Valor dos Serviços (R$) *</label>
+                            <input type="text" class="form-control" name="valor_servico" id="valor_servico" 
+                                   placeholder="0,00" required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="valor_deducoes">Deduções (R$)</label>
+                            <input type="text" class="form-control" name="valor_deducoes" id="valor_deducoes" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="desconto_incondicionado">Desconto Incondicionado (R$)</label>
+                            <input type="text" class="form-control" name="desconto_incondicionado" id="desconto_incondicionado" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="desconto_condicionado">Desconto Condicionado (R$)</label>
+                            <input type="text" class="form-control" name="desconto_condicionado" id="desconto_condicionado" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <h6>💼 Retenções</h6>
+                <div class="row">
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="valor_pis">PIS (R$)</label>
+                            <input type="text" class="form-control" name="valor_pis" id="valor_pis" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="valor_cofins">COFINS (R$)</label>
+                            <input type="text" class="form-control" name="valor_cofins" id="valor_cofins" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="valor_inss">INSS (R$)</label>
+                            <input type="text" class="form-control" name="valor_inss" id="valor_inss" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="valor_ir">IR (R$)</label>
+                            <input type="text" class="form-control" name="valor_ir" id="valor_ir" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="valor_csll">CSLL (R$)</label>
+                            <input type="text" class="form-control" name="valor_csll" id="valor_csll" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="outras_retencoes">Outras (R$)</label>
+                            <input type="text" class="form-control" name="outras_retencoes" id="outras_retencoes" 
+                                   placeholder="0,00" value="0,00">
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <h6><i class="fas fa-landmark"></i> ISS</h6>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="aliquota_iss">Alíquota ISS (%)</label>
+                            <input type="number" class="form-control" name="aliquota_iss" id="aliquota_iss" 
+                                   step="0.01" min="0" max="5" value="5" onchange="calcularTotais()" required>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="iss_retido">ISS Retido?</label>
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" name="iss_retido" id="iss_retido" onchange="calcularTotais()">
+                                <label class="form-check-label" for="iss_retido">Sim, reter ISS</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for=>Valor ISS</label>
+                            <input type="text" class="form-control" id="valor_iss_display" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for=>Base de Cálculo</label>
+                            <input type="text" class="form-control" id="base_calculo_display" readonly>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <h6><i class="fas fa-percentage"></i> Tributos Totais (Reforma Tributária)</h6>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="percentual_total_tributos_federais">% Total Tributos Federais</label>
+                            <input type="number" class="form-control" name="percentual_total_tributos_federais" id="percentual_total_tributos_federais" 
+                                   step="0.01" min="0" max="100" value="0" required>
+                            <small class="text-muted">Percentual do valor do serviço</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="percentual_total_tributos_estaduais">% Total Tributos Estaduais</label>
+                            <input type="number" class="form-control" name="percentual_total_tributos_estaduais" id="percentual_total_tributos_estaduais" 
+                                   step="0.01" min="0" max="100" value="0" required>
+                            <small class="text-muted">Percentual do valor do serviço</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="percentual_total_tributos_municipais">% Total Tributos Municipais</label>
+                            <input type="number" class="form-control" name="percentual_total_tributos_municipais" id="percentual_total_tributos_municipais" 
+                                   step="0.01" min="0" max="100" value="5" required>
+                            <small class="text-muted">Percentual do valor do serviço (geralmente o ISS)</small>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="alert alert-info mb-0">
+                            <strong>Total Retenções:</strong> 
+                            <span id="total_retencoes_display" class="valor-display">R$ 0,00</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="alert alert-success mb-0">
+                            <strong>Valor Líquido:</strong> 
+                            <span id="valor_liquido_display" class="valor-display">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IBS/CBS - Reforma Tributária -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>⚖️ IBS/CBS - Reforma Tributária</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="finalidade_nfse">Finalidade da NFS-e</label>
+                            <select class="form-control" name="finalidade_nfse" id="finalidade_nfse" required>
+                                <option value="0" selected>0 - Normal</option>
+                                <option value="1">1 - Complementar</option>
+                                <option value="2">2 - Ajuste</option>
+                                <option value="3">3 - Substituição</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="indicador_consumidor_final">Consumidor Final?</label>
+                            <select class="form-control" name="indicador_consumidor_final" id="indicador_consumidor_final" required>
+                                <option value="0" selected>0 - Não</option>
+                                <option value="1">1 - Sim</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="codigo_indicador_operacao">Indicador de Operação</label>
+                            <select class="form-control" name="codigo_indicador_operacao" id="codigo_indicador_operacao" required>
+                                <option value="000001" selected>000001 - Operação Interna</option>
+                                <option value="000002">000002 - Operação Interestadual</option>
+                                <option value="000003">000003 - Operação com Exterior</option>
+                            </select>
+                            <small class="text-muted">6 dígitos numéricos</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="indicador_destinatario">Indicador Destinatário</label>
+                            <select class="form-control" name="indicador_destinatario" id="indicador_destinatario" required>
+                                <option value="0" selected>0 - Operação Interna (mesmo município)</option>
+                                <option value="1">1 - Operação Interestadual</option>
+                                <option value="2">2 - Operação com Exterior</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="cst_ibs_cbs">CST IBS/CBS</label>
+                            <select class="form-control" name="cst_ibs_cbs" id="cst_ibs_cbs" required>
+                                <option value="001" selected>001 - Tributado com alíquota cheia</option>
+                                <option value="002">002 - Tributado com redução</option>
+                                <option value="003">003 - Diferido</option>
+                                <option value="004">004 - Isento</option>
+                                <option value="005">005 - Não tributado</option>
+                                <option value="006">006 - Suspenso por decisão judicial</option>
+                                <option value="007">007 - Suspenso por decisão administrativa</option>
+                                <option value="008">008 - Não incidência</option>
+                            </select>
+                            <small class="text-muted">3 dígitos numéricos</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="codigo_classificacao_tributaria">Cód. Classificação Tributária</label>
+                            <input type="text" class="form-control" name="codigo_classificacao_tributaria" id="codigo_classificacao_tributaria" 
+                                   value="000001" pattern="[0-9]{6}" maxlength="6" required>
+                            <small class="text-muted">6 dígitos numéricos</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="codigo_localidade_incidencia">Localidade de Incidência</label>
+                            <select class="form-control" name="codigo_localidade_incidencia" id="codigo_localidade_incidencia" required>
+                                <option value="3549805" selected>São José do Rio Preto - SP (3549805)</option>
+                                {% for codigo, nome in municipios.items() %}
+                                {% if codigo != '3549805' %}
+                                <option value="{{ codigo }}">{{ nome }} ({{ codigo }})</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Código IBGE do município</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="percentual_redutor">Percentual Redutor</label>
+                            <input type="number" class="form-control" name="percentual_redutor" id="percentual_redutor" 
+                                   step="0.01" min="0" max="100" value="0" required>
+                            <small class="text-muted">Percentual de redução da base de cálculo</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Informação:</strong> Estes campos são obrigatórios pela Reforma Tributária (LC 214/2025). 
+                    O sistema GISS Online exige essas informações para emissão da NFS-e.
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações Complementares -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>ℹ️ Informações Complementares</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="form-group">
+                            <label for="informacoes_complementares">Observações</label>
+                            <textarea class="form-control" name="informacoes_complementares" id="informacoes_complementares" 
+                                      rows="3" placeholder="Informações adicionais (opcional)"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="card mt-3">
+            <div class="card-body text-center">
+                <button type="button" class="btn btn-info btn-lg me-2" onclick="validarComIA()" id="btnValidarIA">
+                    <i class="fas fa-robot"></i> Validar com IA
+                </button>
+                <button type="submit" class="btn btn-primary btn-lg me-2">
+                    <i class="fas fa-paper-plane"></i> Emitir NFS-e
+                </button>
+                <button type="button" class="btn btn-secondary btn-lg" onclick="window.history.back()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Modal de Validação com IA -->
+<div class="modal fade" id="modalValidacaoIA" tabindex="-1" aria-labelledby="modalValidacaoIALabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white" id="modalValidacaoHeader">
+                <h5 class="modal-title" id="modalValidacaoIALabel">
+                    <i class="fas fa-robot"></i> Validação com IA
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalValidacaoBody">
+                <div class="text-center" id="validacaoLoading">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Analisando...</span>
+                    </div>
+                    <p class="mt-3"><strong>🤖 IA analisando dados da NFS-e...</strong></p>
+                    <p class="text-muted">Verificando regras fiscais, IBS/CBS, tributos e compatibilidades...</p>
+                </div>
+                <div id="validacaoResultado" style="display: none;">
+                    <!-- Resultado será preenchido via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer" id="modalValidacaoFooter" style="display: none;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" id="btnContinuarEmissao" data-bs-dismiss="modal">
+                    <i class="fas fa-check"></i> Continuar para Emissão
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/i18n/pt-BR.js"></script>
+<script>
+// Inicializar Select2 para busca dinâmica de NBS
+$(document).ready(function() {
+    $('#codigo_nbs').select2({
+        theme: 'bootstrap-5',
+        language: 'pt-BR',
+        placeholder: 'Digite para buscar código NBS...',
+        allowClear: true,
+        minimumInputLength: 2,
+        ajax: {
+            url: '/api/nfse/nbs/search',
+            dataType: 'json',
+            delay: 300,
+            data: function (params) {
+                return {
+                    q: params.term,
+                    page: params.page || 1
+                };
+            },
+            processResults: function (data, params) {
+                params.page = params.page || 1;
+                return {
+                    results: data.results,
+                    pagination: {
+                        more: data.pagination.more
+                    }
+                };
+            },
+            cache: true
+        },
+        templateResult: formatNBS,
+        templateSelection: formatNBSSelection
+    });
+});
+
+// Formatar resultado do NBS na lista
+function formatNBS(nbs) {
+    if (nbs.loading) {
+        return nbs.text;
+    }
+    
+    var $container = $(
+        "<div class='select2-result-nbs clearfix'>" +
+            "<div class='select2-result-nbs__meta'>" +
+                "<div class='select2-result-nbs__title'><strong>" + nbs.codigo_nbs + "</strong> - " + nbs.descricao + "</div>" +
+                "<div class='select2-result-nbs__description'><small class='text-muted'>LC 116: " + (nbs.codigo_lc116 || 'N/A') + " | Categoria: " + (nbs.categoria || 'N/A') + "</small></div>" +
+            "</div>" +
+        "</div>"
+    );
+    
+    return $container;
+}
+
+// Formatar seleção do NBS
+function formatNBSSelection(nbs) {
+    return nbs.codigo_nbs ? (nbs.codigo_nbs + ' - ' + nbs.descricao) : nbs.text;
+}
+
+// Alíquotas ISS por código de serviço (São José do Rio Preto)
+const aliquotasISS = {{ aliquotas_iss | tojson | safe }};
+
+function carregarTomador() {
+    const select = document.getElementById('tomador_select');
+    const option = select.options[select.selectedIndex];
+    const tomadorInfo = document.getElementById('tomadorInfo');
+    
+    if (option.value) {
+        // Preencher campos hidden
+        document.getElementById('tomador_cpf_cnpj').value = option.dataset.cpfCnpj || '';
+        document.getElementById('tomador_razao_social').value = option.dataset.razao || '';
+        document.getElementById('tomador_inscricao_municipal').value = option.dataset.inscricao || '';
+        document.getElementById('tomador_logradouro').value = option.dataset.logradouro || '';
+        document.getElementById('tomador_numero').value = option.dataset.numero || '';
+        document.getElementById('tomador_complemento').value = option.dataset.complemento || '';
+        document.getElementById('tomador_bairro').value = option.dataset.bairro || '';
+        document.getElementById('tomador_codigo_municipio').value = option.dataset.municipio || '';
+        document.getElementById('tomador_uf').value = option.dataset.uf || 'SP';
+        document.getElementById('tomador_cep').value = option.dataset.cep || '';
+        document.getElementById('tomador_telefone').value = option.dataset.telefone || '';
+        document.getElementById('tomador_email').value = option.dataset.email || '';
+        
+        // Preencher informações do alert
+        document.getElementById('tomadorNome').textContent = option.dataset.razao || '';
+        document.getElementById('tomadorDocumento').textContent = 'CPF/CNPJ: ' + (option.dataset.cpfCnpj || '');
+        
+        const endereco = option.dataset.logradouro + ', ' + option.dataset.numero + 
+                        (option.dataset.complemento ? ' - ' + option.dataset.complemento : '') + 
+                        ' - ' + option.dataset.bairro;
+        document.getElementById('tomadorEndereco').textContent = endereco;
+        
+        const cidade = (option.dataset.municipioNome || '') + '/' + (option.dataset.uf || '');
+        document.getElementById('tomadorCidade').textContent = cidade;
+        document.getElementById('tomadorCep').textContent = option.dataset.cep || '';
+        
+        // Contato
+        let contato = '';
+        if (option.dataset.telefone) contato += 'Tel: ' + option.dataset.telefone;
+        if (option.dataset.email) {
+            if (contato) contato += ' - ';
+            contato += 'E-mail: ' + option.dataset.email;
+        }
+        document.getElementById('tomadorContato').textContent = contato || 'Sem informações de contato';
+        
+        // Mostrar alert
+        tomadorInfo.style.display = 'block';
+        
+        // Buscar regra tributária após carregar tomador
+        buscarRegraTributaria();
+    } else {
+        // Limpar campos hidden
+        document.getElementById('tomador_cpf_cnpj').value = '';
+        document.getElementById('tomador_razao_social').value = '';
+        document.getElementById('tomador_inscricao_municipal').value = '';
+        document.getElementById('tomador_logradouro').value = '';
+        document.getElementById('tomador_numero').value = '';
+        document.getElementById('tomador_complemento').value = '';
+        document.getElementById('tomador_bairro').value = '';
+        document.getElementById('tomador_codigo_municipio').value = '';
+        document.getElementById('tomador_uf').value = '';
+        document.getElementById('tomador_cep').value = '';
+        document.getElementById('tomador_telefone').value = '';
+        document.getElementById('tomador_email').value = '';
+        
+        // Esconder alert
+        tomadorInfo.style.display = 'none';
+    }
+}
+
+function atualizarAliquota() {
+    const codigoServico = document.getElementById('codigo_servico').value;
+    const aliquota = aliquotasISS[codigoServico] || aliquotasISS['default'] || 5.0;
+    document.getElementById('aliquota_iss').value = aliquota.toFixed(2);
+    calcularTotais();
+}
+
+function calcularTotais() {
+    // Obter valores (removendo formatação)
+    const valorServico = parseFloatBR(document.getElementById('valor_servico').value) || 0;
+    const valorDeducoes = parseFloatBR(document.getElementById('valor_deducoes').value) || 0;
+    const descontoInc = parseFloatBR(document.getElementById('desconto_incondicionado').value) || 0;
+    const valorPis = parseFloatBR(document.getElementById('valor_pis').value) || 0;
+    const valorCofins = parseFloatBR(document.getElementById('valor_cofins').value) || 0;
+    const valorInss = parseFloatBR(document.getElementById('valor_inss').value) || 0;
+    const valorIr = parseFloatBR(document.getElementById('valor_ir').value) || 0;
+    const valorCsll = parseFloatBR(document.getElementById('valor_csll').value) || 0;
+    const outrasRet = parseFloatBR(document.getElementById('outras_retencoes').value) || 0;
+    const aliquotaIss = parseFloat(document.getElementById('aliquota_iss').value) || 0;
+    const issRetido = document.getElementById('iss_retido').checked;
+    
+    // Calcular base de cálculo
+    const baseCalculo = valorServico - valorDeducoes - descontoInc;
+    
+    // Calcular ISS
+    const valorIss = baseCalculo * (aliquotaIss / 100);
+    
+    // Calcular total de retenções
+    let totalRetencoes = valorPis + valorCofins + valorInss + valorIr + valorCsll + outrasRet;
+    if (issRetido) {
+        totalRetencoes += valorIss;
+    }
+    
+    // Calcular valor líquido
+    const valorLiquido = valorServico - totalRetencoes - descontoInc;
+    
+    // Atualizar displays
+    document.getElementById('base_calculo_display').value = formatarMoedaBR(baseCalculo);
+    document.getElementById('valor_iss_display').value = formatarMoedaBR(valorIss);
+    document.getElementById('total_retencoes_display').textContent = formatarMoedaBR(totalRetencoes);
+    document.getElementById('valor_liquido_display').textContent = formatarMoedaBR(valorLiquido);
+}
+
+// Formatar valor para padrão brasileiro
+function formatarMoedaBR(valor) {
+    if (!valor) valor = 0;
+    return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Parse de valor brasileiro para float
+function parseFloatBR(valor) {
+    if (!valor) return 0;
+    // Remove pontos de milhar e substitui vírgula por ponto
+    let valorLimpo = valor.toString().replace(/\./g, '').replace(',', '.');
+    return parseFloat(valorLimpo) || 0;
+}
+
+// Formatar campo monetário quando sai do campo
+function formatarCampoMonetario(input) {
+    // Pega o valor e remove formatação existente
+    let valor = input.value.replace(/\./g, '').replace(',', '.');
+    
+    if (valor === '' || valor === '0') {
+        input.value = '0,00';
+        return;
+    }
+    
+    // Converte para número
+    let numero = parseFloat(valor);
+    
+    if (isNaN(numero)) {
+        input.value = '0,00';
+        return;
+    }
+    
+    // Formata no padrão brasileiro com 2 casas decimais
+    input.value = numero.toLocaleString('pt-BR', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+    });
+}
+
+// Aplicar formatação monetária aos campos de valor
+function aplicarFormatacaoMonetaria() {
+    const camposMonetarios = [
+        'valor_servico',
+        'valor_deducoes',
+        'desconto_incondicionado',
+        'desconto_condicionado',
+        'valor_pis',
+        'valor_cofins',
+        'valor_inss',
+        'valor_ir',
+        'valor_csll',
+        'outras_retencoes'
+    ];
+    
+    camposMonetarios.forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) {
+            // Formatar ao sair do campo
+            campo.addEventListener('blur', function() {
+                formatarCampoMonetario(this);
+                calcularTotais();
+            });
+            
+            // Permitir apenas números, vírgula e ponto (uma vez)
+            campo.addEventListener('keypress', function(e) {
+                const char = String.fromCharCode(e.which);
+                const currentValue = this.value;
+                
+                // Permite números sempre
+                if (/\d/.test(char)) {
+                    return true;
+                }
+                
+                // Permite vírgula ou ponto se ainda não tem um
+                if ((char === ',' || char === '.') && 
+                    currentValue.indexOf(',') === -1 && 
+                    currentValue.indexOf('.') === -1) {
+                    return true;
+                }
+                
+                e.preventDefault();
+            });
+            
+            // Recalcular ao alterar
+            campo.addEventListener('input', function() {
+                // Aguarda 500ms após parar de digitar para calcular
+                clearTimeout(this.calcTimeout);
+                this.calcTimeout = setTimeout(() => calcularTotais(), 500);
+            });
+        }
+    });
+}
+
+function formatarMoeda(valor) {
+    return 'R$ ' + valor.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+// Máscaras
+document.getElementById('tomador_cpf_cnpj').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length <= 11) {
+        // CPF
+        value = value.replace(/(\d{3})(\d)/, '$1.$2');
+        value = value.replace(/(\d{3})(\d)/, '$1.$2');
+        value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else {
+        // CNPJ
+        value = value.replace(/^(\d{2})(\d)/, '$1.$2');
+        value = value.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+        value = value.replace(/\.(\d{3})(\d)/, '.$1/$2');
+        value = value.replace(/(\d{4})(\d)/, '$1-$2');
+    }
+    e.target.value = value;
+});
+
+document.getElementById('tomador_cep').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    value = value.replace(/^(\d{5})(\d)/, '$1-$2');
+    e.target.value = value;
+});
+
+document.getElementById('tomador_telefone').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 10) {
+        value = value.replace(/^(\d{2})(\d{5})(\d{4}).*/, '($1) $2-$3');
+    } else if (value.length > 6) {
+        value = value.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, '($1) $2-$3');
+    } else if (value.length > 2) {
+        value = value.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+    }
+    e.target.value = value;
+});
+
+// Inicializar data de competência
+document.addEventListener('DOMContentLoaded', function() {
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('data_competencia').value = hoje;
+    
+    // Aplicar formatação monetária aos campos
+    aplicarFormatacaoMonetaria();
+    
+    calcularTotais();
+});
+
+// ========== VALIDAÇÃO COM IA ==========
+let modalValidacaoIA = null;
+
+function validarComIA() {
+    console.log('[IA NFSE] Iniciando validação com IA');
+    
+    // Inicializar modal Bootstrap 5 se necessário
+    if (!modalValidacaoIA) {
+        modalValidacaoIA = new bootstrap.Modal(document.getElementById('modalValidacaoIA'));
+    }
+    
+    // Mostrar modal com loading
+    modalValidacaoIA.show();
+    document.getElementById('validacaoLoading').style.display = 'block';
+    document.getElementById('validacaoResultado').style.display = 'none';
+    document.getElementById('modalValidacaoFooter').style.display = 'none';
+    document.getElementById('modalValidacaoHeader').className = 'modal-header bg-primary text-white';
+    
+    // Coletar dados do formulário
+    const formData = coletarDadosFormulario();
+    
+    if (!formData) {
+        mostrarResultadoValidacao({
+            sucesso: false,
+            validacao_ok: false,
+            erros_criticos: [{campo: 'formulário', erro: 'Preencha os campos obrigatórios', solucao: 'Complete os dados do Tomador e dados do serviço'}],
+            alertas: [],
+            sugestoes_melhoria: [],
+            score_confianca: 0,
+            resumo: 'Formulário incompleto'
+        });
+        return;
+    }
+    
+    console.log('[IA NFSE] Enviando dados para validação:', formData);
+    
+    // Enviar para validação IA
+    fetch('/api/llm/validar-nfse', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('[IA NFSE] Resposta da validação:', data);
+        mostrarResultadoValidacao(data);
+    })
+    .catch(error => {
+        console.error('[IA NFSE] Erro na validação:', error);
+        mostrarResultadoValidacao({
+            sucesso: false,
+            validacao_ok: true,
+            erros_criticos: [],
+            alertas: [{alerta: 'Erro ao conectar com serviço de IA: ' + error.message}],
+            sugestoes_melhoria: [],
+            score_confianca: 0,
+            resumo: 'Erro de conexão'
+        });
+    });
+}
+
+function coletarDadosFormulario() {
+    console.log('[IA NFSE] Coletando dados do formulário');
+    
+    // Helper para pegar valor de campo com segurança
+    const getFieldValue = (id, defaultValue = '') => {
+        const elem = document.getElementById(id);
+        return elem ? elem.value : defaultValue;
+    };
+    
+    const getFloatValue = (id, defaultValue = 0) => {
+        const elem = document.getElementById(id);
+        if (!elem || !elem.value) return defaultValue;
+        return parseFloatBR(elem.value) || defaultValue;
+    };
+    
+    // Validar campos obrigatórios
+    const codigoServico = getFieldValue('codigo_servico');
+    const discriminacao = getFieldValue('discriminacao');
+    const valorServicos = getFloatValue('valor_servico'); // Corrigido: é valor_servico, não valor_servicos
+    
+    if (!codigoServico || !discriminacao || !valorServicos) {
+        console.log('[IA NFSE] Campos obrigatórios não preenchidos', {
+            codigoServico, discriminacao, valorServicos
+        });
+        return null;
+    }
+    
+    // Coletar dados do prestador (emitente)
+    const prestador = {
+        cnpj: '{{ emitente_data.cnpj if emitente_data else "" }}',
+        razao_social: '{{ emitente_data.razao_social if emitente_data else "" }}',
+        inscricao_municipal: '{{ emitente_data.inscricao_municipal or "" }}',
+        uf: '{{ emitente_data.uf if emitente_data else "SP" }}',
+        municipio: '{{ emitente_data.municipio if emitente_data else "São José do Rio Preto" }}'
+    };
+    
+    // Coletar dados do Tomador
+    const tomador = {
+        cpf_cnpj: getFieldValue('tomador_cpf_cnpj'),
+        nome_razao: getFieldValue('tomador_razao_social'),
+        uf: getFieldValue('tomador_uf', 'SP'),
+        municipio: getMunicipioNome()
+    };
+    
+    // Helper para obter nome do município do tomador
+    function getMunicipioNome() {
+        const select = document.getElementById('tomador_select');
+        const option = select.options[select.selectedIndex];
+        return option && option.dataset.municipioNome ? option.dataset.municipioNome : 'N/A';
+    }
+    
+    // Coletar dados do serviço
+    const servico = {
+        codigo_servico: codigoServico,
+        codigo_nbs: getFieldValue('codigo_nbs'),
+        discriminacao: discriminacao,
+        valor_servicos: valorServicos,
+        valor_deducoes: getFloatValue('valor_deducoes'),
+        aliquota_iss: getFloatValue('aliquota_iss'),
+        valor_iss: parseFloat(document.getElementById('valor_iss_display')?.value?.replace(/[^\d,]/g, '').replace(',', '.') || 0),
+        base_calculo: parseFloat(document.getElementById('base_calculo_display')?.value?.replace(/[^\d,]/g, '').replace(',', '.') || 0),
+        valor_liquido: parseFloat(document.getElementById('valor_liquido_display')?.textContent?.replace(/[^\d,]/g, '').replace(',', '.') || 0)
+    };
+    
+    // Coletar dados da Reforma Tributária (IBS/CBS)
+    const reformaTributaria = {
+        percentual_tributos_federais: getFloatValue('percentual_total_tributos_federais'),
+        percentual_tributos_estaduais: getFloatValue('percentual_total_tributos_estaduais'),
+        percentual_tributos_municipais: getFloatValue('percentual_total_tributos_municipais'),
+        finalidade_nfse: getFieldValue('finalidade_nfse', '0'),
+        indicador_consumidor_final: getFieldValue('indicador_consumidor_final', '0'),
+        codigo_indicador_operacao: getFieldValue('codigo_indicador_operacao', '000001'),
+        indicador_destinatario: getFieldValue('indicador_destinatario', '0'),
+        cst_ibs_cbs: getFieldValue('cst_ibs_cbs', '001'),
+        codigo_classificacao_tributaria: getFieldValue('codigo_classificacao_tributaria', '000001'),
+        percentual_redutor: getFloatValue('percentual_redutor')
+    };
+    
+    // Montar objeto completo
+    const dados = {
+        ambiente: getFieldValue('ambiente', 'homologacao'),
+        tipo_documento: 'nfse',
+        prestador: prestador,
+        tomador: tomador,
+        servico: servico,
+        reforma_tributaria: reformaTributaria,
+        informacoes_complementares: getFieldValue('informacoes_complementares')
+    };
+    
+    console.log('[IA NFSE] Dados coletados:', dados);
+    return dados;
+}
+
+function mostrarResultadoValidacao(data) {
+    console.log('[IA NFSE] Mostrando resultado da validação');
+    
+    document.getElementById('validacaoLoading').style.display = 'none';
+    document.getElementById('validacaoResultado').style.display = 'block';
+    document.getElementById('modalValidacaoFooter').style.display = 'flex';
+    
+    let html = '';
+    let headerClass = 'bg-success text-white';
+    
+    const errosCriticos = data.erros_criticos || [];
+    const alertas = data.alertas || [];
+    const sugestoes = data.sugestoes_melhoria || [];
+    const score = data.score_confianca || 0;
+    const resumo = data.resumo || '';
+    
+    // Determinar cor do header
+    if (errosCriticos.length > 0) {
+        headerClass = 'bg-danger text-white';
+    } else if (alertas.length > 0) {
+        headerClass = 'bg-warning text-dark';
+    }
+    
+    document.getElementById('modalValidacaoHeader').className = 'modal-header ' + headerClass;
+    
+    // Score de confiança
+    html += `
+        <div class="text-center mb-4">
+            <h3>
+                <span class="badge ${score >= 80 ? 'bg-success' : score >= 50 ? 'bg-warning' : 'bg-danger'}" style="font-size: 1.5rem;">
+                    ${score}% de Confiança
+                </span>
+            </h3>
+            <p class="text-muted">${resumo}</p>
+        </div>
+    `;
+    
+    // Erros críticos
+    if (errosCriticos.length > 0) {
+        html += `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-times-circle"></i> Erros Críticos (${errosCriticos.length})</h5>
+                <ul class="mb-0">
+        `;
+        errosCriticos.forEach(erro => {
+            html += `
+                <li>
+                    <strong>${erro.campo || 'Campo'}:</strong> ${erro.erro}
+                    ${erro.solucao ? `<br><small class="text-muted">💡 ${erro.solucao}</small>` : ''}
+                </li>
+            `;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Alertas
+    if (alertas.length > 0) {
+        html += `
+            <div class="alert alert-warning">
+                <h5><i class="fas fa-exclamation-triangle"></i> Alertas (${alertas.length})</h5>
+                <ul class="mb-0">
+        `;
+        alertas.forEach(alerta => {
+            if (typeof alerta === 'string') {
+                html += `<li>${alerta}</li>`;
+            } else {
+                html += `
+                    <li>
+                        ${alerta.campo ? `<strong>${alerta.campo}:</strong> ` : ''}${alerta.alerta}
+                        ${alerta.sugestao ? `<br><small class="text-muted">💡 ${alerta.sugestao}</small>` : ''}
+                    </li>
+                `;
+            }
+        });
+        html += '</ul></div>';
+    }
+    
+    // Sugestões de melhoria
+    if (sugestoes.length > 0) {
+        html += `
+            <div class="alert alert-info">
+                <h5><i class="fas fa-lightbulb"></i> Sugestões de Melhoria</h5>
+                <ul class="mb-0">
+        `;
+        sugestoes.forEach(sug => {
+            html += `<li>${sug}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Tudo OK
+    if (errosCriticos.length === 0 && alertas.length === 0) {
+        html += `
+            <div class="alert alert-success text-center">
+                <h4><i class="fas fa-check-circle"></i> NFS-e pronta para emissão!</h4>
+                <p class="mb-0">A IA não identificou problemas nos dados informados.</p>
+            </div>
+        `;
+    }
+    
+    document.getElementById('validacaoResultado').innerHTML = html;
+}
+
+/* 
+// ⚠️ FUNÇÃO COMENTADA - SUBSTITUÍDA POR SELECT2 DINÂMICO
+// ✅ BUSCAR CÓDIGOS NBS DISPONÍVEIS PARA O SERVIÇO
+function buscarCodigosNBS(codigoServico) {
+    if (!codigoServico) {
+        $('#codigo_nbs').html('<option value="">Selecione o serviço primeiro...</option>');
+        return;
+    }
+    
+    console.log('🔍 Buscando códigos NBS para serviço:', codigoServico);
+    
+    $.ajax({
+        url: `/admin/nfse/api/codigos-nbs/${codigoServico}`,
+        method: 'GET',
+        success: function(response) {
+            console.log('📥 Códigos NBS recebidos:', response);
+            
+            if (response.success && response.codigos_nbs && response.codigos_nbs.length > 0) {
+                let options = '<option value="">Selecione o código NBS...</option>';
+                
+                response.codigos_nbs.forEach(function(nbs) {
+                    // Formatar código sem pontos (GISS aceita max 9 dígitos)
+                    const codigoFormatado = nbs.codigo.replace(/\./g, '');
+                    // Descrição abreviada
+                    const descricao = nbs.descricao.length > 50 
+                        ? nbs.descricao.substring(0, 47) + '...' 
+                        : nbs.descricao;
+                    
+                    options += `<option value="${codigoFormatado}">${nbs.codigo} - ${descricao}</option>`;
+                });
+                
+                $('#codigo_nbs').html(options);
+                console.log('✅ Select NBS atualizado com', response.codigos_nbs.length, 'opções');
+            } else {
+                $('#codigo_nbs').html('<option value="">Nenhum código NBS cadastrado para este serviço</option>');
+                console.log('⚠️ Nenhum código NBS encontrado');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Erro ao buscar códigos NBS:', error);
+            $('#codigo_nbs').html('<option value="">Erro ao carregar códigos NBS</option>');
+        }
+    });
+}
+*/
+
+// ✅ BUSCAR REGRA TRIBUTÁRIA CADASTRADA
+function buscarRegraTributaria() {
+    const codigoServico = document.getElementById('codigo_servico').value;
+    const ufDestino = document.getElementById('tomador_uf').value || 'SP';
+    
+    // ⚠️ NOTA: Busca de NBS agora é feita via Select2 dinâmico
+    // Removido buscarCodigosNBS() - Select2 faz busca AJAX automática
+    
+    // Validar se código foi selecionado
+    if (!codigoServico) {
+        return;
+    }
+    
+    // Ocultar alertas anteriores
+    $('#alertRegra').addClass('d-none');
+    $('#alertRegraNotFound').addClass('d-none');
+    
+    // Fazer requisição
+    $.ajax({
+        url: '/admin/regras-servicos/api/buscar-regra',
+        method: 'GET',
+        data: {
+            cliente_id: {{ session.current_client_id if session.current_client_id else 'null' }},
+            codigo_servico: codigoServico,
+            uf_destino: ufDestino
+        },
+        timeout: 5000,
+        success: function(response) {
+            console.log('📥 Resposta da API:', response);
+            
+            // Verificar se a regra existe e tem dados
+            if (response.regra && Object.keys(response.regra).length > 0) {
+                const regra = response.regra;
+                
+                // Preencher campos automaticamente - Dados do Serviço
+                if (regra.codigo_nbs) {
+                    $('#codigo_nbs').val(regra.codigo_nbs);
+                }
+                
+                if (regra.aliquota_iss) {
+                    $('#aliquota_iss').val(regra.aliquota_iss);
+                }
+                
+                if (regra.iss_retido !== null && regra.iss_retido !== undefined) {
+                    $('#iss_retido').prop('checked', regra.iss_retido);
+                }
+                
+                if (regra.descricao_servico) {
+                    const discriminacaoAtual = $('#discriminacao').val();
+                    if (!discriminacaoAtual) {
+                        $('#discriminacao').val(regra.descricao_servico);
+                    }
+                }
+                
+                // Preencher campos IBS/CBS - Reforma Tributária
+                if (regra.cst_ibs_cbs) {
+                    $('#cst_ibs_cbs').val(regra.cst_ibs_cbs);
+                }
+                
+                if (regra.codigo_indicador_operacao) {
+                    $('#codigo_indicador_operacao').val(regra.codigo_indicador_operacao);
+                }
+                
+                if (regra.codigo_classificacao_tributaria) {
+                    $('#codigo_classificacao_tributaria').val(regra.codigo_classificacao_tributaria);
+                }
+                
+                if (regra.codigo_localidade_incidencia) {
+                    $('#codigo_localidade_incidencia').val(regra.codigo_localidade_incidencia);
+                }
+                
+                if (regra.percentual_redutor !== null && regra.percentual_redutor !== undefined) {
+                    $('#percentual_redutor').val(regra.percentual_redutor);
+                }
+                
+                // Mostrar alerta de sucesso
+                $('#alertRegra').removeClass('d-none');
+                
+                // Recalcular totais
+                calcularTotais();
+                
+                // Ocultar alerta após 5 segundos
+                setTimeout(function() {
+                    $('#alertRegra').addClass('d-none');
+                }, 5000);
+                
+                console.log('✅ Regra aplicada:', regra);
+            } else {
+                // Mostrar aviso de regra não encontrada
+                $('#alertRegraNotFound').removeClass('d-none');
+                
+                // Ocultar aviso após 5 segundos
+                setTimeout(function() {
+                    $('#alertRegraNotFound').addClass('d-none');
+                }, 5000);
+                
+                console.log('ℹ️ Nenhuma regra cadastrada para este serviço');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Erro ao buscar regra:', error);
+            // Não mostra alerta em caso de erro de rede
+        }
+    });
+}
+
+// Buscar regra automaticamente quando trocar o tomador (UF)
+$('#tomador_uf, #tomador_select').on('change', function() {
+    const codigoServico = $('#codigo_servico').val();
+    if (codigoServico) {
+        buscarRegraTributaria();
+    }
+});
+</script>
+{% endblock %}

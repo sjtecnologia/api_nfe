@@ -1,0 +1,25 @@
+[
+   {
+      "codigo":"101",
+      "atividade":"8599603",
+      "descricao":"Ensino Fundamental",
+      "valor":1200.00,
+      "inicio":"01/01/2024",
+      "fim":"31/12/2024"
+   },
+   {
+      "codigo":"102",
+      "atividade":"8599603",
+      "descricao":"Ensino Medio",
+      "valor":1500.00,
+      "inicio":"01/01/2024",
+      "fim":"31/12/2024"
+   },
+   {
+      "codigo":"103",
+      "atividade":"8599603",
+      "descricao":"Ingles Nivel 1",
+      "valor":750.00,
+      "inicio":"01/01/2024"
+   }
+]

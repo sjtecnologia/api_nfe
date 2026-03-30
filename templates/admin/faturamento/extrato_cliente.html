@@ -1,0 +1,341 @@
+{% extends 'base.html' %}
+
+{% block title %}Extrato de Faturamento - {{ cliente.razao_social }}{% endblock %}
+
+{# Filtros customizados #}
+{% macro format_cnpj(cnpj) %}
+    {% if cnpj and cnpj|length == 14 %}
+        {{ cnpj[0:2] }}.{{ cnpj[2:5] }}.{{ cnpj[5:8] }}/{{ cnpj[8:12] }}-{{ cnpj[12:14] }}
+    {% else %}
+        {{ cnpj }}
+    {% endif %}
+{% endmacro %}
+
+{% macro format_cep(cep) %}
+    {% if cep and cep|length == 8 %}
+        {{ cep[0:5] }}-{{ cep[5:8] }}
+    {% else %}
+        {{ cep }}
+    {% endif %}
+{% endmacro %}
+
+{% macro format_date(date_string) %}
+    {% if date_string %}
+        {% set parts = date_string.split('-') %}
+        {% if parts|length == 3 %}
+            {{ parts[2] }}/{{ parts[1] }}/{{ parts[0] }}
+        {% else %}
+            {{ date_string }}
+        {% endif %}
+    {% else %}
+        -
+    {% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Cabeçalho com opções de impressão -->
+            <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+                <h1 class="h3"><i class="fas fa-file-invoice-dollar"></i> Extrato de Faturamento</h1>
+                <div>
+                    <a href="{{ url_for('admin.gerar_extrato_cliente', cliente_id=cliente.cliente_id) }}" 
+                       class="btn btn-warning me-2">
+                        <i class="fas fa-calendar-alt"></i> Alterar Período
+                    </a>
+                    <button onclick="window.print()" class="btn btn-primary me-2">
+                        <i class="fas fa-print"></i> Imprimir
+                    </button>
+                    <a href="{{ url_for('admin.list_faturamento') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+
+            <!-- Extrato (printable) -->
+            <div class="card shadow-lg">
+                <div class="card-body p-5">
+                    <!-- Cabeçalho do Extrato -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h2 class="mb-3">EXTRATO DE NOTAS FISCAIS</h2>
+                            <p class="mb-1"><strong>Período:</strong> {{ ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][extrato.mes_referencia] }}/{{ extrato.ano_referencia }}</p>
+                            <p class="mb-1"><strong>Data de Emissão:</strong> {{ data_hoje }}</p>
+                            <p class="mb-0"><strong>Vencimento:</strong> {{ format_date(extrato.data_vencimento) }}</p>
+                        </div>
+                        <!-- <div class="col-md-6 text-end">
+                            <h5 class="text-muted mb-2">PRESTADOR DE SERVIÇOS</h5>
+                            <p class="mb-1"><strong>SUA EMPRESA LTDA</strong></p>
+                            <p class="mb-1">CNPJ: 00.000.000/0001-00</p>
+                            <p class="mb-0">contato@suaempresa.com.br</p>
+                        </div> -->
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Dados do Cliente -->
+                    <div class="mb-4">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-building"></i> CLIENTE
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <p class="mb-1"><strong>Razão Social:</strong> {{ cliente.razao_social }}</p>
+                                <p class="mb-1"><strong>Nome Fantasia:</strong> {{ cliente.nome_fantasia or '-' }}</p>
+                                <p class="mb-1"><strong>CNPJ:</strong> {{ format_cnpj(cliente.cnpj) }}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p class="mb-1"><strong>Email:</strong> {{ cliente.email_contato or '-' }}</p>
+                                <p class="mb-0"><strong>Telefone:</strong> {{ cliente.telefone_contato or '-' }}</p>
+                            </div>
+                        </div>
+                        {% if cliente.logradouro %}
+                        <p class="mb-0 mt-2">
+                            <strong>Endereço:</strong> 
+                            {{ cliente.logradouro }}, {{ cliente.numero }}
+                            {% if cliente.complemento %} - {{ cliente.complemento }}{% endif %}
+                            - {{ cliente.bairro }} - {{ cliente.nome_municipio }}/{{ cliente.uf }}
+                            - CEP: {{ format_cep(cliente.cep) }}
+                        </p>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Discriminação dos Serviços -->
+                    <div class="mb-4">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-list-alt"></i> DISCRIMINAÇÃO
+                        </h5>
+                        
+                        <div class="alert alert-info d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Plano Contratado:</strong> {{ cliente.plano_nome }}
+                                <!-- <span class="badge bg-primary ms-2">{{ cliente.tipo_plano }}</span> -->
+                            </div>
+                            <div>
+                                <strong>NFes no Período:</strong> <span class="badge bg-success">{{ extrato.quantidade_nfes }}</span> / {{ extrato.limite_plano }}
+                            </div>
+                        </div>
+
+                        {% if cliente.tipo_plano in ['MENSAL', 'PACOTE'] %}
+                            <!-- Plano Mensal: Mostrar resumo sem tabela se não houver excedentes -->
+                            {% if extrato.quantidade_nfes <= extrato.limite_plano %}
+                                <!-- Apenas informativo - sem cobrança extra -->
+                                <div class="alert alert-success">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong><i class="fas fa-check-circle"></i> Assinatura Mensal - {{ cliente.plano_nome }}</strong>
+                                            <br><small>Inclui até {{ extrato.limite_plano }} NFes</small>
+                                            <br><small class="text-muted">NFes Utilizadas: {{ extrato.quantidade_nfes }} de {{ extrato.limite_plano }}
+                                            {% if extrato.limite_plano > 0 %}
+                                                ({{ "%.1f"|format((extrato.quantidade_nfes / extrato.limite_plano * 100)) }}% utilizado)
+                                            {% endif %}
+                                            </small>
+                                        </div>
+                                        <div class="text-end">
+                                            <h4 class="text-success mb-0">R$ {{ "%.2f"|format(extrato.valor_plano) }}</h4>
+                                            <small class="text-muted">Valor do Plano</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <!-- Tabela detalhada quando houver excedentes -->
+                                <table class="table table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Descrição</th>
+                                            <th class="text-center" style="width: 150px;">Quantidade</th>
+                                            <th class="text-center" style="width: 150px;">Valor Unitário</th>
+                                            <th class="text-center" style="width: 150px;">Valor Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Valor da assinatura mensal -->
+                                        <tr>
+                                            <td>
+                                                <strong>Assinatura Mensal - {{ cliente.plano_nome }}</strong>
+                                                <br><small class="text-muted">Inclui até {{ extrato.limite_plano }} NFes</small>
+                                            </td>
+                                            <td class="text-center">1</td>
+                                            <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_plano) }}</td>
+                                            <td class="text-center"><strong>R$ {{ "%.2f"|format(extrato.valor_plano) }}</strong></td>
+                                        </tr>
+                                        
+                                        <!-- NFes incluídas (informativo) -->
+                                        <tr class="table-light">
+                                            <td colspan="4" class="text-muted">
+                                                <i class="fas fa-info-circle"></i> 
+                                                <strong>NFes Incluídas no Plano:</strong> {{ extrato.limite_plano }} de {{ extrato.limite_plano }} (100% utilizado)
+                                            </td>
+                                        </tr>
+                                        
+                                        <!-- NFes excedentes -->
+                                        {% set excedentes_calc = extrato.quantidade_nfes - extrato.limite_plano %}
+                                        <tr class="table-warning">
+                                            <td>
+                                                <strong>NFes Excedentes</strong>
+                                                <br><small class="text-muted">Além do limite do plano</small>
+                                            </td>
+                                            <td class="text-center"><strong class="text-danger">{{ excedentes_calc }}</strong></td>
+                                            <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_unitario) }}</td>
+                                            <td class="text-center"><strong class="text-warning">R$ {{ "%.2f"|format(excedentes_calc * extrato.valor_unitario) }}</strong></td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                        <tr>
+                                            <th colspan="3" class="text-end">SUBTOTAL ASSINATURA:</th>
+                                            <th class="text-center">R$ {{ "%.2f"|format(extrato.valor_plano) }}</th>
+                                        </tr>
+                                        <tr>
+                                            <th colspan="3" class="text-end">SUBTOTAL EXCEDENTES:</th>
+                                            <th class="text-center text-warning">R$ {{ "%.2f"|format(excedentes_calc * extrato.valor_unitario) }}</th>
+                                        </tr>
+                                        <tr>
+                                            <th colspan="3" class="text-end">TOTAL A PAGAR:</th>
+                                            <th class="text-center">
+                                                <h4 class="text-success mb-0">R$ {{ "%.2f"|format(extrato.valor_plano + (excedentes_calc * extrato.valor_unitario)) }}</h4>
+                                            </th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            {% endif %}
+                        {% else %}
+                            <!-- Plano Avulso: Sempre mostrar tabela detalhada -->
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Descrição</th>
+                                        <th class="text-center" style="width: 150px;">Quantidade</th>
+                                        <th class="text-center" style="width: 150px;">Valor Unitário</th>
+                                        <th class="text-center" style="width: 150px;">Valor Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>
+                                            <strong>Emissão de Nota Fiscal Eletrônica (NF-e)</strong>
+                                            <br><small class="text-muted">Plano Avulso - Cobrança por emissão</small>
+                                        </td>
+                                        <td class="text-center"><strong>{{ extrato.quantidade_nfes }}</strong></td>
+                                        <td class="text-center">R$ {{ "%.2f"|format(extrato.valor_unitario) }}</td>
+                                        <td class="text-center"><strong class="text-success">R$ {{ "%.2f"|format(extrato.valor_nfes) }}</strong></td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="3" class="text-end">TOTAL A PAGAR:</th>
+                                        <th class="text-center">
+                                            <h4 class="text-success mb-0">R$ {{ "%.2f"|format(extrato.valor_total) }}</h4>
+                                        </th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        {% endif %}
+                    </div>
+
+                    <!-- Detalhamento das NFes (opcional - pode ser muito grande) -->
+                    {% if extrato.quantidade_nfes <= 50 %}
+                    <hr class="my-4">
+                    <div class="mb-4">
+                        <h6 class="text-muted mb-3">
+                            <i class="fas fa-file-invoice"></i> Detalhamento das NFes Emitidas
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 50px;">#</th>
+                                        <th>Data</th>
+                                        <th>Destinatário</th>
+                                        <th>Chave de Acesso</th>
+                                        <th class="text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for nfe in extrato.nfes %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ nfe.data_criacao.strftime('%d/%m/%Y') if nfe.data_criacao else '-' }}</td>
+                                        <td>{{ nfe.destinatario_razao_social[:30] if nfe.destinatario_razao_social else '-' }}{{ '...' if nfe.destinatario_razao_social and nfe.destinatario_razao_social|length > 30 else '' }}</td>
+                                        <td><small class="text-muted">{{ nfe.chave_acesso[:10] + '...' + nfe.chave_acesso[-10:] if nfe.chave_acesso else '-' }}</small></td>
+                                        <td class="text-center">
+                                            <span class="badge {% if nfe.status == 'Autorizada' %}bg-success{% else %}bg-secondary{% endif %}">
+                                                {{ nfe.status }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <hr class="my-4">
+
+                    <!-- Informações de Pagamento -->
+                    <div class="mb-4">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-credit-card"></i> INFORMAÇÕES DE PAGAMENTO
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-2"><strong>Plano:</strong> 
+                                    <span class="badge bg-primary">{{ cliente.plano_nome }}</span>
+                                    <!-- <span class="badge bg-info">{{ cliente.tipo_plano }}</span> -->
+                                </p>
+                                <p class="mb-2"><strong>Vencimento:</strong> {{ format_date(extrato.data_vencimento) }}</p>
+                                <p class="mb-0"><strong>Valor Total:</strong> 
+                                    <span class="text-success fs-5">R$ {{ "%.2f"|format(extrato.valor_total) }}</span>
+                                </p>
+                            </div>
+                            <!-- <div class="col-md-6">
+                                <div class="alert alert-info mb-0">
+                                    <strong><i class="fas fa-info-circle"></i> Informações de Pagamento</strong><br>
+                                    Entre em contato com o financeiro para obter as instruções de pagamento.<br>
+                                    <small class="text-muted">Email: contato@suaempresa.com.br | Telefone: (11) 1234-5678</small>
+                                </div>
+                            </div> -->
+                        </div>
+                        
+                        {% if extrato.nfes_excedentes > 0 %}
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <strong>Atenção:</strong> Este período apresenta {{ extrato.nfes_excedentes }} NFe(s) excedente(s) 
+                            além do limite do plano contratado ({{ extrato.limite_plano }} NFes). 
+                            Valor adicional de R$ {{ "%.2f"|format(extrato.valor_excedentes) }}.
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Rodapé -->
+                    <div class="mt-5 pt-4 border-top text-center text-muted">
+                        <small>
+                            Este documento é um extrato de serviços prestados e não substitui a nota fiscal.<br>
+                            Em caso de dúvidas, entre em contato: (17) 98810-5545
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    body {
+        font-size: 12pt;
+    }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Cancelar NFS-e{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1 class="page-title">❌ Cancelar NFS-e</h1>
+                <div class="page-subtitle">
+                    NFS-e: {{ nfse.numero_nfse or 'RPS ' ~ nfse.numero_rps }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Confirmar Cancelamento</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Atenção:</strong> O cancelamento de uma NFS-e é uma operação irreversível.
+                        Certifique-se de que deseja realmente cancelar esta nota.
+                    </div>
+
+                    <h6 class="mb-3">Dados da NFS-e:</h6>
+                    <table class="table table-bordered">
+                        <tr>
+                            <th width="30%">Número NFS-e:</th>
+                            <td>{{ nfse.numero_nfse or 'Aguardando' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Número RPS:</th>
+                            <td>{{ nfse.numero_rps }}/{{ nfse.serie_rps }}</td>
+                        </tr>
+                        <tr>
+                            <th>Tomador:/th>
+                            <td>{{ nfse.tomador_razao_social or '-' }} ({{ nfse.tomador_cpf_cnpj or '-' }})</td>
+                        </tr>
+                        <tr>
+                            <th>Valor:</th>
+                            <td>R$ {{ "%.2f"|format(nfse.valor_servicos or 0) }}</td>
+                        </tr>
+                        <tr>
+                            <th>Data Emissão:</th>
+                            <td>{{ nfse.data_emissao.strftime('%d/%m/%Y %H:%M') if nfse.data_emissao else '-' }}</td>
+                        </tr>
+                    </table>
+
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="motivo_cancelamento" class="form-label">Motivo do Cancelamento *</label>
+                            <select class="form-control" name="motivo_cancelamento" id="motivo_cancelamento" required>
+                                <option value="">Selecione o motivo...</option>
+                                <option value="1">1 - Erro na emissão</option>
+                                <option value="2">2 - Serviço não prestado</option>
+                                <option value="3">3 - Erro de cálculo</option>
+                                <option value="4">4 - Duplicidade</option>
+                                <option value="5">5 - Outros</option>
+                            </select>
+                        </div>
+
+                        <div class="text-center">
+                            <button type="submit" class="btn btn-danger btn-lg me-2">
+                                <i class="fas fa-times"></i> Confirmar Cancelamento
+                            </button>
+                            <a href="{{ url_for('nfse.list_nfse') }}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

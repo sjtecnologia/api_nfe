@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}Documentação da API{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-10 offset-lg-1">
+            <div class="mb-4">
+                <h1 class="h2">
+                    <i class="fas fa-book text-primary"></i> Documentação da API
+                </h1>
+                <p class="text-muted">
+                    Acesse os guias completos para integração e uso da nossa API
+                </p>
+            </div>
+
+            <div class="row g-4">
+                {% for doc_key, doc_info in docs.items() %}
+                <div class="col-md-6">
+                    <div class="card h-100 shadow-sm hover-shadow">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                {% if doc_key == 'tributacao-automatica' %}
+                                    <span class="badge bg-warning text-dark float-end">NOVO</span>
+                                {% endif %}
+                                {{ doc_info.titulo }}
+                            </h5>
+                            <p class="card-text text-muted">
+                                {{ doc_info.descricao }}
+                            </p>
+                            <a href="{{ url_for('api_keys.api_documentation', doc_name=doc_key) }}" 
+                               class="btn btn-primary">
+                                <i class="fas fa-book-open"></i> Ler Documentação
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-question-circle text-info"></i> Precisa de Ajuda?
+                    </h6>
+                    <p class="card-text small mb-2">
+                        Se você tiver dúvidas sobre a integração ou precisar de suporte técnico, 
+                        entre em contato com nossa equipe.
+                    </p>
+                    <a href="mailto:suporte@emitemax.com.br" class="btn btn-sm btn-outline-info">
+                        <i class="fas fa-envelope"></i> Contato Suporte
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.hover-shadow {
+    transition: box-shadow 0.3s ease-in-out;
+}
+.hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+</style>
+{% endblock %}

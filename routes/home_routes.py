@@ -16,15 +16,19 @@ def home():
     if hasattr(current_user, 'clients') and current_user.clients:
         # Se tem apenas 1 cliente, redirecionar diretamente
         if len(current_user.clients) == 1:
-            cliente_id = current_user.clients[0]['cliente_id']
-            print(f"🔄 Redirecionando usuário {current_user.username} para cliente {cliente_id}")
-            return redirect(url_for('cliente.dashboard', cliente_id=cliente_id))
+            from utils.id_encoder import encode_id
+            cliente = current_user.clients[0]
+            cliente_id = cliente['cliente_id']
+            session['current_client_id'] = cliente_id
+            session['current_client_name'] = cliente.get('razao_social') or cliente.get('nome_fantasia') or ''
+            print(f"[?] Redirecionando usuário {current_user.username} para cliente {cliente_id}")
+            return redirect(url_for('cliente.dashboard', cliente_hash=encode_id(cliente_id)))
         
         # Se tem múltiplos clientes, mostrar seleção
         return render_template('select_client.html', clientes=current_user.clients)
     
     # Se é admin, redirecionar para admin
-    if current_user.is_admin():
+    if current_user.is_super_admin():
         return redirect(url_for('admin.admin_home'))
     
     # Se não tem clientes nem é admin, fazer logout
@@ -43,8 +47,20 @@ def select_client(cliente_id):
     if hasattr(current_user, 'clients') and current_user.clients:
         user_client_ids = [client['cliente_id'] for client in current_user.clients]
         if cliente_id in user_client_ids:
+            from utils.id_encoder import encode_id
             session['current_client_id'] = cliente_id
-            return redirect(url_for('cliente.dashboard', cliente_id=cliente_id))
+            # Atualiza o nome do cliente na sessão
+            for client in current_user.clients:
+                if client['cliente_id'] == cliente_id:
+                    session['current_client_name'] = client.get('razao_social') or client.get('nome_fantasia') or ''
+                    break
+            
+            # Verificar se há URL de retorno salva
+            next_url = session.pop('next_url', None)
+            if next_url:
+                return redirect(next_url)
+            
+            return redirect(url_for('cliente.dashboard', cliente_hash=encode_id(cliente_id)))
     
     flash('Você não tem acesso a este cliente.', 'error')
     return redirect(url_for('home.home'))

@@ -1,0 +1,38 @@
+{
+  "nomenclaturas": [
+    {
+      "codigo": "01012100",
+      "descricao": "Reprodutores de raça pura",
+      "unidade": "CABECA",
+      "dataInicio": "2025-01-01",
+      "dataFim": null,
+      "tipoAto": "RESOLUCAO",
+      "numeroAto": "123",
+      "anoAto": "2025"
+    },
+    {
+      "codigo": "01012900",
+      "descricao": "Outros animais vivos da espécie bovina",
+      "unidade": "CABECA",
+      "dataInicio": "2025-01-01",
+      "dataFim": null
+    },
+    {
+      "codigo": "84713000",
+      "descricao": "Máquinas automáticas para processamento de dados, portáteis, de peso não superior a 10 kg, constituídas, pelo menos, de uma unidade central de processamento, um teclado e uma tela",
+      "unidade": "NUMERO",
+      "dataInicio": "2025-01-01"
+    },
+    {
+      "codigo": "85171231",
+      "descricao": "Telefones para redes celulares",
+      "unidade": "NUMERO",
+      "dataInicio": "2025-01-01"
+    }
+  ],
+  "metadata": {
+    "total": 4,
+    "fonte": "Portal Único Siscomex",
+    "dataExtracao": "2025-10-29"
+  }
+}

@@ -54,14 +54,6 @@ try:
 except ImportError:
     print("AVISO: SefazService nao disponivel - usando apenas simulacao")
 
-# OK: IMPORTAÇÃO DO SERVIÇO DE CONTINGÊNCIA
-try:
-    from services.contingencia_service import contingencia_service
-    print("ContingenciaService carregado com sucesso")
-except ImportError:
-    contingencia_service = None
-    print("AVISO: ContingenciaService nao disponivel")
-
 
 # ========== VALIDAÇÃO TRIBUTÁRIA ==========
 def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool, List[str]]:
@@ -778,13 +770,13 @@ class NFeService:
             insert_query = text("""
                 INSERT INTO nfe_emitidas (
                     cliente_id, numero, serie, modelo, chave_acesso, protocolo_sefaz,
-                    data_emissao, data_autorizacao, status, valor_total,
+                    data_emissao, data_autorizacao, data_criacao, status, valor_total,
                     natureza_operacao, tipo_nfe, finalidade_emissao,
                     destinatario_razao_social, destinatario_cnpj_cpf,
                     informacoes_adicionais, mensagem_sefaz, json_nfe
                 ) VALUES (
                     :cliente_id, :numero, :serie, :modelo, :chave_acesso, :protocolo_sefaz,
-                    :data_emissao, :data_autorizacao, :status, :valor_total,
+                    :data_emissao, :data_autorizacao, :data_criacao, :status, :valor_total,
                     :natureza_operacao, :tipo_nfe, :finalidade_emissao,
                     :destinatario_razao_social, :destinatario_cnpj_cpf,
                     :informacoes_adicionais, :mensagem_sefaz, :json_nfe
@@ -820,6 +812,7 @@ class NFeService:
                 'protocolo_sefaz': resultado.get('protocolo'),
                 'data_emissao': dt,
                 'data_autorizacao': datetime.now() if resultado['success'] else None,
+                'data_criacao': datetime.now(),
                 'status': 'AUTORIZADA' if resultado['success'] else 'REJEITADA',
                 'valor_total': valor_total,
                 'natureza_operacao': dados_nfe.get('natOp', ''),
@@ -879,6 +872,10 @@ class NFeService:
                 return {'success': False, 'errors': ['Certificado não encontrado']}
             
             print(f"OK: Certificado encontrado: {certificado.get('nome_arquivo_original', 'N/A')}")
+            
+            # Adicionar db_session e cliente_id para XMLSignatureService
+            certificado['db_session'] = self.db
+            certificado['cliente_id'] = cliente_id
             
             # 3. ASSINAR XML
             xml_assinado = self._assinar_xml_real(xml_nfe, certificado)
@@ -947,56 +944,21 @@ class NFeService:
             return None
     
     def _processar_envio_sefaz(self, xml_assinado: str, certificado: Dict[str, Any], ambiente: str, cliente_id: int) -> Dict[str, Any]:
-        """Processa envio para SEFAZ real ou simulado, com contingência automática"""
+        """Processa envio para SEFAZ real ou simulado"""
         try:
             print(f" === PROCESSANDO ENVIO SEFAZ ===")
             
-            # Extrair chave de acesso e UF do emitente
+            # Extrair chave de acesso
             chave_acesso = self._extrair_chave_acesso(xml_assinado)
             if not chave_acesso:
                 return {'success': False, 'message': 'Chave de acesso não encontrada'}
-            
-            # Extrair UF da chave de acesso (posições 0-1 = código IBGE da UF)
-            uf_code = chave_acesso[:2]
-            uf_map = {'11':'RO','12':'AC','13':'AM','14':'RR','15':'PA','16':'AP','17':'TO',
-                      '21':'MA','22':'PI','23':'CE','24':'RN','25':'PB','26':'PE','27':'AL',
-                      '28':'SE','29':'BA','31':'MG','32':'ES','33':'RJ','35':'SP','41':'PR',
-                      '42':'SC','43':'RS','50':'MS','51':'MT','52':'GO','53':'DF'}
-            uf_emitente = uf_map.get(uf_code, 'SP')
             
             # Decidir se usa SEFAZ real
             usar_sefaz_real = self._deve_usar_sefaz_real(certificado, ambiente)
             
             if usar_sefaz_real and SEFAZ_DISPONIVEL:
-                # Verificar se já está em contingência para esta UF
-                if contingencia_service and contingencia_service.esta_em_contingencia(uf_emitente):
-                    info = contingencia_service.obter_info_contingencia(uf_emitente)
-                    print(f"🔴 [CONTINGÊNCIA] UF={uf_emitente} já em contingência ({info.get('tipo')})")
-                    print(f"   Enviando direto para {info.get('tipo')}...")
-                    return self._enviar_sefaz_contingencia(
-                        xml_assinado, chave_acesso, ambiente, cliente_id, uf_emitente
-                    )
-                
-                # Tentar envio normal primeiro
                 print("✅ === ENVIANDO PARA SEFAZ REAL ===")
-                resultado = self._enviar_sefaz_real(xml_assinado, chave_acesso, ambiente, cliente_id)
-                
-                # Se falhou, verificar se deve entrar em contingência
-                if not resultado.get('success') and contingencia_service:
-                    if contingencia_service.deve_entrar_em_contingencia(resultado):
-                        motivo = resultado.get('message', resultado.get('mensagem', 'SEFAZ indisponível'))
-                        contingencia_service.ativar_contingencia(uf_emitente, motivo=motivo)
-                        
-                        print(f"🔴 [CONTINGÊNCIA] Tentando reemitir via contingência...")
-                        return self._enviar_sefaz_contingencia(
-                            xml_assinado, chave_acesso, ambiente, cliente_id, uf_emitente
-                        )
-                
-                # Se deu sucesso, registrar e retornar
-                if resultado.get('success') and contingencia_service:
-                    contingencia_service.registrar_sucesso_sefaz(uf_emitente)
-                
-                return resultado
+                return self._enviar_sefaz_real(xml_assinado, chave_acesso, ambiente, cliente_id)
             else:
                 print("⚠️  === USANDO SIMULAÇÃO LOCAL (SEM CERTIFICADO) ===")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente)
@@ -1191,216 +1153,6 @@ class NFeService:
                     print(f"[OK] Arquivo temporário removido: {key_path}")
                 except:
                     pass
-    
-    def _enviar_sefaz_contingencia(self, xml_assinado: str, chave_acesso: str, 
-                                    ambiente: str, cliente_id: int, uf: str) -> Dict[str, Any]:
-        """
-        Envia NFe para SEFAZ Virtual de Contingência (SVC-AN ou SVC-RS).
-        
-        Modifica o XML para contingência:
-        1. Altera tpEmis de 1 para 6 (SVC-AN) ou 7 (SVC-RS)
-        2. Recalcula a chave de acesso (tpEmis faz parte da chave)
-        3. Reassina o XML  
-        4. Envia para o servidor SVC correto
-        """
-        cert_path = None
-        key_path = None
-        
-        try:
-            if not contingencia_service:
-                print("❌ [CONTINGÊNCIA] Serviço de contingência não disponível")
-                return {'success': False, 'message': 'Serviço de contingência não disponível'}
-            
-            info = contingencia_service.obter_info_contingencia(uf)
-            if not info:
-                print("❌ [CONTINGÊNCIA] Info de contingência não encontrada")
-                return {'success': False, 'message': 'Info de contingência não encontrada'}
-            
-            tipo = info.get('tipo', 'SVC-RS')
-            tp_emis = info.get('tp_emis', '7')
-            urls_svc = contingencia_service.obter_urls_contingencia(uf, ambiente)
-            
-            print(f"\n{'='*80}")
-            print(f"🔴 [CONTINGÊNCIA] EMISSÃO VIA {tipo} (tpEmis={tp_emis})")
-            print(f"   UF: {uf}")
-            print(f"   URL: {urls_svc.get('autorizacao', 'N/A')}")
-            print(f"   Motivo: {info.get('motivo', 'N/A')}")
-            print(f"{'='*80}\n")
-            
-            # 1. Modificar o XML: alterar tpEmis
-            xml_contingencia = self._alterar_tp_emis_xml(xml_assinado, tp_emis)
-            if not xml_contingencia:
-                return {'success': False, 'message': 'Falha ao modificar XML para contingência'}
-            
-            # 2. Recalcular chave de acesso (tpEmis é parte da chave - posição 34)
-            nova_chave = self._recalcular_chave_acesso(chave_acesso, tp_emis)
-            if not nova_chave:
-                return {'success': False, 'message': 'Falha ao recalcular chave de acesso'}
-            
-            # 3. Atualizar Id no XML com nova chave
-            xml_contingencia = xml_contingencia.replace(
-                f'Id="NFe{chave_acesso}"', f'Id="NFe{nova_chave}"'
-            )
-            # Atualizar cDV (último dígito da chave)
-            import re
-            cdv_novo = nova_chave[-1]
-            xml_contingencia = re.sub(r'<cDV>\d</cDV>', f'<cDV>{cdv_novo}</cDV>', xml_contingencia)
-            
-            # 4. Remover assinatura antiga (será reassinado)
-            xml_contingencia = re.sub(
-                r'<Signature[^>]*xmlns[^>]*>.*?</Signature>', '', xml_contingencia, flags=re.DOTALL
-            )
-            xml_contingencia = re.sub(
-                r'<ns\d*:Signature[^>]*>.*?</ns\d*:Signature>', '', xml_contingencia, flags=re.DOTALL
-            )
-            
-            print(f"   Nova chave: {nova_chave}")
-            print(f"   XML modificado: {len(xml_contingencia)} caracteres")
-            
-            # 5. Reassinar o XML
-            certificado = certificate_service_function(self.db, cliente_id) if certificate_service_function else None
-            if not certificado:
-                return {'success': False, 'message': 'Certificado não encontrado para reassinatura'}
-            
-            xml_reassinado = self._assinar_xml_real(xml_contingencia, certificado)
-            if not xml_reassinado:
-                return {'success': False, 'message': 'Falha ao reassinar XML para contingência'}
-            
-            print(f"   XML reassinado: {len(xml_reassinado)} caracteres")
-            
-            # 6. Extrair certificado para HTTPS
-            if certificado.get('cert_data') and certificado.get('password'):
-                try:
-                    cert_data = certificado['cert_data']
-                    password = certificado['password'].encode('utf-8')
-                    
-                    private_key, certificate, _ = pkcs12.load_key_and_certificates(cert_data, password)
-                    
-                    with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cf:
-                        cf.write(certificate.public_bytes(serialization.Encoding.PEM))
-                        cert_path = cf.name
-                    
-                    with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as kf:
-                        kf.write(private_key.private_bytes(
-                            encoding=serialization.Encoding.PEM,
-                            format=serialization.PrivateFormat.TraditionalOpenSSL,
-                            encryption_algorithm=serialization.NoEncryption()
-                        ))
-                        key_path = kf.name
-                        
-                except Exception as e:
-                    print(f"❌ [CONTINGÊNCIA] Erro ao extrair certificado: {e}")
-                    return {'success': False, 'message': f'Erro certificado: {str(e)}'}
-            else:
-                return {'success': False, 'message': 'Certificado incompleto para contingência'}
-            
-            # 7. Enviar para SVC com URLs customizadas
-            sefaz_svc = SefazService(
-                ambiente=ambiente, 
-                cert_path=cert_path, 
-                key_path=key_path,
-                urls_override=urls_svc
-            )
-            
-            print(f"🔴 [CONTINGÊNCIA] Enviando para {tipo}...")
-            resultado = sefaz_svc.enviar_nfe(xml_reassinado, nova_chave)
-            
-            if resultado.get('status') == 'AUTORIZADA':
-                xml_protocolo = self._gerar_xml_protocolo(xml_reassinado, resultado)
-                print(f"✅ [CONTINGÊNCIA] NFe AUTORIZADA via {tipo}!")
-                return {
-                    'success': True,
-                    'status': 'AUTORIZADA',
-                    'chave_acesso': nova_chave,
-                    'protocolo': resultado.get('protocolo'),
-                    'message': f'Autorizada via {tipo} (contingência)',
-                    'xml_protocolo': xml_protocolo,
-                    'ambiente_real': True,
-                    'contingencia': True,
-                    'tipo_contingencia': tipo,
-                }
-            else:
-                print(f"❌ [CONTINGÊNCIA] {tipo} também rejeitou: {resultado.get('mensagem')}")
-                return {
-                    'success': False,
-                    'status': resultado.get('status', 'ERRO'),
-                    'message': f'{tipo}: {resultado.get("mensagem", "Erro desconhecido")}',
-                    'codigo': resultado.get('codigo'),
-                    'ambiente_real': True,
-                    'contingencia': True,
-                    'tipo_contingencia': tipo,
-                }
-                
-        except Exception as e:
-            print(f"❌ [CONTINGÊNCIA] Erro: {e}")
-            import traceback
-            traceback.print_exc()
-            return {
-                'success': False,
-                'status': 'ERRO_CONTINGENCIA',
-                'message': f'Erro na contingência: {str(e)}',
-            }
-        finally:
-            if cert_path and os.path.exists(cert_path):
-                try: os.unlink(cert_path)
-                except: pass
-            if key_path and os.path.exists(key_path):
-                try: os.unlink(key_path)
-                except: pass
-    
-    def _alterar_tp_emis_xml(self, xml: str, tp_emis: str) -> Optional[str]:
-        """Altera o tpEmis no XML da NFe para contingência"""
-        try:
-            import re
-            # Substituir <tpEmis>1</tpEmis> por <tpEmis>6</tpEmis> ou <tpEmis>7</tpEmis>
-            xml_modificado = re.sub(r'<tpEmis>\d</tpEmis>', f'<tpEmis>{tp_emis}</tpEmis>', xml)
-            
-            # Adicionar dhCont (data/hora de contingência) se não existir
-            if '<dhCont>' not in xml_modificado:
-                from datetime import timezone as tz
-                brt = tz(timedelta(hours=-3))
-                dh_cont = datetime.now(brt).replace(microsecond=0).isoformat()
-                x_just = 'SEFAZ autorizadora indisponivel'
-                
-                # Inserir dhCont e xJust após indPres ou indIntermed
-                for tag_ref in ['</indIntermed>', '</indPres>', '</indFinal>']:
-                    if tag_ref in xml_modificado:
-                        xml_modificado = xml_modificado.replace(
-                            tag_ref,
-                            f'{tag_ref}<dhCont>{dh_cont}</dhCont><xJust>{x_just}</xJust>'
-                        )
-                        break
-            
-            print(f"   tpEmis alterado para {tp_emis}")
-            return xml_modificado
-        except Exception as e:
-            print(f"❌ Erro ao alterar tpEmis: {e}")
-            return None
-    
-    def _recalcular_chave_acesso(self, chave_original: str, novo_tp_emis: str) -> Optional[str]:
-        """
-        Recalcula a chave de acesso com novo tpEmis.
-        Posição 34 da chave = tpEmis (0-indexed)
-        """
-        try:
-            if len(chave_original) != 44:
-                print(f"❌ Chave original inválida: {len(chave_original)} dígitos")
-                return None
-            
-            # Substituir tpEmis na posição 34
-            chave_sem_dv = chave_original[:34] + novo_tp_emis + chave_original[35:43]
-            
-            # Recalcular DV (módulo 11)
-            from services.nfe_nfelib_service import calcular_dv_chave_acesso
-            dv = calcular_dv_chave_acesso(chave_sem_dv)
-            
-            nova_chave = chave_sem_dv + dv
-            print(f"   Chave recalculada: {chave_original} → {nova_chave}")
-            print(f"   tpEmis: {chave_original[34]} → {novo_tp_emis}")
-            return nova_chave
-        except Exception as e:
-            print(f"❌ Erro ao recalcular chave: {e}")
-            return None
     
     def _enviar_sefaz_simulado(self, xml_assinado: str, chave_acesso: str, ambiente: str, motivo: Optional[str] = None) -> Dict[str, Any]:
         """Envia para SEFAZ simulado - FALLBACK quando não há certificado válido"""
@@ -1745,11 +1497,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         
         # OK: GERAR CHAVE DE ACESSO
         uf_code = get_uf_ibge_code(emitente_data.get('uf', 'SP'))
-        if emitente_data.get('produtor_rural'):
-            cpf_raw = (emitente_data.get('cpf') or '').replace('.', '').replace('-', '')
-            cnpj_emit = cpf_raw.zfill(14)  # CPF padded a 14 digitos para chave de acesso
-        else:
-            cnpj_emit = emitente_data.get('cnpj', '').replace('.', '').replace('/', '').replace('-', '')
+        cnpj_emit = emitente_data.get('cnpj', '').replace('.', '').replace('/', '').replace('-', '')
         
         # Código numérico aleatório de 8 dígitos
         codigo_numerico = str(uuid.uuid4().int)[-8:]
@@ -1895,11 +1643,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         
         # emit
         emit = etree.SubElement(inf_nfe, "emit")
-        if emitente_data.get('produtor_rural'):
-            cpf_emit = (emitente_data.get('cpf') or '').replace('.', '').replace('-', '')
-            etree.SubElement(emit, "CPF").text = cpf_emit
-        else:
-            etree.SubElement(emit, "CNPJ").text = cnpj_emit
+        etree.SubElement(emit, "CNPJ").text = cnpj_emit
         etree.SubElement(emit, "xNome").text = str(emitente_data.get('razao_social', '')).strip()
         if emitente_data.get('nome_fantasia'):
             etree.SubElement(emit, "xFant").text = str(emitente_data['nome_fantasia']).strip()

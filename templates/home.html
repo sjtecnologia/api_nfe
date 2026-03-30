@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - NfeSjtec{% endblock %}
+{% block title %}Dashboard - EmiteMax{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -15,12 +15,12 @@
                         Dashboard
                     </h1>
                     <p class="text-muted">
-                        Bem-vindo ao NfeSjtec - Sistema de Nota Fiscal Eletrônica
+                        Bem-vindo ao EmiteMax - Sistema de Nota Fiscal Eletrônica
                     </p>
                 </div>
                 <div class="text-right">
                     <small class="text-muted d-block">Última atualização</small>
-                    <span class="badge badge-primary">
+                    <span class="badge bg-primary">
                         <i class="fas fa-clock"></i>
                         Agora mesmo
                     </span>
@@ -84,27 +84,29 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
+                        {% if can_create() %}
                         <div class="col-md-3 mb-3">
                             <a href="{{ url_for('nfe.emitir_nfe') }}" class="btn btn-primary btn-block btn-lg">
-                                <i class="fas fa-plus-circle"></i>
+                                <i class="fas fa-plus-circle me-2"></i>
                                 Nova NFe
                             </a>
                         </div>
+                        {% endif %}
                         <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('admin.list_produtos', cliente_id=session.current_client_id) }}" class="btn btn-outline-primary btn-block btn-lg">
-                                <i class="fas fa-boxes"></i>
+                            <a href="{{ url_for('admin.list_produtos') }}" class="btn btn-outline-primary btn-block btn-lg">
+                                <i class="fas fa-boxes me-2"></i>
                                 Produtos
                             </a>
                         </div>
                         <div class="col-md-3 mb-3">
                             <a href="{{ url_for('admin.list_clientes') }}" class="btn btn-outline-primary btn-block btn-lg">
-                                <i class="fas fa-users"></i>
+                                <i class="fas fa-users me-2"></i>
                                 Clientes
                             </a>
                         </div>
                         <div class="col-md-3 mb-3">
                             <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-primary btn-block btn-lg">
-                                <i class="fas fa-list"></i>
+                                <i class="fas fa-list me-2"></i>
                                 Consultar NFes
                             </a>
                         </div>
@@ -141,21 +143,21 @@
                                     <td><strong>001</strong></td>
                                     <td>Empresa ABC Ltda</td>
                                     <td>R$ 1.250,00</td>
-                                    <td><span class="badge badge-success">Autorizada</span></td>
+                                    <td><span class="badge bg-success">Autorizada</span></td>
                                     <td>Hoje 14:30</td>
                                 </tr>
                                 <tr>
                                     <td><strong>002</strong></td>
                                     <td>XYZ Comércio</td>
                                     <td>R$ 890,50</td>
-                                    <td><span class="badge badge-success">Autorizada</span></td>
+                                    <td><span class="badge bg-success">Autorizada</span></td>
                                     <td>Hoje 12:15</td>
                                 </tr>
                                 <tr>
                                     <td><strong>003</strong></td>
                                     <td>Tech Solutions</td>
                                     <td>R$ 2.100,00</td>
-                                    <td><span class="badge badge-warning">Pendente</span></td>
+                                    <td><span class="badge bg-warning">Pendente</span></td>
                                     <td>Hoje 09:45</td>
                                 </tr>
                             </tbody>
@@ -205,7 +207,7 @@
                             <i class="fas fa-laptop-code" style="font-size: 3rem; color: var(--sj-primary); opacity: 0.8;"></i>
                         </div>
                         <br>
-                        <small class="text-muted">NfeSjtec v2.0</small>
+                        <small class="text-muted">EmiteMax v2.0</small>
                     </div>
                 </div>
             </div>
@@ -227,7 +229,7 @@
                     <i class="fas fa-rocket"></i>
                     Ação Rápida
                 </h5>
-                <button type="button" class="close" data-dismiss="modal">
+                <button type="button" class="btn-close" data-bs-dismiss="modal">
                     <span>&times;</span>
                 </button>
             </div>

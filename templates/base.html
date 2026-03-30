@@ -1,17 +1,21 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <script src="https://unpkg.com/imask"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}SJ Tecnologia - Sistema NFe{% endblock %}</title>
+    <title>{% block title %}EmiteMax - Sistema de Emissão de Notas Fiscais{% endblock %}</title>
     
-    <!-- ✅ FAVICON DA SJ TECNOLOGIA -->
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
-    <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
     
-    <!-- ✅ USAR APENAS BOOTSTRAP 4.6 (compatível com Select2) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/Logonew.ico') }}">
+    <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', filename='img/Logonew.ico') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     
     <!-- ✅ TEMA PERSONALIZADO SJ TECNOLOGIA -->
     <style>
@@ -27,6 +31,17 @@
         }
         
         /* ===== NAVBAR PERSONALIZADA ===== */
+        .nav-tabs .nav-link.active {
+            background-color: #f8f9fa !important;
+            color: #212529 !important;
+            border-color: #dee2e6 #dee2e6 #fff;
+        }
+        .nav-tabs .nav-link {
+            color: #212529 !important;
+        }
+        .card-header-tabs {
+            border-bottom: 1px solid #dee2e6;
+        }
         .navbar-dark {
             background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%) !important;
             box-shadow: 0 2px 10px rgba(0, 188, 212, 0.3);
@@ -246,6 +261,73 @@
             background-color: var(--sj-danger) !important;
         }
         
+        /* ===== BADGES BOOTSTRAP (BG-*) ===== */
+        .badge.bg-success,
+        span.badge.bg-success,
+        td .badge.bg-success,
+        table .badge.bg-success {
+            background-color: #28a745 !important;
+            color: #ffffff !important;
+        }
+        
+        .badge.bg-secondary,
+        span.badge.bg-secondary,
+        td .badge.bg-secondary,
+        table .badge.bg-secondary {
+            background-color: #6c757d !important;
+            color: #ffffff !important;
+        }
+        
+        .badge.bg-danger,
+        span.badge.bg-danger,
+        td .badge.bg-danger,
+        table .badge.bg-danger {
+            background-color: #dc3545 !important;
+            color: #ffffff !important;
+        }
+        
+        .badge.bg-warning,
+        span.badge.bg-warning,
+        td .badge.bg-warning,
+        table .badge.bg-warning {
+            background-color: #ffc107 !important;
+            color: #212529 !important;
+        }
+        
+        .badge.bg-info,
+        span.badge.bg-info,
+        td .badge.bg-info,
+        table .badge.bg-info {
+            background-color: #17a2b8 !important;
+            color: #ffffff !important;
+        }
+        
+        .badge.bg-primary,
+        span.badge.bg-primary,
+        td .badge.bg-primary,
+        table .badge.bg-primary {
+            background-color: var(--sj-primary) !important;
+            color: #ffffff !important;
+        }
+        
+        /* Sobrescrever qualquer classe text-white em badges coloridos */
+        .badge.bg-success.text-white,
+        .badge.bg-secondary.text-white,
+        .badge.bg-danger.text-white,
+        .badge.bg-info.text-white,
+        .badge.bg-primary.text-white {
+            color: #ffffff !important;
+        }
+        
+        /* Garantir que text-white sempre funcione */
+        .text-white {
+            color: #ffffff !important;
+        }
+        
+        .text-dark {
+            color: #212529 !important;
+        }
+        
         /* ===== ALERTAS PERSONALIZADOS ===== */
         .alert {
             border: none;
@@ -254,27 +336,20 @@
         }
         
         .alert-success {
-            background-color: rgba(76, 175, 80, 0.1);
-            border-left-color: var(--sj-success);
-            color: #2E7D32;
+            background-color: #28a745 !important; /* verde Bootstrap mais forte */
+            color: #fff;
         }
-        
-        .alert-info {
-            background-color: rgba(2, 136, 209, 0.1);
-            border-left-color: var(--sj-secondary);
-            color: #1565C0;
-        }
-        
-        .alert-warning {
-            background-color: rgba(255, 152, 0, 0.1);
-            border-left-color: var(--sj-warning);
-            color: #E65100;
-        }
-        
         .alert-danger {
-            background-color: rgba(244, 67, 54, 0.1);
-            border-left-color: var(--sj-danger);
-            color: #C62828;
+            background-color: #dc3545 !important;
+            color: #fff;
+        }
+        .alert-warning {
+            background-color: #ffc107 !important;
+            color: #212529;
+        }
+        .alert-info {
+            background-color: #17a2b8 !important;
+            color: #fff;
         }
         
         /* ===== FORMULÁRIOS PERSONALIZADOS ===== */
@@ -641,177 +716,244 @@
                 font-size: 1rem !important;
             }
         }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.7);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .loading-overlay.active {
+            display: flex !important;
+        }
+        .spinner {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #3498db;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg);}
+            100% { transform: rotate(360deg);}
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
+{% block scripts %}{% endblock %}
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('home.home') }}">
-                <div class="logo">
-                    <i class="fas fa-file-invoice"></i>
-                </div>
-                <span>NfeSjtec</span>
+            
+            <a class="navbar-brand"
+                href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
+                        {{ url_for('admin.admin_home') }}
+                    {% elif current_user.is_authenticated and session.current_client_id %}
+                        {{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}
+                    {% else %}
+                        {{ url_for('home.home') }}
+                    {% endif %}">
+                <img src="{{ url_for('static', filename='img/emitemax-logo.png') }}" 
+                     alt="EmiteMax" 
+                     style="height: 40px; margin-right: 12px; border-radius: 8px;">
+                <span>EmiteMax</span>
                 <small style="font-size: 0.75rem; opacity: 0.8; margin-left: 8px;">v2.0</small>
             </a>
             
-            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav mr-auto mb-2 mb-lg-0">
                     {% if current_user.is_authenticated %}
-                        
-                        <!-- Menu para Clientes (não admin) -->
-                        {% if not current_user.is_admin() %}
-                            
-                            {% if session.current_client_id %}
-                                
-                                {% if has_permission('nfe.issue') %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-plus-circle"></i> Emitir NF-e
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if has_permission('nfe.read') %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-list"></i> NF-es
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if has_permission('products.read') %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-boxes"></i> Produtos
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if has_permission('destinatarios_nfe.read') %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-address-book"></i> Destinatários
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if has_permission('certificates.read') %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_certificados') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-certificate"></i> Certificados
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if has_permission('rules.read') %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_regras_tributacao') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-gavel"></i> Regras Tributárias
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                            {% endif %}
-                            
-                        {% else %}
-                            
-                            <!-- Menu para Administradores -->
-                            
-                            {% if has_permission('clients.read') %}
+                        {# Menu dinâmico por role #}
+                        {% if current_user.is_super_admin() %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin.dashboard') }}">
+                                    <i class="fas fa-chart-line"></i> Dashboard
+                                </a>
+                            </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('admin.list_clientes') }}">
                                     <i class="fas fa-users"></i> Clientes
                                 </a>
                             </li>
-                            {% endif %}
-                            
-                            {% if has_permission('nfe.read') %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('admin.list_nfes') }}">
-                                    <i class="fas fa-file-invoice"></i> Todas NFes
-                                </a>
-                            </li>
-                            {% endif %}
-                            
-                            <!-- Dropdown para Cadastros Fiscais -->
-                            {% if has_permission('cfops.read') or has_permission('ncms.read') or has_permission('cst.read') or has_permission('csosn.read') %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                     <i class="fas fa-cogs"></i> Cadastros Fiscais
                                 </a>
                                 <div class="dropdown-menu">
-                                    {% if has_permission('cfops.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_cfops') }}">
-                                        <i class="fas fa-exchange-alt"></i> CFOPs
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_cfops') }}"><i class="fas fa-exchange-alt"></i> CFOPs</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_ncms') }}"><i class="fas fa-barcode"></i> NCMs</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_cst') }}"><i class="fas fa-percentage"></i> CST ICMS</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_csosn') }}"><i class="fas fa-calculator"></i> CSOSN ICMS</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_origens_mercadoria') }}"><i class="fas fa-map-marker-alt"></i> Origem Mercadoria</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_regimes_tributarios') }}"><i class="fas fa-building"></i> Regimes Tributários</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_motivos_desoneracao') }}"><i class="fas fa-minus-circle"></i> Motivos Desoneração</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_classificacoes_ibs_cbs') }}">
+                                        <i class="fas fa-receipt text-primary"></i> Classificações IBS/CBS
+                                        <span class="badge bg-info ms-1">Reforma</span>
                                     </a>
-                                    {% endif %}
-                                    {% if has_permission('ncms.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_ncms') }}">
-                                        <i class="fas fa-barcode"></i> NCMs
-                                    </a>
-                                    {% endif %}
-                                    {% if has_permission('cst.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_cst') }}">
-                                        <i class="fas fa-percentage"></i> CST ICMS
-                                    </a>
-                                    {% endif %}
-                                    {% if has_permission('csosn.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_csosn') }}">
-                                        <i class="fas fa-calculator"></i> CSOSN ICMS
-                                    </a>
-                                    {% endif %}
-                                    {% if has_permission('origens_mercadoria.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_origens_mercadoria') }}">
-                                        <i class="fas fa-map-marker-alt"></i> Origem Mercadoria
-                                    </a>
-                                    {% endif %}
-                                    {% if has_permission('regimes_tributarios.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_regimes_tributarios') }}">
-                                        <i class="fas fa-building"></i> Regimes Tributários
-                                    </a>
-                                    {% endif %}
-                                    {% if has_permission('motivos_desoneracao.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_motivos_desoneracao') }}">
-                                        <i class="fas fa-minus-circle"></i> Motivos Desoneração
-                                    </a>
-                                    {% endif %}
                                 </div>
                             </li>
-                            {% endif %}
-                            
-                            <!-- Dropdown para Administração do Sistema -->
-                            {% if has_permission('users.read') or has_permission('roles.read') %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                     <i class="fas fa-tools"></i> Sistema
                                 </a>
                                 <div class="dropdown-menu">
-                                    {% if has_permission('users.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_users') }}">
-                                        <i class="fas fa-user"></i> Usuários
-                                    </a>
-                                    {% endif %}
-                                    {% if has_permission('roles.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_roles') }}">
-                                        <i class="fas fa-user-tag"></i> Papéis
-                                    </a>
-                                    {% endif %}
-                                    {% if has_permission('permissions.read') %}
-                                    <a class="dropdown-item" href="{{ url_for('admin.list_permissions') }}">
-                                        <i class="fas fa-key"></i> Permissões
-                                    </a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_usuarios') }}"><i class="fas fa-user"></i> Usuários</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_roles') }}"><i class="fas fa-user-tag"></i> Papéis</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_permissions') }}"><i class="fas fa-key"></i> Permissões</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.relatorio_certificados_vencimento') }}"><i class="fas fa-certificate"></i> Certificados Digitais</a>
+                                    {% if current_user.is_super_admin() %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('planos.list_planos') }}"><i class="fas fa-box-open"></i> Planos</a>
+                                    <a class="dropdown-item" href="{{ url_for('planos.list_assinaturas') }}"><i class="fas fa-id-card"></i> Assinaturas de Clientes</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-key"></i> API Keys</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-webhook"></i> Webhooks</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_faturamento') }}"><i class="fas fa-dollar-sign"></i> Faturamento</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_auditoria') }}"><i class="fas fa-clipboard-list"></i> Logs e Auditoria</a>
                                     {% endif %}
                                 </div>
                             </li>
+                        {% elif current_user.is_admin() %}
+                            {% if session.current_client_id %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_clientes') }}">
+                                        <i class="fas fa-users"></i> Clientes
+                                    </a>
+                                </li>
+                                {% if current_user.is_super_admin() %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_nfes') }}">
+                                        <i class="fas fa-file-invoice"></i> Todas NFes
+                                    </a>
+                                </li>
+                                {% endif %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_certificados') }}">
+                                        <i class="fas fa-certificate"></i> Certificados
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}">
+                                        <i class="fas fa-box"></i> Produtos
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
+                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
+                                    </a>
+                                </li>
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-gavel"></i> Regras Tributárias
+                                    </a>
+                                    <div class="dropdown-menu">
+                                        <a class="dropdown-item" href="{{ url_for('admin.list_regras_tributacao') }}">
+                                            <i class="fas fa-file-invoice"></i> Regras NFe
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url_for('regras_servicos.list_regras_servicos') }}">
+                                            <i class="fas fa-file-alt"></i> Regras NFSe
+                                        </a>
+                                        <div class="dropdown-divider"></div>
+                                        <a class="dropdown-item" href="{{ url_for('classificacao_ibs_cbs.listar') }}">
+                                            <i class="fas fa-balance-scale"></i> IBS/CBS (LC 214/2025)
+                                        </a>
+                                    </div>
+                                </li>
                             {% endif %}
-                            
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-tools"></i> Sistema
+                                </a>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_usuarios') }}"><i class="fas fa-user"></i> Usuários</a>
+                                    {% if current_user.is_super_admin() %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_auditoria') }}"><i class="fas fa-clipboard-list"></i> Logs e Auditoria</a>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% elif current_user.role_name == 'Editor' %}
+                            {% if session.current_client_id %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-plus-circle"></i> Emitir NF-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-list"></i> NF-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.emitir_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-cash-register"></i> Emitir NFC-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.listar_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-receipt"></i> NFC-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
+                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-boxes"></i> Produtos
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
+                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
+                                    </a>
+                                </li>
+                                {# Editor NÃO vê Certificados nem Regras Tributárias #}
+                            {% endif %}
+                        {% elif current_user.role_name == 'Viewer' %}
+                            {% if session.current_client_id %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-list"></i> NF-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.listar_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-receipt"></i> NFC-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
+                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-boxes"></i> Produtos
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
+                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
+                                    </a>
+                                </li>
+                                {# Viewer NÃO vê Certificados, Regras Tributárias, nem botões de edição/criação #}
+                            {% endif %}
                         {% endif %}
-                        
                     {% endif %}
                 </ul>
                 
@@ -819,12 +961,12 @@
                 <ul class="navbar-nav">
                     {% if current_user.is_authenticated %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-toggle="dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                                 <i class="fas fa-user-circle"></i> {{ current_user.username }}
-                                {% if not current_user.is_admin() and session.current_client_id %}
-                                    <small class="badge badge-primary ml-1">Cliente</small>
-                                {% elif current_user.is_admin() %}
-                                    <small class="badge badge-danger ml-1">Admin</small>
+                                {% if current_user.roles and current_user.roles|length > 0 %}
+                                    <small class="badge bg-info ms-1">{{ current_user.roles[0].name }}</small>
+                                {% else %}
+                                    <small class="badge bg-secondary ms-1">Sem papel</small>
                                 {% endif %}
                             </a>
                             <div class="dropdown-menu dropdown-menu-right">
@@ -833,10 +975,19 @@
                                 </h6>
                                 
                                 <!-- Informações do Cliente Atual -->
-                                {% if not current_user.is_admin() and session.current_client_id %}
+                                {% set accessible_clients = current_user.get_accessible_clients() if current_user.get_accessible_clients is defined else [] %}
+                                {% if not current_user.is_super_admin() and accessible_clients|length > 1 %}
                                 <span class="dropdown-item-text">
                                     <small class="text-muted">Cliente Atual:</small><br>
-                                    <strong>{{ session.current_client_name or 'Cliente Selecionado' }}</strong>
+                                    {% set nome_cliente = session.current_client_name %}
+                                    {% if not nome_cliente and session.current_client_id and accessible_clients %}
+                                        {% for c in accessible_clients %}
+                                            {% if c.id == session.current_client_id or c.cliente_id == session.current_client_id %}
+                                                {% set nome_cliente = c.nome if c.nome is defined else c.razao_social %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                    <strong>{{ nome_cliente if nome_cliente else 'Nenhum cliente selecionado' }}</strong>
                                 </span>
                                 <div class="dropdown-divider"></div>
                                 <a class="dropdown-item" href="{{ url_for('home.switch_client') }}">
@@ -844,11 +995,26 @@
                                 </a>
                                 <div class="dropdown-divider"></div>
                                 {% endif %}
-                                
-                                <a class="dropdown-item" href="{{ url_for('home.home') }}">
-                                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                                <a class="dropdown-item"
+                                    href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
+                                            {{ url_for('admin.admin_home') }}
+                                        {% elif current_user.is_authenticated and session.current_client_id %}
+                                            {{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}
+                                        {% else %}
+                                            {{ url_for('home.home') }}
+                                        {% endif %}">
+                                    
+                                   <i class="fas fa-tachometer-alt"></i> Dashboard                          
                                 </a>
-                                <a class="dropdown-item" href="#" onclick="alert('Perfil não implementado ainda')">
+                                <!-- <a class="dropdown-item" href="{{ url_for('home.home') }}">
+                                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                                </a> -->
+                                
+                                <!-- <a class="dropdown-item" href="{{ url_for('cliente.selecionar_cliente') }}">
+                                    <i class="fas fa-exchange-alt"></i> Trocar Cliente
+                                </a> -->
+
+                                <a class="dropdown-item" href="{{ url_for('admin.perfil') }}">
                                     <i class="fas fa-user-edit"></i> Meu Perfil
                                 </a>
                                 <div class="dropdown-divider"></div>
@@ -889,7 +1055,6 @@
     {% endif %} -->
 
     <main class="container-fluid mt-3">
-        <!-- Área para mostrar mensagens flash -->
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="alerts-global-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 450px;">
@@ -897,10 +1062,8 @@
                     <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-lg auto-close-alert global-alert" 
                          role="alert" 
                          style="border-radius: 12px; border: none; border-left: 5px solid; margin-bottom: 12px; animation: slideInRight 0.6s ease-out; backdrop-filter: blur(15px);">
-                        
-                        <!-- ✅ ÍCONE BASEADO NO TIPO -->
                         <div class="d-flex align-items-start">
-                            <div class="alert-icon mr-3" style="font-size: 1.2rem; margin-top: 2px;">
+                            <div class="alert-icon me-3" style="font-size: 1.2rem; margin-top: 2px;">
                                 {% if category == 'error' or category == 'danger' %}
                                     <i class="fas fa-exclamation-triangle"></i>
                                 {% elif category == 'success' %}
@@ -913,29 +1076,21 @@
                                     <i class="fas fa-bell"></i>
                                 {% endif %}
                             </div>
-                            
                             <div class="alert-content flex-grow-1">
                                 <div class="alert-message" style="font-weight: 500; line-height: 1.4;">
                                     {{ message }}
                                 </div>
-                                
-                                <!-- ✅ BARRA DE PROGRESSO PARA AUTO-CLOSE -->
                                 <div class="auto-close-progress" style="height: 3px; background: rgba(255,255,255,0.3); border-radius: 3px; margin-top: 8px; overflow: hidden;">
                                     <div class="progress-bar" style="height: 100%; background: rgba(255,255,255,0.7); width: 100%; animation: progressCountdown 6s linear forwards;"></div>
                                 </div>
                             </div>
-                            
-                            <!-- ✅ BOTÃO FECHAR -->
-                            <button type="button" class="close ml-2" data-dismiss="alert" aria-label="Close" style="font-size: 1.5rem; opacity: 0.8;">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
+                            <button type="button" class="btn-close ms-2" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% endif %}
         {% endwith %}
-
         {% block content %}{% endblock %}
     </main>
 
@@ -943,150 +1098,100 @@
     <footer class="mt-5 py-3">
         <div class="container-fluid text-center">
             <small class="text-muted">
-                <i class="fas fa-code"></i> NfeSjtec - Sistema de Nota Fiscal Eletrônica
+                <i class="fas fa-code"></i> EmiteMax - Sistema de Nota Fiscal Eletrônica
                 {% if current_user.is_authenticated %}
                     | Usuário: <strong>{{ current_user.username }}</strong>
-                    {% if current_user.is_admin() %}
-                        <span class="badge badge-danger ml-1">Administrador</span>
-                    {% elif session.current_client_id %}
-                        <span class="badge badge-primary ml-1">{{ session.current_client_name or 'Cliente' }}</span>
-                    {% endif %}
+                    <span class="badge bg-primary ms-1">{{ current_user.roles[0].name }}</span>                    
                 {% endif %}
-                | © 2024
+                | © 2025
             </small>
         </div>
     </footer>
 
-    <!-- ✅ ORDEM CORRETA: jQuery PRIMEIRO, depois Bootstrap -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+ 
 
-    <!-- ✅ JAVASCRIPT DE AUTO-CLOSE APÓS JQUERY -->
+ 
+    <!-- ✅ JAVASCRIPT DE AUTO-CLOSE EM JS PURO -->
     <script>
-    $(document).ready(function() {
-        
-        console.log('🔧 Inicializando sistema de auto-close alerts...');
-        
-        // ✅ FUNÇÃO CORRIGIDA DE AUTO-CLOSE
+    document.addEventListener('DOMContentLoaded', function () {
         function initAutoCloseAlerts() {
-            $('.auto-close-alert:not(.initialized)').each(function() {
-                const $alert = $(this);
-                const closeTime = 6000; // 6 segundos
+            document.querySelectorAll('.auto-close-alert:not(.initialized)').forEach(function(alert) {
+                alert.classList.add('initialized', 'showing');
+                let closeTime = 6000;
                 let timeoutId;
                 let isPaused = false;
-                
-                console.log('📋 Inicializando alert:', $alert.find('.alert-message').text().substring(0, 30) + '...');
-                
-                // Marcar como inicializado
-                $alert.addClass('initialized showing');
-                
-                // Função para fechar o alert
+                const progressBar = alert.querySelector('.progress-bar');
+
                 function closeAlert() {
-                    console.log('🚫 Fechando alert automaticamente');
-                    
-                    // Adicionar classe de fechamento
-                    $alert.addClass('closing');
-                    
-                    // Aguardar animação CSS e remover elemento
+                    alert.classList.add('closing');
                     setTimeout(function() {
-                        $alert.fadeOut(300, function() {
-                            $alert.remove();
-                            console.log('✅ Alert removido do DOM');
-                        });
-                    }, 500); // Aguarda a animação slideOutRight (0.5s)
+                        alert.classList.remove('show', 'showing', 'closing');
+                        alert.style.display = 'none';
+                    }, 500);
                 }
-                
-                // Timer principal
+
                 function startTimer() {
                     if (!isPaused) {
-                        console.log('⏰ Iniciando timer de 6 segundos');
                         timeoutId = setTimeout(closeAlert, closeTime);
                     }
                 }
-                
-                // Eventos de hover
-                $alert.hover(
-                    function() {
-                        // Mouse enter - pausar
-                        console.log('⏸️  Pausando timer (hover)');
-                        isPaused = true;
-                        if (timeoutId) {
-                            clearTimeout(timeoutId);
-                        }
-                        $(this).find('.progress-bar').css('animation-play-state', 'paused');
-                    },
-                    function() {
-                        // Mouse leave - retomar
-                        console.log('▶️  Retomando timer (leave)');
-                        isPaused = false;
-                        $(this).find('.progress-bar').css('animation-play-state', 'running');
-                        
-                        // Tempo reduzido ao retomar (2 segundos)
-                        timeoutId = setTimeout(closeAlert, 2000);
-                    }
-                );
-                
-                // Botão de fechar manual
-                $alert.find('.close').off('click.autoclose').on('click.autoclose', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('❌ Fechamento manual do alert');
-                    
-                    if (timeoutId) {
-                        clearTimeout(timeoutId);
-                    }
-                    closeAlert();
+
+                alert.addEventListener('mouseenter', function() {
+                    isPaused = true;
+                    if (timeoutId) clearTimeout(timeoutId);
+                    if (progressBar) progressBar.style.animationPlayState = 'paused';
                 });
-                
-                // Iniciar o timer
+
+                alert.addEventListener('mouseleave', function() {
+                    isPaused = false;
+                    if (progressBar) progressBar.style.animationPlayState = 'running';
+                    timeoutId = setTimeout(closeAlert, 2000);
+                });
+
+                // Botão de fechar manual
+                const btnClose = alert.querySelector('.btn-close');
+                if (btnClose) {
+                    btnClose.addEventListener('click', function(e) {
+                        if (timeoutId) clearTimeout(timeoutId);
+                        closeAlert();
+                    });
+                }
+
                 startTimer();
             });
         }
-        
-        // ✅ INICIALIZAR IMEDIATAMENTE
+
+        // Inicializar imediatamente
         initAutoCloseAlerts();
-        
-        // ✅ OBSERVER PARA ALERTS DINÂMICOS (AJAX)
+
+        // Observer para alerts dinâmicos
         const alertObserver = new MutationObserver(function(mutations) {
             let hasNewAlerts = false;
-            
             mutations.forEach(function(mutation) {
                 mutation.addedNodes.forEach(function(node) {
-                    if (node.nodeType === 1) {
-                        if ($(node).hasClass('auto-close-alert') || $(node).find('.auto-close-alert').length > 0) {
-                            hasNewAlerts = true;
-                        }
+                    if (node.nodeType === 1 && (node.classList.contains('auto-close-alert') || node.querySelector('.auto-close-alert'))) {
+                        hasNewAlerts = true;
                     }
                 });
             });
-            
-            if (hasNewAlerts) {
-                console.log('🔍 Novos alerts detectados via AJAX/DOM');
-                setTimeout(initAutoCloseAlerts, 100); // Pequeno delay para garantir renderização
-            }
+            if (hasNewAlerts) setTimeout(initAutoCloseAlerts, 100);
         });
-        
-        // Observar mudanças no DOM
-        alertObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        
-        // ✅ FALLBACK: Verificar periodicamente por novos alerts
+
+        alertObserver.observe(document.body, { childList: true, subtree: true });
+
+        // Fallback: verificar periodicamente por novos alerts
         setInterval(function() {
-            const newAlerts = $('.auto-close-alert:not(.initialized)').length;
-            if (newAlerts > 0) {
-                console.log(`🔄 Encontrados ${newAlerts} alerts não inicializados`);
+            if (document.querySelectorAll('.auto-close-alert:not(.initialized)').length > 0) {
                 initAutoCloseAlerts();
             }
         }, 1000);
-        
-        console.log('✅ Sistema de auto-close alerts carregado com sucesso');
     });
     </script>
-    
-    <!-- Scripts personalizados das páginas -->
+    <!-- jQuery (necessário para Select2) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     {% block extra_js %}{% endblock %}
-
+    
 </body>
 </html>

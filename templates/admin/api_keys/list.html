@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+
+{% block title %}API Keys - {{ cliente.razao_social }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-key text-primary"></i> API Keys
+            </h1>
+            <p class="text-muted mb-0">{{ cliente.razao_social }}</p>
+        </div>
+        <a href="{{ url_for('api_keys.create_api_key', cliente_id=cliente_id) }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Nova API Key
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message|safe }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i> Minhas API Keys
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                <strong>Importante:</strong> As API Keys são exibidas apenas uma vez no momento da criação. 
+                Guarde-as em local seguro. Se perder uma chave, você precisará criar uma nova.
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 25%">Nome</th>
+                            <th style="width: 15%">Prefixo</th>
+                            <th style="width: 10%" class="text-center">Status</th>
+                            <th style="width: 12%" class="text-center">Rate Limit</th>
+                            <th style="width: 18%">Última Utilização</th>
+                            <th style="width: 10%">Expira Em</th>
+                            <th style="width: 10%" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key in api_keys %}
+                        <tr>
+                            <td>
+                                <strong>{{ key.nome }}</strong>
+                                {% if key.ip_whitelist %}
+                                    <br><small class="text-muted">
+                                        <i class="fas fa-shield-alt"></i> IP Whitelist
+                                    </small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code class="text-primary">{{ key.key_prefix }}...</code>
+                            </td>
+                            <td class="text-center">
+                                {% if key.ativa %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check-circle"></i> Ativa
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-times-circle"></i> Inativa
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-info">
+                                    {{ key.rate_limit }} req/hora
+                                </span>
+                            </td>
+                            <td>
+                                {% if key.ultima_utilizacao %}
+                                    <small>{{ key.ultima_utilizacao.strftime('%d/%m/%Y %H:%M') }}</small>
+                                {% else %}
+                                    <small class="text-muted">Nunca utilizada</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if key.expira_em %}
+                                    <small class="{% if key.expira_em < now %}text-danger{% else %}text-muted{% endif %}">
+                                        {{ key.expira_em.strftime('%d/%m/%Y') }}
+                                    </small>
+                                {% else %}
+                                    <small class="text-muted">Sem expiração</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <a href="{{ url_for('api_keys.api_key_stats', api_key_id=key.api_key_id) }}" 
+                                       class="btn btn-outline-info" title="Estatísticas">
+                                        <i class="fas fa-chart-line"></i>
+                                    </a>
+                                    <form method="POST" 
+                                          action="{{ url_for('api_keys.toggle_api_key', api_key_id=key.api_key_id) }}" 
+                                          style="display:inline;">
+                                        <button type="submit" 
+                                                class="btn btn-outline-warning" 
+                                                title="{% if key.ativa %}Desativar{% else %}Ativar{% endif %}">
+                                            <i class="fas fa-power-off"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" 
+                                          action="{{ url_for('api_keys.delete_api_key', api_key_id=key.api_key_id) }}" 
+                                          style="display:inline;"
+                                          onsubmit="return confirm('Tem certeza que deseja excluir a API Key \'{{ key.nome }}\'? Esta ação não pode ser desfeita!');">
+                                        <button type="submit" 
+                                                class="btn btn-outline-danger" 
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="fas fa-key fa-3x mb-3 d-block opacity-25"></i>
+                                <p>Nenhuma API Key cadastrada.</p>
+                                <a href="{{ url_for('api_keys.create_api_key', cliente_id=cliente_id) }}" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Criar Primeira API Key
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-question-circle"></i> Como Usar as API Keys
+            </h5>
+        </div>
+        <div class="card-body">
+            <p>Para autenticar suas requisições à API v2, inclua a API Key no header <code>Authorization</code>:</p>
+            
+            <div class="bg-dark text-light p-3 rounded">
+                <code>
+                    curl -X GET https://seu-servidor.com.br/api/v2/nfes \<br>
+                    &nbsp;&nbsp;-H "Authorization: Bearer sua_api_key_aqui"
+                </code>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-shield-alt text-success"></i> Segurança</h6>
+                    <ul class="small">
+                        <li>Nunca compartilhe suas API Keys</li>
+                        <li>Use HTTPS em produção</li>
+                        <li>Configure IP Whitelist quando possível</li>
+                        <li>Desative keys não utilizadas</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="fas fa-book text-primary"></i> Documentação</h6>
+                    <ul class="small">
+                        <li><a href="{{ url_for('api_keys.api_documentation', doc_name='tributacao-automatica') }}" target="_blank">
+                            <i class="fas fa-star text-warning"></i> <strong>Tributação Automática (NOVO)</strong>
+                        </a></li>
+                        <li><a href="{{ url_for('api_keys.api_documentation', doc_name='tributacao-completo') }}" target="_blank">
+                            Documentação Técnica Completa
+                        </a></li>
+                        <li><a href="{{ url_for('api_keys.api_documentation', doc_name='integracao') }}" target="_blank">
+                            Manual Completo da API
+                        </a></li>
+                        <li><a href="{{ url_for('api_keys.api_documentation') }}" target="_blank">
+                            <i class="fas fa-list"></i> Ver Todas as Documentações
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

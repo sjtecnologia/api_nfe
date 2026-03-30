@@ -1,0 +1,54 @@
+<div class="table-responsive">
+    {% if destinatarios_existentes %}
+        <table class="table table-bordered table-hover table-sm align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Nome/Razão Social</th>
+                    <th>CPF/CNPJ</th>
+                    <th>Município</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th style="width: 110px;">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for destinatario in destinatarios_existentes %}
+                <tr>
+                    <td>{{ destinatario.destinatario_id }}</td>
+                    <td>{{ destinatario.nome_razao_social }}</td>
+                    <td><code>{{ destinatario.cpf_cnpj or '-' }}</code></td>
+                    <td>{{ destinatario.nome_municipio or '-' }}</td>
+                    <td>
+                        {% if destinatario.email %}
+                            <a href="mailto:{{ destinatario.email }}">{{ destinatario.email }}</a>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% if destinatario.telefone %}
+                            <a href="tel:{{ destinatario.telefone }}">{{ destinatario.telefone }}</a>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('admin.edit_destinatario', destinatario_id=destinatario.destinatario_id) }}" class="btn btn-sm btn-outline-primary me-1" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <form action="{{ url_for('admin.delete_destinatario', destinatario_id=destinatario.destinatario_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este destinatário?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir"><i class="fas fa-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="text-center py-4">
+            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+            <h5>Nenhum destinatário/tomador cadastrado</h5>
+            <p class="text-muted">Comece adicionando um novo destinatário/tomador para este cliente.</p>
+            <a href="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Adicionar Primeiro Destinatário/Tomador
+            </a>
+        </div>
+    {% endif %}
+</div>

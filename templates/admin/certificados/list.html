@@ -1,36 +1,80 @@
 {% extends 'base.html' %}
 
-{% block title %}Certificados Digitais{% endblock %}
+{% block title %}Certificados Digitais - {{ cliente_nome }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-certificate"></i>
-            Certificados Digitais - {{ cliente_nome }}
-        </h1>
-        <div>
-            <a href="{{ url_for('admin.novo_certificado', cliente_id=cliente_id) }}" 
-               class="btn btn-primary btn-sm">
-                <i class="fas fa-plus"></i> Novo Certificado
-            </a>
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">🔐 Certificados Digitais</h1>
+                    <div class="page-subtitle">
+                        {{ cliente_nome }}
+                    </div>
+                </div>
+                <div>
+                    <a href="{{ url_for('admin.create_certificado', cliente_id=cliente_id) }}" 
+                       class="btn btn-primary" title="Certificado A1 (arquivo .pfx/.p12)">
+                        <i class="fas fa-file-upload"></i> Certificado A1
+                    </a>
+                    <a href="{{ url_for('a3.select_certificate', cliente_id=cliente_id) }}" 
+                       class="btn btn-success" title="Certificado A3 (token/smartcard USB)">
+                        <i class="fas fa-usb"></i> Certificado A3
+                    </a>
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">
-                Lista de Certificados ({{ certificados|length }})
-            </h6>
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-control" name="tipo">
+                        <option value="">Todos</option>
+                        <option value="A1" {% if request.args.get('tipo') == 'A1' %}selected{% endif %}>A1 (Arquivo)</option>
+                        <option value="A3" {% if request.args.get('tipo') == 'A3' %}selected{% endif %}>A3 (Token/Smartcard)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" name="status">
+                        <option value="">Todos</option>
+                        <option value="ativo" {% if request.args.get('status') == 'ativo' %}selected{% endif %}>Ativo</option>
+                        <option value="expirado" {% if request.args.get('status') == 'expirado' %}selected{% endif %}>Expirado</option>
+                        <option value="proximo_vencimento" {% if request.args.get('status') == 'proximo_vencimento' %}selected{% endif %}>Próximo do Vencimento</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Arquivo/Label</label>
+                    <input type="text" class="form-control" name="nome_arquivo" placeholder="Nome do arquivo ou label" value="{{ request.args.get('nome_arquivo', '') }}">
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
         </div>
-        
+    </div>
+
+    <!-- Tabela de Certificados -->
+    <div class="card">
         <div class="card-body">
             {% if certificados %}
             <div class="table-responsive">
-                <table class="table table-bordered" width="100%" cellspacing="0">
-                    <thead>
+                <table class="table table-hover">
+                    <thead class="table-light">
                         <tr>
                             <th>ID</th>
+                            <th>Tipo</th>
                             <th>Arquivo</th>
                             <th>Fingerprint</th>
                             <th>Status</th>
@@ -46,8 +90,19 @@
                                 <code>#{{ certificado.certificado_digital_id }}</code>
                             </td>
                             <td>
+                                {% if certificado.tipo_certificado == 'A3' %}
+                                    <span class="badge bg-success" title="Certificado A3 (Token/Smartcard)">
+                                        <i class="fas fa-usb"></i> A3
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-primary" title="Certificado A1 (Arquivo)">
+                                        <i class="fas fa-file"></i> A1
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 <i class="fas fa-certificate text-primary"></i>
-                                {{ certificado.nome_arquivo_original or 'Certificado.pfx' }}
+                                {{ certificado.nome_arquivo_original or certificado.token_label or 'Certificado.pfx' }}
                             </td>
                             <td>
                                 {% if certificado.fingerprint %}
@@ -60,7 +115,7 @@
                             </td>
                             <td>
                                 {% if certificado.ativo %}
-                                    <span class="badge badge-success">
+                                    <span class="badge bg-success">
                                         <i class="fas fa-check"></i> Ativo
                                     </span>
                                 {% else %}
@@ -120,14 +175,14 @@
                 </table>
             </div>
             {% else %}
-            <div class="text-center py-4">
-                <i class="fas fa-certificate fa-3x text-muted mb-3"></i>
+            <div class="text-center py-5">
+                <i class="fas fa-certificate fa-4x text-muted mb-4"></i>
                 <h5 class="text-muted">Nenhum certificado encontrado</h5>
                 <p class="text-muted">
                     Adicione um certificado digital para poder emitir NF-e
                 </p>
-                <a href="{{ url_for('admin.novo_certificado', cliente_id=cliente_id) }}" 
-                   class="btn btn-primary">
+                <a href="{{ url_for('admin.create_certificado', cliente_id=cliente_id) }}" 
+                   class="btn btn-primary btn-lg">
                     <i class="fas fa-plus"></i> Adicionar Certificado
                 </a>
             </div>
@@ -144,7 +199,7 @@
                     <i class="fas fa-certificate"></i>
                     Detalhes do Certificado
                 </h5>
-                <button type="button" class="close" data-dismiss="modal">
+                <button type="button" class="btn-close" data-bs-dismiss="modal">
                     <span>&times;</span>
                 </button>
             </div>
@@ -152,7 +207,7 @@
                 <i class="fas fa-spinner fa-spin"></i> Carregando...
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times"></i> Fechar
                 </button>
             </div>

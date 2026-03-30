@@ -1,118 +1,124 @@
 {% extends "base.html" %}
 
-{% block title %}NFes - {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}{% endblock %}
+{% block title %}
+    {% if current_user.is_super_admin() %}
+        NFes - {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}
+    {% else %}
+        NFes - {{ cliente_map.get(cliente_id|int, 'Cliente Selecionado') }}
+    {% endif %}
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4 class="card-title mb-0">
-                        <i class="fas fa-file-invoice"></i>
-                        NFes - {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}
-                    </h4>
-                    <div>
-                        <!-- Filtro por Cliente -->
-                        {% if cliente_map|length > 1 %}
-                        <div class="dropdown d-inline-block mr-2">
-                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-toggle="dropdown">
-                                <i class="fas fa-filter"></i>
-                                Filtrar por Cliente
-                            </button>
-                            <div class="dropdown-menu">
-                                <a class="dropdown-item {% if not cliente_id %}active{% endif %}" href="{{ url_for('nfe.list_nfes') }}">
-                                    <i class="fas fa-list"></i> Todos os Clientes
-                                </a>
-                                <div class="dropdown-divider"></div>
-                                {% for cid, cnome in cliente_map.items() %}
-                                <a class="dropdown-item {% if cliente_id and cliente_id|int == cid %}active{% endif %}" 
-                                   href="{{ url_for('nfe.list_nfes', cliente_id=cid) }}">
-                                    <i class="fas fa-building"></i> {{ cnome }}
-                                </a>
-                                {% endfor %}
-                            </div>
-                        </div>
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">📋 Minhas NFe</h1>
+                    <div class="page-subtitle">
+                        {% if current_user.is_super_admin() %}
+                            {{ cliente_map.get(cliente_id|int, 'Todos os Clientes') if cliente_id else 'Todas as NFes' }}
+                        {% else %}
+                            {{ cliente_map.get(cliente_id|int, 'Cliente Selecionado') }}
                         {% endif %}
-                        
-                        <!-- Botão Nova NFe -->
+                    </div>
+                </div>
+                    <div>
+                        {% if cliente_map|length > 1 and current_user.is_super_admin() %}
+                            <div class="dropdown d-inline-block me-2">
+                                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-filter"></i>
+                                    Filtrar por Cliente
+                                </button>
+                                <div class="dropdown-menu">
+                                    {% if current_user.is_super_admin() %}
+                                    <a class="dropdown-item {% if not cliente_id %}active{% endif %}" href="{{ url_for('nfe.list_nfes') }}">
+                                        <i class="fas fa-list"></i> Todos os Clientes
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    {% endif %}
+                                    {% for cid, cnome in cliente_map.items() %}
+                                    <a class="dropdown-item {% if cliente_id and cliente_id|int == cid %}active{% endif %}" 
+                                       href="{{ url_for('nfe.list_nfes', cliente_id=cid) }}">
+                                        <i class="fas fa-building"></i> {{ cnome }}
+                                    </a>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+                        {% if can_create() %}
                         <a href="{{ url_for('nfe.create') }}" class="btn btn-primary">
                             <i class="fas fa-plus"></i> Nova NFe
                         </a>
+                        {% endif %}
+                        <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
                     </div>
                 </div>
-                
-                <div class="card-body">
-                    {% if nfes %}
-                        <!-- Estatísticas Rápidas -->
-                        <div class="row mb-4">
-                            <div class="col-md-3">
-                                <div class="card bg-primary text-white">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between">
-                                            <div>
-                                                <h6 class="card-title mb-0">Total de NFes</h6>
-                                                <h4 class="mb-0">{{ nfes|length }}</h4>
-                                            </div>
-                                            <div class="align-self-center">
-                                                <i class="fas fa-file-invoice fa-2x"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="card bg-success text-white">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between">
-                                            <div>
-                                                <h6 class="card-title mb-0">Autorizadas</h6>
-                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'autorizada')|list|length }}</h4>
-                                            </div>
-                                            <div class="align-self-center">
-                                                <i class="fas fa-check-circle fa-2x"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="card bg-warning text-white">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between">
-                                            <div>
-                                                <h6 class="card-title mb-0">Em Processamento</h6>
-                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'processando')|list|length }}</h4>
-                                            </div>
-                                            <div class="align-self-center">
-                                                <i class="fas fa-clock fa-2x"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="card bg-danger text-white">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between">
-                                            <div>
-                                                <h6 class="card-title mb-0">Rejeitadas</h6>
-                                                <h4 class="mb-0">{{ nfes|selectattr('status', 'equalto', 'rejeitada')|list|length }}</h4>
-                                            </div>
-                                            <div class="align-self-center">
-                                                <i class="fas fa-times-circle fa-2x"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                {% if cliente_id %}
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                {% endif %}
+                <div class="col-md-2">
+                    <label class="form-label">Número NFe</label>
+                    <input type="text" class="form-control" name="numero" placeholder="Número" value="{{ request.args.get('numero', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Destinatário</label>
+                    <input type="text" class="form-control" name="destinatario" placeholder="Nome ou CPF/CNPJ" value="{{ request.args.get('destinatario', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Inicial</label>
+                    <input type="date" class="form-control" name="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Final</label>
+                    <input type="date" class="form-control" name="data_fim" value="{{ request.args.get('data_fim', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" name="status">
+                        <option value="">Todos</option>
+                        <option value="AUTORIZADA" {% if request.args.get('status') == 'AUTORIZADA' %}selected{% endif %}>Autorizada</option>
+                        <option value="RASCUNHO" {% if request.args.get('status') == 'RASCUNHO' %}selected{% endif %}>Rascunho</option>
+                        <option value="REJEITADA" {% if request.args.get('status') == 'REJEITADA' %}selected{% endif %}>Rejeitada</option>
+                        <option value="CANCELADA" {% if request.args.get('status') == 'CANCELADA' %}selected{% endif %}>Cancelada</option>
+                        <option value="DENEGADA" {% if request.args.get('status') == 'DENEGADA' %}selected{% endif %}>Denegada</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    {% if request.args and (request.args.get('numero') or request.args.get('destinatario') or request.args.get('data_inicio') or request.args.get('data_fim') or request.args.get('status')) %}
+                    <a href="{{ url_for('nfe.list_nfes', cliente_id=cliente_id) if cliente_id else url_for('nfe.list_nfes') }}" class="btn btn-secondary ms-1" title="Limpar filtros">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de NFe -->
+    <div class="card">
+        <div class="card-body">
+                    {% if nfes %}
                         <div class="table-responsive">
                             <table class="table table-striped table-hover">
                                 <thead>
                                     <tr>
                                         <th>ID</th>
+                                        <th>Número</th>
+                                        <th>Série</th>
                                         <th>Cliente</th>
                                         <th>Destinatário</th>
                                         <th>Tipo</th>
@@ -127,6 +133,8 @@
                                     {% for nfe in nfes %}
                                         <tr>
                                             <td>{{ nfe.nfe_emitida_id }}</td>
+                                            <td><strong>{{ nfe.numero }}</strong></td>
+                                            <td>{{ nfe.serie }}</td>
                                             <td>
                                                 <small class="text-muted d-block">{{ cliente_map.get(nfe.cliente_id, 'Cliente não encontrado') }}</small>
                                             </td>
@@ -137,40 +145,59 @@
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                <span class="badge badge-{{ 'info' if nfe.tipo_nfe == '1' else 'secondary' }}">
+                                                <span class="badge bg-{{ 'info' if nfe.tipo_nfe == '1' else 'secondary' }}">
                                                     {{ '1 - Saída' if nfe.tipo_nfe == '1' else '0 - Entrada' }}
                                                 </span>
                                             </td>
                                             <td>
-                                                {% set finalidades = {
-                                                    '1': 'Normal',
-                                                    '2': 'Complementar',
-                                                    '3': 'Ajuste',
-                                                    '4': 'Devolução'
-                                                } %}
-                                                <span class="badge badge-light">
-                                                    {{ finalidades.get(nfe.finalidade_emissao, 'N/A') }}
-                                                </span>
+                                                {% if nfe.finalidade_emissao %}
+                                                    {% if nfe.finalidade_emissao == 1 or nfe.finalidade_emissao == '1' %}
+                                                        <span class="badge bg-primary">Normal</span>
+                                                    {% elif nfe.finalidade_emissao == 2 or nfe.finalidade_emissao == '2' %}
+                                                        <span class="badge bg-info">Complementar</span>
+                                                    {% elif nfe.finalidade_emissao == 3 or nfe.finalidade_emissao == '3' %}
+                                                        <span class="badge bg-warning text-dark">Ajuste</span>
+                                                    {% elif nfe.finalidade_emissao == 4 or nfe.finalidade_emissao == '4' %}
+                                                        <span class="badge bg-secondary">Devolução</span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary text-white">{{ nfe.finalidade_emissao }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-secondary text-white">N/A</span>
+                                                {% endif %}
                                             </td>
                                             <td>
-                                                {% if nfe.status == 'autorizada' %}
-                                                    <span class="badge badge-success">
+                                                {% if nfe.status|upper == 'AUTORIZADA' %}
+                                                    <span class="badge bg-success">
                                                         <i class="fas fa-check-circle"></i> Autorizada
                                                     </span>
-                                                {% elif nfe.status == 'rejeitada' %}
-                                                    <span class="badge badge-danger">
+                                                {% elif nfe.status|upper == 'CANCELADA' %}
+                                                    <span class="badge bg-dark">
+                                                        <i class="fas fa-ban"></i> Cancelada
+                                                    </span>
+                                                {% elif nfe.status|upper == 'DENEGADA' %}
+                                                    <span class="badge bg-danger">
+                                                        <i class="fas fa-exclamation-triangle"></i> Denegada
+                                                    </span>
+                                                {% elif nfe.status|upper == 'REJEITADA' %}
+                                                    <span class="badge bg-danger" 
+                                                          {% if nfe.mensagem_sefaz %}
+                                                          data-bs-toggle="tooltip" 
+                                                          data-bs-placement="top" 
+                                                          title="{{ nfe.mensagem_sefaz }}"
+                                                          {% endif %}>
                                                         <i class="fas fa-times-circle"></i> Rejeitada
                                                     </span>
-                                                {% elif nfe.status == 'processando' %}
-                                                    <span class="badge badge-warning">
+                                                {% elif nfe.status|upper == 'PROCESSANDO' %}
+                                                    <span class="badge bg-warning text-dark">
                                                         <i class="fas fa-clock"></i> Processando
                                                     </span>
-                                                {% elif nfe.status == 'rascunho' %}
-                                                    <span class="badge badge-secondary">
+                                                {% elif nfe.status|upper == 'RASCUNHO' %}
+                                                    <span class="badge bg-secondary">
                                                         <i class="fas fa-edit"></i> Rascunho
                                                     </span>
                                                 {% else %}
-                                                    <span class="badge badge-light">{{ nfe.status or 'N/A' }}</span>
+                                                    <span class="badge bg-secondary text-white">{{ nfe.status or 'N/A' }}</span>
                                                 {% endif %}
                                             </td>
                                             <td>
@@ -183,7 +210,7 @@
                                             <td>
                                                 {% if nfe.chave_acesso %}
                                                     <small class="font-monospace">{{ nfe.chave_acesso[:8] }}...{{ nfe.chave_acesso[-8:] }}</small>
-                                                    <button class="btn btn-sm btn-outline-secondary ml-1" 
+                                                    <button class="btn btn-sm btn-outline-secondary ms-1" 
                                                             onclick="copiarChave('{{ nfe.chave_acesso }}')" 
                                                             title="Copiar chave completa">
                                                         <i class="fas fa-copy"></i>
@@ -194,38 +221,47 @@
                                             </td>
                                             <td>
                                                 <div class="btn-group" role="group">
-                                                    <!-- ✅ VISUALIZAR NFE -->
                                                     <a href="{{ url_for('nfe.view', nfe_id=nfe.nfe_emitida_id) }}" 
-                                                       class="btn btn-sm btn-outline-info" 
-                                                       title="Visualizar">
+                                                    class="btn btn-sm btn-outline-info" 
+                                                    title="Visualizar">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
-                                                    
-                                                    <!-- ✅ EDITAR APENAS SE FOR RASCUNHO -->
-                                                    {% if nfe.status == 'rascunho' %}
+                                                    {% if nfe.status|upper == 'RASCUNHO' %}
                                                     <a href="{{ url_for('nfe.edit', nfe_id=nfe.nfe_emitida_id) }}" 
-                                                       class="btn btn-sm btn-outline-primary" 
-                                                       title="Editar">
+                                                    class="btn btn-sm btn-outline-primary" 
+                                                    title="Editar">
                                                         <i class="fas fa-edit"></i>
                                                     </a>
                                                     {% endif %}
-                                                    
-                                                    <!-- ✅ DOWNLOAD XML SE AUTORIZADA -->
-                                                    {% if nfe.status == 'autorizada' and nfe.chave_acesso %}
-                                                    <a href="{{ url_for('nfe.download', nfe_id=nfe.nfe_emitida_id) }}" 
-                                                       class="btn btn-sm btn-outline-success" 
-                                                       title="Download XML">
-                                                        <i class="fas fa-download"></i>
-                                                    </a>
-                                                    {% endif %}
-                                                    
-                                                    <!-- ✅ REENVIAR SE REJEITADA -->
-                                                    {% if nfe.status == 'rejeitada' %}
-                                                    <button type="button" 
-                                                            class="btn btn-sm btn-outline-warning btn-reenviar"
+                                                    {% if nfe.chave_acesso %}
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-warning btn-consultar-status"
                                                             data-nfe-id="{{ nfe.nfe_emitida_id }}"
-                                                            title="Reenviar">
-                                                        <i class="fas fa-redo"></i>
+                                                            data-chave="{{ nfe.chave_acesso }}"
+                                                            title="Consultar Status na SEFAZ">
+                                                        <i class="fas fa-sync"></i>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% if nfe.status|upper == 'AUTORIZADA' %}
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-success btn-gerar-danfe"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            title="Gerar DANFE">
+                                                        <i class="fas fa-file-pdf"></i>
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-danger btn-cancelar-nfe"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            data-numero="{{ nfe.numero }}"
+                                                            title="Cancelar NFe">
+                                                        <i class="fas fa-ban"></i>
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-info btn-duplicar-nfe"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            data-numero="{{ nfe.numero }}"
+                                                            title="Duplicar e Emitir Automaticamente">
+                                                        <i class="fas fa-copy"></i>
                                                     </button>
                                                     {% endif %}
                                                 </div>
@@ -235,39 +271,23 @@
                                 </tbody>
                             </table>
                         </div>
-
-                        <!-- Paginação (futura implementação) -->
-                        {% if nfes|length >= 100 %}
-                        <div class="row mt-3">
-                            <div class="col-12">
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle"></i>
-                                    Mostrando as primeiras 100 NFes. Sistema de paginação será implementado em breve.
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-
                     {% else %}
-                        <!-- Estado Vazio -->
                         <div class="text-center py-5">
-                            <i class="fas fa-file-invoice fa-4x text-muted mb-4"></i>
-                            <h5>Nenhuma NFe encontrada</h5>
+                            <i class="fas fa-file-invoice fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted">Nenhuma NFe encontrada</h5>
                             {% if cliente_id %}
                                 <p class="text-muted">Este cliente ainda não possui NFes emitidas.</p>
                             {% else %}
-                                <p class="text-muted">Nenhuma NFe foi emitida ainda no sistema.</p>
+                                <p class="text-muted">Clique em "Nova NFe" para emitir sua primeira nota fiscal.</p>
                             {% endif %}
-                            <div class="mt-4">
-                                <a href="{{ url_for('nfe.create') }}" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-plus"></i> Emitir Primeira NFe
-                                </a>
-                                {% if cliente_id %}
-                                <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary btn-lg ml-2">
-                                    <i class="fas fa-list"></i> Ver Todas as NFes
-                                </a>
-                                {% endif %}
-                            </div>
+                            <a href="{{ url_for('nfe.create') }}" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Emitir NFe
+                            </a>
+                            {% if cliente_id and current_user.is_super_admin() %}
+                            <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary ms-2">
+                                <i class="fas fa-list"></i> Ver Todas as NFes
+                            </a>
+                            {% endif %}
                         </div>
                     {% endif %}
                 </div>
@@ -276,23 +296,38 @@
     </div>
 </div>
 
-<!-- Modal para Chave de Acesso Completa -->
-<div class="modal fade" id="chaveModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Modal de Ações Pós-DANFE -->
+<div class="modal fade" id="modalAcoesDanfe" tabindex="-1" role="dialog" aria-labelledby="modalAcoesDanfeLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Chave de Acesso da NFe</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalAcoesDanfeLabel">
+                    <i class="fas fa-check-circle"></i> DANFE Gerado com Sucesso!
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <div class="modal-body">
-                <p>Chave de Acesso:</p>
-                <div class="input-group">
-                    <input type="text" class="form-control font-monospace" id="chaveCompleta" readonly>
-                    <div class="input-group-append">
-                        <button class="btn btn-outline-secondary" type="button" onclick="copiarChaveModal()">
-                            <i class="fas fa-copy"></i> Copiar
+            <div class="modal-body text-center py-4">
+                <p class="lead mb-4">O que deseja fazer com o DANFE?</p>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-primary btn-lg w-100 shadow-sm" onclick="imprimirDanfe()" style="height: 120px;">
+                            <i class="fas fa-print fa-3x mb-2"></i>
+                            <br>
+                            <strong>Imprimir</strong>
+                        </button>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-info btn-lg w-100 shadow-sm" onclick="enviarEmailDanfe()" style="height: 120px;">
+                            <i class="fas fa-envelope fa-3x mb-2"></i>
+                            <br>
+                            <strong>Enviar por Email</strong>
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <button type="button" class="btn btn-secondary btn-sm w-100" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Fechar
                         </button>
                     </div>
                 </div>
@@ -303,178 +338,491 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ super() }}
 <script>
+// Variáveis globais para o modal DANFE
+let nfeIdAtual = null;
+let danfeCaminhoAtual = null;
+
 document.addEventListener('DOMContentLoaded', function() {
-    // ✅ CONFIGURAR BOTÕES DE REENVIO
-    document.querySelectorAll('.btn-reenviar').forEach(function(button) {
+    // Verificar se há parâmetros de DANFE gerado na URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const danfeGerado = urlParams.get('danfe_gerado');
+    const nfeId = urlParams.get('nfe_id');
+    const danfePath = urlParams.get('danfe_path');
+    
+    if (danfeGerado === 'true' && nfeId && danfePath) {
+        console.log('[DEBUG] DANFE gerado detectado, abrindo modal...');
+        mostrarModalAcoesDanfe(nfeId, danfePath);
+        
+        // Limpar URL sem recarregar a página
+        const cleanUrl = window.location.pathname + (urlParams.get('cliente_id') ? '?cliente_id=' + urlParams.get('cliente_id') : '');
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+    
+    document.querySelectorAll('.btn-gerar-danfe').forEach(function(button) {
         button.addEventListener('click', function() {
             const nfeId = this.getAttribute('data-nfe-id');
-            reenviarNFe(nfeId);
+            console.log('[DEBUG] Gerar DANFE para NFe:', nfeId); // Print debug
+            gerarDANFE(nfeId, this);
         });
     });
-
-    // ✅ CONFIGURAR DROPDOWN BOOTSTRAP (caso não esteja carregado)
-    if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
-        // Bootstrap 5
-        const dropdownElementList = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
-        dropdownElementList.map(function (dropdownToggleEl) {
-            return new bootstrap.Dropdown(dropdownToggleEl);
-        });
-    }
 });
 
-// ✅ FUNÇÃO PARA COPIAR CHAVE DE ACESSO
-function copiarChave(chave) {
-    // Tentar usar a API moderna
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(chave).then(function() {
-            mostrarToast('Chave de acesso copiada!', 'success');
-        }).catch(function() {
-            // Fallback para método antigo
-            copiarChaveAntigo(chave);
-        });
+function gerarDANFE(nfeId, buttonEl) {
+    const originalHtml = buttonEl.innerHTML;
+    buttonEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    buttonEl.disabled = true;
+
+    fetch('/admin/nfe/generate-danfe/' + nfeId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nfe_id: nfeId })
+    })
+    .then(response => {
+        console.log('[DEBUG] Resposta do backend:', response); // Print debug
+        return response.json();
+    })
+    .then(data => {
+        console.log('[DEBUG] JSON recebido:', data); // Print debug
+        buttonEl.innerHTML = originalHtml;
+        buttonEl.disabled = false;
+
+        if (data.success) {
+            window.open(data.pdf_url, '_blank');
+        } else {
+            alert('Erro: ' + (data.message || 'Erro ao gerar DANFE.'));
+        }
+    })
+    .catch(error => {
+        buttonEl.innerHTML = originalHtml;
+        buttonEl.disabled = false;
+        console.error('[DEBUG] Erro ao gerar DANFE:', error); // Print debug
+        alert('Erro ao gerar DANFE. Tente novamente mais tarde.');
+    });
+}
+
+// Função para mostrar modal de ações pós-DANFE
+function mostrarModalAcoesDanfe(nfeId, danfeCaminho) {
+    nfeIdAtual = nfeId;
+    danfeCaminhoAtual = danfeCaminho;
+    const modal = new bootstrap.Modal(document.getElementById('modalAcoesDanfe'));
+    modal.show();
+}
+
+// Função para imprimir DANFE
+function imprimirDanfe() {
+    if (!danfeCaminhoAtual) {
+        alert('Erro: Caminho do DANFE não encontrado');
+        return;
+    }
+    
+    // Abrir DANFE em nova janela para impressão
+    const danfeUrl = danfeCaminhoAtual.startsWith('http') 
+        ? danfeCaminhoAtual 
+        : `${window.location.origin}/${danfeCaminhoAtual}`;
+    
+    const printWindow = window.open(danfeUrl, '_blank');
+    
+    if (printWindow) {
+        // Aguardar carregamento e imprimir automaticamente
+        printWindow.onload = function() {
+            setTimeout(function() {
+                printWindow.print();
+            }, 500);
+        };
+        
+        // Fechar modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalAcoesDanfe'));
+        if (modal) modal.hide();
+        
+        // Mostrar mensagem de sucesso
+        alert('DANFE aberto para impressão!');
     } else {
-        // Mostrar modal com chave completa
-        document.getElementById('chaveCompleta').value = chave;
-        $('#chaveModal').modal('show');
+        alert('Não foi possível abrir o DANFE. Verifique se o bloqueador de pop-ups está desabilitado.');
     }
 }
 
-function copiarChaveModal() {
-    const input = document.getElementById('chaveCompleta');
-    input.select();
-    document.execCommand('copy');
-    mostrarToast('Chave de acesso copiada!', 'success');
-    $('#chaveModal').modal('hide');
-}
-
-function copiarChaveAntigo(chave) {
-    // Criar elemento temporário para cópia
-    const tempInput = document.createElement('input');
-    tempInput.style.position = 'absolute';
-    tempInput.style.left = '-9999px';
-    tempInput.value = chave;
-    document.body.appendChild(tempInput);
-    tempInput.select();
-    document.execCommand('copy');
-    document.body.removeChild(tempInput);
-    mostrarToast('Chave de acesso copiada!', 'success');
-}
-
-// ✅ FUNÇÃO PARA REENVIAR NFE
-function reenviarNFe(nfeId) {
-    if (confirm('⚠️ Reenviar NFe\n\nDeseja tentar reenviar esta NFe rejeitada?\n\nEsta ação irá processar a NFe novamente no SEFAZ.')) {
-        // Mostrar loading
-        const btn = document.querySelector(`[data-nfe-id="${nfeId}"]`);
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        btn.disabled = true;
-
-        fetch('/admin/nfe/reenviar', {
+// Função para enviar DANFE por email
+async function enviarEmailDanfe() {
+    if (!nfeIdAtual) {
+        alert('Erro: ID da NFe não encontrado');
+        return;
+    }
+    
+    // Solicitar email do destinatário
+    const emailDestinatario = prompt('Digite o email do destinatário:');
+    
+    if (!emailDestinatario || !emailDestinatario.includes('@')) {
+        alert('Email inválido!');
+        return;
+    }
+    
+    // Validar formato do email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailDestinatario)) {
+        alert('Por favor, informe um email válido');
+        return;
+    }
+    
+    try {
+        // Usar a rota compartilhar (mesma do xml_preview.html)
+        const response = await fetch(`/admin/nfe/compartilhar/${nfeIdAtual}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
             },
-            body: 'nfe_id=' + nfeId
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                mostrarToast('NFe reenviada com sucesso!', 'success');
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
-            } else {
-                mostrarToast('Erro: ' + data.message, 'error');
-                btn.innerHTML = originalHtml;
-                btn.disabled = false;
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            mostrarToast('Erro ao reenviar NFe', 'error');
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
+            body: JSON.stringify({
+                email: emailDestinatario,
+                include_danfe: true,
+                include_xml: false
+            })
         });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalAcoesDanfe'));
+            if (modal) modal.hide();
+            
+            // Mostrar mensagem de sucesso
+            alert(`DANFE enviado com sucesso para ${emailDestinatario}!`);
+        } else {
+            alert(`Erro ao enviar email: ${result.message || 'Erro desconhecido'}`);
+        }
+        
+    } catch (error) {
+        console.error('Erro ao enviar email:', error);
+        alert(`Erro ao enviar email: ${error.message}`);
     }
 }
 
-// ✅ FUNÇÃO PARA MOSTRAR TOAST/NOTIFICAÇÃO
-function mostrarToast(mensagem, tipo = 'info') {
-    // Implementação simples de toast
-    const toast = document.createElement('div');
-    toast.className = `alert alert-${tipo === 'success' ? 'success' : tipo === 'error' ? 'danger' : 'info'} toast-notification`;
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
-        min-width: 300px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        animation: slideIn 0.3s ease;
-    `;
-    toast.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="fas fa-${tipo === 'success' ? 'check-circle' : tipo === 'error' ? 'exclamation-circle' : 'info-circle'} mr-2"></i>
-            <span>${mensagem}</span>
-            <button type="button" class="close ml-auto" onclick="this.parentElement.parentElement.remove()">
-                <span>&times;</span>
-            </button>
+// ==================== CONSULTAR STATUS ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Botões de consultar status
+    document.querySelectorAll('.btn-consultar-status').forEach(button => {
+        button.addEventListener('click', async function() {
+            const nfeId = this.dataset.nfeId;
+            const chave = this.dataset.chave;
+            
+            if (!chave || chave.length !== 44) {
+                alert('NFe não possui chave de acesso válida');
+                return;
+            }
+            
+            if (!confirm('Deseja consultar o status desta NFe na SEFAZ?')) {
+                return;
+            }
+            
+            // Desabilitar botão e mostrar loading
+            this.disabled = true;
+            const iconOriginal = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            try {
+                const response = await fetch(`/admin/nfe/consultar-status/${nfeId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    let mensagem = `Status SEFAZ: ${result.status}\n`;
+                    mensagem += `\nMensagem: ${result.mensagem || 'N/A'}`;
+                    if (result.protocolo) {
+                        mensagem += `\nProtocolo: ${result.protocolo}`;
+                    }
+                    if (result.data_autorizacao) {
+                        mensagem += `\nData: ${result.data_autorizacao}`;
+                    }
+                    
+                    alert(mensagem);
+                    
+                    // Recarregar página se status mudou
+                    if (result.status_atualizado) {
+                        location.reload();
+                    }
+                } else {
+                    alert(`Erro ao consultar status: ${result.message || 'Erro desconhecido'}`);
+                }
+                
+            } catch (error) {
+                console.error('Erro ao consultar status:', error);
+                alert(`Erro ao consultar status: ${error.message}`);
+            } finally {
+                // Restaurar botão
+                this.disabled = false;
+                this.innerHTML = iconOriginal;
+            }
+        });
+    });
+});
+
+// ==================== CANCELAR NFE ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Botões de cancelar NFe
+    document.querySelectorAll('.btn-cancelar-nfe').forEach(button => {
+        button.addEventListener('click', function() {
+            const nfeId = this.dataset.nfeId;
+            const numero = this.dataset.numero;
+            
+            // Abrir modal de confirmação
+            abrirModalCancelamento(nfeId, numero);
+        });
+    });
+});
+
+function abrirModalCancelamento(nfeId, numero) {
+    const modalHtml = `
+        <div class="modal fade" id="modalCancelarNfe" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-ban"></i> Cancelar NFe ${numero}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <strong>Atenção!</strong> Esta ação é irreversível e será enviada para a SEFAZ.
+                            <br>Prazo máximo: 24 horas após emissão.
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="justificativaCancelamento" class="form-label">
+                                Justificativa do Cancelamento <span class="text-danger">*</span>
+                            </label>
+                            <textarea 
+                                class="form-control" 
+                                id="justificativaCancelamento" 
+                                rows="4" 
+                                placeholder="Informe o motivo do cancelamento (mínimo 15 caracteres)"
+                                required
+                                minlength="15"></textarea>
+                            <small class="form-text text-muted">
+                                Mínimo de 15 caracteres. Esta justificativa será enviada para a SEFAZ.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="confirmarCancelamento(${nfeId})">
+                            <i class="fas fa-ban"></i> Confirmar Cancelamento
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
     
-    document.body.appendChild(toast);
+    // Remover modal anterior se existir
+    const modalExistente = document.getElementById('modalCancelarNfe');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
     
-    // Auto remover após 5 segundos
-    setTimeout(() => {
-        if (toast.parentNode) {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 300);
-        }
-    }, 5000);
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalCancelarNfe'));
+    modal.show();
 }
 
-// ✅ CSS PARA ANIMAÇÕES DO TOAST
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
+async function confirmarCancelamento(nfeId) {
+    const justificativa = document.getElementById('justificativaCancelamento').value.trim();
+    
+    if (!justificativa || justificativa.length < 15) {
+        alert('Por favor, informe uma justificativa com no mínimo 15 caracteres');
+        return;
     }
     
-    @keyframes slideOut {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
+    if (!confirm('Tem certeza que deseja CANCELAR esta NFe na SEFAZ?\n\nEsta ação é IRREVERSÍVEL!')) {
+        return;
     }
     
-    .toast-notification {
-        border-radius: 0.375rem;
-        border: none;
+    try {
+        // Mostrar loading
+        const btnConfirmar = document.querySelector('#modalCancelarNfe .btn-danger');
+        btnConfirmar.disabled = true;
+        btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
+        
+        const response = await fetch(`/admin/nfe/cancelar/${nfeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                justificativa: justificativa
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalCancelarNfe'));
+            if (modal) modal.hide();
+            
+            // Mostrar mensagem de sucesso
+            let mensagem = 'NFe cancelada com sucesso na SEFAZ!\n';
+            if (result.protocolo) {
+                mensagem += `\nProtocolo: ${result.protocolo}`;
+            }
+            if (result.data_cancelamento) {
+                mensagem += `\nData: ${result.data_cancelamento}`;
+            }
+            
+            alert(mensagem);
+            
+            // Recarregar página
+            location.reload();
+            
+        } else {
+            alert(`Erro ao cancelar NFe: ${result.message || 'Erro desconhecido'}`);
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Confirmar Cancelamento';
+        }
+        
+    } catch (error) {
+        console.error('Erro ao cancelar NFe:', error);
+        alert(`Erro ao cancelar NFe: ${error.message}`);
+        
+        const btnConfirmar = document.querySelector('#modalCancelarNfe .btn-danger');
+        if (btnConfirmar) {
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Confirmar Cancelamento';
+        }
     }
-    
-    .font-monospace {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 0.875em;
-    }
-`;
-document.head.appendChild(style);
+}
 
-console.log('✅ NFe List JavaScript carregado com sucesso!');
+// ==================== DUPLICAR NFE ====================
+document.addEventListener('DOMContentLoaded', function() {
+    // Botões de duplicar NFe
+    document.querySelectorAll('.btn-duplicar-nfe').forEach(button => {
+        button.addEventListener('click', function() {
+            const nfeId = this.dataset.nfeId;
+            const numero = this.dataset.numero;
+            duplicarNfe(nfeId, numero);
+        });
+    });
+});
+
+async function duplicarNfe(nfeId, numeroOriginal) {
+    // Confirmar duplicação
+    const confirmar = confirm(
+        `Deseja duplicar a NFe ${numeroOriginal}?\n\n` +
+        `A nova NFe será criada com os mesmos dados (produtos, destinatário, valores) ` +
+        `e será ENVIADA AUTOMATICAMENTE para a SEFAZ com o próximo número da sequência.`
+    );
+    
+    if (!confirmar) return;
+    
+    try {
+        // Mostrar loading
+        const btn = document.querySelector(`button[data-nfe-id="${nfeId}"].btn-duplicar-nfe`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        }
+        
+        // Fazer requisição
+        const response = await fetch(`/admin/nfe/duplicar/${nfeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Sucesso
+            alert(
+                `✅ NFe duplicada e emitida com sucesso!\n\n` +
+                `Número: ${result.numero}\n` +
+                `Chave: ${result.chave_acesso || 'N/A'}\n` +
+                `Status: ${result.status}`
+            );
+            
+            // Recarregar página
+            location.reload();
+        } else {
+            alert(`Erro ao duplicar NFe: ${result.message || 'Erro desconhecido'}`);
+            
+            // Restaurar botão
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-copy"></i>';
+            }
+        }
+        
+    } catch (error) {
+        console.error('Erro ao duplicar NFe:', error);
+        alert(`Erro ao duplicar NFe: ${error.message}`);
+        
+        // Restaurar botão
+        const btn = document.querySelector(`button[data-nfe-id="${nfeId}"].btn-duplicar-nfe`);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-copy"></i>';
+        }
+    }
+}
+
+// Função para copiar chave de acesso
+function copiarChave(chave) {
+    // Criar elemento temporário
+    const tempInput = document.createElement('input');
+    tempInput.value = chave;
+    document.body.appendChild(tempInput);
+    
+    // Selecionar e copiar
+    tempInput.select();
+    tempInput.setSelectionRange(0, 99999); // Para mobile
+    
+    try {
+        document.execCommand('copy');
+        
+        // Feedback visual
+        const btnCopiar = event.target.closest('button');
+        if (btnCopiar) {
+            const originalHtml = btnCopiar.innerHTML;
+            btnCopiar.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+            btnCopiar.classList.add('btn-success');
+            btnCopiar.classList.remove('btn-outline-secondary');
+            
+            setTimeout(() => {
+                btnCopiar.innerHTML = originalHtml;
+                btnCopiar.classList.remove('btn-success');
+                btnCopiar.classList.add('btn-outline-secondary');
+            }, 2000);
+        }
+        
+        console.log('Chave copiada:', chave);
+    } catch (err) {
+        console.error('Erro ao copiar:', err);
+        alert('Erro ao copiar chave. Tente novamente.');
+    }
+    
+    // Remover elemento temporário
+    document.body.removeChild(tempInput);
+}
+
+// Inicializar tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
 </script>
 {% endblock %}

@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+
+{% block title %}Criar API Key - {{ cliente.razao_social }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-plus-circle text-primary"></i> Nova API Key
+            </h1>
+            <p class="text-muted mb-0">{{ cliente.razao_social }}</p>
+        </div>
+        <a href="{{ url_for('api_keys.list_api_keys', cliente_id=cliente_id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message|safe }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog"></i> Configurações da API Key
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('api_keys.create_api_key', cliente_id=cliente_id) }}">
+                        
+                        <!-- Nome -->
+                        <div class="mb-3">
+                            <label for="nome" class="form-label">
+                                <i class="fas fa-tag"></i> Nome da API Key <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="nome" 
+                                   name="nome" 
+                                   placeholder="Ex: Produção, Desenvolvimento, Integração ERP"
+                                   required
+                                   maxlength="100">
+                            <small class="form-text text-muted">
+                                Um nome descritivo para identificar onde esta key será utilizada
+                            </small>
+                        </div>
+
+                        <!-- Rate Limit -->
+                        <div class="mb-3">
+                            <label for="rate_limit" class="form-label">
+                                <i class="fas fa-tachometer-alt"></i> Rate Limit (requisições por hora)
+                            </label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="rate_limit" 
+                                   name="rate_limit" 
+                                   value="1000"
+                                   min="1"
+                                   max="100000">
+                            <small class="form-text text-muted">
+                                Limite de requisições que podem ser feitas por hora com esta key
+                            </small>
+                        </div>
+
+                        <!-- Expiração -->
+                        <div class="mb-3">
+                            <label for="expira_em_dias" class="form-label">
+                                <i class="fas fa-calendar-times"></i> Expiração
+                            </label>
+                            <select class="form-select" id="expira_em_dias" name="expira_em_dias">
+                                <option value="">Sem expiração</option>
+                                <option value="30">30 dias</option>
+                                <option value="90">90 dias (3 meses)</option>
+                                <option value="180">180 dias (6 meses)</option>
+                                <option value="365" selected>365 dias (1 ano)</option>
+                                <option value="730">730 dias (2 anos)</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                Tempo até a key expirar automaticamente. Keys expiradas não poderão ser usadas.
+                            </small>
+                        </div>
+
+                        <!-- IP Whitelist -->
+                        <div class="mb-3">
+                            <label for="ip_whitelist" class="form-label">
+                                <i class="fas fa-shield-alt"></i> IP Whitelist (Opcional)
+                            </label>
+                            <textarea class="form-control" 
+                                      id="ip_whitelist" 
+                                      name="ip_whitelist" 
+                                      rows="3"
+                                      placeholder="192.168.1.100&#10;203.0.113.45&#10;198.51.100.0/24"></textarea>
+                            <small class="form-text text-muted">
+                                Liste os IPs permitidos (um por linha). Deixe em branco para permitir qualquer IP.
+                                Suporta IPs individuais ou ranges CIDR.
+                            </small>
+                        </div>
+
+                        <!-- Permissões -->
+                        <div class="mb-4">
+                            <label class="form-label">
+                                <i class="fas fa-lock"></i> Permissões <span class="text-danger">*</span>
+                            </label>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_nfe_read" 
+                                                       name="permissoes" 
+                                                       value="nfe.read"
+                                                       checked>
+                                                <label class="form-check-label" for="perm_nfe_read">
+                                                    <i class="fas fa-eye text-info"></i> <strong>nfe.read</strong>
+                                                    <br><small class="text-muted">Consultar NFes</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_nfe_write" 
+                                                       name="permissoes" 
+                                                       value="nfe.write">
+                                                <label class="form-check-label" for="perm_nfe_write">
+                                                    <i class="fas fa-edit text-primary"></i> <strong>nfe.write</strong>
+                                                    <br><small class="text-muted">Modificar NFes</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_nfe_emit" 
+                                                       name="permissoes" 
+                                                       value="nfe.emit">
+                                                <label class="form-check-label" for="perm_nfe_emit">
+                                                    <i class="fas fa-file-invoice text-success"></i> <strong>nfe.emit</strong>
+                                                    <br><small class="text-muted">Emitir novas NFes</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_nfe_cancel" 
+                                                       name="permissoes" 
+                                                       value="nfe.cancel">
+                                                <label class="form-check-label" for="perm_nfe_cancel">
+                                                    <i class="fas fa-ban text-danger"></i> <strong>nfe.cancel</strong>
+                                                    <br><small class="text-muted">Cancelar NFes</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_produtos_read" 
+                                                       name="permissoes" 
+                                                       value="produtos.read">
+                                                <label class="form-check-label" for="perm_produtos_read">
+                                                    <i class="fas fa-box text-info"></i> <strong>produtos.read</strong>
+                                                    <br><small class="text-muted">Consultar produtos</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_clientes_read" 
+                                                       name="permissoes" 
+                                                       value="clientes.read">
+                                                <label class="form-check-label" for="perm_clientes_read">
+                                                    <i class="fas fa-users text-info"></i> <strong>clientes.read</strong>
+                                                    <br><small class="text-muted">Consultar clientes</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_webhooks" 
+                                                       name="permissoes" 
+                                                       value="webhooks.manage">
+                                                <label class="form-check-label" for="perm_webhooks">
+                                                    <i class="fas fa-webhook text-warning"></i> <strong>webhooks.manage</strong>
+                                                    <br><small class="text-muted">Gerenciar webhooks</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" 
+                                                       type="checkbox" 
+                                                       id="perm_admin" 
+                                                       name="permissoes" 
+                                                       value="admin">
+                                                <label class="form-check-label" for="perm_admin">
+                                                    <i class="fas fa-crown text-warning"></i> <strong>admin</strong>
+                                                    <br><small class="text-muted">Acesso administrativo completo</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">
+                                Selecione as permissões que esta API Key terá. Siga o princípio do menor privilégio.
+                            </small>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('api_keys.list_api_keys', cliente_id=cliente_id) }}" 
+                               class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-key"></i> Gerar API Key
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar com dicas -->
+        <div class="col-lg-4">
+            <div class="card bg-light">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-lightbulb text-warning"></i> Dicas de Segurança
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="small mb-0">
+                        <li class="mb-2">
+                            <strong>Nome descritivo:</strong> Use nomes que indiquem claramente onde a key será usada
+                        </li>
+                        <li class="mb-2">
+                            <strong>Rate Limit:</strong> Configure limites adequados ao uso esperado
+                        </li>
+                        <li class="mb-2">
+                            <strong>IP Whitelist:</strong> Sempre que possível, restrinja por IP para maior segurança
+                        </li>
+                        <li class="mb-2">
+                            <strong>Permissões:</strong> Conceda apenas as permissões necessárias
+                        </li>
+                        <li class="mb-2">
+                            <strong>Expiração:</strong> Keys temporárias são mais seguras
+                        </li>
+                        <li class="mb-2">
+                            <strong>Armazenamento:</strong> A key completa será exibida apenas uma vez. Guarde-a em local seguro!
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card bg-info text-white mt-3">
+                <div class="card-body">
+                    <h6 class="text-white">
+                        <i class="fas fa-info-circle"></i> Importante
+                    </h6>
+                    <p class="small mb-0">
+                        Após criar a API Key, ela será exibida <strong>apenas uma vez</strong>. 
+                        Copie e armazene em local seguro. Se perder a key, será necessário criar uma nova.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Selecionar/Desselecionar todas as permissões
+document.addEventListener('DOMContentLoaded', function() {
+    // Validação de formulário
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const permissoes = document.querySelectorAll('input[name="permissoes"]:checked');
+        if (permissoes.length === 0) {
+            e.preventDefault();
+            alert('Selecione pelo menos uma permissão para a API Key.');
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

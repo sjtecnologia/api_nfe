@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if assinatura else 'Nova' }} Assinatura{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-user-plus"></i> 
+                {{ 'Editar Assinatura' if assinatura else 'Nova Assinatura' }}
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('planos.list_assinaturas') }}">Assinaturas</a></li>
+                    <li class="breadcrumb-item active">{{ 'Editar' if assinatura else 'Nova' }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        
+                        {% if not assinatura %}
+                        <!-- Seleção de Cliente (só na criação) -->
+                        <div class="mb-3">
+                            <label class="form-label">Cliente <span class="text-danger">*</span></label>
+                            <select class="form-select" name="cliente_id" required>
+                                <option value="">Selecione um cliente...</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.cliente_id }}">
+                                    {{ cliente.razao_social }} - CNPJ: {{ cliente.cnpj }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% else %}
+                        <!-- Exibir cliente (não editável) -->
+                        <div class="mb-3">
+                            <label class="form-label">Cliente</label>
+                            <input type="text" class="form-control" 
+                                   value="{{ assinatura.cliente.razao_social }} - CNPJ: {{ assinatura.cliente.cnpj }}" 
+                                   readonly>
+                        </div>
+                        {% endif %}
+
+                        <!-- Seleção de Plano -->
+                        <div class="mb-3">
+                            <label class="form-label">Plano <span class="text-danger">*</span></label>
+                            <select class="form-select" name="plano_id" id="plano_select" required onchange="updatePlanoInfo()">
+                                <option value="">Selecione um plano...</option>
+                                {% for plano in planos %}
+                                <option value="{{ plano.plano_id }}" 
+                                        data-tipo="{{ plano.tipo_plano }}"
+                                        data-quantidade="{{ plano.quantidade_nfes or 'Ilimitado' }}"
+                                        data-valor="{{ '%.2f'|format(plano.valor_mensal|float) }}"
+                                        {{ 'selected' if assinatura and assinatura.plano_id == plano.plano_id else '' }}>
+                                    {{ plano.nome }} 
+                                    ({% if plano.tipo_plano == 'AVULSO' %}
+                                        Avulso - R$ {{ '%.2f'|format(plano.valor_por_nfe|float) }}/NFe
+                                    {% else %}
+                                        {{ plano.quantidade_nfes or 'Ilimitado' }} NFes - R$ {{ '%.2f'|format(plano.valor_mensal|float) }}/mês
+                                    {% endif %})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Info do Plano Selecionado -->
+                        <div id="plano_info" class="alert alert-info" style="display: none;">
+                            <h6>Informações do Plano:</h6>
+                            <ul class="mb-0">
+                                <li><strong>Tipo:</strong> <span id="info_tipo"></span></li>
+                                <li><strong>Quantidade:</strong> <span id="info_quantidade"></span> NFes</li>
+                                <li><strong>Valor Mensal:</strong> R$ <span id="info_valor"></span></li>
+                            </ul>
+                        </div>
+
+                        <hr>
+
+                        <!-- Datas e Configurações -->
+                        <div class="row">
+                            {% if not assinatura %}
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Data de Início <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" name="data_inicio" 
+                                       value="{{ date.today().strftime('%Y-%m-%d') }}" required>
+                            </div>
+                            {% else %}
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Data de Início</label>
+                                <input type="date" class="form-control" 
+                                       value="{{ assinatura.data_inicio.strftime('%Y-%m-%d') }}" readonly>
+                            </div>
+                            {% endif %}
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Dia de Vencimento</label>
+                                <input type="number" class="form-control" name="dia_vencimento" 
+                                       value="{{ assinatura.dia_vencimento if assinatura else 10 }}" 
+                                       min="1" max="28" required>
+                                <small class="text-muted">Dia do mês para renovação (1-28)</small>
+                            </div>
+                        </div>
+
+                        {% if assinatura %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status" required>
+                                    <option value="ATIVA" {{ 'selected' if assinatura.status == 'ATIVA' else '' }}>
+                                        Ativa
+                                    </option>
+                                    <option value="SUSPENSA" {{ 'selected' if assinatura.status == 'SUSPENSA' else '' }}>
+                                        Suspensa
+                                    </option>
+                                    <option value="INADIMPLENTE" {{ 'selected' if assinatura.status == 'INADIMPLENTE' else '' }}>
+                                        Inadimplente
+                                    </option>
+                                    <option value="CANCELADA" {{ 'selected' if assinatura.status == 'CANCELADA' else '' }}>
+                                        Cancelada
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Data de Término</label>
+                                <input type="date" class="form-control" name="data_fim" 
+                                       value="{{ assinatura.data_fim.strftime('%Y-%m-%d') if assinatura.data_fim else '' }}">
+                                <small class="text-muted">Deixe vazio para sem data de término</small>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Observações -->
+                        <div class="mb-3">
+                            <label class="form-label">Observações</label>
+                            <textarea class="form-control" name="observacoes" rows="3">{{ assinatura.observacoes if assinatura else '' }}</textarea>
+                        </div>
+
+                        <hr>
+
+                        <!-- Botões -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('planos.list_assinaturas') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> {{ 'Atualizar' if assinatura else 'Criar' }} Assinatura
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel Lateral -->
+        <div class="col-md-4">
+            {% if assinatura %}
+            <!-- Estatísticas da Assinatura -->
+            <div class="card mb-3">
+                <div class="card-header bg-info text-white">
+                    <i class="fas fa-chart-pie"></i> Consumo Atual
+                </div>
+                <div class="card-body">
+                    {% if assinatura.plano.quantidade_nfes %}
+                    <div class="text-center mb-3">
+                        <h2 class="mb-0">{{ assinatura.nfes_consumidas }}</h2>
+                        <small class="text-muted">de {{ assinatura.plano.quantidade_nfes }} NFes</small>
+                    </div>
+                    <div class="progress" style="height: 25px;">
+                        {% set percentual = (assinatura.nfes_consumidas / assinatura.plano.quantidade_nfes * 100)|int %}
+                        <div class="progress-bar 
+                            {% if percentual >= 90 %}bg-danger
+                            {% elif percentual >= 70 %}bg-warning
+                            {% else %}bg-success{% endif %}" 
+                            role="progressbar" 
+                            style="width: {{ percentual }}%">
+                            {{ percentual }}%
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center">
+                        <h2 class="text-success mb-0"><i class="fas fa-infinity"></i></h2>
+                        <p class="mb-1">NFes Ilimitadas</p>
+                        <small class="text-muted">{{ assinatura.nfes_consumidas }} emitidas no período</small>
+                    </div>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    <p class="mb-1">
+                        <strong>Período:</strong><br>
+                        <small>
+                            {{ assinatura.periodo_ref_inicio.strftime('%d/%m/%Y') if assinatura.periodo_ref_inicio else 'N/A' }}
+                            até
+                            {{ assinatura.periodo_ref_fim.strftime('%d/%m/%Y') if assinatura.periodo_ref_fim else 'N/A' }}
+                        </small>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Ações Rápidas -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-bolt"></i> Ações Rápidas
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('planos.renovar_assinatura', assinatura_id=assinatura.assinatura_id) }}">
+                        <button type="submit" class="btn btn-success btn-sm w-100 mb-2"
+                                onclick="return confirm('Renovar período? Isso irá zerar o contador de NFes.')">
+                            <i class="fas fa-sync"></i> Renovar Período
+                        </button>
+                    </form>
+                    
+                    <button onclick="cancelarAssinatura()" class="btn btn-danger btn-sm w-100">
+                        <i class="fas fa-ban"></i> Cancelar Assinatura
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <!-- Ajuda para Nova Assinatura -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> Ajuda
+                </div>
+                <div class="card-body">
+                    <h6>Criando Assinatura:</h6>
+                    <ol class="small">
+                        <li>Selecione o cliente</li>
+                        <li>Escolha o plano desejado</li>
+                        <li>Defina a data de início</li>
+                        <li>Configure o dia de vencimento</li>
+                    </ol>
+
+                    <hr>
+
+                    <p class="small mb-0">
+                        <strong>Nota:</strong> Verifique se o cliente já não possui uma assinatura ativa antes de criar uma nova.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function updatePlanoInfo() {
+    const select = document.getElementById('plano_select');
+    const option = select.options[select.selectedIndex];
+    const infoDiv = document.getElementById('plano_info');
+    
+    if (option.value) {
+        document.getElementById('info_tipo').textContent = option.dataset.tipo;
+        document.getElementById('info_quantidade').textContent = option.dataset.quantidade;
+        document.getElementById('info_valor').textContent = option.dataset.valor;
+        infoDiv.style.display = 'block';
+    } else {
+        infoDiv.style.display = 'none';
+    }
+}
+
+{% if assinatura %}
+function cancelarAssinatura() {
+    if (!confirm('Tem certeza que deseja CANCELAR esta assinatura?')) return;
+    
+    fetch('{{ url_for("planos.cancelar_assinatura", assinatura_id=assinatura.assinatura_id) }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = '{{ url_for("planos.list_assinaturas") }}';
+        } else {
+            alert('Erro: ' + data.message);
+        }
+    })
+    .catch(error => alert('Erro: ' + error));
+}
+{% endif %}
+
+// Executar ao carregar
+document.addEventListener('DOMContentLoaded', updatePlanoInfo);
+</script>
+{% endblock %}

@@ -65,6 +65,27 @@
                                 Informações Básicas
                             </h5>
                             
+                            <!-- Descrição da Regra -->
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label for="descricao_regra">
+                                            <i class="fas fa-file-alt"></i>
+                                            Descrição da Regra *
+                                        </label>
+                                        <input type="text" class="form-control" id="descricao_regra" 
+                                               name="descricao_regra" maxlength="200"
+                                               value="{{ regra.descricao_regra if regra else '' }}" 
+                                               placeholder="Ex: Venda de bebidas dentro do estado - Simples Nacional"
+                                               required>
+                                        <small class="form-text text-muted">
+                                            <i class="fas fa-info-circle"></i>
+                                            Digite uma descrição clara para identificar esta regra (máx. 200 caracteres)
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="row">
                                 <div class="col-md-4">
                                     <div class="form-group">
@@ -102,9 +123,19 @@
                                             Regime Tributário
                                         </label>
                                         <select class="form-control" id="regime_tributario_id" name="regime_tributario_id">
-                                            <option value="1" {% if not regra or regra.regime_tributario_id == 1 %}selected{% endif %}>Simples Nacional</option>
-                                            <option value="2" {% if regra and regra.regime_tributario_id == 2 %}selected{% endif %}>Lucro Presumido</option>
-                                            <option value="3" {% if regra and regra.regime_tributario_id == 3 %}selected{% endif %}>Lucro Real</option>
+                                            {% if regimes %}
+                                                {% for regime in regimes %}
+                                                <option value="{{ regime.regime_tributario_id }}" 
+                                                        {% if regra and regra.regime_tributario_id == regime.regime_tributario_id %}selected
+                                                        {% elif not regra and loop.first %}selected{% endif %}>
+                                                    {{ regime.nome }}
+                                                </option>
+                                                {% endfor %}
+                                            {% else %}
+                                                <option value="1" selected>Simples Nacional</option>
+                                                <option value="2">Lucro Presumido</option>
+                                                <option value="3">Lucro Real</option>
+                                            {% endif %}
                                         </select>
                                     </div>
                                 </div>
@@ -340,7 +371,30 @@
                                                value="{{ regra.aliquota_pis if regra else '' }}">
                                     </div>
                                 </div>
-                                
+                            </div>
+
+                            <div class="row mt-3">
+                                <!-- CST COFINS -->
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label for="cst_cofins">CST COFINS</label>
+                                        <select class="form-control js-select2" id="cst_cofins" name="cst_cofins">
+                                            <option value="">Selecione um CST COFINS...</option>
+                                            <option value="01" {% if regra and regra.cst_cofins == '01' %}selected{% endif %}>01 - Operação Tributável com Alíquota Básica</option>
+                                            <option value="02" {% if regra and regra.cst_cofins == '02' %}selected{% endif %}>02 - Operação Tributável com Alíquota por Unidade</option>
+                                            <option value="03" {% if regra and regra.cst_cofins == '03' %}selected{% endif %}>03 - Operação Tributável com Alíquota Diferenciada</option>
+                                            <option value="04" {% if regra and regra.cst_cofins == '04' %}selected{% endif %}>04 - Operação Tributável Monofásica</option>
+                                            <option value="05" {% if regra and regra.cst_cofins == '05' %}selected{% endif %}>05 - Operação Tributável por ST</option>
+                                            <option value="06" {% if regra and regra.cst_cofins == '06' %}selected{% endif %}>06 - Operação Tributável a Alíquota Zero</option>
+                                            <option value="07" {% if regra and regra.cst_cofins == '07' %}selected{% endif %}>07 - Operação Isenta da Contribuição</option>
+                                            <option value="08" {% if regra and regra.cst_cofins == '08' %}selected{% endif %}>08 - Operação sem Incidência da Contribuição</option>
+                                            <option value="09" {% if regra and regra.cst_cofins == '09' %}selected{% endif %}>09 - Operação com Suspensão da Contribuição</option>
+                                            <option value="49" {% if regra and regra.cst_cofins == '49' %}selected{% endif %}>49 - Outras Operações de Saída</option>
+                                            <option value="99" {% if regra and regra.cst_cofins == '99' %}selected{% endif %}>99 - Outras Operações</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div class="col-md-4">
                                     <div class="form-group">
                                         <label for="aliquota_cofins">Alíquota COFINS (%)</label>
@@ -367,14 +421,31 @@
                             </ul>
                         </div>
 
+                        <!-- RESULTADO DA VALIDAÇÃO IA -->
+                        <div id="validacao-ia-container" style="display: none;">
+                            <div class="card mb-3" id="validacao-ia-card">
+                                <div class="card-header" id="validacao-ia-header">
+                                    <h5 class="mb-0" id="validacao-ia-titulo">
+                                        <i class="fas fa-robot"></i> Validação com IA
+                                    </h5>
+                                </div>
+                                <div class="card-body" id="validacao-ia-body">
+                                    <!-- Conteúdo será preenchido dinamicamente -->
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- BOTÕES DE AÇÃO -->
                         <div class="form-group text-center mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg">
+                            <button type="button" class="btn btn-info btn-lg" id="btn-validar-ia">
+                                <i class="fas fa-robot"></i> Validar com IA
+                            </button>
+                            <button type="submit" class="btn btn-primary btn-lg ms-2">
                                 <i class="fas fa-save"></i>
                                 {% if regra %}Atualizar Regra{% else %}Salvar Regra{% endif %}
                             </button>
                             <a href="{{ url_for('admin.list_regras_tributacao', cliente_id=cliente_id) }}" 
-                               class="btn btn-secondary btn-lg ml-2">
+                               class="btn btn-secondary btn-lg ms-2">
                                 <i class="fas fa-times"></i> Cancelar
                             </a>
                         </div>
@@ -472,6 +543,148 @@ $(document).ready(function() {
             const valorCofins = (valorPis * 3).toFixed(2);
             $('#aliquota_cofins').val(valorCofins);
         }
+    });
+    
+    // ✅ NOVA FUNÇÃO: Validar regra com IA
+    function validarRegraComIA() {
+        console.log('🤖 Iniciando validação com IA...');
+        
+        // Coletar dados do formulário
+        const regime = $('#regime_tributario_id option:selected').text().trim();
+        const cfopSelect = $('#cfop_id option:selected');
+        const cfop = cfopSelect.val() ? cfopSelect.text().split(' - ')[0].trim() : '';
+        const cstIcms = $('#cst_icms').val();
+        const csosnIcms = $('#csosn_icms').val();
+        const ncmSelect = $('#ncm_id option:selected');
+        const ncm = ncmSelect.val() ? ncmSelect.text().split(' - ')[0].trim() : '';
+        const descricao = $('#descricao_regra').val();
+        
+        // Validar se tem dados mínimos
+        if (!cfop && !cstIcms && !csosnIcms) {
+            alert('⚠️ Preencha ao menos CFOP, CST ou CSOSN para validar com IA');
+            return;
+        }
+        
+        // Preparar payload
+        const payload = {
+            regime_tributario: regime,
+            cfop: cfop,
+            cst_icms: cstIcms || '',
+            csosn_icms: csosnIcms || '',
+            ncm: ncm,
+            descricao: descricao
+        };
+        
+        console.log('📤 Enviando para validação:', payload);
+        
+        // Mostrar loading
+        const $btn = $('#btn-validar-ia');
+        const originalHtml = $btn.html();
+        $btn.html('<i class="fas fa-spinner fa-spin"></i> Validando...').prop('disabled', true);
+        
+        $('#validacao-ia-container').show();
+        $('#validacao-ia-body').html('<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p class="mt-2">Analisando regra tributária com IA...</p></div>');
+        
+        // Chamar endpoint de validação
+        $.ajax({
+            url: '/api/validar-regra-ia',  // ✅ Usar proxy interno ao invés de localhost:8081
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            timeout: 15000,
+            success: function(resultado) {
+                console.log('✅ Validação concluída:', resultado);
+                
+                // Montar HTML do resultado
+                let html = '';
+                
+                if (resultado.valido) {
+                    $('#validacao-ia-card').removeClass('border-danger').addClass('border-success');
+                    $('#validacao-ia-header').removeClass('bg-danger text-white').addClass('bg-success text-white');
+                    
+                    html = '<div class="alert alert-success mb-0">';
+                    html += '<h5><i class="fas fa-check-circle"></i> Regra válida!</h5>';
+                    html += '<p class="mb-0">' + (resultado.explicacao || 'Todos os parâmetros estão corretos.') + '</p>';
+                    html += '</div>';
+                } else {
+                    $('#validacao-ia-card').removeClass('border-success').addClass('border-danger');
+                    $('#validacao-ia-header').removeClass('bg-success text-white').addClass('bg-danger text-white');
+                    
+                    html = '<div class="alert alert-danger">';
+                    html += '<h5><i class="fas fa-exclamation-triangle"></i> Erros encontrados:</h5>';
+                    html += '<ul class="mb-2">';
+                    resultado.erros.forEach(function(erro) {
+                        html += '<li>' + erro + '</li>';
+                    });
+                    html += '</ul>';
+                    html += '</div>';
+                    
+                    if (resultado.sugestoes && resultado.sugestoes.length > 0) {
+                        html += '<div class="alert alert-info mb-2">';
+                        html += '<h6><i class="fas fa-lightbulb"></i> Sugestões:</h6>';
+                        html += '<ul class="mb-0">';
+                        resultado.sugestoes.forEach(function(sugestao) {
+                            html += '<li>' + sugestao + '</li>';
+                        });
+                        html += '</ul>';
+                        html += '</div>';
+                    }
+                    
+                    if (resultado.explicacao) {
+                        html += '<div class="alert alert-secondary mb-0">';
+                        html += '<h6><i class="fas fa-info-circle"></i> Explicação:</h6>';
+                        html += '<p class="mb-0">' + resultado.explicacao + '</p>';
+                        html += '</div>';
+                    }
+                }
+                
+                $('#validacao-ia-body').html(html);
+                
+                // Scroll suave até o resultado
+                $('html, body').animate({
+                    scrollTop: $('#validacao-ia-container').offset().top - 20
+                }, 500);
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Erro na validação:', error);
+                
+                $('#validacao-ia-card').removeClass('border-success').addClass('border-warning');
+                $('#validacao-ia-header').removeClass('bg-success bg-danger text-white').addClass('bg-warning');
+                
+                let html = '<div class="alert alert-warning mb-0">';
+                html += '<h5><i class="fas fa-exclamation-circle"></i> Erro ao validar</h5>';
+                html += '<p class="mb-0">Não foi possível conectar ao serviço de IA. Verifique se o serviço está rodando.</p>';
+                html += '<small class="text-muted d-block mt-2">Erro técnico: ' + error + '</small>';
+                html += '</div>';
+                
+                $('#validacao-ia-body').html(html);
+            },
+            complete: function() {
+                $btn.html(originalHtml).prop('disabled', false);
+            }
+        });
+    }
+    
+    // ✅ Botão de validação manual
+    $('#btn-validar-ia').on('click', function() {
+        validarRegraComIA();
+    });
+    
+    // ✅ Validação automática ao mudar campos críticos (com debounce)
+    let validacaoTimeout;
+    $('#cfop_id, #cst_icms, #csosn_icms, #regime_tributario_id').on('change', function() {
+        clearTimeout(validacaoTimeout);
+        validacaoTimeout = setTimeout(function() {
+            // Validar automaticamente apenas se já tiver dados mínimos
+            const cfop = $('#cfop_id').val();
+            const cst = $('#cst_icms').val();
+            const csosn = $('#csosn_icms').val();
+            
+            if (cfop || cst || csosn) {
+                console.log('🔄 Auto-validação disparada por mudança de campo');
+                validarRegraComIA();
+            }
+        }, 1000); // Aguardar 1 segundo após última mudança
     });
     
     // Validação do formulário

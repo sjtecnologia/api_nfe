@@ -4,11 +4,10 @@ from flask import Blueprint, jsonify, request, render_template, redirect, sessio
 from typing import Dict, Any
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
-from sqlalchemy import text, func
+from sqlalchemy import text
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
-from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, NFeInutilizacao
-from database.models import UserModel, UserClient
+from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, AssinaturaCliente
 from auth.decorators import (
     admin_required,
     block_viewer_access,
@@ -84,18 +83,34 @@ def emitir_nfe():
         if not emitente_data:
             flash('Cliente não encontrado', 'danger')
             return redirect(url_for('home.home'))
-        
-        print(f"OK: Emitente encontrado: {emitente_data.razao_social}")
-        
-        # VALIDAR CNPJ DO EMITENTE
-        if getattr(emitente_data, 'produtor_rural', False):
-            print('[VALIDACAO] Emitente e Produtor Rural (CPF) - pulando validacao CNPJ')
-        else:
-            cnpj_emitente_limpo = (emitente_data.cnpj or '').replace('.', '').replace('/', '').replace('-', '').strip()
-            if not validar_cnpj(cnpj_emitente_limpo):
-                flash(f'CNPJ do emitente é inválido: {emitente_data.cnpj}. Corrija o cadastro antes de emitir NFe.', 'danger')
+
+        # VERIFICAR SE CLIENTE ESTÁ ATIVO NO CADASTRO
+        if not emitente_data.ativo:
+            flash('Emissão bloqueada: cliente inativo. Entre em contato com o suporte.', 'danger')
+            return redirect(url_for('home.home'))
+
+        # VERIFICAR ASSINATURA / BLOQUEIO POR INADIMPLÊNCIA OU CANCELAMENTO
+        assinatura = db.query(AssinaturaCliente).filter(
+            AssinaturaCliente.cliente_id == emitente_cliente_id
+        ).order_by(AssinaturaCliente.data_inicio.desc()).first()
+
+        if assinatura:
+            pode, motivo = assinatura.pode_emitir()
+            if not pode:
+                flash(f'Emissão bloqueada: {motivo}', 'danger')
                 return redirect(url_for('home.home'))
-            print('[VALIDACAO] CNPJ emitente valido')
+        # Se não há assinatura, a emissão é liberada (cliente sem plano vinculado)
+
+        print(f"OK: Emitente encontrado: {emitente_data.razao_social}")
+
+        # VALIDAR CNPJ DO EMITENTE
+        cnpj_emitente_limpo = emitente_data.cnpj.replace('.', '').replace('/', '').replace('-', '').strip()
+        print(f"🔍 [VALIDAÇÃO] CNPJ emitente: {cnpj_emitente_limpo}")
+        if not validar_cnpj(cnpj_emitente_limpo):
+            print(f"❌ [VALIDAÇÃO] CNPJ EMITENTE INVÁLIDO: {cnpj_emitente_limpo}")
+            flash(f'CNPJ do emitente é inválido: {emitente_data.cnpj}. Corrija o cadastro do cliente antes de emitir NFe.', 'danger')
+            return redirect(url_for('home.home'))
+        print(f"✅ [VALIDAÇÃO] CNPJ emitente válido")
         
         # Buscar regime tributário
         regime_tributario_nome = 'Regime Normal'
@@ -111,8 +126,6 @@ def emitir_nfe():
             'cliente_id': emitente_data.cliente_id,
             'razao_social': emitente_data.razao_social,
             'cnpj': emitente_data.cnpj,
-            'cpf': getattr(emitente_data, 'cpf', None),
-            'produtor_rural': getattr(emitente_data, 'produtor_rural', False),
             'nome_fantasia': emitente_data.nome_fantasia,
             'logradouro': emitente_data.logradouro,
             'numero': emitente_data.numero,
@@ -647,6 +660,11 @@ def emitir_nfe():
                             data_emissao_nfe = datetime.now(brasilia_tz)
                             print(f"📅 [DEBUG] Sem dataEmissao, usando now(): {data_emissao_nfe.isoformat()}")
                         
+                        # Truncar mensagem de erro se necessário (limite 255 caracteres)
+                        mensagem_sefaz = resultado_sefaz.get('message', '')
+                        if mensagem_sefaz and len(mensagem_sefaz) > 250:
+                            mensagem_sefaz = mensagem_sefaz[:247] + '...'
+                        
                         nova_nfe = NFeEmitidas(
                             cliente_id=emitente_cliente_id,
                             numero=int(form_data_initial.get('numero_nfe', '1')),
@@ -669,7 +687,7 @@ def emitir_nfe():
                             status=status_nfe,
                             chave_acesso=resultado_sefaz.get('chave_acesso'),
                             protocolo_sefaz=resultado_sefaz.get('protocolo'),
-                            mensagem_sefaz=resultado_sefaz.get('message'),
+                            mensagem_sefaz=mensagem_sefaz,
                             data_criacao=datetime.now(),
                             data_autorizacao=data_autorizacao_nfe,
                             created_by_user_id=current_user.id,
@@ -749,30 +767,6 @@ def emitir_nfe():
                                 # Marcar que DANFE foi gerado para abrir o modal
                                 danfe_gerado_com_sucesso = True
                                 caminho_danfe = f'static/danfe/danfe_{nfe_id}.pdf'
-                                
-                                # === ENVIAR EMAIL AUTOMATICAMENTE PARA O DESTINATÁRIO ===
-                                try:
-                                    print(" === ENVIANDO EMAIL AUTOMÁTICO PARA DESTINATÁRIO ===")
-                                    from services.email_service import enviar_nfe_automaticamente
-                                    
-                                    resultado_email = enviar_nfe_automaticamente(nfe_id, db)
-                                    
-                                    if resultado_email.get('success'):
-                                        print(f"✅ Email automático enviado com sucesso!")
-                                        flash('Email com NFe enviado automaticamente para o destinatário!', 'success')
-                                    else:
-                                        msg_erro = resultado_email.get('message', 'Erro desconhecido')
-                                        print(f"⚠️  Email automático não enviado: {msg_erro}")
-                                        # Não mostrar erro crítico ao usuário, apenas avisar no log
-                                        if 'sem email' not in msg_erro.lower():
-                                            flash(f'Aviso: Não foi possível enviar email automático - {msg_erro}', 'warning')
-                                        
-                                except Exception as email_error:
-                                    print(f"❌ Erro ao enviar email automático: {str(email_error)}")
-                                    import traceback
-                                    traceback.print_exc()
-                                    # Não bloquear a emissão da NFe por causa do email
-                                    flash('NFe emitida com sucesso, mas houve erro no envio automático do email.', 'warning')
                             else:
                                 print(f"AVISO: DANFE não foi gerado (pdf_path: {pdf_path})")
                                 flash('NFe emitida, mas o DANFE não foi gerado.', 'warning')
@@ -1016,9 +1010,25 @@ def emitir_nfe():
         
         print(f" Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
         
+        # Buscar última série usada pelo cliente para pré-preencher o formulário
+        ultima_serie = 1
+        try:
+            from sqlalchemy import text as sql_text
+            result_serie = db.execute(sql_text(
+                "SELECT serie FROM nfe_emitidas WHERE cliente_id = :cid "
+                "AND status NOT IN ('CANCELADA', 'DENEGADA') "
+                "ORDER BY data_criacao DESC LIMIT 1"
+            ), {'cid': emitente_cliente_id}).fetchone()
+            if result_serie:
+                ultima_serie = result_serie[0]
+                print(f"[SERIE] Última série usada pelo cliente {emitente_cliente_id}: {ultima_serie}")
+        except Exception as e:
+            print(f"[SERIE] Aviso: não foi possível buscar última série: {e}")
+        
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,
                              destinatarios=destinatarios_data,
+                             ultima_serie=ultima_serie,
                              produtos=produtos_data,
                              all_cfops=cfops_data,
                              all_csts=csts_data,
@@ -1631,41 +1641,46 @@ def enviar_danfe_email(nfe_id):
         numero = nfe_data.get('numero', 'N/A')
         cliente_nome = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_razao_social', 'N/A')
         
-        assunto = f'NFe {numero} - DANFE - {cliente_nome}'
+        assunto = f'NF-e nº {numero} - {cliente_nome}'
         
         corpo_html = f"""
         <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background-color: #4CAF50; color: white; padding: 15px; text-align: center; }}
-                    .content {{ padding: 20px; background-color: #f9f9f9; }}
-                    .info {{ margin: 10px 0; padding: 10px; background-color: white; border-left: 4px solid #4CAF50; }}
-                    .footer {{ text-align: center; padding: 15px; color: #666; font-size: 12px; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h2>Documento Auxiliar da Nota Fiscal Eletrônica</h2>
-                    </div>
-                    <div class="content">
-                        <p>Prezado(a),</p>
-                        <p>Segue em anexo o DANFE (Documento Auxiliar da Nota Fiscal Eletrônica).</p>
-                        
-                        <div class="info">
-                            <strong>Número NFe:</strong> {numero}<br>
-                            <strong>Emitente:</strong> {cliente_nome}<br>
-                            <strong>Chave de Acesso:</strong> {chave_acesso}
+            <body style="margin:0; padding:0; background:#f3f5f9; font-family:'Segoe UI', Tahoma, Arial, sans-serif; color:#1f2937;">
+                <div style="max-width:680px; margin:24px auto; padding:0 14px;">
+                    <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(17,24,39,0.08);">
+                        <div style="background:linear-gradient(120deg,#0f4c81 0%,#0b6aa8 55%,#22a2c9 100%); color:#ffffff; padding:24px 28px;">
+                            <div style="font-size:12px; letter-spacing:0.10em; text-transform:uppercase; opacity:0.9;">Documento Fiscal</div>
+                            <h1 style="margin:8px 0 0 0; font-size:22px; line-height:1.3; font-weight:700;">DANFE da NF-e {numero}</h1>
                         </div>
-                        
-                        <p>Este documento deve acompanhar a mercadoria em trânsito.</p>
-                        <p>O arquivo XML da NFe pode ser consultado usando a chave de acesso acima.</p>
-                    </div>
-                    <div class="footer">
-                        <p>Este é um email automático. Por favor, não responda.</p>
-                        <p>Sistema de Gestão de NFe</p>
+
+                        <div style="padding:24px 28px;">
+                            <p style="margin:0 0 14px 0; font-size:15px;">Prezado(a),</p>
+                            <p style="margin:0 0 18px 0; font-size:15px; color:#374151;">Segue em anexo o DANFE referente a NF-e emitida por <strong>{cliente_nome}</strong>.</p>
+
+                            <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin:0 0 18px 0;">
+                                <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                                    <tr>
+                                        <td style="padding:8px 0; width:38%; color:#6b7280;">Numero da NF-e</td>
+                                        <td style="padding:8px 0; font-weight:600;">{numero}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:8px 0; color:#6b7280;">Emitente</td>
+                                        <td style="padding:8px 0; font-weight:600;">{cliente_nome}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:8px 0; color:#6b7280;">Chave de acesso</td>
+                                        <td style="padding:8px 0; font-family:Consolas, 'Courier New', monospace; font-size:12px; word-break:break-all;">{chave_acesso}</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <p style="margin:0 0 8px 0; font-size:14px; color:#4b5563;">Anexo enviado: <strong>DANFE em PDF</strong>.</p>
+                            <p style="margin:0; font-size:14px; color:#4b5563;">Em caso de duvidas, responda este contato para suporte.</p>
+                        </div>
+
+                        <div style="padding:14px 28px 20px 28px; border-top:1px solid #eef2f7;">
+                            <p style="margin:0; font-size:12px; color:#6b7280; text-align:center;">Este email foi enviado automaticamente pela EmiteMax.</p>
+                        </div>
                     </div>
                 </div>
             </body>
@@ -1691,6 +1706,8 @@ def enviar_danfe_email(nfe_id):
         
         try:
             email_service = EmailService()
+            # Exibir Nome Fantasia (ou Razão Social) como remetente no email
+            email_service.from_name = cliente_nome
             resultado = email_service.enviar_email(
                 destinatario=email_destinatario,
                 assunto=assunto,
@@ -2735,6 +2752,23 @@ def reenviar_nfe(nfe_id):
         
         if resultado['success']:
             print(f"OK: NFe reenviada com sucesso")
+            # Atualizar banco com dados da autorização
+            success_query = text("""
+                UPDATE nfe_emitidas 
+                SET status = 'AUTORIZADA',
+                    chave_acesso = :chave_acesso,
+                    protocolo_sefaz = :protocolo,
+                    data_autorizacao = NOW(),
+                    mensagem_sefaz = 'Autorizado o uso da NF-e'
+                WHERE nfe_emitida_id = :nfe_id
+            """)
+            db.execute(success_query, {
+                'nfe_id': nfe_id,
+                'chave_acesso': resultado.get('chave_acesso'),
+                'protocolo': resultado.get('protocolo')
+            })
+            db.commit()
+            print(f"[OK] Banco atualizado: status=AUTORIZADA, protocolo={resultado.get('protocolo')}")
             return jsonify({
                 'success': True,
                 'message': 'NF-e reenviada com sucesso!',
@@ -3086,21 +3120,6 @@ def emitir_rascunho(nfe_id):
                 'json_nfe': json.dumps(json_data)
             })
             db.commit()
-            
-            # === ENVIAR EMAIL AUTOMATICAMENTE ===
-            try:
-                print("📧 [RASCUNHO] Tentando enviar email automático")
-                from services.email_service import enviar_nfe_automaticamente
-                
-                resultado_email = enviar_nfe_automaticamente(nfe_id, db)
-                
-                if resultado_email.get('success'):
-                    print(f"✅ [RASCUNHO] Email enviado com sucesso!")
-                else:
-                    print(f"⚠️  [RASCUNHO] Email não enviado: {resultado_email.get('message')}")
-            except Exception as email_error:
-                print(f"❌ [RASCUNHO] Erro ao enviar email: {str(email_error)}")
-                # Não bloquear a emissão por causa do email
         else:
             status_nfe = 'REJEITADA'
             update_final_query = text("""
@@ -3193,7 +3212,8 @@ def compartilhar_nfe(nfe_id):
         query = text("""
             SELECT 
                 n.*,
-                c.razao_social as cliente_nome
+                c.razao_social as cliente_nome,
+                c.nome_fantasia as cliente_fantasia
             FROM nfe_emitidas n
             JOIN clientes c ON n.cliente_id = c.cliente_id
             WHERE n.nfe_emitida_id = :nfe_id
@@ -3334,37 +3354,87 @@ def compartilhar_nfe(nfe_id):
             
             print(f" Total de anexos preparados: {len(anexos)}")
             
-            # Enviar email com template profissional
-            from services.email_service import EmailService, gerar_template_email_nfe
+            # Enviar email
+            from services.email_service import EmailService
             
             email_service = EmailService()
             
             # Preparar dados do email
-            assunto = f'Nota Fiscal Eletrônica #{nfe_data.get("numero", nfe_id)} - {nfe_data.get("cliente_nome", "")}'
+            emissora = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_nome', '')
+            numero_nfe = nfe_data.get('numero', nfe_id)
+            assunto = f'NF-e nº {numero_nfe} - {emissora}'
             
             # Verificar se data_autorizacao não é None antes do strftime
             data_autorizacao = nfe_data.get('data_autorizacao')
             if data_autorizacao:
-                data_autorizacao_str = data_autorizacao.strftime('%d/%m/%Y às %H:%M')
+                data_autorizacao_str = data_autorizacao.strftime('%d/%m/%Y %H:%M:%S')
             else:
                 data_autorizacao_str = 'N/A'
             
-            # Usar o template profissional com logo da EmiteMax
-            corpo_html = gerar_template_email_nfe(
-                nfe_id=nfe_id,
-                numero_nfe=nfe_data.get('numero', nfe_id),
-                emitente=nfe_data.get('cliente_nome', 'N/A'),
-                destinatario=nfe_data.get('destinatario_razao_social', 'N/A'),
-                chave_acesso=nfe_data.get('chave_acesso', 'N/A'),
-                protocolo=nfe_data.get('protocolo_sefaz', 'N/A'),
-                data_autorizacao=data_autorizacao_str,
-                valor_total=nfe_data.get('valor_total', 0),
-                anexos=anexos
-            )
+            corpo_html = f"""
+            <html>
+            <body style="margin:0; padding:0; background:#f3f5f9; font-family:'Segoe UI', Tahoma, Arial, sans-serif; color:#1f2937;">
+                <div style="max-width:680px; margin:24px auto; padding:0 14px;">
+                    <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(17,24,39,0.08);">
+                        <div style="background:linear-gradient(120deg,#0f4c81 0%,#0b6aa8 55%,#22a2c9 100%); color:#ffffff; padding:24px 28px;">
+                            <h1 style="margin:8px 0 0 0; font-size:22px; line-height:1.3; font-weight:700;">NF-e {numero_nfe} de {emissora}</h1>
+                        </div>
+
+                        <div style="padding:24px 28px;">
+                            <p style="margin:0 0 14px 0; font-size:15px;">Prezado(a),</p>
+                            <p style="margin:0 0 18px 0; font-size:15px; color:#374151;">Segue anexo a nota fiscal eletrônica emitida por <strong>{emissora}</strong>.</p>
+
+                            <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin:0 0 18px 0;">
+                                <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                                    <tr>
+                                        <td style="padding:8px 0; width:38%; color:#6b7280;">Numero da NF-e</td>
+                                        <td style="padding:8px 0; font-weight:600;">{numero_nfe}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:8px 0; color:#6b7280;">Emitente</td>
+                                        <td style="padding:8px 0; font-weight:600;">{emissora}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:8px 0; color:#6b7280;">Destinatario</td>
+                                        <td style="padding:8px 0; font-weight:600;">{nfe_data.get('destinatario_razao_social', 'N/A')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:8px 0; color:#6b7280;">Chave de acesso</td>
+                                        <td style="padding:8px 0; font-family:Consolas, 'Courier New', monospace; font-size:12px; word-break:break-all;">{nfe_data.get('chave_acesso', 'N/A')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:8px 0; color:#6b7280;">Protocolo</td>
+                                        <td style="padding:8px 0; font-weight:600;">{nfe_data.get('protocolo_sefaz', 'N/A')}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:8px 0; color:#6b7280;">Data de autorizacao</td>
+                                        <td style="padding:8px 0; font-weight:600;">{data_autorizacao_str}</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <div style="background:#eef6fb; border:1px solid #dbeafe; color:#1f2937; border-radius:10px; padding:12px 14px; font-size:14px;">
+                                <strong>Anexos incluidos:</strong>
+                                <ul style="margin:8px 0 0 18px; padding:0;">
+                                    {"<li>DANFE (PDF)</li>" if include_danfe else ""}
+                                    {"<li>XML da NF-e</li>" if include_xml else ""}
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div style="padding:14px 28px 20px 28px; border-top:1px solid #eef2f7;">
+                            <p style="margin:0; font-size:12px; color:#6b7280; text-align:center;">Este email foi enviado automaticamente pela EmiteMax.</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
             
             print(f" Enviando email...")
             
             # Enviar
+            email_service.from_name = emissora
             resultado = email_service.enviar_email(
                 destinatario=email_destino,
                 assunto=assunto,
@@ -3506,7 +3576,9 @@ def consultar_status_sefaz(nfe_id):
             'message': f'Erro interno: {str(e)}'
         }), 500
     finally:
-        db.close()@nfe_bp.route('/cancelar/<int:nfe_id>', methods=['POST'])
+        db.close()
+
+@nfe_bp.route('/cancelar/<int:nfe_id>', methods=['POST'])
 @login_required
 @editor_or_admin_required()
 def cancelar_nfe(nfe_id):
@@ -3574,6 +3646,13 @@ def cancelar_nfe(nfe_id):
         if not certificado:
             return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
         
+        # Extrair dados do certificado PFX
+        cert_data = certificado.get('cert_data') or certificado.get('arquivo_certificado')
+        cert_senha = certificado.get('password') or certificado.get('senha_certificado')
+        
+        if not cert_data or not cert_senha:
+            return jsonify({'success': False, 'message': 'Dados do certificado incompletos'}), 400
+        
         # Cancelar na SEFAZ
         from services.sefaz_service import SefazService
         
@@ -3587,7 +3666,9 @@ def cancelar_nfe(nfe_id):
             chave_nfe=chave_acesso,
             protocolo=protocolo,
             justificativa=justificativa,
-            cnpj_emitente=nfe_data['emitente_cnpj']
+            cnpj_emitente=nfe_data['emitente_cnpj'],
+            certificado_pfx=cert_data,
+            senha_certificado=cert_senha
         )
         
         if resultado.get('success'):
@@ -3632,472 +3713,307 @@ def cancelar_nfe(nfe_id):
     finally:
         db.close()
 
-
-# ===== STATUS DE CONTINGÊNCIA =====
-@nfe_bp.route('/contingencia/status', methods=['GET'])
-@login_required
-@viewer_or_higher_required()
-def status_contingencia():
-    """Consulta status de contingência do sistema"""
-    try:
-        from services.contingencia_service import contingencia_service
-        status = contingencia_service.obter_status_geral()
-        return jsonify({'success': True, **status})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-# ===== INUTILIZAÇÃO DE NUMERAÇÃO =====
-@nfe_bp.route('/inutilizar/form', methods=['GET'])
-@login_required
-@viewer_or_higher_required()
-def form_inutilizar():
-    """Formulário para inutilização de numeração"""
-    try:
-        cliente_id = request.args.get('cliente_id', type=int)
-        
-        if not cliente_id:
-            flash('Cliente não especificado', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        # Verificar acesso do usuário ao cliente
-        db = next(get_db())
-        accessible_clients = get_accessible_client_ids(db)
-        
-        if cliente_id not in accessible_clients:
-            flash('Você não tem acesso a este cliente.', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        # Buscar dados do cliente/emitente
-        from database.models import Cliente
-        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
-        
-        if not cliente:
-            flash('Cliente não encontrado', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        # Buscar último número emitido por série
-        from database.models import NFeEmitidas
-        ultimas_nfes = db.query(
-            NFeEmitidas.serie,
-            NFeEmitidas.modelo,
-            func.max(NFeEmitidas.numero).label('ultimo_numero')
-        ).filter(
-            NFeEmitidas.cliente_id == cliente_id,
-            NFeEmitidas.status == 'AUTORIZADA'
-        ).group_by(
-            NFeEmitidas.serie,
-            NFeEmitidas.modelo
-        ).all()
-        
-        series_info = []
-        for serie, modelo, ultimo_num in ultimas_nfes:
-            modelo_desc = 'NFe' if modelo == '55' else 'NFCe'
-            series_info.append({
-                'serie': serie,
-                'modelo': modelo,
-                'modelo_desc': modelo_desc,
-                'ultimo_numero': ultimo_num,
-                'sugestao_inicial': ultimo_num + 1 if ultimo_num else 1
-            })
-        
-        db.close()
-        
-        return render_template('admin/nfes/inutilizar.html',
-                             cliente=cliente,
-                             series_info=series_info,
-                             cliente_id=cliente_id)
-                             
-    except Exception as e:
-        print(f"[ERRO] Erro ao carregar formulário de inutilização: {e}")
-        import traceback
-        traceback.print_exc()
-        flash(f'Erro ao carregar formulário: {str(e)}', 'danger')
-        return redirect(url_for('nfe.list_nfes'))
-
-
-@nfe_bp.route('/inutilizar', methods=['POST'])
+@nfe_bp.route('/duplicar/<int:nfe_id>', methods=['POST'])
 @login_required
 @editor_or_admin_required()
-def processar_inutilizacao():
-    """Processa inutilização de numeração na SEFAZ"""
-    db = None
+def duplicar_nfe(nfe_id):
+    """Duplicar NFe e emitir automaticamente"""
+    db = next(get_db())
     try:
-        # Obter dados do formulário
-        cliente_id = request.form.get('cliente_id', type=int)
-        modelo = request.form.get('modelo')  # 55 ou 65
-        serie = request.form.get('serie', type=int)
-        numero_inicial = request.form.get('numero_inicial', type=int)
-        numero_final = request.form.get('numero_final', type=int)
-        ano = request.form.get('ano')  # 2 dígitos
-        justificativa = request.form.get('justificativa', '').strip()
+        print(f"[DUPLICAR] Iniciando duplicação da NFe ID: {nfe_id}")
         
-        print(f"[INUTILIZAR] Requisição recebida:")
-        print(f"  Cliente: {cliente_id}")
-        print(f"  Modelo: {modelo}, Série: {serie}")
-        print(f"  Números: {numero_inicial} a {numero_final}")
-        print(f"  Ano: {ano}")
-        print(f"  Justificativa: {justificativa[:50]}...")
+        # 1. Buscar NFe original com todos os dados
+        query = text("""
+            SELECT ne.*, c.razao_social as cliente_nome 
+            FROM nfe_emitidas ne
+            JOIN clientes c ON ne.cliente_id = c.cliente_id
+            WHERE ne.nfe_emitida_id = :nfe_id
+        """)
+        result = db.execute(query, {'nfe_id': nfe_id})
+        nfe_original = result.fetchone()
         
-        # Validações
-        if not all([cliente_id, modelo, serie is not None, numero_inicial, numero_final, ano, justificativa]):
-            return jsonify({
-                'success': False,
-                'message': 'Todos os campos são obrigatórios'
-            }), 400
+        if not nfe_original:
+            return jsonify({'success': False, 'message': 'NFe original não encontrada'}), 404
         
-        if len(justificativa) < 15:
-            return jsonify({
-                'success': False,
-                'message': 'Justificativa deve ter no mínimo 15 caracteres'
-            }), 400
+        # Converter para dict
+        if hasattr(nfe_original, '_mapping'):
+            nfe_data = dict(nfe_original._mapping)
+        else:
+            nfe_data = dict(nfe_original)
         
-        if numero_final < numero_inicial:
-            return jsonify({
-                'success': False,
-                'message': 'Número final deve ser maior ou igual ao número inicial'
-            }), 400
+        cliente_id = nfe_data['cliente_id']
+        print(f"[DUPLICAR] NFe original encontrada: #{nfe_data.get('numero')}")
         
-        if modelo not in ['55', '65']:
-            return jsonify({
-                'success': False,
-                'message': 'Modelo inválido (deve ser 55 ou 65)'
-            }), 400
+        # Verificar se tem dados JSON
+        if not nfe_data.get('json_nfe'):
+            return jsonify({'success': False, 'message': 'NFe original sem dados completos para duplicação'}), 400
         
-        # Abrir conexão com banco
-        db = next(get_db())
+        # 2. Obter próximo número da sequência
+        query_next_num = text("""
+            SELECT COALESCE(MAX(numero), 0) + 1 as proximo_numero
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+        """)
+        result_num = db.execute(query_next_num, {'cliente_id': cliente_id})
+        proximo_numero = result_num.scalar()
+        print(f"[DUPLICAR] Próximo número: {proximo_numero}")
         
-        # Verificar acesso do usuário ao cliente
-        accessible_clients = get_accessible_client_ids(db)
-        if cliente_id not in accessible_clients:
-            return jsonify({
-                'success': False,
-                'message': 'Você não tem acesso a este cliente'
-            }), 403
+        # 3. Buscar dados do emitente
+        emitente_data = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        if not emitente_data:
+            return jsonify({'success': False, 'message': 'Dados do emitente não encontrados'}), 400
         
-        # Obter ID do usuário logado
-        user_id = current_user.id
+        # Converter emitente para dicionário
+        emitente_dict = {
+            'cliente_id': emitente_data.cliente_id,
+            'razao_social': emitente_data.razao_social,
+            'cnpj': emitente_data.cnpj,
+            'nome_fantasia': emitente_data.nome_fantasia,
+            'logradouro': emitente_data.logradouro,
+            'numero': emitente_data.numero,
+            'bairro': emitente_data.bairro,
+            'cep': emitente_data.cep,
+            'codigo_municipio': emitente_data.codigo_municipio,
+            'nome_municipio': emitente_data.nome_municipio,
+            'uf': emitente_data.uf,
+            'inscricao_estadual': emitente_data.inscricao_estadual,
+            'regime_tributario_id': emitente_data.regime_tributario_id,
+            'ambiente': emitente_data.ambiente
+        }
         
-        # Buscar cliente/emitente
-        from database.models import Cliente
-        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        # 4. Extrair form_data da NFE original e atualizar número
+        import json
+        from copy import deepcopy
+        json_nfe_original = nfe_data.get('json_nfe', {})
+        form_data = deepcopy(json_nfe_original.get('form_data', {}))
         
-        if not cliente:
-            return jsonify({
-                'success': False,
-                'message': 'Cliente não encontrado'
-            }), 404
+        # Atualizar data de emissão (número será definido no loop de tentativas)
+        from datetime import datetime
+        form_data['dataEmissao'] = datetime.now().strftime('%Y-%m-%d')
         
-        # Obter CNPJ do emitente
-        cnpj_emitente = cliente.cnpj
+        # Adicionar CNPJ/CPF do destinatário que processar_nfe() espera encontrar
+        cnpj_cpf_dest = nfe_data.get('destinatario_cnpj_cpf')
+        if cnpj_cpf_dest:
+            form_data['destinatario_cnpj_cpf'] = cnpj_cpf_dest
         
-        # Obter certificado digital
-        from services.certificate_service import get_active_certificate_for_client
-        certificado = get_active_certificate_for_client(db, cliente_id)
+        print(f"[DUPLICAR] Form data preparado, número inicial: {proximo_numero}")
+        print(f"[DUPLICAR] Destinatário CNPJ/CPF: {cnpj_cpf_dest}")
         
-        if not certificado or certificado.get('modo_simulado'):
-            return jsonify({
-                'success': False,
-                'message': 'Certificado digital não configurado ou em modo simulado'
-            }), 400
+        # 5. Buscar destinatário
+        destinatario_id = form_data.get('destinatario')
+        destinatario_data = {}
         
-        # Determinar ambiente (1=Produção, 2=Homologação)
-        ambiente = 'producao' if cliente.ambiente == 1 else 'homologacao'
+        if destinatario_id:
+            try:
+                dest_query = text("""
+                    SELECT destinatario_id, nome_razao_social, cpf_cnpj, ie,
+                           logradouro, numero, bairro, cep, codigo_municipio, 
+                           nome_municipio, uf
+                    FROM destinatarios_nfe 
+                    WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
+                """)
+                dest_result = db.execute(dest_query, {
+                    'dest_id': destinatario_id,
+                    'cliente_id': cliente_id
+                }).fetchone()
+                
+                if dest_result:
+                    dest_mapping = dest_result._mapping if hasattr(dest_result, '_mapping') else dest_result
+                    destinatario_data = {
+                        'nome_razao_social': dest_mapping['nome_razao_social'],
+                        'cpf_cnpj': dest_mapping['cpf_cnpj'],
+                        'inscricao_estadual': dest_mapping.get('ie'),
+                        'logradouro': dest_mapping['logradouro'],
+                        'numero': dest_mapping['numero'],
+                        'bairro': dest_mapping['bairro'],
+                        'cep': dest_mapping['cep'],
+                        'codigo_municipio': dest_mapping['codigo_municipio'],
+                        'nome_municipio': dest_mapping['nome_municipio'],
+                        'uf': dest_mapping['uf']
+                    }
+            except Exception as e:
+                print(f"Aviso: Erro ao buscar destinatário por ID: {e}")
         
-        # Extrair certificado em arquivos temporários
-        import tempfile
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.serialization import pkcs12
+        # Se não encontrou, usar dados armazenados na NFe
+        if not destinatario_data:
+            destinatario_data = {
+                'nome_razao_social': nfe_data.get('destinatario_razao_social'),
+                'cpf_cnpj': nfe_data.get('destinatario_cnpj_cpf'),
+                'inscricao_estadual': form_data.get('dest_ie'),
+                'logradouro': form_data.get('dest_logradouro', 'RUA TESTE'),
+                'numero': form_data.get('dest_numero', 'SN'),
+                'bairro': form_data.get('dest_bairro', 'CENTRO'),
+                'cep': form_data.get('dest_cep', '00000000'),
+                'codigo_municipio': form_data.get('dest_codigo_municipio', '3550308'),
+                'nome_municipio': form_data.get('dest_municipio', 'SAO PAULO'),
+                'uf': form_data.get('dest_uf', 'SP')
+            }
         
-        cert_data = certificado['cert_data']
-        password = certificado['password'].encode('utf-8')
+        # 6. Extrair produtos do JSON da NFe original
+        # Tentar buscar produtos de diferentes locais no JSON
+        items_data = []
         
-        private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(
-            cert_data, password
-        )
+        # Tentativa 1: items direto no raiz do JSON
+        if json_nfe_original.get('items'):
+            items_data = deepcopy(json_nfe_original['items'])
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items")
         
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
-            cert_file.write(certificate.public_bytes(serialization.Encoding.PEM))
-            cert_path = cert_file.name
+        # Tentativa 2: items_data direto
+        elif json_nfe_original.get('items_data'):
+            items_data = deepcopy(json_nfe_original['items_data'])
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items_data")
         
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
-            key_file.write(private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption()
-            ))
-            key_path = key_file.name
+        # Tentativa 2: form_data.items
+        elif json_nfe_original.get('form_data', {}).get('items'):
+            items_raw = json_nfe_original['form_data']['items']
+            items_data = deepcopy(items_raw) if isinstance(items_raw, list) else []
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em form_data.items")
         
-        try:
-            # Inicializar serviço SEFAZ
-            from services.sefaz_service import SefazService
-            sefaz = SefazService(
-                ambiente=ambiente, 
-                cert_path=cert_path, 
-                key_path=key_path,
-                cert_pfx_data=cert_data,  # Manter dados originais para assinatura
-                cert_pfx_password=certificado['password']
-            )
+        # Tentativa 3: Processar do items[0][json], items[1][json]...
+        elif json_nfe_original.get('form_data'):
+            form_data_orig = json_nfe_original['form_data']
+            idx = 0
+            while f'items[{idx}][json]' in form_data_orig:
+                item_json_str = form_data_orig[f'items[{idx}][json]']
+                if item_json_str:
+                    try:
+                        item_data = json.loads(item_json_str) if isinstance(item_json_str, str) else item_json_str
+                        items_data.append(item_data)
+                    except:
+                        pass
+                idx += 1
+            print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items[N][json]")
+        
+        if not items_data:
+            print(f"[DUPLICAR] ⚠️ Estrutura JSON da NFe: {list(json_nfe_original.keys())}")
+            return jsonify({'success': False, 'message': 'NFe original sem produtos no JSON'}), 400
+        
+        print(f"[DUPLICAR] Total de {len(items_data)} produtos para duplicar")
+        
+        # 7. Processar emissão completa usando o serviço existente
+        # IMPORTANTE: Usar processar_nfe() que salva no banco, não processar_emissao_completa()
+        from services.nfe_service import NFeService
+        
+        # Tentar emitir, se houver duplicidade, incrementar número e tentar novamente
+        max_tentativas = 5
+        tentativa = 0
+        
+        while tentativa < max_tentativas:
+            tentativa += 1
+            print(f"[DUPLICAR] Tentativa {tentativa} com número {proximo_numero}")
             
-            # Enviar inutilização para SEFAZ
-            resultado = sefaz.inutilizar_numeracao(
-                cnpj_emitente=cnpj_emitente,
-                modelo=modelo,
-                serie=serie,
-                numero_inicial=numero_inicial,
-                numero_final=numero_final,
-                ano=ano,
-                justificativa=justificativa
-            )
+            # Atualizar número no form_data
+            form_data['numero_nfe'] = str(proximo_numero)
             
-            print(f"[INUTILIZAR] Resultado SEFAZ: {resultado.get('status')}")
+            nfe_service = NFeService(db)
             
-            # Normalizar status para valores válidos do banco
-            # Constraint aceita: 'PROCESSANDO', 'AUTORIZADA', 'REJEITADA', 'ERRO'
-            status_sefaz = resultado.get('status', 'ERRO')
-            if status_sefaz not in ['PROCESSANDO', 'AUTORIZADA', 'REJEITADA']:
-                status_sefaz = 'ERRO'
-            
-            # Salvar no banco
-            inutilizacao = NFeInutilizacao(
+            # processar_nfe() espera ambiente em form_data, não como parâmetro separado
+            # Não passar nfe_id para criar nova NFe
+            resultado = nfe_service.processar_nfe(
+                dados_nfe=form_data,
+                itens=items_data,
                 cliente_id=cliente_id,
-                modelo=modelo,
-                serie=serie,
-                numero_inicial=numero_inicial,
-                numero_final=numero_final,
-                ano=ano,
-                justificativa=justificativa,
-                status=status_sefaz,
-                protocolo=resultado.get('protocolo'),
-                chave_inutilizacao=resultado.get('chave_inutilizacao'),
-                codigo_status=resultado.get('codigo'),
-                mensagem_sefaz=resultado.get('mensagem'),
-                xml_pedido=resultado.get('xml_pedido'),
-                xml_resposta=resultado.get('xml_resposta'),
-                data_inutilizacao=datetime.now() if resultado.get('success') else None,
-                created_by_user_id=user_id
+                nfe_id=None  # None = criar nova NFe
             )
             
-            db.add(inutilizacao)
-            db.commit()
-            
-            print(f"[INUTILIZAR] Registro salvo no banco: ID {inutilizacao.inutilizacao_id}")
-            
+            # Se sucesso, sair do loop
             if resultado.get('success'):
+                break
+            
+            # Se erro de duplicidade, incrementar número e tentar novamente
+            erro_msg = None
+            if resultado.get('errors') and isinstance(resultado['errors'], list):
+                erro_msg = ' '.join(resultado['errors'])
+            elif resultado.get('message'):
+                erro_msg = resultado['message']
+            
+            if erro_msg and ('Duplicidade' in erro_msg or 'já existe' in erro_msg):
+                print(f"[DUPLICAR] ⚠️ Número {proximo_numero} duplicado, tentando {proximo_numero + 1}")
+                proximo_numero += 1
+                continue
+            else:
+                # Outro tipo de erro, não tentar novamente
+                break
+        
+        if resultado.get('success'):
+            print(f"[DUPLICAR] ✅ NFe duplicada e emitida com sucesso!")
+            
+            nova_nfe_id = resultado.get('nfe_id') or resultado.get('nfe_emitida_id')
+            
+            # Buscar dados da nova NFe
+            if nova_nfe_id:
+                query_nova = text("""
+                    SELECT numero, chave_acesso, status
+                    FROM nfe_emitidas
+                    WHERE nfe_emitida_id = :nfe_id
+                """)
+                result_nova = db.execute(query_nova, {'nfe_id': nova_nfe_id})
+                nova_nfe = result_nova.first()
+                
                 return jsonify({
                     'success': True,
-                    'message': f'Numeração inutilizada com sucesso!',
-                    'protocolo': resultado.get('protocolo'),
-                    'codigo': resultado.get('codigo'),
-                    'inutilizacao_id': inutilizacao.inutilizacao_id
+                    'message': 'NFe duplicada e emitida com sucesso!',
+                    'nfe_id': nova_nfe_id,
+                    'numero': nova_nfe.numero if nova_nfe else proximo_numero,
+                    'chave_acesso': nova_nfe.chave_acesso if nova_nfe else None,
+                    'status': nova_nfe.status if nova_nfe else 'AUTORIZADA'
                 })
             else:
                 return jsonify({
-                    'success': False,
-                    'message': resultado.get('mensagem', 'Erro ao inutilizar na SEFAZ'),
-                    'codigo': resultado.get('codigo')
+                    'success': True,
+                    'message': 'NFe duplicada e emitida com sucesso!',
+                    'numero': proximo_numero,
+                    'chave_acesso': resultado.get('chave_acesso'),
+                    'status': resultado.get('status', 'AUTORIZADA')
                 })
-                
-        finally:
-            # Limpar arquivos temporários
-            import os
-            try:
-                os.unlink(cert_path)
-                os.unlink(key_path)
-            except:
-                pass
-                
+        else:
+            # Capturar mensagem de erro detalhada da SEFAZ
+            erro_msg = None
+            
+            # Tentar diferentes formatos de erro
+            if resultado.get('errors') and isinstance(resultado['errors'], list):
+                # Formato: {'errors': ['mensagem1', 'mensagem2']}
+                erro_msg = '; '.join(resultado['errors'])
+            elif resultado.get('message'):
+                erro_msg = resultado['message']
+            elif resultado.get('mensagem_sefaz'):
+                erro_msg = resultado['mensagem_sefaz']
+            elif resultado.get('erro'):
+                erro_msg = resultado['erro']
+            
+            # Se não tem mensagem, tenta extrair do status
+            if not erro_msg:
+                if resultado.get('status') == 'REJEITADA':
+                    erro_msg = 'NFe rejeitada pela SEFAZ'
+                elif resultado.get('status') == 'ERRO':
+                    erro_msg = 'Erro ao processar NFe'
+                else:
+                    erro_msg = 'Erro desconhecido na emissão'
+            
+            codigo_erro = resultado.get('codigo') or resultado.get('cStat') or resultado.get('codigo_sefaz')
+            
+            erro_detalhado = erro_msg
+            if codigo_erro:
+                erro_detalhado = f"Código {codigo_erro}: {erro_msg}"
+            
+            print(f"[DUPLICAR] ❌ Erro na emissão: {erro_detalhado}")
+            print(f"[DUPLICAR] ❌ Resultado completo: {resultado}")
+            
+            return jsonify({
+                'success': False,
+                'message': f"Erro ao emitir NFe duplicada: {erro_detalhado}"
+            }), 400
+            
     except Exception as e:
-        if db:
+        if hasattr(db, 'rollback'):
             db.rollback()
-        print(f"[ERRO] Erro ao processar inutilização: {e}")
+        print(f"[DUPLICAR] ❌ Erro ao duplicar NFe: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
             'success': False,
-            'message': f'Erro ao processar: {str(e)}'
+            'message': f'Erro ao duplicar: {str(e)}'
         }), 500
     finally:
-        if db:
+        if hasattr(db, 'close'):
             db.close()
-
-
-@nfe_bp.route('/inutilizacoes', methods=['GET'])
-@login_required
-@viewer_or_higher_required()
-def listar_inutilizacoes():
-    """Lista inutilizações de numeração"""
-    try:
-        cliente_id = request.args.get('cliente_id', type=int)
-        
-        if not cliente_id:
-            flash('Cliente não especificado', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        db = next(get_db())
-        
-        # Verificar acesso do usuário ao cliente
-        accessible_clients = get_accessible_client_ids(db)
-        if cliente_id not in accessible_clients:
-            flash('Você não tem acesso a este cliente.', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        # Buscar inutilizações
-        inutilizacoes = db.query(NFeInutilizacao).options(
-            joinedload(NFeInutilizacao.created_by_user)
-        ).filter(
-            NFeInutilizacao.cliente_id == cliente_id
-        ).order_by(
-            NFeInutilizacao.data_criacao.desc()
-        ).all()
-        
-        # Estatísticas
-        stats = {
-            'autorizadas': db.query(func.count(NFeInutilizacao.inutilizacao_id)).filter(
-                NFeInutilizacao.cliente_id == cliente_id,
-                NFeInutilizacao.status == 'AUTORIZADA'
-            ).scalar(),
-            'rejeitadas': db.query(func.count(NFeInutilizacao.inutilizacao_id)).filter(
-                NFeInutilizacao.cliente_id == cliente_id,
-                NFeInutilizacao.status == 'REJEITADA'
-            ).scalar(),
-            'processando': db.query(func.count(NFeInutilizacao.inutilizacao_id)).filter(
-                NFeInutilizacao.cliente_id == cliente_id,
-                NFeInutilizacao.status == 'PROCESSANDO'
-            ).scalar()
-        }
-        
-        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
-        
-        db.close()
-        
-        return render_template('admin/nfes/listar_inutilizacoes.html',
-                             inutilizacoes=inutilizacoes,
-                             cliente=cliente,
-                             cliente_id=cliente_id,
-                             stats=stats)
-                             
-    except Exception as e:
-        print(f"[ERRO] Erro ao listar inutilizações: {e}")
-        import traceback
-        traceback.print_exc()
-        flash(f'Erro ao listar: {str(e)}', 'danger')
-        return redirect(url_for('nfe.list_nfes'))
-
-
-@nfe_bp.route('/inutilizacao/<int:inutilizacao_id>/detalhes', methods=['GET'])
-@login_required
-@viewer_or_higher_required()
-def detalhes_inutilizacao(inutilizacao_id):
-    """Retorna detalhes de uma inutilização em JSON"""
-    try:
-        db = next(get_db())
-        
-        inut = db.query(NFeInutilizacao).options(
-            joinedload(NFeInutilizacao.created_by_user)
-        ).filter_by(
-            inutilizacao_id=inutilizacao_id
-        ).first()
-        
-        if not inut:
-            db.close()
-            return jsonify({'success': False, 'message': 'Inutilização não encontrada'}), 404
-        
-        # Verificar permissões
-        accessible_clients = get_accessible_client_ids(db)
-        if inut.cliente_id not in accessible_clients:
-            db.close()
-            return jsonify({'success': False, 'message': 'Sem permissão'}), 403
-        
-        # Montar resposta
-        data = {
-            'success': True,
-            'inutilizacao': {
-                'inutilizacao_id': inut.inutilizacao_id,
-                'modelo': inut.modelo,
-                'serie': inut.serie,
-                'numero_inicial': inut.numero_inicial,
-                'numero_final': inut.numero_final,
-                'ano': inut.ano,
-                'justificativa': inut.justificativa,
-                'status': inut.status,
-                'protocolo': inut.protocolo,
-                'chave_inutilizacao': inut.chave_inutilizacao,
-                'codigo_status': inut.codigo_status,
-                'mensagem_sefaz': inut.mensagem_sefaz,
-                'data_criacao': inut.data_criacao.strftime('%d/%m/%Y %H:%M:%S') if inut.data_criacao else None,
-                'created_by_user': inut.created_by_user.username if inut.created_by_user else None
-            }
-        }
-        
-        db.close()
-        return jsonify(data)
-        
-    except Exception as e:
-        print(f"[ERRO] Erro ao buscar detalhes: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-@nfe_bp.route('/inutilizacao/<int:inutilizacao_id>/xml/<tipo>', methods=['GET'])
-@login_required
-@viewer_or_higher_required()
-def download_xml_inutilizacao(inutilizacao_id, tipo):
-    """Baixa XML de pedido ou resposta da inutilização"""
-    try:
-        db = next(get_db())
-        
-        inut = db.query(NFeInutilizacao).filter_by(
-            inutilizacao_id=inutilizacao_id
-        ).first()
-        
-        if not inut:
-            db.close()
-            flash('Inutilização não encontrada', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        # Verificar permissões
-        accessible_clients = get_accessible_client_ids(db)
-        if inut.cliente_id not in accessible_clients:
-            db.close()
-            flash('Sem permissão para acessar', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        # Selecionar XML
-        if tipo == 'pedido':
-            xml_content = inut.xml_pedido
-            filename = f'inut_pedido_{inut.inutilizacao_id}.xml'
-        elif tipo == 'resposta':
-            xml_content = inut.xml_resposta
-            filename = f'inut_resposta_{inut.inutilizacao_id}.xml'
-        else:
-            db.close()
-            flash('Tipo de XML inválido', 'danger')
-            return redirect(url_for('nfe.list_nfes'))
-        
-        if not xml_content:
-            db.close()
-            flash(f'XML de {tipo} não disponível', 'warning')
-            return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=inut.cliente_id))
-        
-        db.close()
-        
-        # Retornar XML
-        from flask import Response
-        return Response(
-            xml_content,
-            mimetype='application/xml',
-            headers={
-                'Content-Disposition': f'attachment; filename={filename}'
-            }
-        )
-        
-    except Exception as e:
-        print(f"[ERRO] Erro ao baixar XML: {e}")
-        import traceback
-        traceback.print_exc()
-        flash(f'Erro ao baixar XML: {str(e)}', 'danger')
-        return redirect(url_for('nfe.list_nfes'))
-
-

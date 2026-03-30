@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas NFS-e{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">📋 Minhas NFS-e</h1>
+                    <div class="page-subtitle">
+                        Notas Fiscais de Serviço emitidas
+                    </div>
+                </div>
+                <div>
+                    <a href="{{ url_for('nfse.emitir_form') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Nova NFS-e
+                    </a>
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Número NFS-e</label>
+                    <input type="text" class="form-control" name="numero" placeholder="Número">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tomador</label>
+                    <input type="text" class="form-control" name="tomador" placeholder="Nome ou CPF/CNPJ">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Inicial</label>
+                    <input type="date" class="form-control" name="data_inicio">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data Final</label>
+                    <input type="date" class="form-control" name="data_fim">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" name="status">
+                        <option value="">Todos</option>
+                        <option value="1">Autorizada</option>
+                        <option value="2">Aguardando</option>
+                        <option value="3">Cancelada</option>
+                        <option value="4">Rejeitada</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de NFS-e -->
+    <div class="card">
+        <div class="card-body">
+            {% if nfses and nfses|length > 0 %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nº NFS-e</th>
+                            <th>Nº RPS</th>
+                            <th>Data Emissão</th>
+                            <th>Tomador</th>
+                            <th>Valor Serviços</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for nfse in nfses %}
+                        <tr>
+                            <td>
+                                {% if nfse.numero_nfse %}
+                                    <strong>{{ nfse.numero_nfse }}</strong>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ nfse.numero_rps }}/{{ nfse.serie_rps }}</td>
+                            <td>{{ nfse.data_emissao.strftime('%d/%m/%Y') if nfse.data_emissao else '-' }}</td>
+                            <td>{{ nfse.tomador_razao_social or nfse.tomador_nome or '-' }}</td>
+                            <td>R$ {{ "%.2f"|format(nfse.valor_servicos or 0) }}</td>
+                            <td>
+                                {% if nfse.status == '0' %}
+                                    <span class="badge bg-secondary">Pendente</span>
+                                {% elif nfse.status == '1' %}
+                                    <span class="badge bg-success">Autorizada</span>
+                                {% elif nfse.status == '2' %}
+                                    <span class="badge bg-warning">Aguardando Processamento</span>
+                                {% elif nfse.status == '3' %}
+                                    <span class="badge bg-danger">Cancelada</span>
+                                {% elif nfse.status == '4' %}
+                                    <span class="badge bg-dark">Rejeitada</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ nfse.status or 'N/D' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('nfse.visualizar', nfse_id=nfse.id) }}" 
+                                       class="btn btn-outline-primary" title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('nfse.download_xml', nfse_id=nfse.id) }}" 
+                                       class="btn btn-outline-secondary" title="Download XML">
+                                        <i class="fas fa-file-code"></i>
+                                    </a>
+                                    {% if nfse.status == '1' %}
+                                    <a href="{{ url_for('nfse.cancelar', nfse_id=nfse.id) }}" 
+                                       class="btn btn-outline-danger" title="Cancelar">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if nfse.protocolo and nfse.status == '2' %}
+                                    <a href="{{ url_for('nfse.consultar_status', protocolo=nfse.protocolo) }}" 
+                                       class="btn btn-outline-info" title="Consultar Status">
+                                        <i class="fas fa-sync"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-file-invoice fa-4x text-muted mb-3"></i>
+                <h5 class="text-muted">Nenhuma NFS-e encontrada</h5>
+                <p class="text-muted">Clique em "Nova NFS-e" para emitir sua primeira nota de serviço.</p>
+                <a href="{{ url_for('nfse.emitir_form') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Emitir NFS-e
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

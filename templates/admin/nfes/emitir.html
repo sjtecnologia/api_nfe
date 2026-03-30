@@ -275,7 +275,7 @@ input[readonly] {
                         <div class="form-group">
                             <label for="serie">Série *</label>
                             <input type="number" class="form-control" name="serie" id="serie" 
-                                   value="1" min="1" max="999" required onchange="buscarProximoNumero()">
+                                   value="{{ ultima_serie | default(1) }}" min="1" max="999" required onchange="buscarProximoNumero()">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -1907,11 +1907,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             const aliquotaIcmsInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
             
             // PIS
-            const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
+            const cstPisInput = document.querySelector(`select[name="cst_pis_${itemId}"]`);
             const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
             
             // COFINS
-            const cstCofinsInput = document.querySelector(`input[name="cst_cofins_${itemId}"]`);
+            const cstCofinsInput = document.querySelector(`select[name="cst_cofins_${itemId}"]`);
             const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
             
             // IPI
@@ -1930,11 +1930,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (aliquotaIcmsInput) aliquotaIcmsInput.value = '0.00';
             
             // Limpar PIS
-            if (cstPisInput) cstPisInput.value = '';
+            if (cstPisInput) { cstPisInput.value = ''; $(cstPisInput).trigger('change'); }
             if (aliquotaPisInput) aliquotaPisInput.value = '0.00';
             
             // Limpar COFINS
-            if (cstCofinsInput) cstCofinsInput.value = '';
+            if (cstCofinsInput) { cstCofinsInput.value = ''; $(cstCofinsInput).trigger('change'); }
             if (aliquotaCofinsInput) aliquotaCofinsInput.value = '0.00';
             
             // Limpar IPI
@@ -1985,6 +1985,7 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (result.regra.cst_pis && cstPisInput) {
                 console.log('Aplicando CST PIS:', result.regra.cst_pis);
                 cstPisInput.value = result.regra.cst_pis;
+                $(cstPisInput).trigger('change');
             }
             if (result.regra.aliquota_pis && aliquotaPisInput) {
                 console.log('Aplicando alíquota PIS:', result.regra.aliquota_pis);
@@ -1995,6 +1996,7 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (result.regra.cst_cofins && cstCofinsInput) {
                 console.log('Aplicando CST COFINS:', result.regra.cst_cofins);
                 cstCofinsInput.value = result.regra.cst_cofins;
+                $(cstCofinsInput).trigger('change');
             }
             if (result.regra.aliquota_cofins && aliquotaCofinsInput) {
                 console.log('Aplicando alíquota COFINS:', result.regra.aliquota_cofins);
@@ -2164,7 +2166,7 @@ function calcularTotalGeral() {
         currency: 'BRL'
     });
     
-    // Atribuir antes de chamar recalcularTotais para que o valor seja usado corretamente
+    // IMPORTANTE: Atualizar variável global ANTES de chamar recalcularTotais()
     totalGeral = total;
     
     // Calcular total da NFe considerando frete, seguro e desconto
@@ -2205,15 +2207,16 @@ function recalcularTotais() {
     
     const totalNFe = totalProdutos + vFrete + vSeg - vDesc;
     
-    // Atualizar valor do pagamento com o total final
+    // Atualizar valor do pagamento com o total final - SEMPRE, mesmo que seja 0
     const campoPagamento = document.getElementById('valorPagamento');
-    if (campoPagamento && totalNFe > 0) {
-        // Remover os event listeners temporariamente para evitar formatação incorreta
+    if (campoPagamento) {
         const valorFormatado = totalNFe.toFixed(2);
-        campoPagamento.value = valorFormatado;
+        // Usar formatação brasileira para exibição (vírgula como decimal)
+        const valorBR = valorFormatado.replace('.', ',');
+        campoPagamento.value = valorBR;
         campoPagamento.setAttribute('data-valor-real', valorFormatado);
         
-        console.log(`💳 Valor do Pagamento atualizado: R$ ${valorFormatado}`);
+        console.log(`💳 Valor do Pagamento atualizado: R$ ${valorBR} (valor real: ${valorFormatado})`);
     }
     
     console.log(`💰 Totais: Produtos=${totalProdutos.toFixed(2)} + Frete=${vFrete.toFixed(2)} + Seguro=${vSeg.toFixed(2)} - Desconto=${vDesc.toFixed(2)} = Total NFe=${totalNFe.toFixed(2)}`);

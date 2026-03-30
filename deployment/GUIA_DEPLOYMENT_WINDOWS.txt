@@ -1,0 +1,530 @@
+============================================================================
+GUIA COMPLETO DE DEPLOYMENT - Windows Server 192.168.0.52:8080
+Sistema: EmiteMax v2.0 - Implementação CRT=3 (Lucro Real/Presumido)
+Data: 11/12/2025
+============================================================================
+
+Este guia contém o passo a passo completo para atualizar o sistema no
+servidor Windows com a nova funcionalidade de IBS/CBS para Lucro Real
+e Lucro Presumido.
+
+============================================================================
+PARTE 1: PREPARAÇÃO (ANTES DE ATUALIZAR)
+============================================================================
+
+1.1 VERIFICAR VERSÃO ATUAL DO SISTEMA
+--------------------------------------
+- Acessar: http://192.168.0.52:8080
+- Login: admin
+- Verificar se sistema está funcionando normalmente
+- Anotar versão atual (rodapé da página)
+
+1.2 CRIAR BACKUP COMPLETO
+--------------------------
+A) Backup do Banco de Dados:
+   cd C:\Program Files\PostgreSQL\16\bin
+   pg_dump -U postgres -d sjtnfe > C:\backups\sjtnfe_pre_crt3_%date%.sql
+   
+   Digite a senha quando solicitado
+
+B) Backup dos Arquivos:
+   - Copiar pasta completa do sistema para backup:
+   xcopy C:\inetpub\wwwroot\api_nfe C:\backups\api_nfe_pre_crt3 /E /I /H /Y
+
+1.3 PARAR O SERVIÇO
+-------------------
+Abrir CMD como Administrador:
+   net stop "EmiteMax API"
+
+Verificar se parou:
+   sc query "EmiteMax API"
+
+Deve mostrar: STATE: STOPPED
+
+============================================================================
+PARTE 2: TRANSFERÊNCIA DOS ARQUIVOS
+============================================================================
+
+2.1 ARQUIVOS A TRANSFERIR
+--------------------------
+Do seu computador local (Mac) para o servidor Windows:
+
+COPIAR ESTES ARQUIVOS:
+/Users/renato/Documents/Developement/api_nfe/services/ibs_cbs_service.py
+    → C:\inetpub\wwwroot\api_nfe\services\ibs_cbs_service.py
+
+/Users/renato/Documents/Developement/api_nfe/database/models.py
+    → C:\inetpub\wwwroot\api_nfe\database\models.py
+
+/Users/renato/Documents/Developement/api_nfe/routes/admin_routes.py
+    → C:\inetpub\wwwroot\api_nfe\routes\admin_routes.py
+
+/Users/renato/Documents/Developement/api_nfe/templates/admin/nfes/emitir.html
+    → C:\inetpub\wwwroot\api_nfe\templates\admin\nfes\emitir.html
+
+/Users/renato/Documents/Developement/api_nfe/deployment/atualizacao_crt3.sql
+    → C:\inetpub\wwwroot\api_nfe\deployment\atualizacao_crt3.sql
+
+/Users/renato/Documents/Developement/api_nfe/deployment/atualizar_banco_windows.bat
+    → C:\inetpub\wwwroot\api_nfe\deployment\atualizar_banco_windows.bat
+
+2.2 MÉTODOS DE TRANSFERÊNCIA
+-----------------------------
+
+OPÇÃO A - WinSCP (Interface Gráfica):
+1. Abrir WinSCP
+2. Conectar ao servidor: 192.168.0.52
+3. Navegar até: C:\inetpub\wwwroot\api_nfe\
+4. Arrastar e soltar os arquivos nas pastas correspondentes
+
+OPÇÃO B - Copiar diretamente no servidor:
+1. Acessar servidor via Remote Desktop
+2. Copiar arquivos via pendrive ou pasta compartilhada
+3. Colar nas pastas correspondentes
+
+OPÇÃO C - FTP:
+1. Usar cliente FTP (FileZilla)
+2. Conectar ao servidor
+3. Transferir arquivos
+
+2.3 VERIFICAR ESTRUTURA DE PASTAS
+----------------------------------
+Após copiar, verificar se existe:
+
+C:\inetpub\wwwroot\api_nfe\
+├── services\
+│   └── ibs_cbs_service.py ✓ NOVO
+├── database\
+│   └── models.py ✓ SUBSTITUÍDO
+├── routes\
+│   └── admin_routes.py ✓ SUBSTITUÍDO
+├── templates\
+│   └── admin\
+│       └── nfes\
+│           └── emitir.html ✓ SUBSTITUÍDO
+└── deployment\
+    ├── atualizacao_crt3.sql ✓ NOVO
+    └── atualizar_banco_windows.bat ✓ NOVO
+
+============================================================================
+PARTE 3: ATUALIZAÇÃO DO BANCO DE DADOS
+============================================================================
+
+3.1 EXECUTAR SCRIPT DE ATUALIZAÇÃO
+-----------------------------------
+No servidor Windows:
+
+1. Abrir Windows Explorer
+2. Navegar até: C:\inetpub\wwwroot\api_nfe\deployment\
+3. Clicar 2x em: atualizar_banco_windows.bat
+4. Digitar senha do PostgreSQL quando solicitado: [sua_senha]
+5. Aguardar execução completa
+
+3.2 MENSAGENS ESPERADAS
+------------------------
+Você deve ver estas mensagens:
+
+============================================================
+  ATUALIZACAO BANCO DE DADOS - CRT=3
+  EmiteMax v2.0
+============================================================
+
+[INFO] Conectando ao banco de dados sjtnfe...
+[INFO] Criando backup de segurança...
+[OK] Backup criado: backup_sjtnfe_20251211_1430.sql
+[INFO] Executando script de atualizacao...
+
+NOTICE:  ✅ Campo crt adicionado com sucesso!
+NOTICE:  ✅ Tabela classificacoes_ibs_cbs criada!
+NOTICE:  ✅ 3 classificações IBS/CBS inseridas!
+NOTICE:  ✅ Tabela autorizacoes_xml_nfe criada!
+NOTICE:  ✅ Campos IBS/CBS adicionados em nfe_emitidas!
+NOTICE:  ✅ Campo classificacao_ibs_cbs_id adicionado em produtos!
+NOTICE:  ✅ Todas as verificações foram bem-sucedidas!
+
+============================================================
+  ATUALIZACAO CONCLUIDA COM SUCESSO!
+============================================================
+
+3.3 EM CASO DE ERRO
+--------------------
+Se aparecer algum erro:
+
+1. NÃO feche a janela - tire print da tela
+2. Anote a mensagem de erro completa
+3. Verifique se PostgreSQL está rodando:
+   sc query postgresql-x64-16
+4. Se necessário, restaure o backup:
+   psql -U postgres -d sjtnfe < C:\backups\sjtnfe_pre_crt3_*.sql
+
+============================================================================
+PARTE 4: VERIFICAÇÃO DO BANCO DE DADOS
+============================================================================
+
+4.1 ABRIR pgAdmin
+-----------------
+1. Abrir pgAdmin 4
+2. Conectar ao servidor local
+3. Expandir: Databases → sjtnfe → Schemas → public → Tables
+
+4.2 VERIFICAR TABELAS CRIADAS
+------------------------------
+Deve aparecer:
+✓ classificacoes_ibs_cbs (nova)
+✓ autorizacoes_xml_nfe (nova)
+
+4.3 VERIFICAR DADOS INSERIDOS
+------------------------------
+Clicar com botão direito em "classificacoes_ibs_cbs" → View/Edit Data → All Rows
+
+Deve mostrar 3 linhas:
+ID  | CÓDIGO | DESCRIÇÃO                               | ALIQ_IBS_UF | ALIQ_IBS_MUN | ALIQ_CBS
+----+--------+-----------------------------------------+-------------+--------------+---------
+1   | 000001 | Medicamentos e produtos de higiene...   | 0.10        | 0.00         | 0.90
+2   | 000002 | Produtos alimentícios básicos           | 0.50        | 0.00         | 1.50
+3   | 000003 | Outros produtos                         | 1.00        | 0.00         | 2.50
+
+4.4 VERIFICAR CAMPOS ADICIONADOS
+---------------------------------
+A) Tabela regimes_tributarios - campo crt:
+   SELECT id, nome, crt FROM regimes_tributarios;
+   
+   Esperado:
+   1 | Simples Nacional | 1
+   2 | Lucro Real       | 3
+   3 | Lucro Presumido  | 3
+
+B) Tabela nfe_emitidas - campos IBS/CBS:
+   \d nfe_emitidas
+   
+   Deve mostrar:
+   total_ibs           | numeric(15,2)
+   total_cbs           | numeric(15,2)
+   total_ibs_bc        | numeric(15,2)
+   valor_icms_st_retido| numeric(15,2)
+
+C) Tabela produtos - campo classificacao:
+   \d produtos
+   
+   Deve mostrar:
+   classificacao_ibs_cbs_id | integer
+
+============================================================================
+PARTE 5: REINICIAR O SISTEMA
+============================================================================
+
+5.1 INICIAR SERVIÇO
+-------------------
+Abrir CMD como Administrador:
+   net start "EmiteMax API"
+
+Verificar se iniciou:
+   sc query "EmiteMax API"
+
+Deve mostrar: STATE: RUNNING
+
+5.2 VERIFICAR LOGS
+------------------
+Abrir arquivo de log:
+   notepad C:\inetpub\wwwroot\api_nfe\logs\app.log
+
+Últimas linhas devem mostrar:
+   * Running on http://0.0.0.0:8080
+   * Restarting with stat
+   * Debugger is active!
+
+5.3 TESTAR ACESSO
+-----------------
+Abrir navegador no servidor e acessar:
+   http://localhost:8080
+
+Deve carregar normalmente a página de login.
+
+============================================================================
+PARTE 6: TESTES FUNCIONAIS
+============================================================================
+
+6.1 TESTE 1 - API DE CLASSIFICAÇÕES
+------------------------------------
+Abrir navegador e acessar:
+   http://192.168.0.52:8080/admin/api/classificacoes-ibs-cbs
+
+Resposta esperada (JSON):
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "codigo": "000001",
+      "descricao": "Medicamentos e produtos de higiene pessoal",
+      "aliquota_ibs_uf": 0.1,
+      "aliquota_ibs_mun": 0.0,
+      "aliquota_cbs": 0.9
+    },
+    ...
+  ]
+}
+
+6.2 TESTE 2 - SIMPLES NACIONAL (NÃO DEVE MUDAR)
+------------------------------------------------
+1. Fazer login no sistema
+2. Ir para: Emissão de NFe
+3. Selecionar cliente com regime "Simples Nacional"
+4. Pressionar F12 (abrir Console do navegador)
+5. Verificar console - deve mostrar:
+   [RegimeTributario] Cliente ID: X
+   [RegimeTributario] Regime: Simples Nacional (CRT=1)
+   [RegimeTributario] Não requer IBS/CBS - campos ocultados
+
+6. Verificar que NÃO aparece:
+   - Seção "Classificação IBS/CBS"
+   - Seção "ICMS ST Retido (ICMS60)"
+   - Seção "Autorizações de Download XML"
+
+7. Preencher NFe normalmente
+8. Confirmar que emissão funciona como antes
+
+6.3 TESTE 3 - LUCRO REAL (NOVOS CAMPOS)
+----------------------------------------
+1. Ir para: Cadastros → Clientes
+2. Editar um cliente
+3. Trocar "Regime Tributário" para "Lucro Real"
+4. Salvar
+
+5. Ir para: Emissão de NFe
+6. Selecionar este cliente
+7. Abrir Console (F12)
+8. Verificar mensagens:
+   [RegimeTributario] Cliente ID: X
+   [RegimeTributario] Regime: Lucro Real (CRT=3)
+   [RegimeTributario] Requer IBS/CBS - exibindo campos
+
+9. Verificar que APARECE:
+   ✓ Seção "Classificação IBS/CBS" (OBRIGATÓRIA)
+   ✓ Seção "ICMS ST Retido (ICMS60)" (OPCIONAL)
+   ✓ Seção "Autorizações de Download XML" (OPCIONAL)
+
+10. Testar select de classificação:
+    - Clicar no select "Classificação IBS/CBS"
+    - Deve listar 3 opções
+    - Selecionar "000001 - Medicamentos..."
+    - Verificar que campos são preenchidos automaticamente:
+      * Alíquota IBS UF: 0.10%
+      * Alíquota IBS Municipal: 0.00%
+      * Alíquota CBS: 0.90%
+
+11. Testar ICMS60 (opcional):
+    - Preencher "Valor BC ST Retida" com: 1000.00
+    - Preencher "% Substituição Tributária": 18.00
+    - Preencher "Valor ICMS Substituto": 180.00
+    - Preencher "Valor ICMS ST Retido": 180.00
+
+12. Testar Autorizações (opcional):
+    - Clicar "Adicionar Autorização"
+    - Digitar CPF: 123.456.789-00
+    - Clicar novamente "Adicionar Autorização"
+    - Digitar CNPJ: 12.345.678/0001-00
+    - Testar botão "Remover" da segunda autorização
+
+6.4 TESTE 4 - VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS
+-----------------------------------------------
+1. Com cliente Lucro Real selecionado
+2. Adicionar produto à NFe
+3. NÃO selecionar classificação IBS/CBS
+4. Tentar emitir NFe
+5. Sistema deve mostrar erro:
+   "Classificação IBS/CBS é obrigatória para regime Lucro Real/Presumido"
+
+6.5 TESTE 5 - CONSOLE DO NAVEGADOR
+-----------------------------------
+Durante todos os testes, o Console (F12) NÃO deve mostrar:
+❌ Erros JavaScript (linhas vermelhas)
+❌ 404 Not Found
+❌ 500 Internal Server Error
+
+Pode mostrar (normal):
+✓ Mensagens [RegimeTributario]
+✓ Mensagens de debug do sistema
+✓ Warnings de terceiros (jQuery, Bootstrap)
+
+============================================================================
+PARTE 7: SOLUÇÃO DE PROBLEMAS
+============================================================================
+
+PROBLEMA 1: Serviço não inicia
+SINTOMA: net start retorna erro
+SOLUÇÃO:
+1. Verificar log: notepad C:\inetpub\wwwroot\api_nfe\logs\app.log
+2. Erro comum: "ImportError: cannot import name ForeignKeyConstraint"
+   → Verificar se models.py tem na linha 1:
+     from sqlalchemy import [...], ForeignKeyConstraint
+3. Erro comum: "ModuleNotFoundError: No module named 'services.ibs_cbs_service'"
+   → Verificar se arquivo existe: services\ibs_cbs_service.py
+   → Verificar se pasta services tem arquivo __init__.py
+
+PROBLEMA 2: API retorna 404
+SINTOMA: /admin/api/classificacoes-ibs-cbs retorna "Not Found"
+SOLUÇÃO:
+1. Verificar se routes/admin_routes.py foi substituído
+2. Verificar fim do arquivo admin_routes.py:
+   grep -A 5 "classificacoes-ibs-cbs" routes/admin_routes.py
+3. Se não encontrar, copiar novamente o arquivo
+
+PROBLEMA 3: Campos não aparecem
+SINTOMA: Cliente Lucro Real não mostra seções IBS/CBS
+SOLUÇÃO:
+1. Abrir Console (F12) → aba Network
+2. Recarregar página
+3. Procurar chamada: regime-tributario/<id>
+4. Ver resposta - deve ser: {"success": true, "crt": 3, "requer_ibs_cbs": true}
+5. Se retornar crt=1, atualizar banco:
+   UPDATE regimes_tributarios SET crt = 3 WHERE id IN (2,3);
+
+PROBLEMA 4: Select vazio
+SINTOMA: Select "Classificação IBS/CBS" não tem opções
+SOLUÇÃO:
+1. Testar API: http://192.168.0.52:8080/admin/api/classificacoes-ibs-cbs
+2. Se retornar vazio, executar:
+   psql -U postgres -d sjtnfe
+   SELECT * FROM classificacoes_ibs_cbs;
+3. Se tabela vazia, inserir manualmente:
+   INSERT INTO classificacoes_ibs_cbs (codigo, descricao, aliquota_ibs_uf, aliquota_ibs_mun, aliquota_cbs, ativo)
+   VALUES 
+   ('000001', 'Medicamentos e produtos de higiene pessoal', 0.10, 0.00, 0.90, true),
+   ('000002', 'Produtos alimentícios básicos', 0.50, 0.00, 1.50, true),
+   ('000003', 'Outros produtos', 1.00, 0.00, 2.50, true);
+
+PROBLEMA 5: Erro JavaScript
+SINTOMA: Console mostra "verificarRegimeTributario is not defined"
+SOLUÇÃO:
+1. Verificar se templates/admin/nfes/emitir.html foi substituído
+2. Abrir arquivo e procurar: "async function verificarRegimeTributario"
+3. Deve estar entre as tags <script>...</script>
+4. Se não encontrar, copiar novamente o arquivo
+
+PROBLEMA 6: Backup do banco não funciona
+SINTOMA: atualizar_banco_windows.bat diz "pg_dump não reconhecido"
+SOLUÇÃO:
+1. Editar arquivo: atualizar_banco_windows.bat
+2. Procurar linha: "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe"
+3. Ajustar para seu caminho real do PostgreSQL
+4. Exemplos:
+   - PostgreSQL 15: C:\Program Files\PostgreSQL\15\bin\pg_dump.exe
+   - PostgreSQL 14: C:\Program Files\PostgreSQL\14\bin\pg_dump.exe
+
+============================================================================
+PARTE 8: ROLLBACK (SE NECESSÁRIO)
+============================================================================
+
+Se algo der errado e precisar voltar atrás:
+
+8.1 RESTAURAR BANCO DE DADOS
+-----------------------------
+cd C:\Program Files\PostgreSQL\16\bin
+psql -U postgres -d sjtnfe < C:\backups\sjtnfe_pre_crt3_*.sql
+
+8.2 RESTAURAR ARQUIVOS
+-----------------------
+xcopy C:\backups\api_nfe_pre_crt3 C:\inetpub\wwwroot\api_nfe /E /I /H /Y
+
+8.3 REINICIAR SERVIÇO
+----------------------
+net stop "EmiteMax API"
+net start "EmiteMax API"
+
+============================================================================
+PARTE 9: PRÓXIMOS PASSOS (APÓS DEPLOYMENT)
+============================================================================
+
+Após confirmar que tudo está funcionando:
+
+9.1 INTEGRAÇÃO XML (PRÓXIMA FASE)
+----------------------------------
+- Modificar routes/nfe_routes.py
+- Chamar funções de services/ibs_cbs_service.py
+- Gerar tags XML: <IBSCBS>, <ICMS60>, <autXML>
+- Incluir totais no XML: <IBSCBSTot>
+
+9.2 DASHBOARD
+-------------
+- Adicionar KPIs de IBS e CBS
+- Gráficos de totais mensais
+- Comparativo Simples x Lucro Real
+
+9.3 RELATÓRIOS
+--------------
+- Relatório de NFes com IBS/CBS
+- Apuração mensal de IBS/CBS
+- Exportação para contabilidade
+
+9.4 SEFAZ HOMOLOGAÇÃO
+---------------------
+- Testar emissão em homologação
+- Validar XML gerado
+- Consultar NFe autorizada
+- Verificar DANFE
+
+============================================================================
+PARTE 10: CHECKLIST FINAL
+============================================================================
+
+ANTES DE CONSIDERAR DEPLOYMENT COMPLETO:
+
+BANCO DE DADOS:
+[ ] Script SQL executado sem erros
+[ ] Backup criado automaticamente
+[ ] 3 classificações IBS/CBS inseridas
+[ ] Campo crt existe em regimes_tributarios
+[ ] Tabela autorizacoes_xml_nfe criada
+[ ] Campos IBS/CBS existem em nfe_emitidas
+[ ] Queries de verificação executadas
+
+ARQUIVOS:
+[ ] services/ibs_cbs_service.py copiado
+[ ] database/models.py substituído
+[ ] routes/admin_routes.py substituído
+[ ] templates/admin/nfes/emitir.html substituído
+
+SERVIÇO:
+[ ] EmiteMax reiniciado com sucesso
+[ ] Sem erros no log app.log
+[ ] Site acessível em http://192.168.0.52:8080
+
+TESTES FUNCIONAIS:
+[ ] API classificacoes-ibs-cbs retorna JSON
+[ ] API regime-tributario retorna CRT correto
+[ ] Simples Nacional: campos NÃO aparecem
+[ ] Lucro Real: campos APARECEM
+[ ] Select carrega 3 classificações
+[ ] Alíquotas preenchem automaticamente
+[ ] Validação de campo obrigatório funciona
+[ ] Console sem erros JavaScript
+[ ] Autorizações: adicionar/remover funciona
+
+DOCUMENTAÇÃO:
+[ ] Este guia salvo no servidor
+[ ] Backups catalogados
+[ ] Equipe informada sobre atualização
+
+============================================================================
+SUPORTE E CONTATOS
+============================================================================
+
+Em caso de dúvidas ou problemas não cobertos neste guia:
+
+1. Consultar documentação técnica:
+   - IMPLEMENTACAO_CRT3_LUCRO_REAL_PRESUMIDO.md
+   - FRONTEND_CRT3_IMPLEMENTADO.md
+
+2. Verificar logs do sistema:
+   - App: C:\inetpub\wwwroot\api_nfe\logs\app.log
+   - PostgreSQL: C:\Program Files\PostgreSQL\16\data\log\
+
+3. Manter backups acessíveis por pelo menos 30 dias
+
+============================================================================
+FIM DO GUIA DE DEPLOYMENT
+Sistema: EmiteMax v2.0 - CRT=3 IBS/CBS
+Versão: 1.0
+Data: 11/12/2025
+============================================================================

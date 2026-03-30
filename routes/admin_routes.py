@@ -65,6 +65,7 @@ def editar_produto(produto_id):
                 'cfop_id': get_or_none('cfop_id', int),
                 'cest': request.form.get('cest') or None,
                 'csosn_id': get_or_none('csosn_id', int),
+                'ativo': request.form.get('ativo') == 'on',  # Checkbox: 'on' se marcado, None se desmarcado
             }
             db.execute(text("""
                 UPDATE produtos
@@ -75,15 +76,18 @@ def editar_produto(produto_id):
                     ncm_id=:ncm_id,
                     cfop_id=:cfop_id,
                     cest=:cest,
-                    csosn_id=:csosn_id
+                    csosn_id=:csosn_id,
+                    ativo=:ativo
                 WHERE produto_id=:produto_id
             """), data)
             db.commit()
-            flash('Produto atualizado com sucesso!', 'success')
+            flash('Produto atualizado', 'success')
             # Buscar cliente_id do produto atualizado
             row = db.execute(text("SELECT cliente_id FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
             cliente_id = row[0] if row else None
-            return redirect(url_for('admin.list_produtos', cliente_id=cliente_id) if cliente_id else url_for('admin.list_produtos'))
+            if cliente_id:
+                return redirect(url_for('admin.list_produtos', cliente_id=cliente_id))
+            return redirect(url_for('admin.list_produtos'))
         else:
             # Exibe form de edição
             row = db.execute(text("SELECT * FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
@@ -3407,22 +3411,10 @@ def list_produtos():
     db = _get_db()
     try:
         from flask import session
-        # Prioridade: query string > sessão
-        cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
-        if cliente_id:
-            try:
-                cliente_id = int(cliente_id)
-            except (ValueError, TypeError):
-                cliente_id = None
+        cliente_id = session.get('current_client_id')
         if not cliente_id:
             flash('Nenhum cliente selecionado.', 'error')
-            return render_template('admin/produtos/list.html', produtos=[], cliente_nome='', cliente_id=None)
-        
-        # Atualiza sessão com o cliente_id recebido
-        session['current_client_id'] = cliente_id
-
-        cliente_nome_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
-        cliente_nome = cliente_nome_row.razao_social if cliente_nome_row else ''
+            return render_template('admin/produtos/list.html', produtos=[])
         
         # Capturar filtros
         filtro_codigo = request.args.get('codigo', '').strip()
@@ -3464,11 +3456,11 @@ def list_produtos():
             'produto_id','codigo_interno','descricao','unidade_comercial',
             'preco_unitario_padrao','ncm_id','cfop_id','ativo','ncm_codigo'
         ]) for r in rows]
-        return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id, cliente_nome=cliente_nome)
+        return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id)
     except Exception as e:
         print(f"[X] Erro list_produtos: {e}")
         flash('Erro ao carregar produtos', 'error')
-        return render_template('admin/produtos/list.html', produtos=[], cliente_nome='', cliente_id=None)
+        return render_template('admin/produtos/list.html', produtos=[])
     finally:
         db.close()
 
@@ -3703,7 +3695,7 @@ def create_produto():
     try:
         # Busca listas para selects (NCM, CFOP, etc)
         ncm_lista = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms")).fetchall()
-        cfop_lista = db.execute(text("SELECT cfop_id, cfop AS codigo, descricao FROM cfops")).fetchall()
+        cfop_lista = db.execute(text("SELECT cfop_id, cfop ,descricao FROM cfops")).fetchall()
         origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria")).fetchall()
         csts_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms")).fetchall()
         csosns_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms")).fetchall()
@@ -3776,7 +3768,8 @@ def store_produto():
                 :ncm_id, :cfop_id, :origem_mercadoria, :cest, :cst_id, :csosn_id, :created_by_user_id, :ativo)
         """), data)
         db.commit()
-        flash('Produto criado com sucesso!', 'success')
+        flash('Produto criado', 'success')
+        # Redireciona para edição do cliente, aba produtos
         return redirect(url_for('admin.list_produtos', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
@@ -5060,7 +5053,59 @@ def api_sugestao_tributaria():
                 resultado_final['ncm_descricao'] = ncm['descricao']
                 print(f"[IA] [OK] NCM encontrado: {ncm['codigo']} (ID: {ncm['ncm_id']})")
             else:
-                print(f"[IA] [!] NCM {ncm_codigo} não encontrado no banco")
+                # NCM não encontrado - cadastra automaticamente COM VALIDAÇÃO
+                print(f"[IA] [!] NCM {ncm_codigo} não encontrado no banco - validando antes de cadastrar...")
+                
+                # ✅ CORREÇÃO 4.2: Validação de NCM antes de auto-cadastrar
+                # Verifica se NCM tem formato válido (8 dígitos numéricos)
+                if not ncm_codigo.isdigit() or len(ncm_codigo) != 8:
+                    print(f"[IA] [X] NCM {ncm_codigo} tem formato inválido (deve ter 8 dígitos)")
+                    # Não retorna erro - apenas não cadastra
+                else:
+                    # ⚠️ AVISO: Auto-cadastro sem validação SEFAZ
+                    # TODO: Implementar validação via API SEFAZ/Siscomex quando disponível
+                    print(f"[IA] [⚠️] AVISO: NCM {ncm_codigo} será cadastrado SEM validação SEFAZ")
+                    print(f"[IA] [⚠️] Recomenda-se validar manualmente em: https://siscomex.gov.br/")
+                    
+                    try:
+                        # Formata código com pontos para visualização (ex: 8471.60.00)
+                        ncm_formatado = ncm_codigo
+                        if len(ncm_codigo) >= 8:
+                            ncm_formatado = f"{ncm_codigo[:4]}.{ncm_codigo[4:6]}.{ncm_codigo[6:8]}"
+                        elif len(ncm_codigo) >= 6:
+                            ncm_formatado = f"{ncm_codigo[:4]}.{ncm_codigo[4:6]}"
+                        
+                        # Cria descrição base (será melhorada se houver explicação da IA)
+                        descricao_ncm = f"NCM {ncm_formatado} (⚠️ VALIDAR MANUALMENTE)"
+                        if classificacao.get('explicacao'):
+                            # Extrai primeira linha da explicação se disponível
+                            primeira_linha = classificacao['explicacao'].split('\n')[0][:200]
+                            descricao_ncm = f"{primeira_linha} (⚠️ VALIDAR)"
+                        
+                        # Insere novo NCM com flag de validação pendente
+                        resultado_insert = db.execute(text("""
+                            INSERT INTO ncms (codigo, descricao, tipo, data_atualizacao, fonte_atualizacao)
+                            VALUES (:codigo, :descricao, 'analitico', NOW(), 'ia_automatico')
+                            RETURNING ncm_id, codigo, descricao
+                        """), {
+                            'codigo': ncm_codigo,
+                            'descricao': descricao_ncm
+                        })
+                        db.commit()
+                        
+                        novo_ncm = resultado_insert.fetchone()
+                        if novo_ncm:
+                            ncm = dict(novo_ncm._mapping)
+                            resultado_final['ids']['ncm_id'] = ncm['ncm_id']
+                            resultado_final['ncm_descricao'] = ncm['descricao']
+                            resultado_final['ncm_auto_cadastrado'] = True  # Flag para indicar cadastro automático
+                            print(f"[IA] [✅] NCM cadastrado automaticamente: {ncm['codigo']} (ID: {ncm['ncm_id']})")
+                        else:
+                            print(f"[IA] [X] Falha ao cadastrar NCM - RETURNING não retornou dados")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[IA] [X] Erro ao cadastrar NCM automaticamente: {e}")
+                        # Não retorna erro - apenas log para não quebrar o fluxo
         
         # Busca CFOP_ID pelo código
         if classificacao.get('cfop'):
@@ -5084,6 +5129,12 @@ def api_sugestao_tributaria():
         # Busca CST_ID pelo código (se aplicável)
         if classificacao.get('cst'):
             cst_codigo = classificacao['cst']
+            
+            # Se vir com 3 dígitos (ex: "000"), converte para 2 (ex: "00")
+            if len(cst_codigo) == 3 and cst_codigo.startswith('0'):
+                cst_codigo = cst_codigo[-2:]  # Pega últimos 2 dígitos
+                print(f"[IA] [?] CST convertido de {classificacao['cst']} para {cst_codigo}")
+            
             cst_row = db.execute(text("""
                 SELECT cst_id, codigo, descricao 
                 FROM cst_icms 
@@ -5096,6 +5147,8 @@ def api_sugestao_tributaria():
                 resultado_final['ids']['cst_id'] = cst['cst_id']
                 resultado_final['cst_descricao'] = cst['descricao']
                 print(f"[IA] [OK] CST encontrado: {cst['codigo']} (ID: {cst['cst_id']})")
+            else:
+                print(f"[IA] [!] CST {cst_codigo} não encontrado no banco")
         
         # Busca CSOSN_ID pelo código (se aplicável)
         if classificacao.get('csosn'):

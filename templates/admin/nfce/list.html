@@ -1,0 +1,202 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Lista de NFC-e{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="fas fa-list"></i> NFC-e Emitidas</h2>
+        </div>
+        <div class="col-md-4 text-right">
+            {% if filtros.cliente_id %}
+                <a href="{{ url_for('nfce.emitir_nfce', cliente_id=filtros.cliente_id) }}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Nova NFC-e
+                </a>
+            {% elif session.current_client_id %}
+                <a href="{{ url_for('nfce.emitir_nfce', cliente_id=session.current_client_id) }}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Nova NFC-e
+                </a>
+            {% else %}
+                <a href="{{ url_for('nfce.emitir_nfce') }}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Nova NFC-e
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="form-inline">
+                <div class="form-group mr-3">
+                    <label class="mr-2">Cliente:</label>
+                    <select name="cliente_id" class="form-control">
+                        <option value="">Todos</option>
+                        {% for cliente in clientes %}
+                        <option value="{{ cliente.cliente_id }}" {% if filtros.cliente_id == cliente.cliente_id %}selected{% endif %}>
+                            {{ cliente.nome_fantasia or cliente.razao_social }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group mr-3">
+                    <label class="mr-2">De:</label>
+                    <input type="date" name="data_inicio" class="form-control" value="{{ filtros.data_inicio or '' }}">
+                </div>
+                
+                <div class="form-group mr-3">
+                    <label class="mr-2">Até:</label>
+                    <input type="date" name="data_fim" class="form-control" value="{{ filtros.data_fim or '' }}">
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter"></i> Filtrar
+                </button>
+                <a href="{{ url_for('nfce.listar_nfce') }}" class="btn btn-secondary ml-2">
+                    <i class="fas fa-times"></i> Limpar
+                </a>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+        <div class="card-body">
+            {% if nfces %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Data Emissão</th>
+                            <th>Cliente</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for nfce in nfces %}
+                        <tr>
+                            <td>
+                                <strong>{{ nfce.numero }}</strong>
+                                <br>
+                                <small class="text-muted">Série: {{ nfce.serie }}</small>
+                            </td>
+                            <td>{{ nfce.data_emissao.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                {% if nfce.cliente %}
+                                {{ nfce.cliente.nome_fantasia or nfce.cliente.razao_social }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong class="text-success">R$ {{ "%.2f"|format(nfce.valor_total or 0) }}</strong>
+                            </td>
+                            <td>
+                                {% if nfce.status == 'Autorizada' %}
+                                <span class="badge badge-success">{{ nfce.status }}</span>
+                                {% elif nfce.status == 'Cancelada' %}
+                                <span class="badge badge-danger">{{ nfce.status }}</span>
+                                {% else %}
+                                <span class="badge badge-warning">{{ nfce.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('nfce.consultar_nfce', nfce_id=nfce.nfe_id) }}" 
+                                       class="btn btn-sm btn-info" title="Consultar">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('nfce.danfce', nfce_id=nfce.nfe_id) }}" 
+                                       class="btn btn-sm btn-primary" title="DANFC-e" target="_blank">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    {% if nfce.status == 'Autorizada' %}
+                                    <button type="button" class="btn btn-sm btn-danger" 
+                                            onclick="cancelarNFCe({{ nfce.nfe_id }})" title="Cancelar">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle"></i> Nenhuma NFC-e encontrada com os filtros aplicados.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cancelamento -->
+<div class="modal fade" id="modalCancelar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cancelar NFC-e</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="formCancelar">
+                    <div class="form-group">
+                        <label>Justificativa (mínimo 15 caracteres)</label>
+                        <textarea class="form-control" name="justificativa" rows="3" required minlength="15"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmarCancelamento()">Confirmar Cancelamento</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let nfceIdCancelar = null;
+
+function cancelarNFCe(nfceId) {
+    nfceIdCancelar = nfceId;
+    $('#modalCancelar').modal('show');
+}
+
+function confirmarCancelamento() {
+    let form = document.getElementById('formCancelar');
+    let justificativa = form.justificativa.value;
+    
+    if (justificativa.length < 15) {
+        alert('A justificativa deve ter pelo menos 15 caracteres');
+        return;
+    }
+    
+    fetch(`/admin/nfce/cancelar/${nfceIdCancelar}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `justificativa=${encodeURIComponent(justificativa)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('NFC-e cancelada com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro: ' + data.erro);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao cancelar NFC-e: ' + error);
+    });
+}
+</script>
+{% endblock %}

@@ -1,4 +1,19 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "css.validate": false,
+    "html.validate.styles": false,
+    "javascript.validate.enable": false,
+    "python.analysis.extraPaths": [],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "none",
+        "reportMissingModuleSource": "none"
+    },
+    "[html]": {
+        "editor.quickSuggestions": {
+            "other": true,
+            "comments": false,
+            "strings": true
+        }
+    }
 }

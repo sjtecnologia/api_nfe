@@ -87,34 +87,22 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     print(f"[SEARCH] VALIDAÇÃO - CNPJ Emitente recebido: '{emitente_data.get('cnpj')}'")
     print(f"[SEARCH] VALIDAÇÃO - Tipo do CNPJ: {type(emitente_data.get('cnpj'))}")
     
-    _is_rural_emit = bool(emitente_data.get('produtor_rural', False))
-    cnpj_emitente = (emitente_data.get('cnpj') or '').strip()
-    cpf_emitente  = (emitente_data.get('cpf')  or '').strip()
+    # [OK] VALIDAÇÕES DO EMITENTE
+    cnpj_emitente = emitente_data.get('cnpj', '').strip()
     print(f"[SEARCH] VALIDAÇÃO - CNPJ após strip: '{cnpj_emitente}'")
-
-    if _is_rural_emit:
-        # Produtor Rural: valida CPF
-        cpf_limpo = re.sub(r'[^0-9]', '', cpf_emitente)
-        if not cpf_limpo:
-            erros.append('CPF do emitente (produtor rural) é obrigatório')
-        elif not validar_cpf(cpf_limpo):
-            erros.append(f'CPF do emitente é inválido: {cpf_emitente}')
-        else:
-            print(f'[OK] CPF do emitente válido: {cpf_limpo}')
+    
+    if not cnpj_emitente:
+        erros.append("CNPJ do emitente é obrigatório")
+    elif not validar_cnpj(cnpj_emitente):
+        erros.append(f"CNPJ do emitente é inválido: {cnpj_emitente}")
     else:
-        # Empresa: valida CNPJ
-        if not cnpj_emitente:
-            erros.append('CNPJ do emitente é obrigatório')
-        elif not validar_cnpj(cnpj_emitente):
-            erros.append(f'CNPJ do emitente é inválido: {cnpj_emitente}')
-        else:
-            print(f'[OK] CNPJ do emitente válido: {cnpj_emitente}')
-
+        print(f"[OK] CNPJ do emitente válido: {cnpj_emitente}")
+    
     if not emitente_data.get('razao_social'):
-        erros.append('Razão social do emitente é obrigatória')
-
-    if not _is_rural_emit and not emitente_data.get('inscricao_estadual'):
-        erros.append('Inscrição estadual do emitente é obrigatória')
+        erros.append("Razão social do emitente é obrigatória")
+    
+    if not emitente_data.get('inscricao_estadual'):
+        erros.append("Inscrição estadual do emitente é obrigatória")
     
     if not emitente_data.get('logradouro'):
         erros.append("Endereço do emitente é obrigatório")
@@ -225,7 +213,9 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     # Valor pagamento opcional - será calculado do total se não fornecido
     if form_data.get('valorPagamento'):
         try:
-            valor_pag = float(form_data.get('valorPagamento'))
+            # Converter vírgula para ponto (formato brasileiro para inglês)
+            valor_pag_str = str(form_data.get('valorPagamento')).replace(',', '.')
+            valor_pag = float(valor_pag_str)
             if valor_pag <= 0:
                 erros.append("Valor do pagamento deve ser maior que zero")
         except ValueError:

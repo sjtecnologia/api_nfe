@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatório Gerencial de Faturamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">
+            <i class="fas fa-chart-line"></i> Relatório Gerencial de Faturamento
+        </h1>
+        <a href="{{ url_for('admin.list_faturamento') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Filtro de Período -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="mes" class="form-label">Mês de Referência:</label>
+                    <select class="form-select" id="mes" name="mes">
+                        {% for m in range(1, 13) %}
+                        <option value="{{ m }}" {% if m == mes_ref %}selected{% endif %}>
+                            {{ ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][m-1] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="ano" class="form-label">Ano:</label>
+                    <select class="form-select" id="ano" name="ano">
+                        {% for y in range(2024, 2031) %}
+                        <option value="{{ y }}" {% if y == ano_ref %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resumo Executivo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h6>Total de Clientes</h6>
+                    <h2>{{ resumo.total_clientes or 0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h6>Clientes Ativos</h6>
+                    <h2>{{ resumo.clientes_ativos_faturamento or 0 }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h6>NFes no Período</h6>
+                    <h2>{{ total_nfes }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h6>Faturamento Total</h6>
+                    <h2>R$ {{ "%.2f"|format(valor_total_faturamento) }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Faturamento por Cliente -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-users"></i> Faturamento por Cliente
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cliente</th>
+                            <th class="text-center">CNPJ</th>
+                            <th class="text-center">Qtd NFes</th>
+                            <th class="text-center">Valor/NFe</th>
+                            <th class="text-center">Total</th>
+                            <th class="text-center">Forma Pagamento</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cliente in clientes_faturamento %}
+                        <tr>
+                            <td>{{ cliente.razao_social }}</td>
+                            <td class="text-center">{{ cliente.cnpj }}</td>
+                            <td class="text-center"><span class="badge bg-info">{{ cliente.quantidade_nfes }}</span></td>
+                            <td class="text-center">R$ {{ "%.2f"|format(cliente.valor_por_nfe) }}</td>
+                            <td class="text-center"><strong class="text-success">R$ {{ "%.2f"|format(cliente.valor_total_mes) }}</strong></td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ cliente.forma_pagamento|replace('_', ' ')|title }}</span>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                Nenhum faturamento registrado neste período
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="2">TOTAL GERAL</th>
+                            <th class="text-center">{{ total_nfes }}</th>
+                            <th></th>
+                            <th class="text-center"><strong class="text-success">R$ {{ "%.2f"|format(valor_total_faturamento) }}</strong></th>
+                            <th></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Distribuição por Forma de Pagamento -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <i class="fas fa-chart-pie"></i> Distribuição por Forma de Pagamento
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for pagamento in distribuicao_pagamento %}
+                <div class="col-md-4 mb-3">
+                    <div class="card border-primary">
+                        <div class="card-body text-center">
+                            <h5>{{ pagamento.forma_pagamento|replace('_', ' ')|title }}</h5>
+                            <p class="mb-1">{{ pagamento.quantidade_clientes }} cliente(s)</p>
+                            <h4 class="text-success">R$ {{ "%.2f"|format(pagamento.valor_total or 0) }}</h4>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12 text-center text-muted">
+                    Nenhum dado de distribuição disponível
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

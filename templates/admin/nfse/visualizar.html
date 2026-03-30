@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}NFS-e #{{ nfse.numero_nfse or nfse.numero_rps }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">
+                        📄 NFS-e 
+                        {% if nfse.numero_nfse %}
+                            #{{ nfse.numero_nfse }}
+                        {% else %}
+                            RPS #{{ nfse.numero_rps }}
+                        {% endif %}
+                    </h1>
+                    <div class="page-subtitle">
+                        Emitida em: {{ nfse.data_emissao.strftime('%d/%m/%Y às %H:%M') if nfse.data_emissao else 'N/D' }}
+                    </div>
+                </div>
+                <div>
+                    <a href="{{ url_for('nfse.download_xml', nfse_id=nfse.id) }}" class="btn btn-secondary">
+                        <i class="fas fa-file-code"></i> Download XML
+                    </a>
+                    {% if nfse.status == '1' %}
+                    <a href="{{ url_for('nfse.cancelar', nfse_id=nfse.id) }}" class="btn btn-danger">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('nfse.list_nfse') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert 
+                {% if nfse.status == '1' %}alert-success
+                {% elif nfse.status == '2' %}alert-warning
+                {% elif nfse.status == '3' %}alert-danger
+                {% else %}alert-secondary{% endif %}" role="alert">
+                <h5 class="alert-heading">
+                    {% if nfse.status == '1' %}
+                        <i class="fas fa-check-circle"></i> NFS-e Autorizada
+                    {% elif nfse.status == '2' %}
+                        <i class="fas fa-clock"></i> Aguardando Processamento
+                    {% elif nfse.status == '3' %}
+                        <i class="fas fa-times-circle"></i> Cancelada
+                    {% elif nfse.status == '4' %}
+                        <i class="fas fa-exclamation-circle"></i> Rejeitada
+                    {% else %}
+                        <i class="fas fa-question-circle"></i> Status: {{ nfse.status or 'Desconhecido' }}
+                    {% endif %}
+                </h5>
+                {% if nfse.protocolo %}
+                <p class="mb-0">Protocolo: <strong>{{ nfse.protocolo }}</strong></p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Dados do RPS/NFS-e -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-file-alt"></i> Identificação</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="40%">Número NFS-e:</th>
+                            <td>{{ nfse.numero_nfse or 'Aguardando' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Número RPS:</th>
+                            <td>{{ nfse.numero_rps }}/{{ nfse.serie_rps }}</td>
+                        </tr>
+                        <tr>
+                            <th>Data Emissão:</th>
+                            <td>{{ nfse.data_emissao.strftime('%d/%m/%Y %H:%M') if nfse.data_emissao else '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Data Competência:</th>
+                            <td>{{ nfse.data_competencia.strftime('%d/%m/%Y') if nfse.data_competencia else '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Natureza Operação:</th>
+                            <td>
+                                {% if nfse.natureza_operacao == '1' %}Tributação no município
+                                {% elif nfse.natureza_operacao == '2' %}Tributação fora do município
+                                {% elif nfse.natureza_operacao == '3' %}Isenção
+                                {% elif nfse.natureza_operacao == '4' %}Imune
+                                {% else %}{{ nfse.natureza_operacao }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Ambiente:</th>
+                            <td>
+                                {% if nfse.ambiente == 'producao' %}
+                                    <span class="badge bg-success">Produção</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Homologação</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dados do Tomador -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-user"></i> Tomador</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="40%">CPF/CNPJ:</th>
+                            <td>{{ nfse.tomador_cpf_cnpj or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Razão Social:</th>
+                            <td>{{ nfse.tomador_razao_social or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Endereço:</th>
+                            <td>{{ nfse.tomador_endereco or '-' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Serviço -->
+        <div class="col-md-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-cogs"></i> Serviço</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="30%">Código de Serviço:</th>
+                            <td>{{ nfse.codigo_servico or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Discriminação:</th>
+                            <td>{{ nfse.discriminacao or '-' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Valores -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="fas fa-calculator"></i> Valores</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th>Valor Serviços:</th>
+                            <td class="text-end"><strong>R$ {{ "%.2f"|format(nfse.valor_servicos or 0) }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Alíquota ISS:</th>
+                            <td class="text-end">{{ "%.2f"|format(nfse.aliquota_iss or 0) }}%</td>
+                        </tr>
+                        <tr>
+                            <th>Valor ISS:</th>
+                            <td class="text-end">R$ {{ "%.2f"|format(nfse.valor_iss or 0) }}</td>
+                        </tr>
+                        <tr class="table-success">
+                            <th>Valor Líquido:</th>
+                            <td class="text-end"><strong>R$ {{ "%.2f"|format(nfse.valor_liquido or 0) }}</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IBS/CBS - Reforma Tributária -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-balance-scale"></i> IBS/CBS - Reforma Tributária</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless table-sm">
+                        <tr>
+                            <th width="50%">Código NBS:</th>
+                            <td>{{ nfse.codigo_nbs or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Finalidade NFS-e:</th>
+                            <td>
+                                {% if nfse.finalidade_nfse == '0' %}Normal
+                                {% elif nfse.finalidade_nfse == '1' %}Complementar
+                                {% elif nfse.finalidade_nfse == '2' %}Ajuste
+                                {% elif nfse.finalidade_nfse == '3' %}Substituição
+                                {% else %}{{ nfse.finalidade_nfse }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Consumidor Final:</th>
+                            <td>{{ 'Sim' if nfse.indicador_consumidor_final == '1' else 'Não' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Indicador Operação:</th>
+                            <td>{{ nfse.codigo_indicador_operacao or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Indicador Destinatário:</th>
+                            <td>
+                                {% if nfse.indicador_destinatario == '0' %}Interno
+                                {% elif nfse.indicador_destinatario == '1' %}Interestadual
+                                {% elif nfse.indicador_destinatario == '2' %}Exterior
+                                {% else %}{{ nfse.indicador_destinatario }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>CST IBS/CBS:</th>
+                            <td>{{ nfse.cst_ibs_cbs or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Classificação Tributária:</th>
+                            <td>{{ nfse.codigo_classificacao_tributaria or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Localidade Incidência:</th>
+                            <td>{{ nfse.codigo_localidade_incidencia or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Percentual Redutor:</th>
+                            <td>{{ "%.2f"|format(nfse.percentual_redutor or 0) }}%</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tributos Totais -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="fas fa-percentage"></i> Tributos Totais</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless table-sm">
+                        <tr>
+                            <th width="50%">Tributos Federais:</th>
+                            <td class="text-end"><strong>{{ "%.2f"|format(nfse.percentual_total_tributos_federais or 0) }}%</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Tributos Estaduais:</th>
+                            <td class="text-end"><strong>{{ "%.2f"|format(nfse.percentual_total_tributos_estaduais or 0) }}%</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Tributos Municipais:</th>
+                            <td class="text-end"><strong>{{ "%.2f"|format(nfse.percentual_total_tributos_municipais or 0) }}%</strong></td>
+                        </tr>
+                        <tr class="table-secondary">
+                            <th>Total de Tributos:</th>
+                            <td class="text-end">
+                                <strong>
+                                    {{ "%.2f"|format((nfse.percentual_total_tributos_federais or 0) + 
+                                                     (nfse.percentual_total_tributos_estaduais or 0) + 
+                                                     (nfse.percentual_total_tributos_municipais or 0)) }}%
+                                </strong>
+                            </td>
+                        </tr>
+                    </table>
+                    <hr>
+                    <h6 class="mt-3">Regime Tributário</h6>
+                    <table class="table table-borderless table-sm">
+                        <tr>
+                            <th width="50%">Regime Especial:</th>
+                            <td>
+                                {% if nfse.regime_especial_tributacao %}
+                                    {% if nfse.regime_especial_tributacao == '1' %}ME Municipal
+                                    {% elif nfse.regime_especial_tributacao == '2' %}Estimativa
+                                    {% elif nfse.regime_especial_tributacao == '3' %}Sociedade Profissionais
+                                    {% elif nfse.regime_especial_tributacao == '4' %}Cooperativa
+                                    {% elif nfse.regime_especial_tributacao == '5' %}MEI
+                                    {% elif nfse.regime_especial_tributacao == '6' %}ME/EPP Simples
+                                    {% else %}{{ nfse.regime_especial_tributacao }}{% endif %}
+                                {% else %}-{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Optante Simples Nacional:</th>
+                            <td>
+                                {% if nfse.optante_simples_nacional %}
+                                    <span class="badge bg-success">Sim</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Incentivador Cultural:</th>
+                            <td>
+                                {% if nfse.incentivador_cultural %}
+                                    <span class="badge bg-info">Sim</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Não</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- XML -->
+    {% if nfse.xml_nfse or nfse.xml_rps %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-code"></i> XML</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3" style="max-height: 300px; overflow: auto;"><code>{{ nfse.xml_nfse or nfse.xml_rps }}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

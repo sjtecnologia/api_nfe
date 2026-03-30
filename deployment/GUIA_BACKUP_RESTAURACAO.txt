@@ -1,0 +1,443 @@
+============================================================================
+GUIA DE BACKUP E RESTAURAÇÃO - Windows Server ↔ Mac
+Sistema: EmiteMax v2.0
+Data: 11/12/2025
+============================================================================
+
+Este guia explica como fazer backup do banco de dados do servidor Windows
+e restaurar no seu Mac local para desenvolvimento/testes.
+
+============================================================================
+PARTE 1: BACKUP NO SERVIDOR WINDOWS (192.168.0.52)
+============================================================================
+
+1.1 ACESSAR O SERVIDOR
+-----------------------
+- Conectar via Remote Desktop ao servidor 192.168.0.52
+- Login com suas credenciais de administrador
+
+1.2 EXECUTAR SCRIPT DE BACKUP
+------------------------------
+1. Abrir Windows Explorer
+2. Navegar até: C:\inetpub\wwwroot\api_nfe\deployment\
+3. Clicar 2x em: backup_banco_windows.bat
+4. Digitar senha do PostgreSQL quando solicitado
+5. Aguardar conclusão
+
+1.3 RESULTADO ESPERADO
+-----------------------
+Você verá:
+
+============================================================
+  BACKUP BANCO DE DADOS PostgreSQL
+  EmiteMax v2.0
+============================================================
+
+[INFO] Conectando ao banco de dados sjtnfe...
+[INFO] Criando backup em: C:\backups\sjtnfe_backup_20251211_143022.sql
+
+============================================================
+  BACKUP CONCLUIDO COM SUCESSO!
+============================================================
+
+[OK] Arquivo criado: C:\backups\sjtnfe_backup_20251211_143022.sql
+[INFO] Tamanho do backup: 45 MB
+[OK] Arquivo de informacoes: C:\backups\sjtnfe_backup_20251211_143022.sql.info
+
+1.4 LOCALIZAÇÃO DO BACKUP
+--------------------------
+Arquivo: C:\backups\sjtnfe_backup_AAAAMMDD_HHMMSS.sql
+Info: C:\backups\sjtnfe_backup_AAAAMMDD_HHMMSS.sql.info
+
+Exemplo:
+- sjtnfe_backup_20251211_143022.sql (arquivo SQL)
+- sjtnfe_backup_20251211_143022.sql.info (informações)
+
+============================================================================
+PARTE 2: TRANSFERIR BACKUP PARA O MAC
+============================================================================
+
+2.1 OPÇÃO A - WinSCP / FileZilla (RECOMENDADO)
+-----------------------------------------------
+1. Abrir WinSCP ou FileZilla no Mac
+2. Conectar ao servidor: 192.168.0.52
+3. Navegar no servidor: C:\backups\
+4. Baixar arquivo .sql para o Mac
+5. Salvar em: ~/Documents/Developement/api_nfe/deployment/backups/
+
+2.2 OPÇÃO B - Remote Desktop (Copiar/Colar)
+--------------------------------------------
+1. Conectar via RDP ao servidor
+2. Copiar o arquivo .sql (Ctrl+C)
+3. No Mac, colar em uma pasta local
+4. Mover para: ~/Documents/Developement/api_nfe/deployment/backups/
+
+2.3 OPÇÃO C - Pendrive / Pasta Compartilhada
+---------------------------------------------
+1. Copiar arquivo para pendrive no servidor
+2. Conectar pendrive no Mac
+3. Copiar para: ~/Documents/Developement/api_nfe/deployment/backups/
+
+2.4 OPÇÃO D - SCP via Terminal (Mac)
+-------------------------------------
+No Mac, abrir Terminal e executar:
+
+scp usuario@192.168.0.52:C:/backups/sjtnfe_backup_*.sql \
+    ~/Documents/Developement/api_nfe/deployment/backups/
+
+Substituir:
+- usuario: seu usuário do Windows
+- sjtnfe_backup_*.sql: nome exato do arquivo
+
+============================================================================
+PARTE 3: RESTAURAR NO MAC
+============================================================================
+
+3.1 VERIFICAR ARQUIVO TRANSFERIDO
+----------------------------------
+No Mac, abrir Terminal e executar:
+
+cd ~/Documents/Developement/api_nfe/deployment/backups
+ls -lh *.sql
+
+Deve listar o arquivo transferido com tamanho em MB.
+
+3.2 EXECUTAR SCRIPT DE RESTAURAÇÃO
+-----------------------------------
+No Terminal:
+
+cd ~/Documents/Developement/api_nfe/deployment
+./restaurar_banco_mac.sh
+
+3.3 PROCESSO INTERATIVO
+------------------------
+O script irá:
+
+1. Listar backups disponíveis:
+   BACKUPS DISPONÍVEIS:
+   ----------------------------------------------------------
+   1. sjtnfe_backup_20251211_143022.sql (45M)
+   2. sjtnfe_backup_20251210_103015.sql (44M)
+   ----------------------------------------------------------
+   
+   Digite o número do backup para restaurar: 1
+
+2. Mostrar informações do backup:
+   INFORMAÇÕES DO BACKUP:
+   ----------------------------------------------------------
+   Data/Hora: 11/12/2025 14:30:22
+   Servidor: localhost:5432
+   Banco: sjtnfe
+   Usuario: postgres
+   Tamanho: 45 MB
+   ----------------------------------------------------------
+
+3. Solicitar confirmação:
+   [ATENÇÃO] Esta operação irá:
+     1. Fazer backup do banco LOCAL atual
+     2. DROPAR o banco de dados: sjtnfe
+     3. Recriar o banco vazio
+     4. Restaurar dados do arquivo: sjtnfe_backup_20251211_143022.sql
+   
+   Deseja continuar? (digite SIM para confirmar): SIM
+
+4. Executar restauração:
+   ============================================================
+     INICIANDO RESTAURAÇÃO
+   ============================================================
+   
+   [INFO] Criando backup de segurança do banco local...
+   [OK] Backup local salvo: sjtnfe_local_pre_restore_20251211_150000.sql
+   
+   [INFO] Encerrando conexões ativas no banco...
+   [INFO] Removendo banco existente...
+   [OK] Banco removido
+   
+   [INFO] Criando banco vazio...
+   [OK] Banco criado
+   
+   [INFO] Restaurando dados do backup...
+   [INFO] Isso pode levar alguns minutos...
+   
+   [OK] Dados restaurados com sucesso!
+
+5. Verificar dados:
+   [INFO] Verificando dados restaurados...
+   
+   [OK] Total de tabelas: 42
+   
+   TABELAS PRINCIPAIS:
+    schema | tabela                    | colunas
+   --------+---------------------------+---------
+    public | classificacoes_ibs_cbs    | 7
+    public | clientes                  | 35
+    public | nfe_emitidas              | 48
+    public | produtos                  | 23
+    public | regimes_tributarios       | 4
+   
+   CONTAGEM DE REGISTROS:
+   ----------------------------------------------------------
+   clientes                      : 45 registros
+   nfe_emitidas                  : 1234 registros
+   produtos                      : 567 registros
+   regimes_tributarios           : 3 registros
+   classificacoes_ibs_cbs        : 3 registros
+   autorizacoes_xml_nfe          : 12 registros
+   ----------------------------------------------------------
+
+6. Verificar CRT=3:
+   [INFO] Verificando implementação CRT=3...
+   
+   ✓ Campo 'crt' existe em regimes_tributarios
+   
+    id | nome              | crt
+   ----+-------------------+-----
+     1 | Simples Nacional  | 1
+     2 | Lucro Real        | 3
+     3 | Lucro Presumido   | 3
+   
+   ✓ Tabela 'classificacoes_ibs_cbs' existe com 3 registros
+
+7. Conclusão:
+   ============================================================
+     RESTAURAÇÃO CONCLUÍDA!
+   ============================================================
+   
+   [OK] Banco de dados: sjtnfe
+   [OK] Backup original: sjtnfe_backup_20251211_143022.sql
+   [OK] Backup local salvo em: sjtnfe_local_pre_restore_20251211_150000.sql
+
+============================================================================
+PARTE 4: TESTAR BANCO RESTAURADO
+============================================================================
+
+4.1 VERIFICAR POSTGRESQL
+-------------------------
+psql -U renato -d sjtnfe -c "SELECT version();"
+
+Deve mostrar versão do PostgreSQL.
+
+4.2 CONTAR REGISTROS
+--------------------
+psql -U renato -d sjtnfe -c "SELECT COUNT(*) FROM clientes;"
+psql -U renato -d sjtnfe -c "SELECT COUNT(*) FROM nfe_emitidas;"
+psql -U renato -d sjtnfe -c "SELECT COUNT(*) FROM produtos;"
+
+4.3 VERIFICAR CAMPO CRT
+-----------------------
+psql -U renato -d sjtnfe -c "SELECT id, nome, crt FROM regimes_tributarios;"
+
+Esperado:
+ id |       nome        | crt
+----+-------------------+-----
+  1 | Simples Nacional  |   1
+  2 | Lucro Real        |   3
+  3 | Lucro Presumido   |   3
+
+4.4 VERIFICAR CLASSIFICAÇÕES IBS/CBS
+-------------------------------------
+psql -U renato -d sjtnfe -c "SELECT * FROM classificacoes_ibs_cbs;"
+
+Deve retornar 3 registros.
+
+4.5 INICIAR APLICAÇÃO
+---------------------
+cd ~/Documents/Developement/api_nfe
+python app.py
+
+4.6 TESTAR NO NAVEGADOR
+-----------------------
+Abrir: http://localhost:8080
+Login: admin
+Senha: [sua senha]
+
+Navegar para: Emissão de NFe
+Selecionar cliente e verificar se dados carregam normalmente.
+
+============================================================================
+PARTE 5: CASOS DE USO
+============================================================================
+
+5.1 CENÁRIO 1 - Sincronizar Dados de Produção
+----------------------------------------------
+**Objetivo**: Trazer dados do servidor para desenvolvimento
+
+Passos:
+1. Servidor: Executar backup_banco_windows.bat
+2. Transferir arquivo .sql para Mac
+3. Mac: Executar restaurar_banco_mac.sh
+4. Testar aplicação localmente
+
+**Quando usar**:
+- Debugar problemas reportados em produção
+- Trabalhar com dados reais
+- Testar queries com volume real
+- Validar relatórios com dados de produção
+
+5.2 CENÁRIO 2 - Testar Implementação CRT=3
+-------------------------------------------
+**Objetivo**: Verificar se servidor tem implementação CRT=3
+
+Passos:
+1. Fazer backup do servidor
+2. Restaurar no Mac
+3. Verificar campo crt e tabelas IBS/CBS
+4. Se não existirem, servidor precisa ser atualizado
+
+5.3 CENÁRIO 3 - Rollback de Desenvolvimento
+--------------------------------------------
+**Objetivo**: Voltar banco local ao estado anterior
+
+Passos:
+1. Restauração cria backup automático em:
+   sjtnfe_local_pre_restore_AAAAMMDD_HHMMSS.sql
+2. Para reverter, executar novamente restaurar_banco_mac.sh
+3. Escolher o backup local recente
+
+5.4 CENÁRIO 4 - Comparar Estruturas
+------------------------------------
+**Objetivo**: Verificar diferenças entre produção e desenvolvimento
+
+Passos:
+1. Backup do servidor
+2. Comparar schema:
+   pg_dump -U renato -d sjtnfe --schema-only > schema_local.sql
+   diff schema_local.sql sjtnfe_backup_*.sql
+
+============================================================================
+PARTE 6: SOLUÇÃO DE PROBLEMAS
+============================================================================
+
+PROBLEMA 1: "psql: FATAL: database does not exist"
+SOLUÇÃO: Normal na primeira execução. Script criará o banco.
+
+PROBLEMA 2: "permission denied"
+SOLUÇÃO: chmod +x restaurar_banco_mac.sh
+
+PROBLEMA 3: Backup muito grande (lento)
+SOLUÇÃO: Backup compactado:
+  No Windows: 7z a backup.7z backup.sql
+  No Mac: 7z x backup.7z
+
+PROBLEMA 4: Erro de encoding
+SOLUÇÃO: Adicionar ao script Windows:
+  set PGCLIENTENCODING=UTF8
+
+PROBLEMA 5: Tabelas faltando após restauração
+SOLUÇÃO: Verificar restore.log:
+  cat restore.log | grep ERROR
+
+PROBLEMA 6: Usuário postgres não existe no Mac
+SOLUÇÃO: Script usa usuário 'renato'. Editar se necessário.
+
+============================================================================
+PARTE 7: AUTOMAÇÃO (OPCIONAL)
+============================================================================
+
+7.1 BACKUP AUTOMÁTICO NO SERVIDOR
+----------------------------------
+Criar tarefa agendada no Windows:
+
+1. Abrir "Agendador de Tarefas"
+2. Criar Tarefa Básica
+3. Nome: "Backup Diário PostgreSQL"
+4. Gatilho: Diário às 02:00
+5. Ação: Executar programa
+   - Programa: C:\inetpub\wwwroot\api_nfe\deployment\backup_banco_windows.bat
+6. Configurar senha do PostgreSQL via variável de ambiente PGPASSWORD
+
+7.2 LIMPEZA DE BACKUPS ANTIGOS
+-------------------------------
+Adicionar ao final de backup_banco_windows.bat:
+
+REM Manter apenas últimos 7 backups
+forfiles /p "C:\backups" /m sjtnfe_backup_*.sql /d -7 /c "cmd /c del @path"
+
+7.3 SINCRONIZAÇÃO AUTOMÁTICA (Mac)
+-----------------------------------
+Criar cron job para baixar backup:
+
+crontab -e
+
+Adicionar linha:
+0 3 * * * scp usuario@192.168.0.52:C:/backups/sjtnfe_backup_*.sql \
+          ~/Documents/Developement/api_nfe/deployment/backups/
+
+============================================================================
+PARTE 8: CHECKLIST
+============================================================================
+
+BACKUP NO SERVIDOR:
+[ ] Script backup_banco_windows.bat copiado para deployment/
+[ ] Executado com sucesso
+[ ] Arquivo .sql gerado em C:\backups\
+[ ] Tamanho do arquivo razoável (>10MB)
+[ ] Arquivo .info criado com metadados
+
+TRANSFERÊNCIA:
+[ ] Arquivo .sql baixado para Mac
+[ ] Salvo em: ~/Documents/Developement/api_nfe/deployment/backups/
+[ ] Tamanho corresponde ao original
+[ ] Arquivo não corrompido (abre com less ou cat)
+
+RESTAURAÇÃO NO MAC:
+[ ] Script restaurar_banco_mac.sh executável (chmod +x)
+[ ] PostgreSQL rodando no Mac
+[ ] Backup local criado antes de dropar banco
+[ ] Banco dropado e recriado
+[ ] Dados restaurados do arquivo
+[ ] Verificações mostraram tabelas e registros
+
+TESTES:
+[ ] psql conecta ao banco sjtnfe
+[ ] Contagem de registros corresponde ao esperado
+[ ] Campo crt existe em regimes_tributarios
+[ ] Tabela classificacoes_ibs_cbs existe
+[ ] Aplicação Flask inicia sem erros
+[ ] Login funciona
+[ ] Dados carregam nas telas
+
+============================================================================
+ARQUIVOS GERADOS
+============================================================================
+
+NO SERVIDOR WINDOWS:
+C:\backups\
+├── sjtnfe_backup_20251211_143022.sql ........... Backup do banco
+├── sjtnfe_backup_20251211_143022.sql.info ....... Metadados
+└── backup_error.log ............................. Logs de erro (se houver)
+
+NO MAC:
+~/Documents/Developement/api_nfe/deployment/
+├── backup_banco_windows.bat ..................... Script Windows
+├── restaurar_banco_mac.sh ....................... Script Mac
+└── backups/
+    ├── sjtnfe_backup_20251211_143022.sql ........ Backup do servidor
+    ├── sjtnfe_local_pre_restore_*.sql ........... Backups locais
+    └── restore.log .............................. Log da restauração
+
+============================================================================
+COMANDOS ÚTEIS
+============================================================================
+
+VERIFICAR TAMANHO DO BANCO:
+psql -U renato -d sjtnfe -c "SELECT pg_size_pretty(pg_database_size('sjtnfe'));"
+
+LISTAR TABELAS:
+psql -U renato -d sjtnfe -c "\dt"
+
+VER CONEXÕES ATIVAS:
+psql -U renato -d postgres -c "SELECT * FROM pg_stat_activity WHERE datname = 'sjtnfe';"
+
+EXPORTAR APENAS UMA TABELA:
+pg_dump -U renato -d sjtnfe -t clientes > clientes_backup.sql
+
+IMPORTAR APENAS UMA TABELA:
+psql -U renato -d sjtnfe -f clientes_backup.sql
+
+============================================================================
+FIM DO GUIA DE BACKUP E RESTAURAÇÃO
+Sistema: EmiteMax v2.0
+Versão: 1.0
+Data: 11/12/2025
+============================================================================

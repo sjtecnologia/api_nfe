@@ -1,0 +1,24 @@
+[Unit]
+Description=API NFe - Serviço de IA (Sugestões NCM/Tributação)
+After=network.target api_nfe_principal.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/api_nfe
+Environment="PATH=/var/www/api_nfe/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+Environment="FLASK_APP=api_ia_unificada.py"
+Environment="FLASK_ENV=production"
+
+ExecStart=/var/www/api_nfe/venv/bin/python3 /var/www/api_nfe/api_ia_unificada.py
+
+Restart=always
+RestartSec=10
+
+StandardOutput=append:/var/www/api_nfe/logs/api_ia.log
+StandardError=append:/var/www/api_nfe/logs/api_ia_error.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,188 @@
+{
+  "title": "Lei Complementar 214/2025 - Classificação Tributária NCM",
+  "description": "Base de conhecimento sobre NCM e benefícios fiscais da Lei Complementar 214/2025 (IBS e CBS)",
+  "version": "1.0",
+  "date": "2025-11-24",
+  "source": "Lei Complementar 214/2025 - Reforma Tributária Brasileira",
+  
+  "regras_gerais": {
+    "contexto": "A Lei Complementar 214/2025 institui o IBS (Imposto sobre Bens e Serviços) e CBS (Contribuição sobre Bens e Serviços), substituindo ICMS, ISS, PIS e COFINS progressivamente a partir de 2026.",
+    "nomenclatura": "Utiliza a Nomenclatura Comum do Mercosul (NCM/SH) conforme Resolução Gecex nº 272/2021",
+    "estabilidade": "Art. 492, §2º: Alterações futuras na nomenclatura NCM/SH não afetarão benefícios fiscais já concedidos"
+  },
+  
+  "beneficios_fiscais": [
+    {
+      "tipo": "Cesta Básica Nacional",
+      "fundamento_legal": "Anexo I da LC 214/2025, Art. 8º",
+      "beneficio": "Redução de 100% das alíquotas do IBS e CBS (isenção)",
+      "produtos": [
+        {
+          "ncm": "09012110",
+          "posicao": "09.01",
+          "descricao": "Café torrado, não descafeinado, em grão",
+          "item_anexo": "8",
+          "explicacao": "Café torrado em grão - NCM 09.01.21.10. EMBASAMENTO LEGAL LC 214/2025: Produto enquadrado no Anexo I (Cesta Básica Nacional) com REDUÇÃO DE 100% das alíquotas do IBS e CBS (Art. 8º - isenção). A Posição 09.01 da NCM/SH é especificamente mencionada no item 8 do Anexo I. A classificação NCM/SH está conforme Resolução Gecex nº 272/2021 (Art. 492, LC 214/2025). Alterações futuras na nomenclatura não afetarão este benefício fiscal (Art. 492, §2º)."
+        },
+        {
+          "ncm": "21011100",
+          "posicao": "2101.1",
+          "descricao": "Extratos, essências e concentrados de café",
+          "item_anexo": "8",
+          "explicacao": "Produto da Posição 2101.1 da NCM/SH, enquadrado no Anexo I (Cesta Básica). Art. 8º da LC 214/2025 concede REDUÇÃO DE 100% do IBS e CBS."
+        }
+      ]
+    },
+    {
+      "tipo": "Hortifrutigranjeiros e Ovos",
+      "fundamento_legal": "Anexo XV da LC 214/2025",
+      "beneficio": "Redução de 100% das alíquotas do IBS e CBS",
+      "produtos": [
+        {
+          "ncm": "04072100",
+          "capitulo": "04",
+          "descricao": "Ovos frescos, de galinha",
+          "item_anexo": "1",
+          "explicacao": "Ovos frescos de galinha - NCM 04.07.21.00. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo XV (Hortifrutigranjeiros e Ovos), item 1, com REDUÇÃO DE 100% das alíquotas do IBS e CBS. A Posição 04.07.2 é especificamente incluída no regime de benefício fiscal. Art. 492 da LC 214/2025 garante estabilidade da classificação NCM/SH."
+        },
+        {
+          "ncm": "07020000",
+          "capitulo": "07",
+          "descricao": "Tomates, frescos ou refrigerados",
+          "item_anexo": "Capítulo 07",
+          "explicacao": "Tomate fresco - NCM 07.02.00.00. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo XV (Hortifrutigranjeiros), Capítulo 07, com REDUÇÃO DE 100% do IBS e CBS. Produtos hortícolas são beneficiados pelo regime especial de tributação."
+        },
+        {
+          "ncm": "08039000",
+          "capitulo": "08",
+          "descricao": "Bananas, frescas ou secas",
+          "item_anexo": "Capítulo 08",
+          "explicacao": "Banana - NCM 08.03.90.00. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo XV, Capítulo 08 (frutas), com REDUÇÃO DE 100% do IBS e CBS. Resolução Gecex 272/2021 estabelece a classificação NCM/SH aplicável."
+        }
+      ]
+    },
+    {
+      "tipo": "Alimentos para Fins Especiais e Dietéticos",
+      "fundamento_legal": "Anexo I da LC 214/2025, Items 24-26",
+      "beneficio": "Redução de 100% das alíquotas do IBS e CBS",
+      "produtos": [
+        {
+          "ncm": "19019090",
+          "posicao": "19.01.90.90",
+          "descricao": "Farinhas dietéticas - baixo teor de proteína para fenilcetonúria",
+          "item_anexo": "24",
+          "explicacao": "Farinha dietética para fenilcetonúria - NCM 19.01.90.90. EMBASAMENTO LEGAL LC 214/2025: Item 24 do Anexo I (alimentos para fins especiais com baixo teor de proteína) com REDUÇÃO DE 100% do IBS e CBS (Art. 8º). Produto destinado a dietas de restrição proteica. Art. 492 garante estabilidade desta classificação."
+        },
+        {
+          "ncm": "19021900",
+          "posicao": "19.02.19.00",
+          "descricao": "Massas alimentícias dietéticas - baixo teor de proteína",
+          "item_anexo": "25",
+          "explicacao": "Massa dietética - NCM 19.02.19.00. EMBASAMENTO LEGAL LC 214/2025: Item 25 do Anexo I, massas com baixo teor de proteína para dietas restritivas, REDUÇÃO DE 100% do IBS e CBS."
+        },
+        {
+          "ncm": "21069090",
+          "posicao": "2106.90.90",
+          "descricao": "Fórmulas nutricionais para necessidades dietoterápicas específicas",
+          "item_anexo": "26",
+          "explicacao": "Fórmula nutricional enteral - NCM 2106.90.90. EMBASAMENTO LEGAL LC 214/2025: Item 26 do Anexo I, preparações alimentícias para fins medicinais específicos, REDUÇÃO DE 100% do IBS e CBS. Produto para nutrição enteral e dietas especiais."
+        }
+      ]
+    },
+    {
+      "tipo": "Suspensão - Transporte Ferroviário",
+      "fundamento_legal": "Art. 119, §1º da LC 214/2025",
+      "beneficio": "Suspensão do IBS e CBS",
+      "produtos": [
+        {
+          "ncm": "86011000",
+          "posicao": "86.01",
+          "descricao": "Locomotivas de fonte externa de eletricidade",
+          "explicacao": "Locomotiva elétrica - NCM 86.01.10.00. EMBASAMENTO LEGAL LC 214/2025: Art. 119, §1º estabelece regime de SUSPENSÃO do IBS e CBS para material rodante e equipamentos de transporte ferroviário. Posições 86.01 a 86.06 beneficiadas. Suspensão se converte em redução a zero após utilização na operação ferroviária."
+        },
+        {
+          "ncm": "86021000",
+          "posicao": "86.02",
+          "descricao": "Locomotivas Diesel-elétricas",
+          "explicacao": "Material rodante ferroviário - NCM 86.02. Art. 119 da LC 214/2025: SUSPENSÃO do IBS e CBS. Regime especial para desenvolvimento do transporte ferroviário."
+        },
+        {
+          "ncm": "73021000",
+          "posicao": "73.02",
+          "descricao": "Trilhos de ferro ou aço",
+          "explicacao": "Trilhos ferroviários - NCM 73.02.10.00. EMBASAMENTO LEGAL LC 214/2025: Art. 119 inclui Posição 73.02 no regime de SUSPENSÃO do IBS e CBS destinados à construção e manutenção de ferrovias."
+        }
+      ]
+    },
+    {
+      "tipo": "Restrições - Zona Franca de Manaus",
+      "fundamento_legal": "Art. 381, alínea 'f' da LC 214/2025",
+      "beneficio": "Vedação de créditos presumidos da ZFM",
+      "produtos": [
+        {
+          "ncm": "33030010",
+          "posicao": "33.03",
+          "descricao": "Perfumes (extratos)",
+          "explicacao": "Perfume (Eau de Parfum) - NCM 33.03.00.10. EMBASAMENTO LEGAL LC 214/2025: Art. 381, alínea 'f' VEDA a apropriação de créditos presumidos da Zona Franca de Manaus para produtos das Posições 33.03 a 33.07 (perfumaria e cosméticos). Restrição específica aos incentivos da ZFM para este setor."
+        },
+        {
+          "ncm": "33049900",
+          "posicao": "33.04 a 33.07",
+          "descricao": "Produtos de beleza e cosméticos",
+          "explicacao": "Cosméticos - NCM 33.04-33.07. Art. 381, alínea 'f' da LC 214/2025: VEDAÇÃO de créditos presumidos da ZFM para produtos de perfumaria, toucador e cosméticos."
+        }
+      ]
+    },
+    {
+      "tipo": "Regime Específico - Combustíveis",
+      "fundamento_legal": "Art. 428 da LC 214/2025",
+      "beneficio": "Regime específico com CIDE",
+      "produtos": [
+        {
+          "ncm": "27111900",
+          "posicao": "27.11",
+          "descricao": "Gás de petróleo liquefeito (GLP)",
+          "explicacao": "GLP - Gás Liquefeito de Petróleo - NCM 27.11.19.00. EMBASAMENTO LEGAL LC 214/2025: Art. 428 estabelece regime tributário específico para produtos da Posição 27.11, incluindo aplicação da CIDE (Contribuição de Intervenção no Domínio Econômico). Tributação diferenciada para combustíveis."
+        }
+      ]
+    }
+  ],
+  
+  "produtos_comuns_sem_beneficio": [
+    {
+      "ncm": "84716053",
+      "descricao": "Mouse óptico USB",
+      "regime": "Tributação padrão do IBS e CBS sem benefícios específicos",
+      "explicacao": "Mouse de computador - NCM 84.71.60.53. Produto sujeito à tributação padrão do IBS e CBS conforme LC 214/2025, sem enquadramento em regimes especiais de redução ou isenção."
+    },
+    {
+      "ncm": "85285900",
+      "descricao": "Monitores de computador",
+      "regime": "Tributação padrão",
+      "explicacao": "Monitor de computador - NCM 85.28.59.00. Tributação normal do IBS e CBS sem benefícios fiscais específicos na LC 214/2025."
+    }
+  ],
+  
+  "instrucoes_classificacao": {
+    "metodologia": "Ao classificar produtos, sempre:",
+    "passos": [
+      "1. Identifique o NCM correto (8 dígitos) usando a NCM/SH (Resolução Gecex 272/2021)",
+      "2. Verifique se o produto está nos Anexos I ou XV (redução 100%)",
+      "3. Consulte artigos específicos (Art. 119 - suspensão ferroviário, Art. 381 - restrições ZFM, Art. 428 - combustíveis)",
+      "4. Cite o embasamento legal completo: anexo, item, artigo e parágrafo",
+      "5. Mencione a Resolução Gecex 272/2021 para classificação NCM",
+      "6. Referencie Art. 492, §2º sobre estabilidade da nomenclatura"
+    ],
+    "formato_resposta": "Sempre inclua: NCM (8 dígitos), CFOP, CST/CSOSN, CEST (se aplicável), e EXPLICAÇÃO com EMBASAMENTO LEGAL detalhado citando artigos, anexos e itens específicos da LC 214/2025"
+  },
+  
+  "artigos_importantes": {
+    "art_8": "Estabelece redução de 100% para produtos do Anexo I (Cesta Básica)",
+    "art_119": "Regime de suspensão para material ferroviário (posições 86.01-86.06, 73.02)",
+    "art_381_f": "Vedação de créditos presumidos ZFM para perfumaria (33.03-33.07)",
+    "art_428": "Regime específico para combustíveis com CIDE (posição 27.11)",
+    "art_492": "Estabilidade da nomenclatura NCM/SH - alterações futuras não afetam benefícios",
+    "anexo_I": "Cesta Básica Nacional - redução 100% (itens 8, 23-26 incluem café, alimentos dietéticos)",
+    "anexo_XV": "Hortifrutigranjeiros e ovos - redução 100% (capítulos 04, 07, 08)"
+  }
+}

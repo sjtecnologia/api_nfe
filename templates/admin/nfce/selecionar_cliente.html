@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Selecionar Cliente - NFC-e{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-building"></i> Selecionar Cliente para Emitir NFC-e
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Selecione o cliente que será o emitente da NFC-e:
+                    </p>
+                    
+                    <div class="list-group">
+                        {% for cliente in clientes %}
+                        <a href="{{ url_for('nfce.emitir_nfce', cliente_id=cliente.cliente_id) }}" 
+                           class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1">
+                                        <i class="fas fa-store text-primary"></i>
+                                        {{ cliente.nome_fantasia or cliente.razao_social }}
+                                    </h5>
+                                    <p class="mb-1 text-muted">
+                                        <small>
+                                            <strong>CNPJ:</strong> {{ cliente.cnpj }}<br>
+                                            <strong>Razão Social:</strong> {{ cliente.razao_social }}
+                                        </small>
+                                    </p>
+                                </div>
+                                <div>
+                                    <i class="fas fa-chevron-right text-muted"></i>
+                                </div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('nfce.listar_nfce') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

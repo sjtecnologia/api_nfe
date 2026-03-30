@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if motivo %}Editar Motivo de Desoneração{% else %}Novo Motivo de Desoneração{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <h1 class="h3 mb-4">{% if motivo %}Editar Motivo de Desoneração{% else %}Novo Motivo de Desoneração{% endif %}</h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{{ url_for('admin.salvar_motivo_desoneracao') }}" class="card p-4 shadow-sm">
+                {% if motivo %}
+                    <input type="hidden" name="motivo_id" value="{{ motivo.motivo_id }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label for="codigo" class="form-label">Código:</label>
+                    <input type="text" id="codigo" name="codigo" class="form-control" maxlength="5" required
+                        value="{{ motivo.codigo if motivo else (form_data.codigo if form_data else '') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição:</label>
+                    <textarea id="descricao" name="descricao" class="form-control" rows="3" required>{{ motivo.descricao if motivo else (form_data.descricao if form_data else '') }}</textarea>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('admin.list_motivos_desoneracao') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

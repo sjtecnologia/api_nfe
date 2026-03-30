@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios - EmiteMax{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-chart-bar"></i> Relatórios Gerenciais</h2>
+            <p class="text-muted">Análise completa das operações fiscais</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Relatório de Notas Emitidas -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card border-primary h-100 hover-shadow">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-file-invoice fa-3x text-primary"></i>
+                    </div>
+                    <h5 class="card-title">Notas Emitidas</h5>
+                    <p class="card-text text-muted">
+                        Listagem completa de notas com filtros por período, status, tipo e modelo
+                    </p>
+                </div>
+                <div class="card-footer bg-white">
+                    <a href="{{ url_for('relatorios.notas_emitidas') }}" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Consultar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relatório de Faturamento -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card border-success h-100 hover-shadow">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-dollar-sign fa-3x text-success"></i>
+                    </div>
+                    <h5 class="card-title">Faturamento</h5>
+                    <p class="card-text text-muted">
+                        Análise de vendas por período com gráficos e evolução de faturamento
+                    </p>
+                </div>
+                <div class="card-footer bg-white">
+                    <a href="{{ url_for('relatorios.faturamento') }}" class="btn btn-success w-100">
+                        <i class="fas fa-chart-line"></i> Visualizar
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relatório de Produtos -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card border-info h-100 hover-shadow">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-boxes fa-3x text-info"></i>
+                    </div>
+                    <h5 class="card-title">Produtos/Serviços</h5>
+                    <p class="card-text text-muted">
+                        Ranking de produtos mais vendidos com análise tributária detalhada
+                    </p>
+                </div>
+                <div class="card-footer bg-white">
+                    <a href="{{ url_for('relatorios.produtos') }}" class="btn btn-info w-100">
+                        <i class="fas fa-list-ol"></i> Ver Ranking
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relatório de Impostos -->
+        <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card border-warning h-100 hover-shadow">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-percentage fa-3x text-warning"></i>
+                    </div>
+                    <h5 class="card-title">Impostos</h5>
+                    <p class="card-text text-muted">
+                        Consolidado tributário com ICMS, IPI, PIS, COFINS e carga tributária
+                    </p>
+                </div>
+                <div class="card-footer bg-white">
+                    <a href="{{ url_for('relatorios.impostos') }}" class="btn btn-warning w-100">
+                        <i class="fas fa-calculator"></i> Calcular
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações Adicionais -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Recursos dos Relatórios</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-filter text-primary"></i> Filtros Avançados</h6>
+                            <p class="small text-muted">Personalize os relatórios com múltiplos filtros de data, status, tipo e modelo de nota</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-download text-success"></i> Exportação</h6>
+                            <p class="small text-muted">Exporte os dados para Excel com formatação profissional e pronto para análise</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><i class="fas fa-chart-pie text-info"></i> Visualizações</h6>
+                            <p class="small text-muted">Gráficos interativos e dashboards para melhor compreensão dos dados</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.hover-shadow {
+    transition: all 0.3s ease;
+}
+.hover-shadow:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+}
+</style>
+{% endblock %}

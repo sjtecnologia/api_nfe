@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testes - XML Preview NFe</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.0/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Highlight.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    
+    <!-- Mocha CSS -->
+    <link href="https://unpkg.com/mocha/mocha.css" rel="stylesheet">
+    
+    <style>
+        .danfe-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .danfe-status.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .danfe-status.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .danfe-status.warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+        }
+        
+        .loading-spinner {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #007bff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <h1 class="text-center mb-4">Testes - XML Preview NFe</h1>
+        
+        <!-- Mocha Test Results -->
+        <div id="mocha"></div>
+        
+        <!-- Mock DOM Elements for Testing -->
+        <div id="test-fixtures" style="display: none;">
+            <!-- Loading Overlay -->
+            <div id="loading-overlay">
+                <div class="loading-spinner"></div>
+                <h3 id="loading-title">Carregando...</h3>
+                <p id="loading-message">Aguarde...</p>
+            </div>
+            
+            <!-- Buttons -->
+            <button id="btn-download-xml" class="btn btn-primary">Download XML</button>
+            <button id="btn-generate-danfe" class="btn btn-success">Gerar DANFE</button>
+            <button id="btn-print-danfe" class="btn btn-print">Imprimir DANFE</button>
+            <button id="btn-check-status" class="btn btn-info">Consultar Status</button>
+            <button id="btn-share" class="btn btn-outline-secondary">Compartilhar</button>
+            
+            <!-- Status Divs -->
+            <div id="danfe-tab-status"></div>
+            <div id="danfe-modal-status"></div>
+            
+            <!-- iFrames -->
+            <iframe id="danfe-preview-iframe" src="about:blank"></iframe>
+            <iframe id="danfe-iframe" src=""></iframe>
+            
+            <!-- XML Content -->
+            <div id="xml">
+                <code>&lt;?xml version="1.0"?&gt;&lt;NFe&gt;&lt;/NFe&gt;</code>
+            </div>
+            
+            <!-- Download Link -->
+            <a id="download-danfe" href="#" download>Download DANFE</a>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/xml.min.js"></script>
+    
+    <!-- Mocha and Chai -->
+    <script src="https://unpkg.com/mocha/mocha.js"></script>
+    <script src="https://unpkg.com/chai/chai.js"></script>
+    <script src="https://unpkg.com/sinon/pkg/sinon.js"></script>
+    
+    <script>
+        // Setup Mocha
+        mocha.setup('bdd');
+        const expect = chai.expect;
+        
+        // Mock NFe data
+        const mockNfeData = {
+            nfe_emitida_id: 123,
+            status: 'AUTORIZADA',
+            json_nfe: {
+                xml_content: '<?xml version="1.0"?><NFe><infNFe Id="NFe35220214200166000187550010000000046261533848"></infNFe></NFe>'
+            }
+        };
+        
+        // Global variables (simulating template variables)
+        var nfeId = mockNfeData.nfe_emitida_id;
+        var danfePdfUrl = null;
+        
+        // ==== IMPLEMENTAÇÃO DAS FUNÇÕES DO TEMPLATE ====
+        // (Todo o código JavaScript das funções seria copiado aqui)
+        
+        // ==== TESTES ====
+        describe('XML Preview NFe Tests', function() {
+            // Todos os testes que criamos anteriormente
+        });
+        
+        // Run tests
+        mocha.run();
+    </script>
+</body>
+</html>

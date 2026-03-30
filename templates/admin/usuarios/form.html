@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+            <h1 class="h3 mb-4">{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}</h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{% if usuario %}{{ url_for('admin.edit_usuario', usuario_id=usuario.id) }}{% else %}{{ url_for('admin.create_usuario') }}{% endif %}" class="card p-4 shadow-sm" id="usuarioForm">
+                {% if usuario %}
+                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label for="username" class="form-label">Login:</label>
+                    <input type="text" id="username" name="username" class="form-control" maxlength="255" required
+                        value="{{ usuario.username if usuario else '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email:</label>
+                    <input type="email" id="email" name="email" class="form-control" maxlength="255" required
+                        value="{{ usuario.email if usuario else '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="password_hash" class="form-label">Senha:</label>
+                    <input type="password" id="password_hash" name="password_hash" class="form-control" maxlength="255" autocomplete="new-password" minlength="8">
+                    <small class="text-muted">Mínimo 8 caracteres, incluindo maiúscula, minúscula e número.</small>
+                </div>
+                <div class="mb-3">
+                    <label for="confirm_password" class="form-label">Confirme a Senha:</label>
+                    <input type="password" id="confirm_password" name="confirm_password" class="form-control" maxlength="255" autocomplete="new-password">
+                    <div id="password-strength" class="mt-2" style="display: none;">
+                        <small class="d-block" id="length-check">✗ Mínimo 8 caracteres</small>
+                        <small class="d-block" id="uppercase-check">✗ Pelo menos uma letra maiúscula</small>
+                        <small class="d-block" id="lowercase-check">✗ Pelo menos uma letra minúscula</small>
+                        <small class="d-block" id="number-check">✗ Pelo menos um número</small>
+                    </div>
+                    <small class="text-muted">Preencha apenas para definir ou alterar a senha.</small>
+                </div>
+                <div class="mb-3">
+                    <label for="roles" class="form-label">Papel (Role):</label>
+                    <select id="roles" name="roles" class="form-select" required>
+                        {% for role in roles %}
+                            {% if current_user.is_super_admin() or role.name|lower != 'super_admin' %}
+                            <option value="{{ role.id }}"
+                                {% if usuario and role.id in usuario.roles %}selected{% endif %}>
+                                {{ role.name }}
+                            </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Selecione apenas um papel para o usuário.</small>
+                </div>
+                <div class="mb-3">
+                    <label for="clientes" class="form-label">Clientes com acesso:</label>
+                    <select id="clientes" name="clientes" class="form-select" multiple required>
+                        {% for cliente in clientes %}
+                            <option value="{{ cliente.cliente_id }}"
+                                {% if usuario and cliente.cliente_id in usuario.clientes %}selected{% endif %}>
+                                {{ cliente.razao_social }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Segure Ctrl (Windows) ou Command (Mac) para selecionar múltiplos.</small>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
+                        {% if usuario and usuario._is_active %}checked{% endif %}>
+                    <label class="form-check-label" for="is_active">Usuário ativo</label>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('admin.list_usuarios') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+            <script>
+                // Validação de força de senha em tempo real
+                const passwordInput = document.getElementById('password_hash');
+                const strengthDiv = document.getElementById('password-strength');
+                const lengthCheck = document.getElementById('length-check');
+                const uppercaseCheck = document.getElementById('uppercase-check');
+                const lowercaseCheck = document.getElementById('lowercase-check');
+                const numberCheck = document.getElementById('number-check');
+
+                passwordInput.addEventListener('input', function() {
+                    const password = this.value;
+                    
+                    if (password.length > 0) {
+                        strengthDiv.style.display = 'block';
+                        
+                        // Validar comprimento
+                        if (password.length >= 8) {
+                            lengthCheck.innerHTML = '✓ Mínimo 8 caracteres';
+                            lengthCheck.style.color = 'green';
+                        } else {
+                            lengthCheck.innerHTML = '✗ Mínimo 8 caracteres';
+                            lengthCheck.style.color = 'red';
+                        }
+                        
+                        // Validar maiúscula
+                        if (/[A-Z]/.test(password)) {
+                            uppercaseCheck.innerHTML = '✓ Pelo menos uma letra maiúscula';
+                            uppercaseCheck.style.color = 'green';
+                        } else {
+                            uppercaseCheck.innerHTML = '✗ Pelo menos uma letra maiúscula';
+                            uppercaseCheck.style.color = 'red';
+                        }
+                        
+                        // Validar minúscula
+                        if (/[a-z]/.test(password)) {
+                            lowercaseCheck.innerHTML = '✓ Pelo menos uma letra minúscula';
+                            lowercaseCheck.style.color = 'green';
+                        } else {
+                            lowercaseCheck.innerHTML = '✗ Pelo menos uma letra minúscula';
+                            lowercaseCheck.style.color = 'red';
+                        }
+                        
+                        // Validar número
+                        if (/[0-9]/.test(password)) {
+                            numberCheck.innerHTML = '✓ Pelo menos um número';
+                            numberCheck.style.color = 'green';
+                        } else {
+                            numberCheck.innerHTML = '✗ Pelo menos um número';
+                            numberCheck.style.color = 'red';
+                        }
+                    } else {
+                        strengthDiv.style.display = 'none';
+                    }
+                });
+
+                // Validação no submit
+                document.getElementById('usuarioForm').addEventListener('submit', function(e) {
+                    var senha = document.getElementById('password_hash').value;
+                    var confirma = document.getElementById('confirm_password').value;
+                    
+                    if (senha || confirma) {
+                        // Verificar se senhas coincidem
+                        if (senha !== confirma) {
+                            e.preventDefault();
+                            alert('As senhas não coincidem!');
+                            return;
+                        }
+                        
+                        // Validar força da senha
+                        if (senha.length < 8) {
+                            e.preventDefault();
+                            alert('A senha deve ter no mínimo 8 caracteres.');
+                            return;
+                        }
+                        if (!/[A-Z]/.test(senha)) {
+                            e.preventDefault();
+                            alert('A senha deve conter pelo menos uma letra maiúscula.');
+                            return;
+                        }
+                        if (!/[a-z]/.test(senha)) {
+                            e.preventDefault();
+                            alert('A senha deve conter pelo menos uma letra minúscula.');
+                            return;
+                        }
+                        if (!/[0-9]/.test(senha)) {
+                            e.preventDefault();
+                            alert('A senha deve conter pelo menos um número.');
+                            return;
+                        }
+                    }
+                });
+            </script>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -3,45 +3,92 @@
 {% block title %}CST ICMS - Admin{% endblock %}
 
 {% block content %}
-    <h1>Administração de CST ICMS</h1>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">Administração de CST ICMS</h1>
+        {% if can_create() %}
+        <a href="{{ url_for('admin.create_cst') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Adicionar Novo CST ICMS
+        </a>
+        {% endif %}
+    </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
+    <!-- Campo de consulta -->
+    <form method="GET" action="{{ url_for('admin.list_cst') }}" class="mb-3">
+        <div class="row g-2">
+            <div class="col-md">
+                <input type="text" name="q" class="form-control" placeholder="Buscar por qualquer campo..." value="{{ request.args.get('q', '') }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i class="fas fa-search"></i> Consultar
+                </button>
+            </div>
+        </div>
+    </form>
+
+    {% set q = request.args.get('q', '') %}
+
+    <!-- {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
             {% endfor %}
         {% endif %}
-    {% endwith %}
+    {% endwith %} -->
 
-    <p><a href="{{ url_for('admin.create_cst') }}" class="btn">Adicionar Novo CST ICMS</a></p>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle text-nowrap">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Código</th>
+                    <th>Descrição</th>
+                    <th class="text-center">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cst in csts %}
+                <tr>
+                    <td>{{ cst.cst_id | highlight(q) }}</td>
+                    <td>{{ cst.codigo | highlight(q) }}</td>
+                    <td>{{ cst.descricao | highlight(q) }}</td>
+                    <td class="text-center">
+                        {% if can_edit() %}
+                        <div class="d-flex justify-content-center gap-2">
+                            <a href="{{ url_for('admin.edit_cst', cst_id=cst.cst_id) }}" class="btn btn-sm btn-warning">
+                                <i class="fas fa-edit"></i> Editar
+                            </a>
+                            <form action="{{ url_for('admin.delete_cst', cst_id=cst.cst_id) }}" method="post" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                    onclick="return confirm('Tem certeza que deseja excluir o CST {{ cst.codigo }}?');">
+                                    <i class="fas fa-trash"></i> Excluir
+                                </button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <span class="text-muted"><i class="fas fa-eye"></i> Visualização</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">Nenhum CST ICMS cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th scope="col">ID</th>
-                <th scope="col">Código</th>
-                <th scope="col">Descrição</th>
-                <th scope="col">Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for cst in csts %}
-            <tr>
-                <td>{{ cst.cst_id }}</td>
-                <td>{{ cst.codigo }}</td>
-                <td>{{ cst.descricao }}</td>
-                <td>
-                    <a href="{{ url_for('admin.edit_cst', cst_id=cst.cst_id) }}" class="btn btn-warning btn-sm">Editar</a>
-                    <form action="{{ url_for('admin.delete_cst', cst_id=cst.cst_id) }}" method="post" style="display:inline;">
-                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir o CST {{ cst.codigo }}?');">Excluir</button>
-                    </form>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="4">Nenhum CST ICMS cadastrado.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- Botão flutuante para voltar ao topo -->
+<button type="button" id="btn-top" class="btn btn-primary rounded-circle shadow"
+        style="position: fixed; bottom: 32px; right: 32px; z-index: 999; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;"
+        onclick="window.scrollTo({top: 0, behavior: 'smooth'});"
+        title="Voltar ao topo">
+    <i class="fas fa-arrow-up"></i>
+</button>
 {% endblock %}

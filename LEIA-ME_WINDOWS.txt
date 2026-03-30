@@ -1,0 +1,112 @@
+# 🪟 GUIA RÁPIDO - WINDOWS
+
+## ⚠️ IMPORTANTE: Execute do diretório raiz do projeto!
+
+### Passo 0: Preparar ambiente
+
+```powershell
+# Copiar o arquivo para o diretório do projeto
+Copy-Item atualizacao_ibs_cbs_servidor.tar.gz C:\nfe_app\
+cd C:\nfe_app
+```
+
+### Passo 1: Extrair o arquivo
+
+```powershell
+# Se você tem Windows 10 ou 11:
+tar -xzf atualizacao_ibs_cbs_servidor.tar.gz
+
+# Se não funcionar, use 7-Zip ou WinRAR
+# Ou clique direito no arquivo → "Extrair tudo..."
+```
+
+### Passo 2: Instalar dependências
+
+```powershell
+# Instalar dependências básicas
+pip install pandas openpyxl sqlalchemy psycopg2-binary flask flask-login
+
+# OU instalar todas as dependências do projeto
+pip install -r requirements.txt
+```
+
+### Passo 3: Executar atualização
+
+```powershell
+# DO DIRETÓRIO RAIZ (C:\nfe_app), não de dentro de scripts!
+python scripts\atualizar_ibs_cbs_servidor.py
+```
+
+## OU use o script PowerShell automatizado:
+
+```powershell
+cd C:\nfe_app
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\deploy_ibs_cbs_windows.ps1
+```
+
+---
+
+## 📖 Documentação Completa
+
+Veja o arquivo `DEPLOY_WINDOWS.md` para instruções detalhadas sobre:
+- Instalação do Python no Windows
+- Resolução de problemas
+- Configuração do PostgreSQL
+- E muito mais!
+
+---
+
+## ⚡ Super Rápido (comandos em sequência)
+
+```powershell
+cd C:\nfe_app
+tar -xzf atualizacao_ibs_cbs_servidor.tar.gz
+pip install -r requirements.txt
+python scripts\atualizar_ibs_cbs_servidor.py
+```
+
+**OU só as dependências essenciais:**
+```powershell
+pip install pandas openpyxl sqlalchemy psycopg2-binary flask flask-login
+python scripts\atualizar_ibs_cbs_servidor.py
+```
+
+---
+
+## 🆘 Erros Comuns
+
+###
+
+### ❌ "ModuleNotFoundError: No module named 'flask_login'"
+**Causa**: Dependências do projeto não instaladas
+**Solução**: 
+```powershell
+pip install -r requirements.txt
+# OU
+pip install flask flask-login sqlalchemy psycopg2-binary pandas openpyxl
+``` ❌ "ModuleNotFoundError: No module named 'database'"
+**Causa**: Você está executando de dentro da pasta scripts
+**Solução**: 
+```powershell
+cd C:\nfe_app  # Voltar para o diretório raiz
+python scripts\atualizar_ibs_cbs_servidor.py
+```
+
+### ❌ "tar não é reconhecido"
+**Solução**: Use 7-Zip ou extraia manualmente (clique direito → Extrair)
+
+### ❌ "Python não é reconhecido"  
+**Solução**: 
+1. Instale Python de https://www.python.org/downloads/
+2. IMPORTANTE: Marcar "Add Python to PATH" durante instalação
+
+### ❌ "scripts não assinados"
+**Solução**: 
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+---
+
+✅ **Pronto!** Após extrair e executar do diretório correto, sua tabela IBS/CBS estará atualizada!
