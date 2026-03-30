@@ -3450,6 +3450,20 @@ def list_produtos():
         
         where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
         
+        PER_PAGE = 20
+        page = request.args.get('page', 1, type=int)
+        if page < 1:
+            page = 1
+
+        total = db.execute(text(f"""
+            SELECT COUNT(*) FROM produtos p
+            LEFT JOIN ncms n ON n.ncm_id = p.ncm_id
+            WHERE p.cliente_id = :cliente_id{where_sql}
+        """), params).scalar() or 0
+
+        params['limit'] = PER_PAGE
+        params['offset'] = (page - 1) * PER_PAGE
+
         rows = db.execute(text(f"""
             SELECT p.produto_id, p.codigo_interno, p.descricao, p.unidade_comercial, p.preco_unitario_padrao,
                    p.ncm_id, p.cfop_id, p.ativo, n.codigo as ncm_codigo
@@ -3457,12 +3471,24 @@ def list_produtos():
             LEFT JOIN ncms n ON n.ncm_id = p.ncm_id
             WHERE p.cliente_id = :cliente_id{where_sql}
             ORDER BY p.descricao
+            LIMIT :limit OFFSET :offset
         """), params).fetchall()
         produtos = [_safe_row_to_dict(r, [
             'produto_id','codigo_interno','descricao','unidade_comercial',
             'preco_unitario_padrao','ncm_id','cfop_id','ativo','ncm_codigo'
         ]) for r in rows]
-        return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id)
+
+        total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+        pagination = {
+            'page': page,
+            'total_pages': total_pages,
+            'total': total,
+            'per_page': PER_PAGE,
+            'has_prev': page > 1,
+            'has_next': page < total_pages,
+        }
+        return render_template('admin/produtos/list.html', produtos=produtos,
+                               cliente_id=cliente_id, pagination=pagination)
     except Exception as e:
         print(f"[X] Erro list_produtos: {e}")
         flash('Erro ao carregar produtos', 'error')

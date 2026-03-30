@@ -24,6 +24,198 @@ from config.settings import SEFAZ_AMBIENTE_HOMOLOGACAO
 
 nfe_bp = Blueprint('nfe', __name__)
 
+
+@nfe_bp.route('/api/produtos')
+@login_required
+def api_produtos():
+    """Endpoint AJAX para busca de produtos via Select2"""
+    db = next(get_db())
+    try:
+        cliente_id = session.get('current_client_id')
+        if not cliente_id:
+            return jsonify({'results': [], 'pagination': {'more': False}})
+
+        q = request.args.get('q', '').strip()
+        page = request.args.get('page', 1, type=int)
+        PER_PAGE = 30
+        offset = (page - 1) * PER_PAGE
+
+        params = {'cliente_id': cliente_id, 'limit': PER_PAGE + 1, 'offset': offset}
+        where_extra = ''
+        if q:
+            where_extra = " AND (p.descricao ILIKE :q OR p.codigo_interno ILIKE :q)"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
+                   p.unidade_comercial, p.origem_mercadoria,
+                   n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
+                   cst.codigo as cst_codigo, cs.codigo as csosn_codigo
+            FROM produtos p
+            LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
+            LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
+            LEFT JOIN cst_icms cst ON p.cst_id = cst.cst_id
+            LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
+            WHERE p.cliente_id = :cliente_id AND p.ativo = true{where_extra}
+            ORDER BY p.descricao
+            LIMIT :limit OFFSET :offset
+        """), params).fetchall()
+
+        has_more = len(rows) > PER_PAGE
+        rows = rows[:PER_PAGE]
+
+        results = []
+        for r in rows:
+            if hasattr(r, '_mapping'):
+                d = dict(r._mapping)
+            elif hasattr(r, '_asdict'):
+                d = r._asdict()
+            else:
+                d = {
+                    'produto_id': r[0], 'codigo_interno': r[1], 'descricao': r[2],
+                    'preco_unitario_padrao': r[3], 'unidade_comercial': r[4],
+                    'origem_mercadoria': r[5], 'ncm_codigo': r[6], 'cfop_codigo': r[7],
+                    'cst_codigo': r[8], 'csosn_codigo': r[9]
+                }
+            results.append({
+                'id': d.get('produto_id'),
+                'text': f"{d.get('codigo_interno','') or ''} - {d.get('descricao','')}".strip(' -'),
+                'codigo': d.get('codigo_interno') or '',
+                'preco': float(d.get('preco_unitario_padrao') or 0),
+                'unidade': d.get('unidade_comercial') or 'UN',
+                'ncm': d.get('ncm_codigo') or '',
+                'cfop': d.get('cfop_codigo') or '',
+                'cst': d.get('cst_codigo') or '',
+                'csosn': d.get('csosn_codigo') or '',
+                'origem': d.get('origem_mercadoria') if d.get('origem_mercadoria') is not None else 0,
+            })
+
+        return jsonify({'results': results, 'pagination': {'more': has_more}})
+    except Exception as e:
+        print(f"[X] Erro api_produtos: {e}")
+        return jsonify({'results': [], 'pagination': {'more': False}})
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/api/proximo-numero')
+@login_required
+def api_proximo_numero():
+    """Retorna o próximo número disponível da NFe para o cliente/série"""
+    db = next(get_db())
+    try:
+        cliente_id = request.args.get('cliente_id', type=int) or session.get('current_client_id')
+        serie = request.args.get('serie', '1')
+        modelo = request.args.get('modelo', '55')
+
+        if not cliente_id:
+            return jsonify({'success': False, 'error': 'cliente_id não informado'})
+
+        # Passo 1: descobrir a última série usada para este cliente/modelo
+        ultima = db.execute(text("""
+            SELECT serie, numero
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+              AND modelo = :modelo
+              AND status NOT IN ('CANCELADA', 'RASCUNHO')
+            ORDER BY nfe_emitida_id DESC
+            LIMIT 1
+        """), {'cliente_id': cliente_id, 'modelo': modelo}).fetchone()
+
+        if ultima:
+            ultima_serie = str(ultima[0]) if ultima[0] is not None else serie
+        else:
+            ultima_serie = serie
+
+        # Passo 2: próximo número dentro dessa série
+        result = db.execute(text("""
+            SELECT COALESCE(MAX(numero), 0) + 1
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+              AND modelo = :modelo
+              AND serie = :serie
+              AND status NOT IN ('CANCELADA', 'RASCUNHO')
+        """), {'cliente_id': cliente_id, 'modelo': modelo, 'serie': ultima_serie}).fetchone()
+
+        proximo = int(result[0]) if result and result[0] else 1
+
+        return jsonify({
+            'success': True,
+            'proximo_numero': proximo,
+            'serie': ultima_serie
+        })
+    except Exception as e:
+        print(f"[X] Erro api_proximo_numero: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/api/ncms')
+@login_required
+def api_ncms():
+    """Endpoint AJAX para busca de NCMs via Select2"""
+    db = next(get_db())
+    try:
+        q = request.args.get('q', '').strip()
+        page = request.args.get('page', 1, type=int)
+        PER_PAGE = 50
+        offset = (page - 1) * PER_PAGE
+
+        params = {'limit': PER_PAGE + 1, 'offset': offset}
+        where = ''
+        if q:
+            where = " WHERE codigo ILIKE :q OR descricao ILIKE :q"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT codigo, descricao FROM ncms{where}
+            ORDER BY codigo LIMIT :limit OFFSET :offset
+        """), params).fetchall()
+
+        has_more = len(rows) > PER_PAGE
+        results = [
+            {'id': r[0], 'text': f"{r[0]} - {r[1]}"}
+            for r in rows[:PER_PAGE]
+        ]
+        return jsonify({'results': results, 'pagination': {'more': has_more}})
+    except Exception as e:
+        print(f"[X] Erro api_ncms: {e}")
+        return jsonify({'results': [], 'pagination': {'more': False}})
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/api/cfops')
+@login_required
+def api_cfops():
+    """Endpoint AJAX para busca de CFOPs via Select2"""
+    db = next(get_db())
+    try:
+        q = request.args.get('q', '').strip()
+        params = {'limit': 100}
+        where = ''
+        if q:
+            where = " WHERE cfop ILIKE :q OR descricao ILIKE :q"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT cfop, descricao FROM cfops{where}
+            ORDER BY cfop LIMIT :limit
+        """), params).fetchall()
+
+        results = [
+            {'id': r[0], 'text': f"{r[0]} - {r[1]}"}
+            for r in rows
+        ]
+        return jsonify({'results': results, 'pagination': {'more': False}})
+    except Exception as e:
+        print(f"[X] Erro api_cfops: {e}")
+        return jsonify({'results': [], 'pagination': {'more': False}})
+    finally:
+        db.close()
+
+
 # ALIAS PARA COMPATIBILIDADE
 @nfe_bp.route('/create', methods=['GET', 'POST'])
 @login_required
@@ -862,80 +1054,12 @@ def emitir_nfe():
                 'uf': dest.uf
             })
         
-        # BUSCAR PRODUTOS (apenas ativos)
-        produtos = db.query(Produto).filter_by(
-            cliente_id=emitente_cliente_id,
-            ativo=True
-        ).all()
+        # PRODUTOS: carregados via AJAX (/nfe/api/produtos) — sem query aqui
         produtos_data = []
-        for prod in produtos:
-            # Get the actual value from the Decimal column
-            preco_value = getattr(prod, 'preco_unitario_padrao', None)
-            preco_float = float(preco_value) if preco_value is not None else 0.0
-            
-            # Buscar códigos NCM e CFOP (não IDs)
-            ncm_codigo = None
-            ncm_id_value = getattr(prod, 'ncm_id', None)
-            if ncm_id_value is not None:
-                ncm_obj = db.query(Ncm).filter_by(ncm_id=ncm_id_value).first()
-                if ncm_obj:
-                    ncm_codigo = ncm_obj.codigo
-            
-            cfop_codigo = None
-            cfop_id_value = getattr(prod, 'cfop_id', None)
-            if cfop_id_value is not None:
-                cfop_obj = db.query(Cfop).filter_by(cfop_id=cfop_id_value).first()
-                if cfop_obj:
-                    cfop_codigo = cfop_obj.cfop
-            
-            cst_codigo = None
-            cst_id_value = getattr(prod, 'cst_id', None)
-            if cst_id_value is not None:
-                cst_obj = db.query(Csticms).filter_by(cst_id=cst_id_value).first()
-                if cst_obj:
-                    cst_codigo = cst_obj.codigo
-            
-            csosn_codigo = None
-            csosn_id_value = getattr(prod, 'csosn_id', None)
-            if csosn_id_value is not None:
-                csosn_obj = db.query(Csosnicms).filter_by(csosn_id=csosn_id_value).first()
-                if csosn_obj:
-                    csosn_codigo = csosn_obj.codigo
-            
-            produto_dict = {
-                'produto_id': prod.produto_id,
-                'codigo_interno': prod.codigo_interno,
-                'descricao': prod.descricao,
-                'preco_unitario_padrao': preco_float,
-                'unidade_comercial': prod.unidade_comercial,
-                'ncm_codigo': ncm_codigo,
-                'cfop_codigo': cfop_codigo,
-                'cst_codigo': cst_codigo,
-                'csosn_codigo': csosn_codigo,
-                'origem_mercadoria_id': prod.origem_mercadoria
-            }
-            
-            produtos_data.append(produto_dict)
         
-        # BUSCAR CFOPs
-        all_cfops = db.query(Cfop).all()
+        # CFOPs e NCMs carregados via AJAX (/nfe/api/cfops e /nfe/api/ncms)
         cfops_data = []
-        for cfop in all_cfops:
-            cfops_data.append({
-                'cfop_id': cfop.cfop_id,
-                'cfop': cfop.cfop,
-                'descricao': cfop.descricao
-            })
-        
-        # BUSCAR NCMs
-        all_ncms = db.query(Ncm).all()
         ncms_data = []
-        for ncm in all_ncms:
-            ncms_data.append({
-                'ncm_id': ncm.ncm_id,
-                'codigo': ncm.codigo,
-                'descricao': ncm.descricao
-            })
 
         # OK: BUSCAR CSTs E CSOSNs
         try:
@@ -1911,59 +2035,9 @@ def edit(nfe_id):
                     print(f"AVISO: Erro ao buscar clientes: {e}")
                     clientes = []
                 
-                # OK: CFOPS
-                try:
-                    cfops_query = text("SELECT cfop, descricao FROM cfops ORDER BY cfop")
-                    cfops_result = db.execute(cfops_query).fetchall()
-                    cfops = []
-                    for cfop_row in cfops_result:
-                        try:
-                            if hasattr(cfop_row, '_asdict'):
-                                cfops.append(cfop_row._asdict())
-                            elif hasattr(cfop_row, '_mapping'):
-                                mapping = cfop_row._mapping
-                                if callable(mapping):
-                                    cfops.append(dict(mapping()))
-                                else:
-                                    cfops.append(dict(mapping))
-                            else:
-                                cfops.append({
-                                    'cfop': cfop_row[0],
-                                    'descricao': cfop_row[1]
-                                })
-                        except Exception as e:
-                            print(f"AVISO: Erro ao processar CFOP: {e}")
-                            continue
-                except Exception as e:
-                    print(f"AVISO: Erro ao buscar CFOPs: {e}")
-                    cfops = []
-                
-                # OK: NCMs
-                try:
-                    ncms_query = text("SELECT codigo, descricao FROM ncms ORDER BY codigo")
-                    ncms_result = db.execute(ncms_query).fetchall()
-                    ncms = []
-                    for ncm_row in ncms_result:
-                        try:
-                            if hasattr(ncm_row, '_asdict'):
-                                ncms.append(ncm_row._asdict())
-                            elif hasattr(ncm_row, '_mapping'):
-                                mapping = ncm_row._mapping
-                                if callable(mapping):
-                                    ncms.append(dict(mapping()))
-                                else:
-                                    ncms.append(dict(mapping))
-                            else:
-                                ncms.append({
-                                    'codigo': ncm_row[0],
-                                    'descricao': ncm_row[1]
-                                })
-                        except Exception as e:
-                            print(f"AVISO: Erro ao processar NCM: {e}")
-                            continue
-                except Exception as e:
-                    print(f"AVISO: Erro ao buscar NCMs: {e}")
-                    ncms = []
+                # CFOPs e NCMs via AJAX — não carregados aqui
+                cfops = []
+                ncms = []
 
                 # OK: CSTs
                 try:
@@ -1999,52 +2073,8 @@ def edit(nfe_id):
                     flash('Erro: Cliente não identificado na NFe', 'error')
                     return redirect(url_for('nfe.list_nfes'))
                 
-                # OK: PRODUTOS (filtrar por cliente)
-                try:
-                    produtos_query = text("""
-                        SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
-                               p.unidade_comercial, n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
-                               cst.codigo as cst_codigo, cs.codigo as csosn_codigo, p.origem_mercadoria as origem_mercadoria_id
-                        FROM produtos p
-                        LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
-                        LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
-                        LEFT JOIN cst_icms cst ON p.cst_id = cst.cst_id
-                        LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
-                        WHERE p.cliente_id = :cliente_id AND p.ativo = true
-                        ORDER BY p.descricao
-                        LIMIT 500
-                    """)
-                    produtos_result = db.execute(produtos_query, {'cliente_id': cliente_id}).fetchall()
-                    produtos = []
-                    for produto_row in produtos_result:
-                        try:
-                            if hasattr(produto_row, '_asdict'):
-                                produtos.append(produto_row._asdict())
-                            elif hasattr(produto_row, '_mapping'):
-                                mapping = produto_row._mapping
-                                if callable(mapping):
-                                    produtos.append(dict(mapping()))
-                                else:
-                                    produtos.append(dict(mapping))
-                            else:
-                                produtos.append({
-                                    'produto_id': produto_row[0],
-                                    'codigo_interno': produto_row[1],
-                                    'descricao': produto_row[2],
-                                    'preco_unitario_padrao': float(produto_row[3]) if produto_row[3] else 0.0,
-                                    'unidade_comercial': produto_row[4],
-                                    'ncm_codigo': produto_row[5],
-                                    'cfop_codigo': produto_row[6],
-                                    'cst_codigo': produto_row[7],
-                                    'csosn_codigo': produto_row[8],
-                                    'origem_mercadoria_id': produto_row[9]
-                                })
-                        except Exception as e:
-                            print(f"AVISO: Erro ao processar produto: {e}")
-                            continue
-                except Exception as e:
-                    print(f"AVISO: Erro ao buscar produtos: {e}")
-                    produtos = []
+                # PRODUTOS: carregados via AJAX (/nfe/api/produtos) — sem query aqui
+                produtos = []
                 
                 # BUSCAR DADOS DO EMITENTE (CLIENTE)
                 try:
