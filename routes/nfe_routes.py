@@ -1567,21 +1567,19 @@ def enviar_danfe_email(nfe_id):
     """Enviar DANFE por email"""
     db = next(get_db())
     try:
-        # Obter dados do request
+        import re as _re
         data = request.json or {}
         email_destinatario = data.get('email_destinatario')
-        
+
         if not email_destinatario:
             return jsonify({'success': False, 'message': 'Email do destinatário não informado'}), 400
-        
-        # Validar formato do email
-        import re
-        if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
+
+        if not _re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
             return jsonify({'success': False, 'message': 'Email inválido'}), 400
-        
+
         # Buscar NFe no banco
         query = text("""
-            SELECT 
+            SELECT
                 n.*,
                 c.razao_social as cliente_razao_social,
                 c.nome_fantasia as cliente_fantasia
@@ -1589,82 +1587,133 @@ def enviar_danfe_email(nfe_id):
             JOIN clientes c ON n.cliente_id = c.cliente_id
             WHERE n.nfe_emitida_id = :nfe_id
         """)
-        result = db.execute(query, {'nfe_id': nfe_id})
-        nfe = result.first()
-        
+        nfe = db.execute(query, {'nfe_id': nfe_id}).first()
+
         if not nfe:
             return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
-        
-        # Converter para dict
+
         nfe_data = dict(nfe._mapping)
-        
+
         # Verificar se DANFE existe
         danfe_path = os.path.join('static', 'danfe', f'danfe_{nfe_id}.pdf')
         if not os.path.exists(danfe_path):
             return jsonify({'success': False, 'message': 'DANFE não encontrado. Gere o DANFE primeiro.'}), 404
-        
-        # Preparar dados do email
-        chave_acesso = nfe_data.get('chave_acesso', 'N/A')
-        numero = nfe_data.get('numero', 'N/A')
-        cliente_nome = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_razao_social', 'N/A')
-        
-        assunto = f'NFe {numero} - DANFE - {cliente_nome}'
-        
-        corpo_html = f"""
-        <html>
-            <head>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background-color: #4CAF50; color: white; padding: 15px; text-align: center; }}
-                    .content {{ padding: 20px; background-color: #f9f9f9; }}
-                    .info {{ margin: 10px 0; padding: 10px; background-color: white; border-left: 4px solid #4CAF50; }}
-                    .footer {{ text-align: center; padding: 15px; color: #666; font-size: 12px; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h2>Documento Auxiliar da Nota Fiscal Eletrônica</h2>
-                    </div>
-                    <div class="content">
-                        <p>Prezado(a),</p>
-                        <p>Segue em anexo o DANFE (Documento Auxiliar da Nota Fiscal Eletrônica).</p>
-                        
-                        <div class="info">
-                            <strong>Número NFe:</strong> {numero}<br>
-                            <strong>Emitente:</strong> {cliente_nome}<br>
-                            <strong>Chave de Acesso:</strong> {chave_acesso}
-                        </div>
-                        
-                        <p>Este documento deve acompanhar a mercadoria em trânsito.</p>
-                        <p>O arquivo XML da NFe pode ser consultado usando a chave de acesso acima.</p>
-                    </div>
-                    <div class="footer">
-                        <p>Este email foi enviado automaticamente pelo EmiteMax. Por favor, não responda.</p>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
-        
-        # Ler arquivo PDF
+
+        # Dados principais
+        chave_acesso  = nfe_data.get('chave_acesso', 'N/A')
+        numero        = nfe_data.get('numero', 'N/A')
+        serie         = nfe_data.get('serie', '')
+        protocolo     = nfe_data.get('protocolo_sefaz', 'N/A')
+        emitente_nome = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_razao_social', 'N/A')
+        dest_nome     = nfe_data.get('destinatario_razao_social', 'N/A')
+
+        data_aut = nfe_data.get('data_autorizacao')
+        if data_aut:
+            try:
+                from datetime import datetime as _dt
+                if isinstance(data_aut, str):
+                    data_aut = _dt.fromisoformat(data_aut)
+                data_aut_fmt = data_aut.strftime('%d/%m/%Y %H:%M:%S')
+            except Exception:
+                data_aut_fmt = str(data_aut)
+        else:
+            data_aut_fmt = 'N/A'
+
+        assunto = f'NF-e nº {numero} – {emitente_nome}'
+
+        corpo_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{ margin:0; padding:0; background:#f4f4f4; font-family:Arial,sans-serif; }}
+  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; }}
+  .header {{
+    background:#1565c0; color:#ffffff;
+    padding:28px 30px; text-align:center;
+  }}
+  .header h1 {{ margin:0; font-size:22px; font-weight:700; }}
+  .body {{ padding:30px 30px 10px 30px; color:#333333; }}
+  .body p {{ margin:0 0 14px 0; font-size:14px; line-height:1.6; }}
+  .info-table {{
+    width:100%; border-collapse:collapse;
+    background:#f8f9fa; border-radius:6px;
+    margin:18px 0 22px 0; font-size:13px;
+  }}
+  .info-table td {{ padding:10px 14px; border-bottom:1px solid #e0e0e0; vertical-align:top; }}
+  .info-table td:first-child {{ color:#555; font-weight:600; white-space:nowrap; width:38%; }}
+  .info-table td:last-child {{ color:#111; word-break:break-all; }}
+  .info-table tr:last-child td {{ border-bottom:none; }}
+  .anexos {{ margin:0 0 20px 0; font-size:14px; }}
+  .anexos strong {{ display:block; margin-bottom:6px; }}
+  .anexos ul {{ margin:0; padding-left:20px; }}
+  .anexos li {{ margin-bottom:4px; }}
+  .footer {{
+    text-align:center; padding:16px 30px;
+    font-size:12px; color:#888888;
+    border-top:1px solid #eeeeee;
+  }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>NF-e {numero} de {emitente_nome}</h1>
+  </div>
+  <div class="body">
+    <p>Prezado(a),</p>
+    <p>Segue anexo a nota fiscal eletrônica emitida por <strong>{emitente_nome}</strong>.</p>
+
+    <table class="info-table">
+      <tr><td>Numero da NF-e</td><td>{numero}</td></tr>
+      <tr><td>Emitente</td><td>{emitente_nome}</td></tr>
+      <tr><td>Destinatário</td><td>{dest_nome}</td></tr>
+      <tr><td>Chave de acesso</td><td style="font-size:11px">{chave_acesso}</td></tr>
+      <tr><td>Protocolo</td><td>{protocolo}</td></tr>
+      <tr><td>Data de autorização</td><td>{data_aut_fmt}</td></tr>
+    </table>
+
+    <div class="anexos">
+      <strong>Anexos incluídos:</strong>
+      <ul>
+        <li>DANFE (PDF)</li>
+        <li>XML da NF-e</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer">
+    Este email foi enviado automaticamente pelo EmiteMax.
+  </div>
+</div>
+</body>
+</html>"""
+
+        # Ler PDF
         try:
             with open(danfe_path, 'rb') as f:
                 pdf_content = f.read()
         except Exception as e:
-            print(f"Erro ao ler arquivo DANFE: {e}")
-            return jsonify({'success': False, 'message': f'Erro ao ler arquivo DANFE: {str(e)}'}), 500
-        
-        # Preparar anexo
-        anexos = [{
-            'nome': f'DANFE_{numero}.pdf',
-            'conteudo': pdf_content
-        }]
-        
-        # Enviar email usando o serviço
+            return jsonify({'success': False, 'message': f'Erro ao ler DANFE: {str(e)}'}), 500
+
+        anexos = [{'nome': f'NFe_{numero}_DANFE.pdf', 'conteudo': pdf_content}]
+
+        # Anexar XML se disponível em json_nfe
+        try:
+            json_nfe = nfe_data.get('json_nfe') or {}
+            if isinstance(json_nfe, str):
+                import json as _json
+                json_nfe = _json.loads(json_nfe)
+            xml_content = json_nfe.get('xml_content')
+            if xml_content:
+                if isinstance(xml_content, str):
+                    xml_bytes = xml_content.encode('utf-8')
+                else:
+                    xml_bytes = xml_content
+                anexos.append({'nome': f'NFe_{numero}.xml', 'conteudo': xml_bytes})
+        except Exception as e:
+            print(f"[AVISO] Não foi possível anexar XML: {e}")
+
         from services.email_service import EmailService
-        
         try:
             email_service = EmailService()
             resultado = email_service.enviar_email(
@@ -1672,26 +1721,19 @@ def enviar_danfe_email(nfe_id):
                 assunto=assunto,
                 corpo_html=corpo_html,
                 anexos=anexos,
-                from_name=cliente_nome
+                from_name=emitente_nome
             )
-            
             if resultado['success']:
-                print(f"Email com DANFE enviado com sucesso para {email_destinatario}")
-                return jsonify({'success': True, 'message': f'DANFE enviado para {email_destinatario}'})
+                print(f"Email enviado para {email_destinatario}")
+                return jsonify({'success': True, 'message': f'Email enviado para {email_destinatario}'})
             else:
-                print(f"Erro ao enviar email: {resultado['message']}")
                 return jsonify({'success': False, 'message': resultado['message']}), 500
-                
         except Exception as e:
-            print(f"Erro ao enviar email: {e}")
-            import traceback
-            traceback.print_exc()
+            import traceback; traceback.print_exc()
             return jsonify({'success': False, 'message': f'Erro ao enviar email: {str(e)}'}), 500
-        
+
     except Exception as e:
-        print(f"Erro geral: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
     finally:
         db.close()

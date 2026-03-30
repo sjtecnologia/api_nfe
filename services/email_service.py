@@ -16,7 +16,7 @@ class EmailService:
         self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
         self.smtp_user = os.getenv('SMTP_USER')
         self.smtp_password = os.getenv('SMTP_PASSWORD')
-        self.from_name = os.getenv('SMTP_FROM_NAME', 'EmiteMax')
+        self.from_name = os.getenv('SMTP_FROM_NAME') or os.getenv('EMAIL_FROM_NAME', 'EmiteMax')
         
         # Debug detalhado
         print(f"[?] EmailService Debug:")
