@@ -2638,6 +2638,29 @@ def reenviar_nfe(nfe_id):
         # Se não encontrou pelo ID, tentar usar dados já armazenados na NFe
         if not destinatario_data and nfe_data.get('destinatario_razao_social'):
             print("Usando dados do destinatário já armazenados na NFe")
+            # Buscar IE e tipo_pessoa na tabela pelo CNPJ/CPF
+            ie_reenvio = None
+            tipo_pessoa_reenvio = None
+            try:
+                cpf_cnpj_stored = nfe_data.get('destinatario_cnpj_cpf', '')
+                if cpf_cnpj_stored:
+                    ie_lookup = text("""
+                        SELECT ie, tipo_pessoa FROM destinatarios_nfe
+                        WHERE cpf_cnpj = :cpf_cnpj AND cliente_id = :cliente_id
+                        LIMIT 1
+                    """)
+                    ie_row = db.execute(ie_lookup, {
+                        'cpf_cnpj': cpf_cnpj_stored,
+                        'cliente_id': nfe_data['cliente_id']
+                    }).fetchone()
+                    if ie_row:
+                        ie_map = ie_row._mapping if hasattr(ie_row, '_mapping') else ie_row
+                        ie_reenvio = ie_map['ie']
+                        tipo_pessoa_reenvio = ie_map['tipo_pessoa']
+                        print(f"IE do destinatário recuperado: {ie_reenvio}")
+            except Exception as e:
+                print(f"Aviso: Erro ao buscar IE do destinatário no reenvio: {e}")
+
             destinatario_data = {
                 'nome_razao_social': nfe_data.get('destinatario_razao_social'),
                 'cpf_cnpj': nfe_data.get('destinatario_cnpj_cpf'),
@@ -2647,7 +2670,9 @@ def reenviar_nfe(nfe_id):
                 'cep': form_data.get('dest_cep', '00000000'),
                 'codigo_municipio': form_data.get('dest_codigo_municipio', '3550308'),
                 'nome_municipio': form_data.get('dest_municipio', 'SAO PAULO'),
-                'uf': form_data.get('dest_uf', 'SP')
+                'uf': form_data.get('dest_uf', 'SP'),
+                'ie': ie_reenvio,
+                'tipo_pessoa': tipo_pessoa_reenvio
             }
         
         # Verificar se destinatário foi encontrado
