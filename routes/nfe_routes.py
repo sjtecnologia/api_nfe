@@ -2343,7 +2343,7 @@ def edit(nfe_id):
                     flash('Destinatário não selecionado', 'error')
                     return redirect(url_for('nfe.edit', nfe_id=nfe_id))
                 
-                destinatario_query = text("SELECT destinatario_id, nome_razao_social, cpf_cnpj FROM destinatarios_nfe WHERE destinatario_id = :dest_id")
+                destinatario_query = text("SELECT destinatario_id, nome_razao_social, cpf_cnpj, ie, tipo_pessoa FROM destinatarios_nfe WHERE destinatario_id = :dest_id")
                 destinatario_result = db.execute(destinatario_query, {'dest_id': destinatario_id}).fetchone()
                 
                 if not destinatario_result:
@@ -2608,7 +2608,7 @@ def reenviar_nfe(nfe_id):
             try:
                 dest_query = text("""
                     SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
-                           bairro, cep, codigo_municipio, nome_municipio, uf
+                           bairro, cep, codigo_municipio, nome_municipio, uf, ie, tipo_pessoa
                     FROM destinatarios_nfe 
                     WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
                 """)
@@ -2628,7 +2628,9 @@ def reenviar_nfe(nfe_id):
                         'cep': dest_mapping['cep'],
                         'codigo_municipio': dest_mapping['codigo_municipio'],
                         'nome_municipio': dest_mapping['nome_municipio'],
-                        'uf': dest_mapping['uf']
+                        'uf': dest_mapping['uf'],
+                        'ie': dest_mapping['ie'],
+                        'tipo_pessoa': dest_mapping['tipo_pessoa']
                     }
             except Exception as e:
                 print(f"Aviso: Erro ao buscar destinatário por ID: {e}")
