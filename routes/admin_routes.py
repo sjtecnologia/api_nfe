@@ -3034,10 +3034,11 @@ def edit_cliente(cliente_id: int):
         
         # Consultar produtos cadastrados para o cliente
         prod_rows = db.execute(text("""
-            SELECT *
-            FROM produtos
-            WHERE cliente_id = :cid
-            ORDER BY descricao
+            SELECT p.*, n.codigo as ncm_codigo
+            FROM produtos p
+            LEFT JOIN ncms n ON n.ncm_id = p.ncm_id
+            WHERE p.cliente_id = :cid
+            ORDER BY p.descricao
         """), {'cid': cliente_id}).fetchall()
         produtos_existentes = []
         if prod_rows:
@@ -3047,7 +3048,14 @@ def edit_cliente(cliente_id: int):
         
         # Consultar regras tributárias para o cliente
         regras_rows = db.execute(text("""
-            SELECT * FROM regras_tributacao WHERE cliente_id = :cid
+            SELECT rt.*,
+                   cf.cfop as cfop_codigo, cf.descricao as cfop_descricao,
+                   nc.codigo as ncm_codigo, nc.descricao as ncm_descricao
+            FROM regras_tributacao rt
+            LEFT JOIN cfops cf ON rt.cfop_id = cf.cfop_id
+            LEFT JOIN ncms nc ON rt.ncm_id = nc.ncm_id
+            WHERE rt.cliente_id = :cid
+            ORDER BY rt.regra_tributacao_id DESC
         """), {'cid': cliente_id}).fetchall()
         regras_existentes = []
         if regras_rows:

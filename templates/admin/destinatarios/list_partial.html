@@ -1,24 +1,42 @@
 <div class="table-responsive">
     {% if destinatarios_existentes %}
-        <table class="table table-bordered table-hover table-sm align-middle mb-0">
+        <table class="table table-hover">
             <thead class="table-light">
                 <tr>
-                    <th>ID</th>
-                    <th>Nome/Razão Social</th>
                     <th>CPF/CNPJ</th>
+                    <th>Nome/Razão Social</th>
+                    <th>Tipo</th>
                     <th>Município</th>
-                    <th>Email</th>
+                    <th>E-mail</th>
                     <th>Telefone</th>
-                    <th style="width: 110px;">Ações</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
                 {% for destinatario in destinatarios_existentes %}
                 <tr>
-                    <td>{{ destinatario.destinatario_id }}</td>
-                    <td>{{ destinatario.nome_razao_social }}</td>
                     <td><code>{{ destinatario.cpf_cnpj or '-' }}</code></td>
-                    <td>{{ destinatario.nome_municipio or '-' }}</td>
+                    <td>
+                        <strong>{{ destinatario.nome_razao_social }}</strong>
+                        {% if destinatario.ie %}
+                            <br><small class="text-muted">IE: {{ destinatario.ie }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if destinatario.tipo_pessoa == 'F' %}
+                            <span class="badge bg-info">Pessoa Física</span>
+                        {% elif destinatario.tipo_pessoa == 'J' %}
+                            <span class="badge bg-primary">Pessoa Jurídica</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ destinatario.tipo_pessoa or 'N/A' }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {{ destinatario.nome_municipio or '-' }}
+                        {% if destinatario.codigo_municipio %}
+                            <br><small class="text-muted">Cód: {{ destinatario.codigo_municipio }}</small>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if destinatario.email %}
                             <a href="mailto:{{ destinatario.email }}">{{ destinatario.email }}</a>
@@ -30,25 +48,28 @@
                         {% else %}-{% endif %}
                     </td>
                     <td>
-                        <a href="{{ url_for('admin.edit_destinatario', destinatario_id=destinatario.destinatario_id) }}" class="btn btn-sm btn-outline-primary me-1" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        <form action="{{ url_for('admin.delete_destinatario', destinatario_id=destinatario.destinatario_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este destinatário?');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir"><i class="fas fa-trash"></i></button>
-                        </form>
+                        {% if can_edit() %}
+                        <div class="btn-group" role="group">
+                            <a href="{{ url_for('admin.edit_destinatario', destinatario_id=destinatario.destinatario_id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                        </div>
+                        {% else %}
+                        <span class="text-muted"><i class="fas fa-eye"></i> Visualização</span>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     {% else %}
-        <div class="text-center py-4">
-            <i class="fas fa-users fa-3x text-muted mb-3"></i>
-            <h5>Nenhum destinatário/tomador cadastrado</h5>
-            <p class="text-muted">Comece adicionando um novo destinatário/tomador para este cliente.</p>
-            <a href="{{ url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente.cliente_id) }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Adicionar Primeiro Destinatário/Tomador
-            </a>
+        <div class="text-center py-5">
+            <i class="fas fa-address-book fa-4x text-muted mb-4"></i>
+            <h5 class="text-muted">Nenhum destinatário/tomador cadastrado</h5>
+            {% if can_create() %}
+            <p class="text-muted">Clique em "Adicionar Novo Destinatário/Tomador" para cadastrar o primeiro.</p>
+            {% endif %}
         </div>
     {% endif %}
 </div>
