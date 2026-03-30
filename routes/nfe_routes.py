@@ -1626,13 +1626,13 @@ def enviar_danfe_email(nfe_id):
 <head>
 <meta charset="UTF-8">
 <style>
-  body {{ margin:0; padding:0; background:#f4f4f4; font-family:Arial,sans-serif; }}
-  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; }}
+  body {{ margin:0; padding:20px; background:#f4f4f4; font-family:Arial,sans-serif; }}
+  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #dadce0; border-radius:8px; overflow:hidden; }}
   .header {{
     background:#1565c0; color:#ffffff;
     padding:28px 30px; text-align:center;
   }}
-  .header h1 {{ margin:0; font-size:22px; font-weight:700; }}
+  .header h1 {{ margin:0; font-size:22px; font-weight:700; line-height:1.3; }}
   .body {{ padding:30px 30px 10px 30px; color:#333333; }}
   .body p {{ margin:0 0 14px 0; font-size:14px; line-height:1.6; }}
   .info-table {{
