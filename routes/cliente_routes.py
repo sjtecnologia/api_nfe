@@ -47,6 +47,9 @@ def dashboard(cliente_hash):
         print(f"[OK] Acesso permitido ao cliente {cliente_id} para usuário {current_user.username}")
         print(f"[?] DASHBOARD: Entrando no dashboard do cliente {cliente_id}")
         
+        # Garantir que session está atualizada com o cliente atual
+        session['current_client_id'] = cliente_id
+        
         # Buscar dados do cliente
         print("[LOG] Buscando dados do cliente...")
         cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
