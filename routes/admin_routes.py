@@ -3412,7 +3412,10 @@ def list_produtos():
         cliente_id = session.get('current_client_id')
         if not cliente_id:
             flash('Nenhum cliente selecionado.', 'error')
-            return render_template('admin/produtos/list.html', produtos=[])
+            return render_template('admin/produtos/list.html', produtos=[], cliente_nome='', cliente_id=None)
+        
+        cliente_nome_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
+        cliente_nome = cliente_nome_row.razao_social if cliente_nome_row else ''
         
         # Capturar filtros
         filtro_codigo = request.args.get('codigo', '').strip()
@@ -3454,11 +3457,11 @@ def list_produtos():
             'produto_id','codigo_interno','descricao','unidade_comercial',
             'preco_unitario_padrao','ncm_id','cfop_id','ativo','ncm_codigo'
         ]) for r in rows]
-        return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id)
+        return render_template('admin/produtos/list.html', produtos=produtos, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
         print(f"[X] Erro list_produtos: {e}")
         flash('Erro ao carregar produtos', 'error')
-        return render_template('admin/produtos/list.html', produtos=[])
+        return render_template('admin/produtos/list.html', produtos=[], cliente_nome='', cliente_id=None)
     finally:
         db.close()
 
@@ -3693,7 +3696,7 @@ def create_produto():
     try:
         # Busca listas para selects (NCM, CFOP, etc)
         ncm_lista = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms")).fetchall()
-        cfop_lista = db.execute(text("SELECT cfop_id, cfop ,descricao FROM cfops")).fetchall()
+        cfop_lista = db.execute(text("SELECT cfop_id, cfop AS codigo, descricao FROM cfops")).fetchall()
         origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria")).fetchall()
         csts_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms")).fetchall()
         csosns_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms")).fetchall()
@@ -3766,9 +3769,8 @@ def store_produto():
                 :ncm_id, :cfop_id, :origem_mercadoria, :cest, :cst_id, :csosn_id, :created_by_user_id, :ativo)
         """), data)
         db.commit()
-        flash('Produto criado', 'success')
-        # Redireciona para edição do cliente, aba produtos
-        return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
+        flash('Produto criado com sucesso!', 'success')
+        return redirect(url_for('admin.list_produtos'))
     except Exception as e:
         db.rollback()
         print(f"[X] Erro store_produto: {e}")

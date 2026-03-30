@@ -215,9 +215,9 @@
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-box me-2"></i>Produtos Associados</span>
                             {% if can_create() %}
-                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Produto" data-modal-url="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id, modal=true) }}">
+                            <a href="{{ url_for('admin.create_produto', cliente_id=cliente.cliente_id) }}" class="btn btn-primary btn-sm">
                                 <i class="fas fa-plus"></i> Adicionar Novo Produto
-                            </button>
+                            </a>
                             {% endif %}
                         </div>
                         <div class="card-body pt-3">
