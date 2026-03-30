@@ -2739,6 +2739,26 @@ def reenviar_nfe(nfe_id):
         
         if resultado['success']:
             print(f"OK: NFe reenviada com sucesso")
+            # Atualizar status no banco para AUTORIZADA
+            try:
+                update_autorizada_query = text("""
+                    UPDATE nfe_emitidas 
+                    SET status = 'AUTORIZADA',
+                        chave_acesso = :chave_acesso,
+                        protocolo_sefaz = :protocolo,
+                        data_autorizacao = NOW(),
+                        mensagem_sefaz = 'Autorizado o uso da NF-e'
+                    WHERE nfe_emitida_id = :nfe_id
+                """)
+                db.execute(update_autorizada_query, {
+                    'nfe_id': nfe_id,
+                    'chave_acesso': resultado.get('chave_acesso'),
+                    'protocolo': resultado.get('protocolo')
+                })
+                db.commit()
+                print(f"[OK] Status atualizado para AUTORIZADA no banco - protocolo: {resultado.get('protocolo')}")
+            except Exception as e_update:
+                print(f"[ERRO] Falha ao atualizar status no banco após autorização: {e_update}")
             return jsonify({
                 'success': True,
                 'message': 'NF-e reenviada com sucesso!',
