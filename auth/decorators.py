@@ -57,6 +57,18 @@ def admin_required():
         return decorated_function
     return decorator
 
+def super_admin_required():
+    """Decorator que permite acesso apenas a super admins"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash('Acesso não autorizado. Faça login.', 'danger')
+                return redirect(url_for('auth.login'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
 def editor_or_admin_required():
     """Decorator que permite acesso a editores e admins (bloqueia apenas viewers)"""
     def decorator(f):
@@ -81,15 +93,17 @@ def viewer_or_higher_required():
         return decorated_function
     return decorator
 
-def block_viewer_access(f):
+def block_viewer_access():
     """Decorator que bloqueia acesso de viewers (apenas leitura)"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated:
-            flash('Acesso não autorizado. Faça login.', 'danger')
-            return redirect(url_for('auth.login'))
-        return f(*args, **kwargs)
-    return decorated_function
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash('Acesso não autorizado. Faça login.', 'danger')
+                return redirect(url_for('auth.login'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 def client_access_required():
     """Decorator para verificar se o usuário tem acesso ao cliente - USER.ID CORRIGIDO"""

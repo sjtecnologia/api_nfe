@@ -10,6 +10,12 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import pkcs12
 from database.models import CertificadoDigital
 
+def _encrypt_password(password):
+    """Codifica a senha do certificado em base64 para armazenamento"""
+    if not password:
+        return None
+    return base64.b64encode(password.encode('utf-8')).decode('utf-8')
+
 def process_certificate_upload(db_session, cliente_id, request_form, request_files):
     """Processa o upload de certificado digital"""
     cert_file = request_files.get('conteudo_certificado_file')
