@@ -531,7 +531,7 @@ def generate_nfe_xml_nfelib(
             reducao_bc = Decimal(str(item.get('reducao_base_icms', '0')))
             bc_icms = Decimal(str(item.get('bc_icms', valor_total)))
             valor_icms = Decimal(str(item.get('valor_icms', '0')))
-            modalidade_bc = item.get('modalidade_bc_icms', '3')
+            modalidade_bc = item.get('modalidade_bc_icms') or '3'
             
             # Criar ICMS com CST apropriado
             if cst_item == '00':
