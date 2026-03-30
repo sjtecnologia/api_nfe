@@ -761,11 +761,6 @@
                         {% elif current_user.is_admin() %}
                             {% if session.current_client_id %}
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
-                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
-                                    </a>
-                                </li>
-                                <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
                                         <i class="fas fa-box"></i> Produtos
                                     </a>
