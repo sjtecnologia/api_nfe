@@ -761,25 +761,43 @@
                         {% elif current_user.is_admin() %}
                             {% if session.current_client_id %}
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_clientes') }}">
-                                        <i class="fas fa-users"></i> Clientes
+                                    <a class="nav-link" href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-plus-circle"></i> Emitir NF-e
                                     </a>
                                 </li>
-                                {% if current_user.is_super_admin() %}
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_nfes') }}">
-                                        <i class="fas fa-file-invoice"></i> Todas NFes
+                                    <a class="nav-link" href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-list"></i> NF-es
                                     </a>
                                 </li>
-                                {% endif %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.emitir_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-cash-register"></i> Emitir NFC-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.listar_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-receipt"></i> NFC-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
+                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-box"></i> Produtos
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
+                                        <i class="fas fa-address-book"></i> Destinatários
+                                    </a>
+                                </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_certificados') }}">
                                         <i class="fas fa-certificate"></i> Certificados
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}">
-                                        <i class="fas fa-box"></i> Produtos
                                     </a>
                                 </li>
                                 <li class="nav-item dropdown">
@@ -798,6 +816,11 @@
                                             <i class="fas fa-balance-scale"></i> IBS/CBS (LC 214/2025)
                                         </a>
                                     </div>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_clientes') }}">
+                                        <i class="fas fa-users"></i> Clientes
+                                    </a>
                                 </li>
                             {% endif %}
                             <li class="nav-item dropdown">
