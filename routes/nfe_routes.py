@@ -3391,72 +3391,80 @@ def compartilhar_nfe(nfe_id):
             email_service = EmailService()
             
             # Preparar dados do email
-            assunto = f'NFe #{nfe_id} - {nfe_data.get("cliente_nome", "")}'
-            
-            # Verificar se data_autorizacao não é None antes do strftime
-            data_autorizacao = nfe_data.get('data_autorizacao')
-            if data_autorizacao:
-                data_autorizacao_str = data_autorizacao.strftime('%d/%m/%Y %H:%M:%S')
+            _emitente_comp = nfe_data.get('cliente_nome', 'N/A')
+            _numero_comp   = nfe_data.get('numero', nfe_id)
+            _dest_comp     = nfe_data.get('destinatario_razao_social', 'N/A')
+            _chave_comp    = nfe_data.get('chave_acesso', 'N/A')
+            _proto_comp    = nfe_data.get('protocolo_sefaz', 'N/A')
+
+            _data_aut_comp = nfe_data.get('data_autorizacao')
+            if _data_aut_comp:
+                try:
+                    from datetime import datetime as _dttm
+                    if isinstance(_data_aut_comp, str):
+                        _data_aut_comp = _dttm.fromisoformat(_data_aut_comp)
+                    _data_aut_comp_fmt = _data_aut_comp.strftime('%d/%m/%Y %H:%M:%S')
+                except Exception:
+                    _data_aut_comp_fmt = str(_data_aut_comp)
             else:
-                data_autorizacao_str = 'N/A'
-            
-            corpo_html = f"""
-            <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                        <h2 style="color: #007bff; margin: 0;"> Nota Fiscal Eletrônica</h2>
-                    </div>
-                    
-                    <p>Prezado(a),</p>
-                    <p>Segue em anexo a Nota Fiscal Eletrônica conforme solicitado:</p>
-                    
-                    <div style="background-color: #ffffff; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                        <table style="width: 100%; border-collapse: collapse;">
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <td style="padding: 8px; font-weight: bold; width: 40%;">Número NFe:</td>
-                                <td style="padding: 8px;">{nfe_id}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <td style="padding: 8px; font-weight: bold;">Emitente:</td>
-                                <td style="padding: 8px;">{nfe_data.get('cliente_nome', 'N/A')}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <td style="padding: 8px; font-weight: bold;">Destinatário:</td>
-                                <td style="padding: 8px;">{nfe_data.get('destinatario_razao_social', 'N/A')}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <td style="padding: 8px; font-weight: bold;">Chave de Acesso:</td>
-                                <td style="padding: 8px; font-family: monospace; font-size: 12px;">{nfe_data.get('chave_acesso', 'N/A')}</td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid #eee;">
-                                <td style="padding: 8px; font-weight: bold;">Protocolo:</td>
-                                <td style="padding: 8px;">{nfe_data.get('protocolo_sefaz', 'N/A')}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 8px; font-weight: bold;">Data de Autorização:</td>
-                                <td style="padding: 8px;">{data_autorizacao_str}</td>
-                            </tr>
-                        </table>
-                    </div>
-                    
-                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; font-size: 14px;">
-                        <strong> Anexos inclusos:</strong>
-                        <ul style="margin: 10px 0; padding-left: 20px;">
-                            {"<li> DANFE (PDF)</li>" if include_danfe else ""}
-                            {"<li> XML da NFe</li>" if include_xml else ""}
-                        </ul>
-                    </div>
-                    
-                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-                    <p style="font-size: 12px; color: #666; text-align: center;">
-                        Este email foi enviado automaticamente pelo Sistema de NFe.<br>
-                        Em caso de dúvidas, entre em contato conosco.
-                    </p>
-                </div>
-            </body>
-            </html>
-            """
+                _data_aut_comp_fmt = 'N/A'
+
+            assunto = f'NF-e nº {_numero_comp} – {_emitente_comp}'
+
+            _anexos_lista = ""
+            if include_danfe:
+                _anexos_lista += "<li>DANFE (PDF)</li>"
+            if include_xml:
+                _anexos_lista += "<li>XML da NF-e</li>"
+
+            corpo_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{ margin:0; padding:20px; background:#f4f4f4; font-family:Arial,sans-serif; }}
+  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #dadce0; border-radius:8px; overflow:hidden; }}
+  .header {{ background:#1565c0; color:#ffffff; padding:28px 30px; text-align:center; }}
+  .header h1 {{ margin:0; font-size:22px; font-weight:700; line-height:1.3; }}
+  .body {{ padding:30px 30px 10px 30px; color:#333333; }}
+  .body p {{ margin:0 0 14px 0; font-size:14px; line-height:1.6; }}
+  .info-table {{ width:100%; border-collapse:collapse; background:#f8f9fa; margin:18px 0 22px 0; font-size:13px; }}
+  .info-table td {{ padding:10px 14px; border-bottom:1px solid #e0e0e0; vertical-align:top; }}
+  .info-table td:first-child {{ color:#555; font-weight:600; white-space:nowrap; width:38%; }}
+  .info-table td:last-child {{ color:#111; word-break:break-all; }}
+  .info-table tr:last-child td {{ border-bottom:none; }}
+  .anexos {{ margin:0 0 20px 0; font-size:14px; }}
+  .anexos strong {{ display:block; margin-bottom:6px; }}
+  .anexos ul {{ margin:0; padding-left:20px; }}
+  .anexos li {{ margin-bottom:4px; }}
+  .footer {{ text-align:center; padding:16px 30px; font-size:12px; color:#888888; border-top:1px solid #eeeeee; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>NF-e {_numero_comp} de {_emitente_comp}</h1>
+  </div>
+  <div class="body">
+    <p>Prezado(a),</p>
+    <p>Segue anexo a nota fiscal eletrônica emitida por <strong>{_emitente_comp}</strong>.</p>
+    <table class="info-table">
+      <tr><td>Numero da NF-e</td><td>{_numero_comp}</td></tr>
+      <tr><td>Emitente</td><td>{_emitente_comp}</td></tr>
+      <tr><td>Destinatário</td><td>{_dest_comp}</td></tr>
+      <tr><td>Chave de acesso</td><td style="font-size:11px">{_chave_comp}</td></tr>
+      <tr><td>Protocolo</td><td>{_proto_comp}</td></tr>
+      <tr><td>Data de autorização</td><td>{_data_aut_comp_fmt}</td></tr>
+    </table>
+    <div class="anexos">
+      <strong>Anexos incluídos:</strong>
+      <ul>{_anexos_lista}</ul>
+    </div>
+  </div>
+  <div class="footer">Este email foi enviado automaticamente pelo EmiteMax.</div>
+</div>
+</body>
+</html>"""
             
             print(f" Enviando email...")
             
@@ -3465,7 +3473,8 @@ def compartilhar_nfe(nfe_id):
                 destinatario=email_destino,
                 assunto=assunto,
                 corpo_html=corpo_html,
-                anexos=anexos
+                anexos=anexos,
+                from_name=_emitente_comp
             )
             
             print(f" Resultado do envio: {resultado}")
