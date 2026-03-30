@@ -79,13 +79,11 @@ def editar_produto(produto_id):
                 WHERE produto_id=:produto_id
             """), data)
             db.commit()
-            flash('Produto atualizado', 'success')
+            flash('Produto atualizado com sucesso!', 'success')
             # Buscar cliente_id do produto atualizado
             row = db.execute(text("SELECT cliente_id FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
             cliente_id = row[0] if row else None
-            if cliente_id:
-                return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
-            return redirect(url_for('admin.list_produtos'))
+            return redirect(url_for('admin.list_produtos', cliente_id=cliente_id) if cliente_id else url_for('admin.list_produtos'))
         else:
             # Exibe form de edição
             row = db.execute(text("SELECT * FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
@@ -3409,11 +3407,20 @@ def list_produtos():
     db = _get_db()
     try:
         from flask import session
-        cliente_id = session.get('current_client_id')
+        # Prioridade: query string > sessão
+        cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
+        if cliente_id:
+            try:
+                cliente_id = int(cliente_id)
+            except (ValueError, TypeError):
+                cliente_id = None
         if not cliente_id:
             flash('Nenhum cliente selecionado.', 'error')
             return render_template('admin/produtos/list.html', produtos=[], cliente_nome='', cliente_id=None)
         
+        # Atualiza sessão com o cliente_id recebido
+        session['current_client_id'] = cliente_id
+
         cliente_nome_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
         cliente_nome = cliente_nome_row.razao_social if cliente_nome_row else ''
         
@@ -3770,7 +3777,7 @@ def store_produto():
         """), data)
         db.commit()
         flash('Produto criado com sucesso!', 'success')
-        return redirect(url_for('admin.list_produtos'))
+        return redirect(url_for('admin.list_produtos', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
         print(f"[X] Erro store_produto: {e}")

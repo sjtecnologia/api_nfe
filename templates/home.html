@@ -91,7 +91,7 @@
                             </a>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <a href="{{ url_for('admin.list_produtos') }}" class="btn btn-outline-primary btn-block btn-lg">
+                            <a href="{{ url_for('admin.list_produtos', cliente_id=session.current_client_id) }}" class="btn btn-outline-primary btn-block btn-lg">
                                 <i class="fas fa-boxes"></i>
                                 Produtos
                             </a>
