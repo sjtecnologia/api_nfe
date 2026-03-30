@@ -3244,7 +3244,8 @@ def compartilhar_nfe(nfe_id):
         query = text("""
             SELECT 
                 n.*,
-                c.razao_social as cliente_nome
+                c.razao_social as cliente_nome,
+                c.nome_fantasia as cliente_fantasia
             FROM nfe_emitidas n
             JOIN clientes c ON n.cliente_id = c.cliente_id
             WHERE n.nfe_emitida_id = :nfe_id
