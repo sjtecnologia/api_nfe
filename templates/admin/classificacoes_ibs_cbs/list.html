@@ -83,9 +83,7 @@
                                     <span class="badge bg-primary">{{ "%.2f"|format(c.aliquota_cbs) }}%</span>
                                 </td>
                                 <td class="text-center">
-                                    {% if c.ativo is none %}
-                                        <span class="badge bg-warning">Indefinido</span>
-                                    {% elif c.ativo %}
+                                    {% if c.ativo %}
                                         <span class="badge bg-success">Ativo</span>
                                     {% else %}
                                         <span class="badge bg-secondary">Inativo</span>

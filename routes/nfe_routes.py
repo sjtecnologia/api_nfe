@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
-from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, AssinaturaCliente
+from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
 from auth.decorators import (
     admin_required,
     block_viewer_access,
@@ -23,6 +23,198 @@ from utils.nfe_validators import validar_dados_nfe, validar_xml_nfe
 from config.settings import SEFAZ_AMBIENTE_HOMOLOGACAO
 
 nfe_bp = Blueprint('nfe', __name__)
+
+
+@nfe_bp.route('/api/produtos')
+@login_required
+def api_produtos():
+    """Endpoint AJAX para busca de produtos via Select2"""
+    db = next(get_db())
+    try:
+        cliente_id = session.get('current_client_id')
+        if not cliente_id:
+            return jsonify({'results': [], 'pagination': {'more': False}})
+
+        q = request.args.get('q', '').strip()
+        page = request.args.get('page', 1, type=int)
+        PER_PAGE = 30
+        offset = (page - 1) * PER_PAGE
+
+        params = {'cliente_id': cliente_id, 'limit': PER_PAGE + 1, 'offset': offset}
+        where_extra = ''
+        if q:
+            where_extra = " AND (p.descricao ILIKE :q OR p.codigo_interno ILIKE :q)"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
+                   p.unidade_comercial, p.origem_mercadoria,
+                   n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
+                   cst.codigo as cst_codigo, cs.codigo as csosn_codigo
+            FROM produtos p
+            LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
+            LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
+            LEFT JOIN cst_icms cst ON p.cst_id = cst.cst_id
+            LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
+            WHERE p.cliente_id = :cliente_id AND p.ativo = true{where_extra}
+            ORDER BY p.descricao
+            LIMIT :limit OFFSET :offset
+        """), params).fetchall()
+
+        has_more = len(rows) > PER_PAGE
+        rows = rows[:PER_PAGE]
+
+        results = []
+        for r in rows:
+            if hasattr(r, '_mapping'):
+                d = dict(r._mapping)
+            elif hasattr(r, '_asdict'):
+                d = r._asdict()
+            else:
+                d = {
+                    'produto_id': r[0], 'codigo_interno': r[1], 'descricao': r[2],
+                    'preco_unitario_padrao': r[3], 'unidade_comercial': r[4],
+                    'origem_mercadoria': r[5], 'ncm_codigo': r[6], 'cfop_codigo': r[7],
+                    'cst_codigo': r[8], 'csosn_codigo': r[9]
+                }
+            results.append({
+                'id': d.get('produto_id'),
+                'text': f"{d.get('codigo_interno','') or ''} - {d.get('descricao','')}".strip(' -'),
+                'codigo': d.get('codigo_interno') or '',
+                'preco': float(d.get('preco_unitario_padrao') or 0),
+                'unidade': d.get('unidade_comercial') or 'UN',
+                'ncm': d.get('ncm_codigo') or '',
+                'cfop': d.get('cfop_codigo') or '',
+                'cst': d.get('cst_codigo') or '',
+                'csosn': d.get('csosn_codigo') or '',
+                'origem': d.get('origem_mercadoria') if d.get('origem_mercadoria') is not None else 0,
+            })
+
+        return jsonify({'results': results, 'pagination': {'more': has_more}})
+    except Exception as e:
+        print(f"[X] Erro api_produtos: {e}")
+        return jsonify({'results': [], 'pagination': {'more': False}})
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/api/proximo-numero')
+@login_required
+def api_proximo_numero():
+    """Retorna o próximo número disponível da NFe para o cliente/série"""
+    db = next(get_db())
+    try:
+        cliente_id = request.args.get('cliente_id', type=int) or session.get('current_client_id')
+        serie = request.args.get('serie', '1')
+        modelo = request.args.get('modelo', '55')
+
+        if not cliente_id:
+            return jsonify({'success': False, 'error': 'cliente_id não informado'})
+
+        # Passo 1: descobrir a última série usada para este cliente/modelo
+        ultima = db.execute(text("""
+            SELECT serie, numero
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+              AND modelo = :modelo
+              AND status NOT IN ('CANCELADA', 'RASCUNHO')
+            ORDER BY nfe_emitida_id DESC
+            LIMIT 1
+        """), {'cliente_id': cliente_id, 'modelo': modelo}).fetchone()
+
+        if ultima:
+            ultima_serie = str(ultima[0]) if ultima[0] is not None else serie
+        else:
+            ultima_serie = serie
+
+        # Passo 2: próximo número dentro dessa série
+        result = db.execute(text("""
+            SELECT COALESCE(MAX(numero), 0) + 1
+            FROM nfe_emitidas
+            WHERE cliente_id = :cliente_id
+              AND modelo = :modelo
+              AND serie = :serie
+              AND status NOT IN ('CANCELADA', 'RASCUNHO')
+        """), {'cliente_id': cliente_id, 'modelo': modelo, 'serie': ultima_serie}).fetchone()
+
+        proximo = int(result[0]) if result and result[0] else 1
+
+        return jsonify({
+            'success': True,
+            'proximo_numero': proximo,
+            'serie': ultima_serie
+        })
+    except Exception as e:
+        print(f"[X] Erro api_proximo_numero: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/api/ncms')
+@login_required
+def api_ncms():
+    """Endpoint AJAX para busca de NCMs via Select2"""
+    db = next(get_db())
+    try:
+        q = request.args.get('q', '').strip()
+        page = request.args.get('page', 1, type=int)
+        PER_PAGE = 50
+        offset = (page - 1) * PER_PAGE
+
+        params = {'limit': PER_PAGE + 1, 'offset': offset}
+        where = ''
+        if q:
+            where = " WHERE codigo ILIKE :q OR descricao ILIKE :q"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT codigo, descricao FROM ncms{where}
+            ORDER BY codigo LIMIT :limit OFFSET :offset
+        """), params).fetchall()
+
+        has_more = len(rows) > PER_PAGE
+        results = [
+            {'id': r[0], 'text': f"{r[0]} - {r[1]}"}
+            for r in rows[:PER_PAGE]
+        ]
+        return jsonify({'results': results, 'pagination': {'more': has_more}})
+    except Exception as e:
+        print(f"[X] Erro api_ncms: {e}")
+        return jsonify({'results': [], 'pagination': {'more': False}})
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/api/cfops')
+@login_required
+def api_cfops():
+    """Endpoint AJAX para busca de CFOPs via Select2"""
+    db = next(get_db())
+    try:
+        q = request.args.get('q', '').strip()
+        params = {'limit': 100}
+        where = ''
+        if q:
+            where = " WHERE cfop ILIKE :q OR descricao ILIKE :q"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT cfop, descricao FROM cfops{where}
+            ORDER BY cfop LIMIT :limit
+        """), params).fetchall()
+
+        results = [
+            {'id': r[0], 'text': f"{r[0]} - {r[1]}"}
+            for r in rows
+        ]
+        return jsonify({'results': results, 'pagination': {'more': False}})
+    except Exception as e:
+        print(f"[X] Erro api_cfops: {e}")
+        return jsonify({'results': [], 'pagination': {'more': False}})
+    finally:
+        db.close()
+
 
 # ALIAS PARA COMPATIBILIDADE
 @nfe_bp.route('/create', methods=['GET', 'POST'])
@@ -83,26 +275,9 @@ def emitir_nfe():
         if not emitente_data:
             flash('Cliente não encontrado', 'danger')
             return redirect(url_for('home.home'))
-
-        # VERIFICAR SE CLIENTE ESTÁ ATIVO NO CADASTRO
-        if not emitente_data.ativo:
-            flash('Emissão bloqueada: cliente inativo. Entre em contato com o suporte.', 'danger')
-            return redirect(url_for('home.home'))
-
-        # VERIFICAR ASSINATURA / BLOQUEIO POR INADIMPLÊNCIA OU CANCELAMENTO
-        assinatura = db.query(AssinaturaCliente).filter(
-            AssinaturaCliente.cliente_id == emitente_cliente_id
-        ).order_by(AssinaturaCliente.data_inicio.desc()).first()
-
-        if assinatura:
-            pode, motivo = assinatura.pode_emitir()
-            if not pode:
-                flash(f'Emissão bloqueada: {motivo}', 'danger')
-                return redirect(url_for('home.home'))
-        # Se não há assinatura, a emissão é liberada (cliente sem plano vinculado)
-
+        
         print(f"OK: Emitente encontrado: {emitente_data.razao_social}")
-
+        
         # VALIDAR CNPJ DO EMITENTE
         cnpj_emitente_limpo = emitente_data.cnpj.replace('.', '').replace('/', '').replace('-', '').strip()
         print(f"🔍 [VALIDAÇÃO] CNPJ emitente: {cnpj_emitente_limpo}")
@@ -879,80 +1054,12 @@ def emitir_nfe():
                 'uf': dest.uf
             })
         
-        # BUSCAR PRODUTOS (apenas ativos)
-        produtos = db.query(Produto).filter_by(
-            cliente_id=emitente_cliente_id,
-            ativo=True
-        ).all()
+        # PRODUTOS: carregados via AJAX (/nfe/api/produtos) — sem query aqui
         produtos_data = []
-        for prod in produtos:
-            # Get the actual value from the Decimal column
-            preco_value = getattr(prod, 'preco_unitario_padrao', None)
-            preco_float = float(preco_value) if preco_value is not None else 0.0
-            
-            # Buscar códigos NCM e CFOP (não IDs)
-            ncm_codigo = None
-            ncm_id_value = getattr(prod, 'ncm_id', None)
-            if ncm_id_value is not None:
-                ncm_obj = db.query(Ncm).filter_by(ncm_id=ncm_id_value).first()
-                if ncm_obj:
-                    ncm_codigo = ncm_obj.codigo
-            
-            cfop_codigo = None
-            cfop_id_value = getattr(prod, 'cfop_id', None)
-            if cfop_id_value is not None:
-                cfop_obj = db.query(Cfop).filter_by(cfop_id=cfop_id_value).first()
-                if cfop_obj:
-                    cfop_codigo = cfop_obj.cfop
-            
-            cst_codigo = None
-            cst_id_value = getattr(prod, 'cst_id', None)
-            if cst_id_value is not None:
-                cst_obj = db.query(Csticms).filter_by(cst_id=cst_id_value).first()
-                if cst_obj:
-                    cst_codigo = cst_obj.codigo
-            
-            csosn_codigo = None
-            csosn_id_value = getattr(prod, 'csosn_id', None)
-            if csosn_id_value is not None:
-                csosn_obj = db.query(Csosnicms).filter_by(csosn_id=csosn_id_value).first()
-                if csosn_obj:
-                    csosn_codigo = csosn_obj.codigo
-            
-            produto_dict = {
-                'produto_id': prod.produto_id,
-                'codigo_interno': prod.codigo_interno,
-                'descricao': prod.descricao,
-                'preco_unitario_padrao': preco_float,
-                'unidade_comercial': prod.unidade_comercial,
-                'ncm_codigo': ncm_codigo,
-                'cfop_codigo': cfop_codigo,
-                'cst_codigo': cst_codigo,
-                'csosn_codigo': csosn_codigo,
-                'origem_mercadoria_id': prod.origem_mercadoria
-            }
-            
-            produtos_data.append(produto_dict)
         
-        # BUSCAR CFOPs
-        all_cfops = db.query(Cfop).all()
+        # CFOPs e NCMs carregados via AJAX (/nfe/api/cfops e /nfe/api/ncms)
         cfops_data = []
-        for cfop in all_cfops:
-            cfops_data.append({
-                'cfop_id': cfop.cfop_id,
-                'cfop': cfop.cfop,
-                'descricao': cfop.descricao
-            })
-        
-        # BUSCAR NCMs
-        all_ncms = db.query(Ncm).all()
         ncms_data = []
-        for ncm in all_ncms:
-            ncms_data.append({
-                'ncm_id': ncm.ncm_id,
-                'codigo': ncm.codigo,
-                'descricao': ncm.descricao
-            })
 
         # OK: BUSCAR CSTs E CSOSNs
         try:
@@ -1010,25 +1117,9 @@ def emitir_nfe():
         
         print(f" Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
         
-        # Buscar última série usada pelo cliente para pré-preencher o formulário
-        ultima_serie = 1
-        try:
-            from sqlalchemy import text as sql_text
-            result_serie = db.execute(sql_text(
-                "SELECT serie FROM nfe_emitidas WHERE cliente_id = :cid "
-                "AND status NOT IN ('CANCELADA', 'DENEGADA') "
-                "ORDER BY data_criacao DESC LIMIT 1"
-            ), {'cid': emitente_cliente_id}).fetchone()
-            if result_serie:
-                ultima_serie = result_serie[0]
-                print(f"[SERIE] Última série usada pelo cliente {emitente_cliente_id}: {ultima_serie}")
-        except Exception as e:
-            print(f"[SERIE] Aviso: não foi possível buscar última série: {e}")
-        
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,
                              destinatarios=destinatarios_data,
-                             ultima_serie=ultima_serie,
                              produtos=produtos_data,
                              all_cfops=cfops_data,
                              all_csts=csts_data,
@@ -1600,21 +1691,19 @@ def enviar_danfe_email(nfe_id):
     """Enviar DANFE por email"""
     db = next(get_db())
     try:
-        # Obter dados do request
+        import re as _re
         data = request.json or {}
         email_destinatario = data.get('email_destinatario')
-        
+
         if not email_destinatario:
             return jsonify({'success': False, 'message': 'Email do destinatário não informado'}), 400
-        
-        # Validar formato do email
-        import re
-        if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
+
+        if not _re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
             return jsonify({'success': False, 'message': 'Email inválido'}), 400
-        
+
         # Buscar NFe no banco
         query = text("""
-            SELECT 
+            SELECT
                 n.*,
                 c.razao_social as cliente_razao_social,
                 c.nome_fantasia as cliente_fantasia
@@ -1622,116 +1711,153 @@ def enviar_danfe_email(nfe_id):
             JOIN clientes c ON n.cliente_id = c.cliente_id
             WHERE n.nfe_emitida_id = :nfe_id
         """)
-        result = db.execute(query, {'nfe_id': nfe_id})
-        nfe = result.first()
-        
+        nfe = db.execute(query, {'nfe_id': nfe_id}).first()
+
         if not nfe:
             return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
-        
-        # Converter para dict
+
         nfe_data = dict(nfe._mapping)
-        
+
         # Verificar se DANFE existe
         danfe_path = os.path.join('static', 'danfe', f'danfe_{nfe_id}.pdf')
         if not os.path.exists(danfe_path):
             return jsonify({'success': False, 'message': 'DANFE não encontrado. Gere o DANFE primeiro.'}), 404
-        
-        # Preparar dados do email
-        chave_acesso = nfe_data.get('chave_acesso', 'N/A')
-        numero = nfe_data.get('numero', 'N/A')
-        cliente_nome = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_razao_social', 'N/A')
-        
-        assunto = f'NF-e nº {numero} - {cliente_nome}'
-        
-        corpo_html = f"""
-        <html>
-            <body style="margin:0; padding:0; background:#f3f5f9; font-family:'Segoe UI', Tahoma, Arial, sans-serif; color:#1f2937;">
-                <div style="max-width:680px; margin:24px auto; padding:0 14px;">
-                    <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(17,24,39,0.08);">
-                        <div style="background:linear-gradient(120deg,#0f4c81 0%,#0b6aa8 55%,#22a2c9 100%); color:#ffffff; padding:24px 28px;">
-                            <div style="font-size:12px; letter-spacing:0.10em; text-transform:uppercase; opacity:0.9;">Documento Fiscal</div>
-                            <h1 style="margin:8px 0 0 0; font-size:22px; line-height:1.3; font-weight:700;">DANFE da NF-e {numero}</h1>
-                        </div>
 
-                        <div style="padding:24px 28px;">
-                            <p style="margin:0 0 14px 0; font-size:15px;">Prezado(a),</p>
-                            <p style="margin:0 0 18px 0; font-size:15px; color:#374151;">Segue em anexo o DANFE referente a NF-e emitida por <strong>{cliente_nome}</strong>.</p>
+        # Dados principais
+        chave_acesso  = nfe_data.get('chave_acesso', 'N/A')
+        numero        = nfe_data.get('numero', 'N/A')
+        serie         = nfe_data.get('serie', '')
+        protocolo     = nfe_data.get('protocolo_sefaz', 'N/A')
+        emitente_nome = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_razao_social', 'N/A')
+        dest_nome     = nfe_data.get('destinatario_razao_social', 'N/A')
 
-                            <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin:0 0 18px 0;">
-                                <table style="width:100%; border-collapse:collapse; font-size:14px;">
-                                    <tr>
-                                        <td style="padding:8px 0; width:38%; color:#6b7280;">Numero da NF-e</td>
-                                        <td style="padding:8px 0; font-weight:600;">{numero}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:8px 0; color:#6b7280;">Emitente</td>
-                                        <td style="padding:8px 0; font-weight:600;">{cliente_nome}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:8px 0; color:#6b7280;">Chave de acesso</td>
-                                        <td style="padding:8px 0; font-family:Consolas, 'Courier New', monospace; font-size:12px; word-break:break-all;">{chave_acesso}</td>
-                                    </tr>
-                                </table>
-                            </div>
+        data_aut = nfe_data.get('data_autorizacao')
+        if data_aut:
+            try:
+                from datetime import datetime as _dt
+                if isinstance(data_aut, str):
+                    data_aut = _dt.fromisoformat(data_aut)
+                data_aut_fmt = data_aut.strftime('%d/%m/%Y %H:%M:%S')
+            except Exception:
+                data_aut_fmt = str(data_aut)
+        else:
+            data_aut_fmt = 'N/A'
 
-                            <p style="margin:0 0 8px 0; font-size:14px; color:#4b5563;">Anexo enviado: <strong>DANFE em PDF</strong>.</p>
-                            <p style="margin:0; font-size:14px; color:#4b5563;">Em caso de duvidas, responda este contato para suporte.</p>
-                        </div>
+        assunto = f'NF-e nº {numero} – {emitente_nome}'
 
-                        <div style="padding:14px 28px 20px 28px; border-top:1px solid #eef2f7;">
-                            <p style="margin:0; font-size:12px; color:#6b7280; text-align:center;">Este email foi enviado automaticamente pela EmiteMax.</p>
-                        </div>
-                    </div>
-                </div>
-            </body>
-        </html>
-        """
-        
-        # Ler arquivo PDF
+        corpo_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{ margin:0; padding:20px; background:#f4f4f4; font-family:Arial,sans-serif; }}
+  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #dadce0; border-radius:8px; overflow:hidden; }}
+  .header {{
+    background:#1565c0; color:#ffffff;
+    padding:28px 30px; text-align:center;
+  }}
+  .header h1 {{ margin:0; font-size:22px; font-weight:700; line-height:1.3; }}
+  .body {{ padding:30px 30px 10px 30px; color:#333333; }}
+  .body p {{ margin:0 0 14px 0; font-size:14px; line-height:1.6; }}
+  .info-table {{
+    width:100%; border-collapse:collapse;
+    background:#f8f9fa; border-radius:6px;
+    margin:18px 0 22px 0; font-size:13px;
+  }}
+  .info-table td {{ padding:10px 14px; border-bottom:1px solid #e0e0e0; vertical-align:top; }}
+  .info-table td:first-child {{ color:#555; font-weight:600; white-space:nowrap; width:38%; }}
+  .info-table td:last-child {{ color:#111; word-break:break-all; }}
+  .info-table tr:last-child td {{ border-bottom:none; }}
+  .anexos {{ margin:0 0 20px 0; font-size:14px; }}
+  .anexos strong {{ display:block; margin-bottom:6px; }}
+  .anexos ul {{ margin:0; padding-left:20px; }}
+  .anexos li {{ margin-bottom:4px; }}
+  .footer {{
+    text-align:center; padding:16px 30px;
+    font-size:12px; color:#888888;
+    border-top:1px solid #eeeeee;
+  }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>NF-e {numero} de {emitente_nome}</h1>
+  </div>
+  <div class="body">
+    <p>Prezado(a),</p>
+    <p>Segue anexo a nota fiscal eletrônica emitida por <strong>{emitente_nome}</strong>.</p>
+
+    <table class="info-table">
+      <tr><td>Numero da NF-e</td><td>{numero}</td></tr>
+      <tr><td>Emitente</td><td>{emitente_nome}</td></tr>
+      <tr><td>Destinatário</td><td>{dest_nome}</td></tr>
+      <tr><td>Chave de acesso</td><td style="font-size:11px">{chave_acesso}</td></tr>
+      <tr><td>Protocolo</td><td>{protocolo}</td></tr>
+      <tr><td>Data de autorização</td><td>{data_aut_fmt}</td></tr>
+    </table>
+
+    <div class="anexos">
+      <strong>Anexos incluídos:</strong>
+      <ul>
+        <li>DANFE (PDF)</li>
+        <li>XML da NF-e</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer">
+    Este email foi enviado automaticamente pelo EmiteMax.
+  </div>
+</div>
+</body>
+</html>"""
+
+        # Ler PDF
         try:
             with open(danfe_path, 'rb') as f:
                 pdf_content = f.read()
         except Exception as e:
-            print(f"Erro ao ler arquivo DANFE: {e}")
-            return jsonify({'success': False, 'message': f'Erro ao ler arquivo DANFE: {str(e)}'}), 500
-        
-        # Preparar anexo
-        anexos = [{
-            'nome': f'DANFE_{numero}.pdf',
-            'conteudo': pdf_content
-        }]
-        
-        # Enviar email usando o serviço
+            return jsonify({'success': False, 'message': f'Erro ao ler DANFE: {str(e)}'}), 500
+
+        anexos = [{'nome': f'NFe_{numero}_DANFE.pdf', 'conteudo': pdf_content}]
+
+        # Anexar XML se disponível em json_nfe
+        try:
+            json_nfe = nfe_data.get('json_nfe') or {}
+            if isinstance(json_nfe, str):
+                import json as _json
+                json_nfe = _json.loads(json_nfe)
+            xml_content = json_nfe.get('xml_content')
+            if xml_content:
+                if isinstance(xml_content, str):
+                    xml_bytes = xml_content.encode('utf-8')
+                else:
+                    xml_bytes = xml_content
+                anexos.append({'nome': f'NFe_{numero}.xml', 'conteudo': xml_bytes})
+        except Exception as e:
+            print(f"[AVISO] Não foi possível anexar XML: {e}")
+
         from services.email_service import EmailService
-        
         try:
             email_service = EmailService()
-            # Exibir Nome Fantasia (ou Razão Social) como remetente no email
-            email_service.from_name = cliente_nome
             resultado = email_service.enviar_email(
                 destinatario=email_destinatario,
                 assunto=assunto,
                 corpo_html=corpo_html,
-                anexos=anexos
+                anexos=anexos,
+                from_name=emitente_nome
             )
-            
             if resultado['success']:
-                print(f"Email com DANFE enviado com sucesso para {email_destinatario}")
-                return jsonify({'success': True, 'message': f'DANFE enviado para {email_destinatario}'})
+                print(f"Email enviado para {email_destinatario}")
+                return jsonify({'success': True, 'message': f'Email enviado para {email_destinatario}'})
             else:
-                print(f"Erro ao enviar email: {resultado['message']}")
                 return jsonify({'success': False, 'message': resultado['message']}), 500
-                
         except Exception as e:
-            print(f"Erro ao enviar email: {e}")
-            import traceback
-            traceback.print_exc()
+            import traceback; traceback.print_exc()
             return jsonify({'success': False, 'message': f'Erro ao enviar email: {str(e)}'}), 500
-        
+
     except Exception as e:
-        print(f"Erro geral: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
     finally:
         db.close()
@@ -1909,59 +2035,9 @@ def edit(nfe_id):
                     print(f"AVISO: Erro ao buscar clientes: {e}")
                     clientes = []
                 
-                # OK: CFOPS
-                try:
-                    cfops_query = text("SELECT cfop, descricao FROM cfops ORDER BY cfop")
-                    cfops_result = db.execute(cfops_query).fetchall()
-                    cfops = []
-                    for cfop_row in cfops_result:
-                        try:
-                            if hasattr(cfop_row, '_asdict'):
-                                cfops.append(cfop_row._asdict())
-                            elif hasattr(cfop_row, '_mapping'):
-                                mapping = cfop_row._mapping
-                                if callable(mapping):
-                                    cfops.append(dict(mapping()))
-                                else:
-                                    cfops.append(dict(mapping))
-                            else:
-                                cfops.append({
-                                    'cfop': cfop_row[0],
-                                    'descricao': cfop_row[1]
-                                })
-                        except Exception as e:
-                            print(f"AVISO: Erro ao processar CFOP: {e}")
-                            continue
-                except Exception as e:
-                    print(f"AVISO: Erro ao buscar CFOPs: {e}")
-                    cfops = []
-                
-                # OK: NCMs
-                try:
-                    ncms_query = text("SELECT codigo, descricao FROM ncms ORDER BY codigo")
-                    ncms_result = db.execute(ncms_query).fetchall()
-                    ncms = []
-                    for ncm_row in ncms_result:
-                        try:
-                            if hasattr(ncm_row, '_asdict'):
-                                ncms.append(ncm_row._asdict())
-                            elif hasattr(ncm_row, '_mapping'):
-                                mapping = ncm_row._mapping
-                                if callable(mapping):
-                                    ncms.append(dict(mapping()))
-                                else:
-                                    ncms.append(dict(mapping))
-                            else:
-                                ncms.append({
-                                    'codigo': ncm_row[0],
-                                    'descricao': ncm_row[1]
-                                })
-                        except Exception as e:
-                            print(f"AVISO: Erro ao processar NCM: {e}")
-                            continue
-                except Exception as e:
-                    print(f"AVISO: Erro ao buscar NCMs: {e}")
-                    ncms = []
+                # CFOPs e NCMs via AJAX — não carregados aqui
+                cfops = []
+                ncms = []
 
                 # OK: CSTs
                 try:
@@ -1997,51 +2073,8 @@ def edit(nfe_id):
                     flash('Erro: Cliente não identificado na NFe', 'error')
                     return redirect(url_for('nfe.list_nfes'))
                 
-                # OK: PRODUTOS (filtrar por cliente)
-                try:
-                    produtos_query = text("""
-                        SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
-                               p.unidade_comercial, n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
-                               cst.codigo as cst_codigo, cs.codigo as csosn_codigo, p.origem_mercadoria as origem_mercadoria_id
-                        FROM produtos p
-                        LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
-                        LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
-                        LEFT JOIN cst_icms cst ON p.cst_id = cst.cst_id
-                        LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
-                        WHERE p.cliente_id = :cliente_id AND p.ativo = true
-                        ORDER BY p.descricao
-                    """)
-                    produtos_result = db.execute(produtos_query, {'cliente_id': cliente_id}).fetchall()
-                    produtos = []
-                    for produto_row in produtos_result:
-                        try:
-                            if hasattr(produto_row, '_asdict'):
-                                produtos.append(produto_row._asdict())
-                            elif hasattr(produto_row, '_mapping'):
-                                mapping = produto_row._mapping
-                                if callable(mapping):
-                                    produtos.append(dict(mapping()))
-                                else:
-                                    produtos.append(dict(mapping))
-                            else:
-                                produtos.append({
-                                    'produto_id': produto_row[0],
-                                    'codigo_interno': produto_row[1],
-                                    'descricao': produto_row[2],
-                                    'preco_unitario_padrao': float(produto_row[3]) if produto_row[3] else 0.0,
-                                    'unidade_comercial': produto_row[4],
-                                    'ncm_codigo': produto_row[5],
-                                    'cfop_codigo': produto_row[6],
-                                    'cst_codigo': produto_row[7],
-                                    'csosn_codigo': produto_row[8],
-                                    'origem_mercadoria_id': produto_row[9]
-                                })
-                        except Exception as e:
-                            print(f"AVISO: Erro ao processar produto: {e}")
-                            continue
-                except Exception as e:
-                    print(f"AVISO: Erro ao buscar produtos: {e}")
-                    produtos = []
+                # PRODUTOS: carregados via AJAX (/nfe/api/produtos) — sem query aqui
+                produtos = []
                 
                 # BUSCAR DADOS DO EMITENTE (CLIENTE)
                 try:
@@ -2383,7 +2416,7 @@ def edit(nfe_id):
                     flash('Destinatário não selecionado', 'error')
                     return redirect(url_for('nfe.edit', nfe_id=nfe_id))
                 
-                destinatario_query = text("SELECT destinatario_id, nome_razao_social, cpf_cnpj FROM destinatarios_nfe WHERE destinatario_id = :dest_id")
+                destinatario_query = text("SELECT destinatario_id, nome_razao_social, cpf_cnpj, ie, tipo_pessoa FROM destinatarios_nfe WHERE destinatario_id = :dest_id")
                 destinatario_result = db.execute(destinatario_query, {'dest_id': destinatario_id}).fetchone()
                 
                 if not destinatario_result:
@@ -2648,7 +2681,7 @@ def reenviar_nfe(nfe_id):
             try:
                 dest_query = text("""
                     SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
-                           bairro, cep, codigo_municipio, nome_municipio, uf
+                           bairro, cep, codigo_municipio, nome_municipio, uf, ie, tipo_pessoa
                     FROM destinatarios_nfe 
                     WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
                 """)
@@ -2668,7 +2701,9 @@ def reenviar_nfe(nfe_id):
                         'cep': dest_mapping['cep'],
                         'codigo_municipio': dest_mapping['codigo_municipio'],
                         'nome_municipio': dest_mapping['nome_municipio'],
-                        'uf': dest_mapping['uf']
+                        'uf': dest_mapping['uf'],
+                        'ie': dest_mapping['ie'],
+                        'tipo_pessoa': dest_mapping['tipo_pessoa']
                     }
             except Exception as e:
                 print(f"Aviso: Erro ao buscar destinatário por ID: {e}")
@@ -2676,6 +2711,29 @@ def reenviar_nfe(nfe_id):
         # Se não encontrou pelo ID, tentar usar dados já armazenados na NFe
         if not destinatario_data and nfe_data.get('destinatario_razao_social'):
             print("Usando dados do destinatário já armazenados na NFe")
+            # Buscar IE e tipo_pessoa na tabela pelo CNPJ/CPF
+            ie_reenvio = None
+            tipo_pessoa_reenvio = None
+            try:
+                cpf_cnpj_stored = nfe_data.get('destinatario_cnpj_cpf', '')
+                if cpf_cnpj_stored:
+                    ie_lookup = text("""
+                        SELECT ie, tipo_pessoa FROM destinatarios_nfe
+                        WHERE cpf_cnpj = :cpf_cnpj AND cliente_id = :cliente_id
+                        LIMIT 1
+                    """)
+                    ie_row = db.execute(ie_lookup, {
+                        'cpf_cnpj': cpf_cnpj_stored,
+                        'cliente_id': nfe_data['cliente_id']
+                    }).fetchone()
+                    if ie_row:
+                        ie_map = ie_row._mapping if hasattr(ie_row, '_mapping') else ie_row
+                        ie_reenvio = ie_map['ie']
+                        tipo_pessoa_reenvio = ie_map['tipo_pessoa']
+                        print(f"IE do destinatário recuperado: {ie_reenvio}")
+            except Exception as e:
+                print(f"Aviso: Erro ao buscar IE do destinatário no reenvio: {e}")
+
             destinatario_data = {
                 'nome_razao_social': nfe_data.get('destinatario_razao_social'),
                 'cpf_cnpj': nfe_data.get('destinatario_cnpj_cpf'),
@@ -2685,7 +2743,9 @@ def reenviar_nfe(nfe_id):
                 'cep': form_data.get('dest_cep', '00000000'),
                 'codigo_municipio': form_data.get('dest_codigo_municipio', '3550308'),
                 'nome_municipio': form_data.get('dest_municipio', 'SAO PAULO'),
-                'uf': form_data.get('dest_uf', 'SP')
+                'uf': form_data.get('dest_uf', 'SP'),
+                'ie': ie_reenvio,
+                'tipo_pessoa': tipo_pessoa_reenvio
             }
         
         # Verificar se destinatário foi encontrado
@@ -2752,23 +2812,26 @@ def reenviar_nfe(nfe_id):
         
         if resultado['success']:
             print(f"OK: NFe reenviada com sucesso")
-            # Atualizar banco com dados da autorização
-            success_query = text("""
-                UPDATE nfe_emitidas 
-                SET status = 'AUTORIZADA',
-                    chave_acesso = :chave_acesso,
-                    protocolo_sefaz = :protocolo,
-                    data_autorizacao = NOW(),
-                    mensagem_sefaz = 'Autorizado o uso da NF-e'
-                WHERE nfe_emitida_id = :nfe_id
-            """)
-            db.execute(success_query, {
-                'nfe_id': nfe_id,
-                'chave_acesso': resultado.get('chave_acesso'),
-                'protocolo': resultado.get('protocolo')
-            })
-            db.commit()
-            print(f"[OK] Banco atualizado: status=AUTORIZADA, protocolo={resultado.get('protocolo')}")
+            # Atualizar status no banco para AUTORIZADA
+            try:
+                update_autorizada_query = text("""
+                    UPDATE nfe_emitidas 
+                    SET status = 'AUTORIZADA',
+                        chave_acesso = :chave_acesso,
+                        protocolo_sefaz = :protocolo,
+                        data_autorizacao = NOW(),
+                        mensagem_sefaz = 'Autorizado o uso da NF-e'
+                    WHERE nfe_emitida_id = :nfe_id
+                """)
+                db.execute(update_autorizada_query, {
+                    'nfe_id': nfe_id,
+                    'chave_acesso': resultado.get('chave_acesso'),
+                    'protocolo': resultado.get('protocolo')
+                })
+                db.commit()
+                print(f"[OK] Status atualizado para AUTORIZADA no banco - protocolo: {resultado.get('protocolo')}")
+            except Exception as e_update:
+                print(f"[ERRO] Falha ao atualizar status no banco após autorização: {e_update}")
             return jsonify({
                 'success': True,
                 'message': 'NF-e reenviada com sucesso!',
@@ -3360,86 +3423,90 @@ def compartilhar_nfe(nfe_id):
             email_service = EmailService()
             
             # Preparar dados do email
-            emissora = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_nome', '')
-            numero_nfe = nfe_data.get('numero', nfe_id)
-            assunto = f'NF-e nº {numero_nfe} - {emissora}'
-            
-            # Verificar se data_autorizacao não é None antes do strftime
-            data_autorizacao = nfe_data.get('data_autorizacao')
-            if data_autorizacao:
-                data_autorizacao_str = data_autorizacao.strftime('%d/%m/%Y %H:%M:%S')
+            _emitente_comp = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_nome', 'N/A')
+            _numero_comp   = nfe_data.get('numero', nfe_id)
+            _dest_comp     = nfe_data.get('destinatario_razao_social', 'N/A')
+            _chave_comp    = nfe_data.get('chave_acesso', 'N/A')
+            _proto_comp    = nfe_data.get('protocolo_sefaz', 'N/A')
+
+            _data_aut_comp = nfe_data.get('data_autorizacao')
+            if _data_aut_comp:
+                try:
+                    from datetime import datetime as _dttm
+                    if isinstance(_data_aut_comp, str):
+                        _data_aut_comp = _dttm.fromisoformat(_data_aut_comp)
+                    _data_aut_comp_fmt = _data_aut_comp.strftime('%d/%m/%Y %H:%M:%S')
+                except Exception:
+                    _data_aut_comp_fmt = str(_data_aut_comp)
             else:
-                data_autorizacao_str = 'N/A'
-            
-            corpo_html = f"""
-            <html>
-            <body style="margin:0; padding:0; background:#f3f5f9; font-family:'Segoe UI', Tahoma, Arial, sans-serif; color:#1f2937;">
-                <div style="max-width:680px; margin:24px auto; padding:0 14px;">
-                    <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; box-shadow:0 10px 30px rgba(17,24,39,0.08);">
-                        <div style="background:linear-gradient(120deg,#0f4c81 0%,#0b6aa8 55%,#22a2c9 100%); color:#ffffff; padding:24px 28px;">
-                            <h1 style="margin:8px 0 0 0; font-size:22px; line-height:1.3; font-weight:700;">NF-e {numero_nfe} de {emissora}</h1>
-                        </div>
+                _data_aut_comp_fmt = 'N/A'
 
-                        <div style="padding:24px 28px;">
-                            <p style="margin:0 0 14px 0; font-size:15px;">Prezado(a),</p>
-                            <p style="margin:0 0 18px 0; font-size:15px; color:#374151;">Segue anexo a nota fiscal eletrônica emitida por <strong>{emissora}</strong>.</p>
+            assunto = f'NF-e nº {_numero_comp} – {_emitente_comp}'
 
-                            <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin:0 0 18px 0;">
-                                <table style="width:100%; border-collapse:collapse; font-size:14px;">
-                                    <tr>
-                                        <td style="padding:8px 0; width:38%; color:#6b7280;">Numero da NF-e</td>
-                                        <td style="padding:8px 0; font-weight:600;">{numero_nfe}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:8px 0; color:#6b7280;">Emitente</td>
-                                        <td style="padding:8px 0; font-weight:600;">{emissora}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:8px 0; color:#6b7280;">Destinatario</td>
-                                        <td style="padding:8px 0; font-weight:600;">{nfe_data.get('destinatario_razao_social', 'N/A')}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:8px 0; color:#6b7280;">Chave de acesso</td>
-                                        <td style="padding:8px 0; font-family:Consolas, 'Courier New', monospace; font-size:12px; word-break:break-all;">{nfe_data.get('chave_acesso', 'N/A')}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:8px 0; color:#6b7280;">Protocolo</td>
-                                        <td style="padding:8px 0; font-weight:600;">{nfe_data.get('protocolo_sefaz', 'N/A')}</td>
-                                    </tr>
-                                    <tr>
-                                        <td style="padding:8px 0; color:#6b7280;">Data de autorizacao</td>
-                                        <td style="padding:8px 0; font-weight:600;">{data_autorizacao_str}</td>
-                                    </tr>
-                                </table>
-                            </div>
+            _anexos_lista = ""
+            if include_danfe:
+                _anexos_lista += "<li>DANFE (PDF)</li>"
+            if include_xml:
+                _anexos_lista += "<li>XML da NF-e</li>"
 
-                            <div style="background:#eef6fb; border:1px solid #dbeafe; color:#1f2937; border-radius:10px; padding:12px 14px; font-size:14px;">
-                                <strong>Anexos incluidos:</strong>
-                                <ul style="margin:8px 0 0 18px; padding:0;">
-                                    {"<li>DANFE (PDF)</li>" if include_danfe else ""}
-                                    {"<li>XML da NF-e</li>" if include_xml else ""}
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div style="padding:14px 28px 20px 28px; border-top:1px solid #eef2f7;">
-                            <p style="margin:0; font-size:12px; color:#6b7280; text-align:center;">Este email foi enviado automaticamente pela EmiteMax.</p>
-                        </div>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+            corpo_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{ margin:0; padding:20px; background:#f4f4f4; font-family:Arial,sans-serif; }}
+  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #dadce0; border-radius:8px; overflow:hidden; }}
+  .header {{ background:#1565c0; color:#ffffff; padding:28px 30px; text-align:center; }}
+  .header h1 {{ margin:0; font-size:22px; font-weight:700; line-height:1.3; }}
+  .body {{ padding:30px 30px 10px 30px; color:#333333; }}
+  .body p {{ margin:0 0 14px 0; font-size:14px; line-height:1.6; }}
+  .info-table {{ width:100%; border-collapse:collapse; background:#f8f9fa; margin:18px 0 22px 0; font-size:13px; }}
+  .info-table td {{ padding:10px 14px; border-bottom:1px solid #e0e0e0; vertical-align:top; }}
+  .info-table td:first-child {{ color:#555; font-weight:600; white-space:nowrap; width:38%; }}
+  .info-table td:last-child {{ color:#111; word-break:break-all; }}
+  .info-table tr:last-child td {{ border-bottom:none; }}
+  .anexos {{ margin:0 0 20px 0; font-size:14px; }}
+  .anexos strong {{ display:block; margin-bottom:6px; }}
+  .anexos ul {{ margin:0; padding-left:20px; }}
+  .anexos li {{ margin-bottom:4px; }}
+  .footer {{ text-align:center; padding:16px 30px; font-size:12px; color:#888888; border-top:1px solid #eeeeee; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>NF-e {_numero_comp} de {_emitente_comp}</h1>
+  </div>
+  <div class="body">
+    <p>Prezado(a),</p>
+    <p>Segue anexo a nota fiscal eletrônica emitida por <strong>{_emitente_comp}</strong>.</p>
+    <table class="info-table">
+      <tr><td>Numero da NF-e</td><td>{_numero_comp}</td></tr>
+      <tr><td>Emitente</td><td>{_emitente_comp}</td></tr>
+      <tr><td>Destinatário</td><td>{_dest_comp}</td></tr>
+      <tr><td>Chave de acesso</td><td style="font-size:11px">{_chave_comp}</td></tr>
+      <tr><td>Protocolo</td><td>{_proto_comp}</td></tr>
+      <tr><td>Data de autorização</td><td>{_data_aut_comp_fmt}</td></tr>
+    </table>
+    <div class="anexos">
+      <strong>Anexos incluídos:</strong>
+      <ul>{_anexos_lista}</ul>
+    </div>
+  </div>
+  <div class="footer">Este email foi enviado automaticamente pelo EmiteMax.</div>
+</div>
+</body>
+</html>"""
             
             print(f" Enviando email...")
             
             # Enviar
-            email_service.from_name = emissora
             resultado = email_service.enviar_email(
                 destinatario=email_destino,
                 assunto=assunto,
                 corpo_html=corpo_html,
-                anexos=anexos
+                anexos=anexos,
+                from_name=_emitente_comp
             )
             
             print(f" Resultado do envio: {resultado}")

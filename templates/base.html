@@ -261,73 +261,6 @@
             background-color: var(--sj-danger) !important;
         }
         
-        /* ===== BADGES BOOTSTRAP (BG-*) ===== */
-        .badge.bg-success,
-        span.badge.bg-success,
-        td .badge.bg-success,
-        table .badge.bg-success {
-            background-color: #28a745 !important;
-            color: #ffffff !important;
-        }
-        
-        .badge.bg-secondary,
-        span.badge.bg-secondary,
-        td .badge.bg-secondary,
-        table .badge.bg-secondary {
-            background-color: #6c757d !important;
-            color: #ffffff !important;
-        }
-        
-        .badge.bg-danger,
-        span.badge.bg-danger,
-        td .badge.bg-danger,
-        table .badge.bg-danger {
-            background-color: #dc3545 !important;
-            color: #ffffff !important;
-        }
-        
-        .badge.bg-warning,
-        span.badge.bg-warning,
-        td .badge.bg-warning,
-        table .badge.bg-warning {
-            background-color: #ffc107 !important;
-            color: #212529 !important;
-        }
-        
-        .badge.bg-info,
-        span.badge.bg-info,
-        td .badge.bg-info,
-        table .badge.bg-info {
-            background-color: #17a2b8 !important;
-            color: #ffffff !important;
-        }
-        
-        .badge.bg-primary,
-        span.badge.bg-primary,
-        td .badge.bg-primary,
-        table .badge.bg-primary {
-            background-color: var(--sj-primary) !important;
-            color: #ffffff !important;
-        }
-        
-        /* Sobrescrever qualquer classe text-white em badges coloridos */
-        .badge.bg-success.text-white,
-        .badge.bg-secondary.text-white,
-        .badge.bg-danger.text-white,
-        .badge.bg-info.text-white,
-        .badge.bg-primary.text-white {
-            color: #ffffff !important;
-        }
-        
-        /* Garantir que text-white sempre funcione */
-        .text-white {
-            color: #ffffff !important;
-        }
-        
-        .text-dark {
-            color: #212529 !important;
-        }
-        
         /* ===== ALERTAS PERSONALIZADOS ===== */
         .alert {
             border: none;
@@ -815,8 +748,7 @@
                                     <a class="dropdown-item" href="{{ url_for('admin.relatorio_certificados_vencimento') }}"><i class="fas fa-certificate"></i> Certificados Digitais</a>
                                     {% if current_user.is_super_admin() %}
                                     <div class="dropdown-divider"></div>
-                                    <a class="dropdown-item" href="{{ url_for('planos.list_planos') }}"><i class="fas fa-box-open"></i> Planos</a>
-                                    <a class="dropdown-item" href="{{ url_for('planos.list_assinaturas') }}"><i class="fas fa-id-card"></i> Assinaturas de Clientes</a>
+                                    <a class="dropdown-item" href="{{ url_for('planos.list_planos') }}"><i class="fas fa-box-open"></i> Planos e Assinaturas</a>
                                     <div class="dropdown-divider"></div>
                                     <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-key"></i> API Keys</a>
                                     <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-webhook"></i> Webhooks</a>
@@ -829,30 +761,18 @@
                         {% elif current_user.is_admin() %}
                             {% if session.current_client_id %}
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_clientes') }}">
-                                        <i class="fas fa-users"></i> Clientes
-                                    </a>
-                                </li>
-                                {% if current_user.is_super_admin() %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_nfes') }}">
-                                        <i class="fas fa-file-invoice"></i> Todas NFes
-                                    </a>
-                                </li>
-                                {% endif %}
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_certificados') }}">
-                                        <i class="fas fa-certificate"></i> Certificados
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
                                         <i class="fas fa-box"></i> Produtos
                                     </a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
-                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
+                                        <i class="fas fa-address-book"></i> Destinatários
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_certificados') }}">
+                                        <i class="fas fa-certificate"></i> Certificados
                                     </a>
                                 </li>
                                 <li class="nav-item dropdown">
@@ -871,6 +791,11 @@
                                             <i class="fas fa-balance-scale"></i> IBS/CBS (LC 214/2025)
                                         </a>
                                     </div>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_clientes') }}">
+                                        <i class="fas fa-users"></i> Clientes
+                                    </a>
                                 </li>
                             {% endif %}
                             <li class="nav-item dropdown">

@@ -213,9 +213,7 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     # Valor pagamento opcional - será calculado do total se não fornecido
     if form_data.get('valorPagamento'):
         try:
-            # Converter vírgula para ponto (formato brasileiro para inglês)
-            valor_pag_str = str(form_data.get('valorPagamento')).replace(',', '.')
-            valor_pag = float(valor_pag_str)
+            valor_pag = float(form_data.get('valorPagamento'))
             if valor_pag <= 0:
                 erros.append("Valor do pagamento deve ser maior que zero")
         except ValueError:

@@ -16,7 +16,7 @@ class EmailService:
         self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
         self.smtp_user = os.getenv('SMTP_USER')
         self.smtp_password = os.getenv('SMTP_PASSWORD')
-        self.from_name = os.getenv('SMTP_FROM_NAME', 'EmiteMax')
+        self.from_name = os.getenv('SMTP_FROM_NAME') or os.getenv('EMAIL_FROM_NAME', 'EmiteMax')
         
         # Debug detalhado
         print(f"[?] EmailService Debug:")
@@ -41,7 +41,7 @@ class EmailService:
         else:
             print(f"[OK] Todas as variáveis de email estão configuradas")
     
-    def enviar_email(self, destinatario, assunto, corpo_html, anexos=None):
+    def enviar_email(self, destinatario, assunto, corpo_html, anexos=None, from_name=None):
         """Enviar email com anexos opcionais"""
         try:
             # Verificação mais específica
@@ -59,15 +59,16 @@ class EmailService:
                     'message': 'SMTP_PASSWORD não definido no arquivo .env'
                 }
             
+            nome_remetente = from_name or self.from_name
             print(f"[?] Preparando email:")
-            print(f"   De: {self.smtp_user} ({self.from_name})")
+            print(f"   De: {self.smtp_user} ({nome_remetente})")
             print(f"   Para: {destinatario}")
             print(f"   Assunto: {assunto}")
             print(f"   Anexos: {len(anexos) if anexos else 0}")
             
             # Criar mensagem
             msg = MIMEMultipart()
-            msg['From'] = formataddr((self.from_name, self.smtp_user))
+            msg['From'] = formataddr((nome_remetente, self.smtp_user))
             msg['To'] = destinatario
             msg['Subject'] = assunto
             

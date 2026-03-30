@@ -34,7 +34,6 @@
                         <option value="">Todos</option>
                         <option value="ATIVA" {{ 'selected' if status_filter == 'ATIVA' else '' }}>Ativa</option>
                         <option value="SUSPENSA" {{ 'selected' if status_filter == 'SUSPENSA' else '' }}>Suspensa</option>
-                        <option value="INADIMPLENTE" {{ 'selected' if status_filter == 'INADIMPLENTE' else '' }}>Inadimplente</option>
                         <option value="CANCELADA" {{ 'selected' if status_filter == 'CANCELADA' else '' }}>Cancelada</option>
                     </select>
                 </div>
@@ -87,9 +86,7 @@
                             {% if assinatura.status == 'ATIVA' %}
                             <span class="badge bg-success">Ativa</span>
                             {% elif assinatura.status == 'SUSPENSA' %}
-                            <span class="badge bg-warning text-dark">Suspensa</span>
-                            {% elif assinatura.status == 'INADIMPLENTE' %}
-                            <span class="badge bg-danger">Inadimplente</span>
+                            <span class="badge bg-warning">Suspensa</span>
                             {% else %}
                             <span class="badge bg-secondary">Cancelada</span>
                             {% endif %}
@@ -137,25 +134,8 @@
                                         class="btn btn-outline-success" title="Renovar Período">
                                     <i class="fas fa-sync"></i>
                                 </button>
-                                <button onclick="suspenderAssinatura({{ assinatura.assinatura_id }})" 
-                                        class="btn btn-outline-warning" title="Suspender">
-                                    <i class="fas fa-pause"></i>
-                                </button>
-                                <button onclick="inadimplenteAssinatura({{ assinatura.assinatura_id }})" 
-                                        class="btn btn-outline-danger" title="Marcar Inadimplente">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                </button>
                                 <button onclick="cancelarAssinatura({{ assinatura.assinatura_id }})" 
-                                        class="btn btn-outline-dark" title="Cancelar">
-                                    <i class="fas fa-ban"></i>
-                                </button>
-                                {% elif assinatura.status in ('SUSPENSA', 'INADIMPLENTE') %}
-                                <button onclick="reativarAssinatura({{ assinatura.assinatura_id }})" 
-                                        class="btn btn-success btn-sm" title="Reativar">
-                                    <i class="fas fa-play"></i> Reativar
-                                </button>
-                                <button onclick="cancelarAssinatura({{ assinatura.assinatura_id }})" 
-                                        class="btn btn-outline-dark" title="Cancelar">
+                                        class="btn btn-outline-danger" title="Cancelar">
                                     <i class="fas fa-ban"></i>
                                 </button>
                                 {% endif %}
@@ -191,38 +171,22 @@ function renovarAssinatura(assinaturaId) {
     form.submit();
 }
 
-function _postAction(url, confirmMsg, errorMsg) {
-    if (!confirm(confirmMsg)) return;
-    fetch(url, {
+function cancelarAssinatura(assinaturaId) {
+    if (!confirm('Tem certeza que deseja CANCELAR esta assinatura?')) return;
+    
+    fetch(`{{ url_for('planos.cancelar_assinatura', assinatura_id=0) }}`.replace('0', assinaturaId), {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success) { location.reload(); }
-        else { alert('Erro: ' + data.message); }
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro: ' + data.message);
+        }
     })
-    .catch(() => alert(errorMsg));
-}
-
-function cancelarAssinatura(assinaturaId) {
-    const url = `{{ url_for('planos.cancelar_assinatura', assinatura_id=0) }}`.replace('0', assinaturaId);
-    _postAction(url, 'Tem certeza que deseja CANCELAR esta assinatura?', 'Erro ao cancelar assinatura');
-}
-
-function suspenderAssinatura(assinaturaId) {
-    const url = `{{ url_for('planos.suspender_assinatura', assinatura_id=0) }}`.replace('0', assinaturaId);
-    _postAction(url, 'Suspender esta assinatura? O cliente não poderá emitir NF-e.', 'Erro ao suspender assinatura');
-}
-
-function inadimplenteAssinatura(assinaturaId) {
-    const url = `{{ url_for('planos.inadimplente_assinatura', assinatura_id=0) }}`.replace('0', assinaturaId);
-    _postAction(url, 'Marcar cliente como INADIMPLENTE? O cliente ficará bloqueado para emissão de NF-e.', 'Erro ao atualizar status');
-}
-
-function reativarAssinatura(assinaturaId) {
-    const url = `{{ url_for('planos.reativar_assinatura', assinatura_id=0) }}`.replace('0', assinaturaId);
-    _postAction(url, 'Reativar esta assinatura?', 'Erro ao reativar assinatura');
+    .catch(error => alert('Erro: ' + error));
 }
 </script>
 {% endblock %}

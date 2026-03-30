@@ -1708,7 +1708,18 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         etree.SubElement(ender_dest, "cPais").text = "1058"
         etree.SubElement(ender_dest, "xPais").text = "Brasil"
         
-        etree.SubElement(dest, "indIEDest").text = "9"  # 9=Não contribuinte
+        # indIEDest: 1=Contribuinte ICMS (tem IE), 2=Contribuinte isento, 9=Não contribuinte
+        ie_dest = str(destinatario_data.get('ie') or destinatario_data.get('inscricao_estadual') or '').strip()
+        if ie_dest and ie_dest.upper() == 'ISENTO':
+            etree.SubElement(dest, "indIEDest").text = "2"
+            etree.SubElement(dest, "IE").text = "ISENTO"
+        elif ie_dest:
+            # Remove formatação (pontos, traços, barras)
+            ie_limpa = ''.join(filter(str.isalnum, ie_dest))
+            etree.SubElement(dest, "indIEDest").text = "1"
+            etree.SubElement(dest, "IE").text = ie_limpa
+        else:
+            etree.SubElement(dest, "indIEDest").text = "9"  # Não contribuinte (sem IE)
         
         # OK: ITENS DA NFE COM CFOP CORRETO
         det_list = []

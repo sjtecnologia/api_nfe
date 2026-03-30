@@ -135,44 +135,30 @@
                     <div class="d-flex flex-wrap justify-content-center gap-3">
                         {% if can_create() %}
                         <a href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ cliente.cliente_id }}"
-                           class="btn btn-success d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-2" style="min-width:130px; min-height:80px;">
+                           class="btn btn-success d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-1" style="min-width:130px; min-height:80px;">
                             <i class="fas fa-plus-circle fa-lg"></i>
                             <span class="small fw-bold">Emitir NFe</span>
                         </a>
                         {% endif %}
                         <a href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ cliente.cliente_id }}"
-                           class="btn btn-primary d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-2" style="min-width:130px; min-height:80px;">
+                           class="btn btn-primary d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-1" style="min-width:130px; min-height:80px;">
                             <i class="fas fa-list fa-lg"></i>
                             <span class="small fw-bold">Ver NFes</span>
                         </a>
-                        {% if current_user.is_admin() or current_user.is_super_admin() %}
-                        <a href="{{ url_for('admin.list_produtos') }}?cliente_id={{ cliente.cliente_id }}"
-                           class="btn btn-dark d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-2" style="min-width:130px; min-height:80px;">
-                            <i class="fas fa-boxes fa-lg"></i>
-                            <span class="small fw-bold">Produtos</span>
-                        </a>
-                        <a href="{{ url_for('admin.list_regras_tributacao', cliente_id=cliente.cliente_id) }}"
-                           class="btn btn-secondary d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-2" style="min-width:130px; min-height:80px;">
-                            <i class="fas fa-gavel fa-lg"></i>
-                            <span class="small fw-bold">Regras Tributárias</span>
-                        </a>
-                        {% endif %}
                         <a href="{{ url_for('admin.list_destinatarios', cliente_id=cliente.cliente_id) }}"
-                           class="btn btn-warning d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-2" style="min-width:130px; min-height:80px;">
+                           class="btn btn-warning d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-1" style="min-width:130px; min-height:80px;">
                             <i class="fas fa-address-book fa-lg"></i>
                             <span class="small fw-bold">Destinatários</span>
                         </a>
-                        {% if can_create() %}
-                        <a href="{{ url_for('nfse.emitir_form') }}?cliente_id={{ cliente.cliente_id }}"
-                           class="btn btn-primary d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-2" style="min-width:130px; min-height:80px;">
-                            <i class="fas fa-file-invoice fa-lg"></i>
-                            <span class="small fw-bold">Emitir NFS-e</span>
+                        <a href="{{ url_for('admin.list_produtos') }}?cliente_id={{ cliente.cliente_id }}"
+                           class="btn btn-info d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-1" style="min-width:130px; min-height:80px;">
+                            <i class="fas fa-box fa-lg"></i>
+                            <span class="small fw-bold">Produtos</span>
                         </a>
-                        {% endif %}
-                        <a href="{{ url_for('nfse.list_nfse') }}?cliente_id={{ cliente.cliente_id }}"
-                           class="btn btn-outline-primary d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-2" style="min-width:130px; min-height:80px;">
-                            <i class="fas fa-list-alt fa-lg"></i>
-                            <span class="small fw-bold">Ver NFS-e</span>
+                        <a href="{{ url_for('admin.list_certificados') }}?cliente_id={{ cliente.cliente_id }}"
+                           class="btn btn-secondary d-flex flex-column align-items-center justify-content-center py-3 px-4 gap-1" style="min-width:130px; min-height:80px;">
+                            <i class="fas fa-certificate fa-lg"></i>
+                            <span class="small fw-bold">Certificados</span>
                         </a>
                     </div>
                 </div>

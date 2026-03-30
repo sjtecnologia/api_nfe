@@ -17,10 +17,9 @@ def home():
         # Se tem apenas 1 cliente, redirecionar diretamente
         if len(current_user.clients) == 1:
             from utils.id_encoder import encode_id
-            cliente = current_user.clients[0]
-            cliente_id = cliente['cliente_id']
+            cliente_id = current_user.clients[0]['cliente_id']
             session['current_client_id'] = cliente_id
-            session['current_client_name'] = cliente.get('razao_social') or cliente.get('nome_fantasia') or ''
+            session['current_client_name'] = current_user.clients[0].get('razao_social') or current_user.clients[0].get('nome_fantasia') or ''
             print(f"[?] Redirecionando usuário {current_user.username} para cliente {cliente_id}")
             return redirect(url_for('cliente.dashboard', cliente_hash=encode_id(cliente_id)))
         

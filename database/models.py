@@ -868,7 +868,7 @@ class AssinaturaCliente(Base):
     plano_id = Column(Integer, ForeignKey('planos_nfe.plano_id'), nullable=False)
     data_inicio = Column(Date, nullable=False)
     data_fim = Column(Date)  # NULL = sem data de término
-    status = Column(String(20), default='ATIVA')  # ATIVA, SUSPENSA, CANCELADA, INADIMPLENTE
+    status = Column(String(20), default='ATIVA')  # ATIVA, SUSPENSA, CANCELADA
     dia_vencimento = Column(Integer, default=10)
     nfes_consumidas = Column(Integer, default=0)
     periodo_ref_inicio = Column(Date)
@@ -896,15 +896,6 @@ class AssinaturaCliente(Base):
     
     def pode_emitir(self):
         """Verifica se pode emitir NFe baseado no plano e consumo"""
-        if self.status == 'CANCELADA':
-            return False, 'Assinatura cancelada'
-
-        if self.status == 'INADIMPLENTE':
-            return False, 'Cliente inadimplente — regularize a situação para emitir NF-e'
-
-        if self.status == 'SUSPENSA':
-            return False, 'Assinatura suspensa — entre em contato com o suporte'
-
         if self.status != 'ATIVA':
             return False, f'Assinatura {self.status.lower()}'
         

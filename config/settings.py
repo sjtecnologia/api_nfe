@@ -10,9 +10,6 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo250
 SEFAZ_AMBIENTE_HOMOLOGACAO = True  # True = Homologação, False = Produção
 USAR_CERTIFICADO_REAL = True  # True = Usar certificado real, False = Simulado
 
-# Configurações da Reforma Tributária (Lei Complementar 214/2025)
-HABILITAR_IBS_CBS = True  # True = Incluir campos IBS/CBS no XML da NFe (a partir de 2026)
-
 # Configurações de Debug
 DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 HOST = os.getenv('FLASK_HOST', '0.0.0.0')
@@ -24,3 +21,7 @@ UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
 
 # Configurações de Log
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+
+# IBS/CBS - Reforma Tributária (LC 214/2024)
+# False = desabilitado (padrão até implementação completa)
+HABILITAR_IBS_CBS = os.getenv('HABILITAR_IBS_CBS', 'False').lower() == 'true'

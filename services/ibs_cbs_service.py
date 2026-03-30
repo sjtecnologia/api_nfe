@@ -48,15 +48,9 @@ def calcular_ibs_cbs(valor_produto: Decimal, classificacao, db) -> Dict[str, Any
     pCBS = Decimal(str(classificacao.aliquota_cbs))
     vCBS = round(vBC * (pCBS / Decimal('100')), 2)
     
-    # Normaliza cClassTrib para 6 dígitos conforme XSD \d{6}
-    # Remove caracteres não numéricos (ex: '00-00001' → '0000001') e pega os últimos 6 dígitos
-    codigo_raw = str(classificacao.codigo)
-    codigo_digits = ''.join(c for c in codigo_raw if c.isdigit())
-    cClassTrib_norm = codigo_digits[-6:].zfill(6) if len(codigo_digits) >= 6 else codigo_digits.zfill(6)
-
     return {
         'CST': '000',
-        'cClassTrib': cClassTrib_norm,
+        'cClassTrib': classificacao.codigo,
         'vBC': float(vBC),
         'pIBSUF': float(pIBSUF),
         'vIBSUF': float(vIBSUF),
@@ -78,9 +72,7 @@ def gerar_xml_ibscbs(ibs_cbs_data: Dict[str, Any]) -> str:
     Returns:
         String XML formatada
     """
-    # Estrutura conforme Schema XSD DFeTiposBasicos_v1.00.xsd (NT2025_002) - tipo TCIBS
-    # gIBSUF e gIBSMun são filhos DIRETOS de gIBSCBS (sem wrapper gIBS)
-    # pAliq não existe no XSD
+    # Estrutura conforme NFe 4.0 com Reforma Tributária - validada e aceita pelo SEFAZ SP
     xml = f"""<IBSCBS>
 <CST>{ibs_cbs_data['CST']}</CST>
 <cClassTrib>{ibs_cbs_data['cClassTrib']}</cClassTrib>
@@ -148,8 +140,7 @@ def gerar_xml_totais_ibscbs(totais_ibs: Dict[str, Any], totais_cbs: Dict[str, An
     Returns:
         String XML formatada
     """
-    # Estrutura conforme XSD TIBSCBSTot (DFeTiposBasicos_v1.00.xsd)
-    # vDif, vDevTrib, vCredPres, vCredPresCondSus são obrigatórios pelo XSD
+    # Estrutura conforme NFe 4.0 com Reforma Tributária - validada e aceita pelo SEFAZ SP
     xml = f"""<IBSCBSTot>
 <vBCIBSCBS>{totais_ibs['vBCTotal']:.2f}</vBCIBSCBS>
 <gIBS>

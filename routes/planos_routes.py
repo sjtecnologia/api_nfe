@@ -360,61 +360,9 @@ def cancelar_assinatura(assinatura_id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@planos_bp.route('/assinaturas/<int:assinatura_id>/suspender', methods=['POST'])
-@login_required
-@super_admin_required()
-def suspender_assinatura(assinatura_id):
-    """Suspender assinatura — bloqueia emissão"""
-    db = next(get_db())
-    try:
-        assinatura = db.query(AssinaturaCliente).filter_by(assinatura_id=assinatura_id).first()
-        if not assinatura:
-            return jsonify({'success': False, 'message': 'Assinatura não encontrada'}), 404
-        assinatura.status = 'SUSPENSA'
-        db.commit()
-        return jsonify({'success': True, 'message': 'Assinatura suspensa com sucesso'})
-    except Exception as e:
-        db.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-@planos_bp.route('/assinaturas/<int:assinatura_id>/inadimplente', methods=['POST'])
-@login_required
-@super_admin_required()
-def inadimplente_assinatura(assinatura_id):
-    """Marcar cliente como inadimplente — bloqueia emissão"""
-    db = next(get_db())
-    try:
-        assinatura = db.query(AssinaturaCliente).filter_by(assinatura_id=assinatura_id).first()
-        if not assinatura:
-            return jsonify({'success': False, 'message': 'Assinatura não encontrada'}), 404
-        assinatura.status = 'INADIMPLENTE'
-        db.commit()
-        return jsonify({'success': True, 'message': 'Cliente marcado como inadimplente'})
-    except Exception as e:
-        db.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-@planos_bp.route('/assinaturas/<int:assinatura_id>/reativar', methods=['POST'])
-@login_required
-@super_admin_required()
-def reativar_assinatura(assinatura_id):
-    """Reativar assinatura suspensa ou inadimplente"""
-    db = next(get_db())
-    try:
-        assinatura = db.query(AssinaturaCliente).filter_by(assinatura_id=assinatura_id).first()
-        if not assinatura:
-            return jsonify({'success': False, 'message': 'Assinatura não encontrada'}), 404
-        assinatura.status = 'ATIVA'
-        assinatura.data_fim = None
-        db.commit()
-        return jsonify({'success': True, 'message': 'Assinatura reativada com sucesso'})
-    except Exception as e:
-        db.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
+# ============================================================================
+# CONSULTAS E RELATÓRIOS
+# ============================================================================
 
 @planos_bp.route('/relatorio/consumo')
 @login_required

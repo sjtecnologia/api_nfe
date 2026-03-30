@@ -3,17 +3,17 @@
 {% block title %}Login - EmiteMax{% endblock %}
 
 {% block content %}
-<div class="container-fluid auth-shell">
-    <div class="row justify-content-center align-items-center auth-row">
-        <div class="col-xl-4 col-lg-5 col-md-6 col-sm-8 col-12">
+<div class="container-fluid">
+    <div class="row justify-content-center align-items-center" style="min-height: 100vh; padding: 20px 0;">
+        <div class="col-xl-4 col-lg-5 col-md-6 col-sm-8">
             
             
             
-            <!-- Card de Login Principal -->
-            <div class="card shadow-lg border-0 auth-card">
+            <!-- ✅ CARD DE LOGIN PRINCIPAL -->
+            <div class="card shadow-lg border-0" style="border-radius: 20px; overflow: hidden;">
                 
-                <!-- Header -->
-                <div class="card-header text-center py-4 auth-card-header" style="border: none;">
+                <!-- ✅ HEADER COM LOGO E BRANDING -->
+                <div class="card-header text-center py-4" style="background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%); border: none;">
                     <div class="logo-container mb-3">
                         <img src="{{ url_for('static', filename='img/emitemax-logo.png') }}" 
                              alt="EmiteMax" 
@@ -30,32 +30,36 @@
                     </small>
                 </div>
                 
-                <!-- Corpo do Formulário -->
-                <div class="card-body p-5 auth-card-body">
+                <!-- ✅ CORPO DO FORMULÁRIO (SEM MENSAGENS DUPLICADAS) -->
+                <div class="card-body p-4">
                     
+                    <!-- ✅ FORMULÁRIO HTML SIMPLES -->
                     <form method="POST" id="loginForm">
                         
                         <!-- Campo Email -->
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <label for="username" class="form-label text-dark font-weight-600">
                                 <i class="fas fa-envelope text-primary me-2"></i>
                                 Email
                             </label>
-                            <input type="email" class="form-control form-control-lg auth-input" id="username" name="username" 
-                                   placeholder="seu@email.com" required>
+                            <input type="email" class="form-control form-control-lg" id="username" name="username" 
+                                   style="border-radius: 10px; border: 2px solid #e0e0e0; padding: 15px 20px; font-size: 1rem; transition: all 0.3s ease;" 
+                                   placeholder="Digite seu email" required>
                         </div>
                         
                         <!-- Campo Password -->
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <label for="password" class="form-label text-dark font-weight-600">
                                 <i class="fas fa-lock text-primary me-2"></i>
                                 Senha
                             </label>
                             <div class="input-group">
-                                <input type="password" class="form-control form-control-lg auth-input auth-input-group-left" id="passwordField" name="password"
+                                <input type="password" class="form-control form-control-lg" id="passwordField" name="password"
+                                       style="border-radius: 10px 0 0 10px; border: 2px solid #e0e0e0; border-right: none; padding: 15px 20px; font-size: 1rem;" 
                                        placeholder="Digite sua senha" required>
                                 <div class="input-group-append">
-                                    <button class="btn btn-outline-secondary auth-input-group-right" type="button" id="togglePassword">
+                                    <button class="btn btn-outline-secondary" type="button" id="togglePassword" 
+                                            style="border-radius: 0 10px 10px 0; border: 2px solid #e0e0e0; border-left: none; padding: 15px 15px;">
                                         <i class="fas fa-eye" id="toggleIcon"></i>
                                     </button>
                                 </div>
@@ -63,7 +67,7 @@
                         </div>
                         
                         <!-- Checkbox Remember Me -->
-                        <div class="form-group mb-4">
+                        <div class="form-group mb-3">
                             <div class="custom-control custom-checkbox">
                                 <input type="checkbox" class="custom-control-input" id="remember_me" name="remember_me">
                                 <label class="custom-control-label" for="remember_me">
@@ -73,11 +77,10 @@
                         </div>
                         
                         <!-- Botão de Submit -->
-                        <div class="form-group mb-4 d-grid">
-                            <button type="submit" class="btn btn-primary btn-lg w-100 d-flex align-items-center justify-content-center auth-submit-btn">
-                                <span class="btn-text">
-                                    <i class="fas fa-sign-in-alt me-2"></i>Entrar
-                                </span>
+                        <div class="form-group mb-3">
+                            <button type="submit" class="btn btn-primary btn-lg btn-block" 
+                                    style="border-radius: 10px; padding: 15px; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 4px 15px rgba(0, 188, 212, 0.4); transition: all 0.3s ease;">
+                                <span class="btn-text">Entrar</span>
                                 <i class="fas fa-spinner fa-spin d-none" id="loading-spinner"></i>
                             </button>
                         </div>
@@ -93,16 +96,41 @@
                     </form>
                 </div>
                 
-                <!-- Footer -->
-                <div class="card-footer text-center py-3 auth-card-footer" style="border: none;">
-                    <p class="text-muted mb-0" style="font-size: 0.85rem;">
+                <!-- ✅ FOOTER DO CARD -->
+                <div class="card-footer text-center py-3" style="background: linear-gradient(135deg, var(--sj-light) 0%, #ffffff 100%); border: none;">
+                    <small class="text-muted">
                         <i class="fas fa-shield-alt text-primary"></i>
-                        Sistema Seguro EmiteMax &copy; 2025
-                    </p>
+                        Acesso seguro e criptografado
+                    </small>
                 </div>
             </div>
             
-
+            <!-- ✅ INFORMAÇÕES ADICIONAIS -->
+            <div class="text-center mt-3">
+                <div class="row">
+                    <div class="col-4">
+                        <div class="text-center">
+                            <i class="fas fa-lock" style="font-size: 1.2rem; color: var(--sj-success); margin-bottom: 3px;"></i>
+                            <br>
+                            <small class="text-muted" style="font-size: 0.75rem;">Seguro</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center">
+                            <i class="fas fa-cloud" style="font-size: 1.2rem; color: var(--sj-primary); margin-bottom: 3px;"></i>
+                            <br>
+                            <small class="text-muted" style="font-size: 0.75rem;">Cloud</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center">
+                            <i class="fas fa-mobile-alt" style="font-size: 1.2rem; color: var(--sj-secondary); margin-bottom: 3px;"></i>
+                            <br>
+                            <small class="text-muted" style="font-size: 0.75rem;">Mobile</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
             
         </div>
     </div>
@@ -111,102 +139,85 @@
 
 {% block extra_css %}
 <style>
-.auth-shell {
+/* ===== TELA DE LOGIN PERSONALIZADA ===== */
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     min-height: 100vh;
-    background:
-        radial-gradient(circle at top left, rgba(34, 162, 201, 0.20), transparent 30%),
-        radial-gradient(circle at bottom right, rgba(15, 76, 129, 0.18), transparent 28%),
-        linear-gradient(135deg, #eef4f8 0%, #d9e7f2 48%, #edf3f8 100%);
+    position: relative;
+    overflow-x: hidden;
 }
 
-.auth-row {
-    min-height: 100vh;
-    padding: 32px 0;
-}
-
-.auth-card {
-    border-radius: 24px;
-    overflow: hidden;
+/* ===== CARD DE LOGIN ===== */
+.card {
     backdrop-filter: blur(10px);
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
-    animation: authRise 0.6s ease-out;
+    background: rgba(255, 255, 255, 0.95);
+    animation: slideInUp 0.8s ease-out;
 }
 
-.auth-card-header {
-    background: linear-gradient(135deg, #0f4c81 0%, #0b6aa8 56%, #22a2c9 100%);
+/* ===== CAMPOS DE FORMULÁRIO ===== */
+.form-control:focus {
+    border-color: var(--sj-primary) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 188, 212, 0.25) !important;
+    transform: translateY(-2px);
 }
 
-.auth-card-body {
-    padding: 2.5rem !important;
-}
-
-.auth-card-footer {
-    background: linear-gradient(180deg, #f8fbfd 0%, #ffffff 100%);
-}
-
-.auth-input {
-    border-radius: 14px;
-    border: 2px solid #d9e2ec;
-    padding: 16px 18px;
-    font-size: 1rem;
-    transition: all 0.25s ease;
-}
-
-.auth-input:focus {
-    border-color: #22a2c9;
-    box-shadow: 0 0 0 0.2rem rgba(34, 162, 201, 0.20);
+.form-control:hover {
+    border-color: var(--sj-primary);
     transform: translateY(-1px);
 }
 
-.auth-input-group-left {
-    border-radius: 14px 0 0 14px !important;
-    border-right: none !important;
+/* ===== BOTÃO DE LOGIN ===== */
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 188, 212, 0.6) !important;
 }
 
-.auth-input-group-right {
-    border-radius: 0 14px 14px 0 !important;
-    border: 2px solid #d9e2ec;
-    border-left: none;
-    padding: 0 18px;
-    transition: all 0.25s ease;
+/* ===== TOGGLE PASSWORD ===== */
+#togglePassword {
+    transition: all 0.3s ease;
 }
 
-.auth-input-group-right:hover {
-    background-color: #eef4f8;
-    border-color: #22a2c9;
-    color: #22a2c9;
+#togglePassword:hover {
+    background-color: var(--sj-light);
+    border-color: var(--sj-primary);
+    color: var(--sj-primary);
 }
 
-.auth-submit-btn {
-    border-radius: 14px;
-    min-height: 60px;
-    padding: 16px 22px;
-    font-size: 1.08rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    box-shadow: 0 8px 24px rgba(34, 162, 201, 0.28);
-    transition: all 0.25s ease;
+/* ===== MENSAGENS DE ALERTA ===== */
+.alerts-container .alert {
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
-.auth-submit-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 28px rgba(34, 162, 201, 0.36);
+.alert-danger {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.9), rgba(220, 53, 69, 0.8));
+    color: white;
+    border-left-color: #dc3545 !important;
 }
 
-.btn-loading .btn-text {
-    opacity: 0.3;
+.alert-success {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.9), rgba(40, 167, 69, 0.8));
+    color: white;
+    border-left-color: #28a745 !important;
 }
 
-.btn-loading #loading-spinner {
-    display: inline-block !important;
+.alert-info {
+    background: linear-gradient(135deg, rgba(23, 162, 184, 0.9), rgba(23, 162, 184, 0.8));
+    color: white;
+    border-left-color: #17a2b8 !important;
 }
 
-@keyframes authRise {
+.alert-warning {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.9), rgba(255, 193, 7, 0.8));
+    color: #212529;
+    border-left-color: #ffc107 !important;
+}
+
+/* ===== ANIMAÇÕES ===== */
+@keyframes slideInUp {
     from {
         opacity: 0;
-        transform: translateY(24px);
+        transform: translateY(50px);
     }
     to {
         opacity: 1;
@@ -214,18 +225,34 @@
     }
 }
 
-@keyframes fadeOut {
-    from { opacity: 1; transform: translateX(0); }
-    to   { opacity: 0; transform: translateX(100px); }
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+}
+
+/* ===== RESPONSIVIDADE ===== */
 @media (max-width: 768px) {
-    .auth-row {
-        padding: 20px 0;
+    .card-body {
+        padding: 1.5rem !important;
     }
-    .auth-card-body {
-        padding: 2rem !important;
-    }
+    
     .alerts-container {
         position: fixed !important;
         top: 10px !important;
@@ -235,20 +262,17 @@
     }
 }
 
-@media (max-width: 576px) {
-    .auth-row {
-        padding: 12px 0;
-    }
-    .auth-card {
-        border-radius: 18px;
-    }
-    .auth-card-body {
-        padding: 1.5rem !important;
-    }
-    .auth-submit-btn {
-        min-height: 56px;
-        font-size: 1rem;
-    }
+/* ===== LOADING STATE ===== */
+.btn-loading {
+    position: relative;
+}
+
+.btn-loading .btn-text {
+    opacity: 0.3;
+}
+
+.btn-loading #loading-spinner {
+    display: inline-block !important;
 }
 </style>
 {% endblock %}
@@ -315,8 +339,8 @@ $(document).ready(function() {
         // Mostrar loading
         submitBtn.addClass('btn-loading');
         submitBtn.prop('disabled', true);
-        btnText.html('<i class="fas fa-spinner fa-spin me-2"></i>Entrando...');
-        spinner.addClass('d-none');
+        btnText.text('Entrando...');
+        spinner.removeClass('d-none');
         
         // Permitir submit normal
         return true;
@@ -359,7 +383,7 @@ $(document).ready(function() {
         
         submitBtn.removeClass('btn-loading');
         submitBtn.prop('disabled', false);
-        btnText.html('<i class="fas fa-sign-in-alt me-2"></i>Entrar');
+        btnText.text('Entrar');
         spinner.addClass('d-none');
     });
     

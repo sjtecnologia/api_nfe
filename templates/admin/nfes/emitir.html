@@ -275,7 +275,7 @@ input[readonly] {
                         <div class="form-group">
                             <label for="serie">Série *</label>
                             <input type="number" class="form-control" name="serie" id="serie" 
-                                   value="{{ ultima_serie | default(1) }}" min="1" max="999" required onchange="buscarProximoNumero()">
+                                   value="1" min="1" max="999" required onchange="buscarProximoNumero()">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -1264,22 +1264,8 @@ function adicionarItem() {
                 <div class="col-md-6">
                     <div class="form-group">
                         <label>Produto *</label>
-                        <select name="produto_${itemCounter}" class="form-control js-select2-produto" onchange="carregarProduto(${itemCounter})" required>
+                        <select name="produto_${itemCounter}" class="form-control js-select2-produto" required>
                             <option value="">Selecione um produto...</option>
-                            {% for prod in produtos %}
-                            <option value="{{ prod.produto_id }}" 
-                                    data-codigo="{{ prod.codigo_interno }}"
-                                    data-descricao="{{ prod.descricao }}"
-                                    data-preco="{{ prod.preco_unitario_padrao }}"
-                                    data-unidade="{{ prod.unidade_comercial }}"
-                                    data-ncm="{{ prod.ncm_codigo }}"
-                                    data-cfop="{{ prod.cfop_codigo }}"
-                                    data-cst="{{ prod.cst_codigo }}"
-                                    data-csosn="{{ prod.csosn_codigo }}"
-                                    data-origem="{{ prod.origem_mercadoria_id }}">
-                                {{ prod.codigo_interno }} - {{ prod.descricao }}
-                            </option>
-                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -1330,9 +1316,6 @@ function adicionarItem() {
                         <label>NCM *</label>
                         <select name="ncm_${itemCounter}" class="form-control js-select2-ncm" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o NCM...</option>
-                            {% for ncm in all_ncms %}
-                            <option value="{{ ncm.codigo }}">{{ ncm.codigo }} - {{ ncm.descricao }}</option>
-                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -1341,9 +1324,6 @@ function adicionarItem() {
                         <label>CFOP *</label>
                         <select name="cfop_${itemCounter}" class="form-control js-select2-cfop" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o CFOP...</option>
-                            {% for cfop in all_cfops %}
-                            <option value="{{ cfop.cfop }}">{{ cfop.cfop }} - {{ cfop.descricao }}</option>
-                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -1604,25 +1584,51 @@ function adicionarItem() {
 // Inicializar Select2 para um item específico
 function initSelect2ForItem(itemId) {
     if ($.fn.select2) {
-        // Produto
+        // Produto (AJAX)
         $(`select[name="produto_${itemId}"]`).select2({
             width: '100%',
             allowClear: true,
             placeholder: 'Digite para buscar produto...',
+            minimumInputLength: 1,
+            ajax: {
+                url: '/admin/nfe/api/produtos',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) {
+                    return { q: params.term, page: params.page || 1 };
+                },
+                processResults: function(data) {
+                    return data;
+                },
+                cache: true
+            },
             language: {
                 noResults: () => "Nenhum produto encontrado",
-                searching: () => "Pesquisando..."
+                searching: () => "Pesquisando...",
+                inputTooShort: () => "Digite ao menos 1 caractere"
             }
+        }).on('select2:select', function() {
+            carregarProduto(itemId);
         });
         
-        // CFOP
+        // CFOP (AJAX)
         $(`select[name="cfop_${itemId}"]`).select2({
             width: '100%',
             allowClear: true,
             placeholder: 'Digite para buscar CFOP...',
+            minimumInputLength: 1,
+            ajax: {
+                url: '/admin/nfe/api/cfops',
+                dataType: 'json',
+                delay: 250,
+                data: params => ({ q: params.term }),
+                processResults: data => data,
+                cache: true
+            },
             language: {
                 noResults: () => "Nenhum CFOP encontrado",
-                searching: () => "Pesquisando..."
+                searching: () => "Pesquisando...",
+                inputTooShort: () => "Digite ao menos 1 caractere"
             }
         });
         
@@ -1647,14 +1653,24 @@ function initSelect2ForItem(itemId) {
                 searching: () => "Pesquisando..."
             }
         });
-        // NCM
+        // NCM (AJAX)
         $(`select[name="ncm_${itemId}"]`).select2({
             width: '100%',
             allowClear: true,
             placeholder: 'Digite para buscar NCM...',
+            minimumInputLength: 2,
+            ajax: {
+                url: '/admin/nfe/api/ncms',
+                dataType: 'json',
+                delay: 300,
+                data: params => ({ q: params.term, page: params.page || 1 }),
+                processResults: data => data,
+                cache: true
+            },
             language: {
                 noResults: () => "Nenhum NCM encontrado",
-                searching: () => "Pesquisando..."
+                searching: () => "Pesquisando...",
+                inputTooShort: () => "Digite ao menos 2 caracteres"
             }
         });
         console.log(`✅ Select2 inicializado para item ${itemId}`);
@@ -1729,56 +1745,58 @@ function selecionarNCM(codigo, descricao) {
 
 // Carregar dados do produto selecionado
 function carregarProduto(itemId) {
-    const select = document.querySelector(`select[name="produto_${itemId}"]`);
-    const option = select.options[select.selectedIndex];
-    
-    if (option.value) {
-        // Dados básicos do produto
-        document.querySelector(`input[name="codigo_produto_${itemId}"]`).value = option.dataset.codigo || '';
-        
-        // Capturar descrição do texto da option (nome do produto)
-        const descricao = option.text.trim();
-        // Armazenar em um campo hidden ou data attribute para uso posterior
-        const codigoProdutoInput = document.querySelector(`input[name="codigo_produto_${itemId}"]`);
-        if (codigoProdutoInput) {
-            codigoProdutoInput.setAttribute('data-descricao', descricao);
-        }
-        
-        document.querySelector(`input[name="valor_unitario_${itemId}"]`).value = option.dataset.preco || '0.00';
-        document.querySelector(`input[name="unidade_${itemId}"]`).value = option.dataset.unidade || 'UN';
-        
-        // Dados tributários - usar Select2 .val() para atualizar
-        if (option.dataset.ncm) {
-            $(`select[name="ncm_${itemId}"]`).val(option.dataset.ncm).trigger('change');
-        }
-        
-        if (option.dataset.cfop) {
-            $(`select[name="cfop_${itemId}"]`).val(option.dataset.cfop).trigger('change');
-        }
-        
-        if (option.dataset.origem !== undefined) {
-            const origemSelect = document.querySelector(`select[name="origem_${itemId}"]`);
-            if (origemSelect) {
-                origemSelect.value = option.dataset.origem;
-            }
-        }
-        
-        // CST ou CSOSN dependendo do regime tributário - usar Select2
-        const csosnSelect = $(`select[name="csosn_${itemId}"]`);
-        const cstSelect = $(`select[name="cst_icms_${itemId}"]`);
-        
-        if (csosnSelect.length && option.dataset.csosn) {
-            csosnSelect.val(option.dataset.csosn).trigger('change');
-        } else if (cstSelect.length && option.dataset.cst) {
-            cstSelect.val(option.dataset.cst).trigger('change');
-        }
-        
-        // ✅ BUSCAR REGRA TRIBUTÁRIA AUTOMATICAMENTE
-        aplicarRegraTributaria(itemId, option.value);
-        
-        // Atualizar JSON do item
-        atualizarItemJSON(itemId);
+    const selectEl = document.querySelector(`select[name="produto_${itemId}"]`);
+    const $select = $(`select[name="produto_${itemId}"]`);
+    const selected = $select.select2('data');
+    const prod = selected && selected.length > 0 ? selected[0] : null;
+
+    if (!prod || !prod.id) return;
+
+    // Dados básicos
+    const codigoInput = document.querySelector(`input[name="codigo_produto_${itemId}"]`);
+    if (codigoInput) {
+        codigoInput.value = prod.codigo || '';
+        codigoInput.setAttribute('data-descricao', prod.text || '');
     }
+
+    const valorInput = document.querySelector(`input[name="valor_unitario_${itemId}"]`);
+    if (valorInput) valorInput.value = prod.preco != null ? prod.preco : '0.00';
+
+    const unidadeInput = document.querySelector(`input[name="unidade_${itemId}"]`);
+    if (unidadeInput) unidadeInput.value = prod.unidade || 'UN';
+
+    // Tributação via Select2
+    if (prod.ncm) {
+        const $ncm = $(`select[name="ncm_${itemId}"]`);
+        if ($ncm.find(`option[value="${prod.ncm}"]`).length === 0) {
+            $ncm.append(new Option(prod.ncm, prod.ncm, true, true));
+        }
+        $ncm.val(prod.ncm).trigger('change');
+    }
+    if (prod.cfop) {
+        const $cfop = $(`select[name="cfop_${itemId}"]`);
+        if ($cfop.find(`option[value="${prod.cfop}"]`).length === 0) {
+            $cfop.append(new Option(prod.cfop, prod.cfop, true, true));
+        }
+        $cfop.val(prod.cfop).trigger('change');
+    }
+    if (prod.origem !== undefined && prod.origem !== null) {
+        const origemSelect = document.querySelector(`select[name="origem_${itemId}"]`);
+        if (origemSelect) origemSelect.value = prod.origem;
+    }
+
+    const csosnSelect = $(`select[name="csosn_${itemId}"]`);
+    const cstSelect = $(`select[name="cst_icms_${itemId}"]`);
+    if (csosnSelect.length && prod.csosn) {
+        csosnSelect.val(prod.csosn).trigger('change');
+    } else if (cstSelect.length && prod.cst) {
+        cstSelect.val(prod.cst).trigger('change');
+    }
+
+    // Regra tributária automática
+    aplicarRegraTributaria(itemId, prod.id);
+
+    atualizarItemJSON(itemId);
 }
 
 // ✅ FUNÇÃO PARA APLICAR REGRA TRIBUTÁRIA AUTOMATICAMENTE
@@ -1907,11 +1925,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             const aliquotaIcmsInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
             
             // PIS
-            const cstPisInput = document.querySelector(`select[name="cst_pis_${itemId}"]`);
+            const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
             const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
             
             // COFINS
-            const cstCofinsInput = document.querySelector(`select[name="cst_cofins_${itemId}"]`);
+            const cstCofinsInput = document.querySelector(`input[name="cst_cofins_${itemId}"]`);
             const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
             
             // IPI
@@ -1930,11 +1948,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (aliquotaIcmsInput) aliquotaIcmsInput.value = '0.00';
             
             // Limpar PIS
-            if (cstPisInput) { cstPisInput.value = ''; $(cstPisInput).trigger('change'); }
+            if (cstPisInput) cstPisInput.value = '';
             if (aliquotaPisInput) aliquotaPisInput.value = '0.00';
             
             // Limpar COFINS
-            if (cstCofinsInput) { cstCofinsInput.value = ''; $(cstCofinsInput).trigger('change'); }
+            if (cstCofinsInput) cstCofinsInput.value = '';
             if (aliquotaCofinsInput) aliquotaCofinsInput.value = '0.00';
             
             // Limpar IPI
@@ -1985,7 +2003,6 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (result.regra.cst_pis && cstPisInput) {
                 console.log('Aplicando CST PIS:', result.regra.cst_pis);
                 cstPisInput.value = result.regra.cst_pis;
-                $(cstPisInput).trigger('change');
             }
             if (result.regra.aliquota_pis && aliquotaPisInput) {
                 console.log('Aplicando alíquota PIS:', result.regra.aliquota_pis);
@@ -1996,7 +2013,6 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (result.regra.cst_cofins && cstCofinsInput) {
                 console.log('Aplicando CST COFINS:', result.regra.cst_cofins);
                 cstCofinsInput.value = result.regra.cst_cofins;
-                $(cstCofinsInput).trigger('change');
             }
             if (result.regra.aliquota_cofins && aliquotaCofinsInput) {
                 console.log('Aplicando alíquota COFINS:', result.regra.aliquota_cofins);
@@ -2166,11 +2182,10 @@ function calcularTotalGeral() {
         currency: 'BRL'
     });
     
-    // IMPORTANTE: Atualizar variável global ANTES de chamar recalcularTotais()
-    totalGeral = total;
-    
     // Calcular total da NFe considerando frete, seguro e desconto
     recalcularTotais();
+    
+    totalGeral = total;
     
     // Validar campos obrigatórios
     validarCamposObrigatorios();
@@ -2207,16 +2222,15 @@ function recalcularTotais() {
     
     const totalNFe = totalProdutos + vFrete + vSeg - vDesc;
     
-    // Atualizar valor do pagamento com o total final - SEMPRE, mesmo que seja 0
+    // Atualizar valor do pagamento com o total final
     const campoPagamento = document.getElementById('valorPagamento');
-    if (campoPagamento) {
+    if (campoPagamento && totalNFe > 0) {
+        // Remover os event listeners temporariamente para evitar formatação incorreta
         const valorFormatado = totalNFe.toFixed(2);
-        // Usar formatação brasileira para exibição (vírgula como decimal)
-        const valorBR = valorFormatado.replace('.', ',');
-        campoPagamento.value = valorBR;
+        campoPagamento.value = valorFormatado;
         campoPagamento.setAttribute('data-valor-real', valorFormatado);
         
-        console.log(`💳 Valor do Pagamento atualizado: R$ ${valorBR} (valor real: ${valorFormatado})`);
+        console.log(`💳 Valor do Pagamento atualizado: R$ ${valorFormatado}`);
     }
     
     console.log(`💰 Totais: Produtos=${totalProdutos.toFixed(2)} + Frete=${vFrete.toFixed(2)} + Seguro=${vSeg.toFixed(2)} - Desconto=${vDesc.toFixed(2)} = Total NFe=${totalNFe.toFixed(2)}`);
@@ -2237,22 +2251,25 @@ function buscarProximoNumero() {
     
     console.log('🔍 Buscando próximo número:', { clienteId, modelo, serie });
     
-    fetch(`/api/nfe/proximo-numero?cliente_id=${clienteId}&modelo=${modelo}&serie=${serie}`)
+    fetch(`/admin/nfe/api/proximo-numero?cliente_id=${clienteId}&modelo=${modelo}&serie=${serie}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 numeroSugerido = data.proximo_numero;
                 document.getElementById('numero_nfe').value = numeroSugerido;
+                // Atualizar campo série com a última série usada
+                const serieField = document.getElementById('serie');
+                if (serieField && data.serie) {
+                    serieField.value = data.serie;
+                }
                 numeroAlteradoManualmente = false;
-                console.log('✅ Próximo número:', data.proximo_numero);
+                console.log('✅ Próximo número:', data.proximo_numero, '| Série:', data.serie);
             } else {
                 console.error('❌ Erro ao buscar número:', data.error);
-                // Manter valor atual em caso de erro
             }
         })
         .catch(error => {
             console.error('❌ Erro na requisição:', error);
-            // Manter valor atual em caso de erro
         });
 }
 

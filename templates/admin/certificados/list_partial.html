@@ -1,52 +1,108 @@
 <div class="table-responsive">
     {% if certificados_existentes %}
-        <table class="table table-bordered table-hover table-sm align-middle mb-0">
+        <table class="table table-hover">
             <thead class="table-light">
                 <tr>
                     <th>ID</th>
-                    <th>Nome do Arquivo</th>
+                    <th>Tipo</th>
+                    <th>Arquivo</th>
                     <th>Fingerprint</th>
-                    <th>Validade Início</th>
-                    <th>Validade Fim</th>
-                    <th>Ativo</th>
-                    <th style="width: 110px;">Ações</th>
+                    <th>Status</th>
+                    <th>Validade</th>
+                    <th>Data Upload</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
                 {% for certificado in certificados_existentes %}
                 <tr>
-                    <td>{{ certificado.certificado_digital_id }}</td>
-                    <td>{{ (certificado.nome_arquivo_original or 'Sem nome') | truncate(30, True, '...') }}</td>
-                    <td>{{ (certificado.fingerprint[:10] if certificado.fingerprint else 'N/A') }}{{ '...' if certificado.fingerprint else '' }}</td>
-                    <td>{{ certificado.validade_inicio.strftime('%d/%m/%Y') if certificado.validade_inicio else 'N/A' }}</td>
-                    <td>{{ certificado.validade_fim.strftime('%d/%m/%Y') if certificado.validade_fim else 'N/A' }}</td>
+                    <td><code>#{{ certificado.certificado_digital_id }}</code></td>
                     <td>
-                        {% if certificado.ativo %}
-                            <span class="badge bg-success">Sim</span>
+                        {% if certificado.tipo_certificado == 'A3' %}
+                            <span class="badge bg-success" title="Certificado A3 (Token/Smartcard)">
+                                <i class="fas fa-usb"></i> A3
+                            </span>
                         {% else %}
-                            <span class="badge bg-danger">Não</span>
+                            <span class="badge bg-primary" title="Certificado A1 (Arquivo)">
+                                <i class="fas fa-file"></i> A1
+                            </span>
                         {% endif %}
                     </td>
                     <td>
-                        <a href="{{ url_for('admin.edit_certificado', certificado_digital_id=certificado.certificado_digital_id, cliente_id=cliente.cliente_id) }}" class="btn btn-sm btn-outline-primary me-1" title="Editar">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        <form action="{{ url_for('admin.delete_certificado', certificado_digital_id=certificado.certificado_digital_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir este certificado?');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir"><i class="fas fa-trash"></i></button>
-                        </form>
+                        <i class="fas fa-certificate text-primary"></i>
+                        {{ certificado.nome_arquivo_original or certificado.token_label or 'Certificado.pfx' }}
+                    </td>
+                    <td>
+                        {% if certificado.fingerprint %}
+                        <small class="text-muted" title="{{ certificado.fingerprint }}">
+                            {{ certificado.fingerprint[:16] }}...
+                        </small>
+                        {% else %}
+                        <span class="text-muted">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if certificado.ativo %}
+                            <span class="badge bg-success"><i class="fas fa-check"></i> Ativo</span>
+                        {% else %}
+                            <span class="badge bg-secondary"><i class="fas fa-pause"></i> Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if certificado.validade_fim %}
+                            <span class="text-info">
+                                <i class="fas fa-calendar"></i>
+                                {{ certificado.validade_fim.strftime('%d/%m/%Y') if certificado.validade_fim else 'N/A' }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">A verificar</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if certificado.data_upload %}
+                            <small>{{ certificado.data_upload.strftime('%d/%m/%Y %H:%M') }}</small>
+                        {% else %}
+                            <span class="text-muted">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a href="{{ url_for('admin.edit_certificado', certificado_digital_id=certificado.certificado_digital_id, cliente_id=cliente.cliente_id) }}"
+                               class="btn btn-outline-primary" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form method="POST"
+                                  action="{{ url_for('admin.toggle_certificado_status', certificado_id=certificado.certificado_digital_id) }}"
+                                  style="display: inline;">
+                                <input type="hidden" name="cliente_id" value="{{ cliente.cliente_id }}">
+                                {% if certificado.ativo %}
+                                <button type="submit" class="btn btn-warning" title="Desativar"
+                                        onclick="return confirm('Desativar certificado?')">
+                                    <i class="fas fa-pause"></i>
+                                </button>
+                                {% else %}
+                                <button type="submit" class="btn btn-success" title="Ativar"
+                                        onclick="return confirm('Ativar certificado?')">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                {% endif %}
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     {% else %}
-        <div class="text-center py-4">
-            <i class="fas fa-certificate fa-3x text-muted mb-3"></i>
-            <h5>Nenhum certificado cadastrado</h5>
-            <p class="text-muted">Comece adicionando um novo certificado digital para este cliente.</p>
+        <div class="text-center py-5">
+            <i class="fas fa-certificate fa-4x text-muted mb-4"></i>
+            <h5 class="text-muted">Nenhum certificado encontrado</h5>
+            <p class="text-muted">Adicione um certificado digital para poder emitir NF-e</p>
             {% if can_create() %}
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="Adicionar Novo Certificado" data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
-                <i class="fas fa-plus"></i> Adicionar Primeiro Certificado
+            <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#addModal"
+                    data-modal-title="Adicionar Novo Certificado"
+                    data-modal-url="{{ url_for('admin.create_certificado', cliente_id=cliente.cliente_id, modal=true) }}">
+                <i class="fas fa-plus"></i> Adicionar Certificado
             </button>
             {% endif %}
         </div>

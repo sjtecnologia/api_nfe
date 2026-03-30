@@ -635,12 +635,7 @@ $(document).ready(function() {
                         }
                         $ncmSelect.trigger('change');
                         
-                        // Verifica se foi cadastrado automaticamente
-                        if (resp.ncm_auto_cadastrado) {
-                            sucessos.push('NCM (' + classificacao.ncm + ') ✨ <em>cadastrado automaticamente</em>');
-                        } else {
-                            sucessos.push('NCM (' + classificacao.ncm + ')');
-                        }
+                        sucessos.push('NCM (' + classificacao.ncm + ')');
                     } else if (classificacao.ncm) {
                         falhas.push('NCM: ' + classificacao.ncm + ' (não encontrado no banco)');
                     }
