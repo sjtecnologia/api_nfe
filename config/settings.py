@@ -21,3 +21,7 @@ UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
 
 # Configurações de Log
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+
+# IBS/CBS - Reforma Tributária (LC 214/2024)
+# False = desabilitado (padrão até implementação completa)
+HABILITAR_IBS_CBS = os.getenv('HABILITAR_IBS_CBS', 'False').lower() == 'true'
