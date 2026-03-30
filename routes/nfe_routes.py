@@ -1641,8 +1641,7 @@ def enviar_danfe_email(nfe_id):
                         <p>O arquivo XML da NFe pode ser consultado usando a chave de acesso acima.</p>
                     </div>
                     <div class="footer">
-                        <p>Este é um email automático. Por favor, não responda.</p>
-                        <p>Sistema de Gestão de NFe</p>
+                        <p>Este email foi enviado automaticamente pelo EmiteMax. Por favor, não responda.</p>
                     </div>
                 </div>
             </body>
@@ -1672,7 +1671,8 @@ def enviar_danfe_email(nfe_id):
                 destinatario=email_destinatario,
                 assunto=assunto,
                 corpo_html=corpo_html,
-                anexos=anexos
+                anexos=anexos,
+                from_name=cliente_nome
             )
             
             if resultado['success']:
