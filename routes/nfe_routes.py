@@ -3391,7 +3391,7 @@ def compartilhar_nfe(nfe_id):
             email_service = EmailService()
             
             # Preparar dados do email
-            _emitente_comp = nfe_data.get('cliente_nome', 'N/A')
+            _emitente_comp = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_nome', 'N/A')
             _numero_comp   = nfe_data.get('numero', nfe_id)
             _dest_comp     = nfe_data.get('destinatario_razao_social', 'N/A')
             _chave_comp    = nfe_data.get('chave_acesso', 'N/A')
