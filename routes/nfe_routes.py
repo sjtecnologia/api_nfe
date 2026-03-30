@@ -2012,6 +2012,7 @@ def edit(nfe_id):
                         LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
                         WHERE p.cliente_id = :cliente_id AND p.ativo = true
                         ORDER BY p.descricao
+                        LIMIT 500
                     """)
                     produtos_result = db.execute(produtos_query, {'cliente_id': cliente_id}).fetchall()
                     produtos = []
