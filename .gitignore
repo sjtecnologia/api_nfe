@@ -1,1 +1,37 @@
 .env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtualenv
+venv/
+.venv/
+
+# Arquivos gerados em runtime
+static/danfe/
+static/xml/
+logs/
+
+# Arquivos temporários de debug/migração
+fix_*.py
+debug_*.py
+nfe_latest.xml
+*.bak
+*.bak-*
+
+# Certificados e chaves
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
