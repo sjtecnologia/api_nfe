@@ -3877,38 +3877,69 @@ def duplicar_nfe(nfe_id):
         destinatario_id = form_data.get('destinatario')
         destinatario_data = {}
         email_destinatario_duplicar = ''
-        
+
+        # Helper para preencher destinatario_data a partir de um row
+        def _fill_dest(dest_mapping):
+            nonlocal email_destinatario_duplicar
+            email_destinatario_duplicar = dest_mapping.get('email') or ''
+            return {
+                'nome_razao_social': dest_mapping['nome_razao_social'],
+                'cpf_cnpj': dest_mapping['cpf_cnpj'],
+                'inscricao_estadual': dest_mapping.get('ie'),
+                'logradouro': dest_mapping['logradouro'],
+                'numero': dest_mapping['numero'],
+                'bairro': dest_mapping['bairro'],
+                'cep': dest_mapping['cep'],
+                'codigo_municipio': dest_mapping['codigo_municipio'],
+                'nome_municipio': dest_mapping['nome_municipio'],
+                'uf': dest_mapping['uf']
+            }
+
         if destinatario_id:
             try:
                 dest_query = text("""
                     SELECT destinatario_id, nome_razao_social, cpf_cnpj, ie,
-                           logradouro, numero, bairro, cep, codigo_municipio, 
+                           logradouro, numero, bairro, cep, codigo_municipio,
                            nome_municipio, uf, email
-                    FROM destinatarios_nfe 
+                    FROM destinatarios_nfe
                     WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
                 """)
                 dest_result = db.execute(dest_query, {
                     'dest_id': destinatario_id,
                     'cliente_id': cliente_id
                 }).fetchone()
-                
+
                 if dest_result:
                     dest_mapping = dest_result._mapping if hasattr(dest_result, '_mapping') else dest_result
-                    email_destinatario_duplicar = dest_mapping.get('email') or ''
-                    destinatario_data = {
-                        'nome_razao_social': dest_mapping['nome_razao_social'],
-                        'cpf_cnpj': dest_mapping['cpf_cnpj'],
-                        'inscricao_estadual': dest_mapping.get('ie'),
-                        'logradouro': dest_mapping['logradouro'],
-                        'numero': dest_mapping['numero'],
-                        'bairro': dest_mapping['bairro'],
-                        'cep': dest_mapping['cep'],
-                        'codigo_municipio': dest_mapping['codigo_municipio'],
-                        'nome_municipio': dest_mapping['nome_municipio'],
-                        'uf': dest_mapping['uf']
-                    }
+                    destinatario_data = _fill_dest(dest_mapping)
             except Exception as e:
                 print(f"Aviso: Erro ao buscar destinatário por ID: {e}")
+
+        # Fallback: buscar por CNPJ/CPF quando ID não está no form_data
+        if not destinatario_data:
+            cnpj_cpf_busca = (nfe_data.get('destinatario_cnpj_cpf') or
+                              form_data.get('destinatario_cnpj_cpf') or
+                              cnpj_cpf_dest)
+            if cnpj_cpf_busca:
+                try:
+                    dest_query_cpf = text("""
+                        SELECT destinatario_id, nome_razao_social, cpf_cnpj, ie,
+                               logradouro, numero, bairro, cep, codigo_municipio,
+                               nome_municipio, uf, email
+                        FROM destinatarios_nfe
+                        WHERE cpf_cnpj = :cpf_cnpj AND cliente_id = :cliente_id
+                        LIMIT 1
+                    """)
+                    dest_result_cpf = db.execute(dest_query_cpf, {
+                        'cpf_cnpj': cnpj_cpf_busca,
+                        'cliente_id': cliente_id
+                    }).fetchone()
+                    if dest_result_cpf:
+                        dest_mapping = dest_result_cpf._mapping if hasattr(dest_result_cpf, '_mapping') else dest_result_cpf
+                        destinatario_data = _fill_dest(dest_mapping)
+                        print(f"[DUPLICAR] Destinatário encontrado por CNPJ/CPF, email: {email_destinatario_duplicar}")
+                except Exception as e:
+                    print(f"Aviso: Erro ao buscar destinatário por CNPJ/CPF: {e}")
         
         # Se não encontrou, usar dados armazenados na NFe
         if not destinatario_data:
