@@ -2107,7 +2107,8 @@ function atualizarItemJSON(itemId) {
     const descricao = produtoOption?.text.trim() || '';
     
     const itemData = {
-        codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`)?.value || '',
+        produto_id: produtoSelect?.value || '',
+        codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`)?.value || '',,
         descricao: descricao,
         unidade: document.querySelector(`input[name="unidade_${itemId}"]`)?.value || '',
         quantidade: document.querySelector(`input[name="quantidade_${itemId}"]`)?.value || '',

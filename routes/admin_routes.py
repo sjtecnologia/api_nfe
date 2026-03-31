@@ -3482,16 +3482,29 @@ def list_produtos():
         produtos_usados = set()
         if produtos:
             ids_pagina = [str(p['produto_id']) for p in produtos]
+            codigos_pagina = [p['codigo_interno'] for p in produtos if p.get('codigo_interno')]
             try:
+                # Verificar por produto_id (NFes novas) ou por codigo_interno == codigo_produto (NFes antigas)
                 usados_rows = db.execute(text("""
-                    SELECT DISTINCT elem->>'produto_id' as pid
+                    SELECT DISTINCT
+                        CASE
+                            WHEN elem->>'produto_id' = ANY(:ids) THEN elem->>'produto_id'
+                            ELSE p2.produto_id::text
+                        END as pid
                     FROM nfe_emitidas ne,
-                         jsonb_array_elements(ne.json_nfe->'itens') AS elem
+                         jsonb_array_elements(ne.json_nfe->'items') AS elem
+                    LEFT JOIN produtos p2
+                        ON p2.codigo_interno = elem->>'codigo_produto'
+                        AND p2.cliente_id = :cliente_id
                     WHERE ne.cliente_id = :cliente_id
-                      AND elem->>'produto_id' = ANY(:ids)
-                """), {'cliente_id': cliente_id, 'ids': ids_pagina}).fetchall()
+                      AND (
+                          elem->>'produto_id' = ANY(:ids)
+                          OR elem->>'codigo_produto' = ANY(:codigos)
+                      )
+                """), {'cliente_id': cliente_id, 'ids': ids_pagina, 'codigos': codigos_pagina}).fetchall()
                 produtos_usados = {r[0] for r in usados_rows if r[0]}
-            except Exception:
+            except Exception as ex:
+                print(f'[WARN] Erro ao verificar produtos usados: {ex}')
                 pass  # fallback: nenhum marcado como usado
 
         for p in produtos:
