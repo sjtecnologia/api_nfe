@@ -3713,21 +3713,20 @@ def cancelar_nfe(nfe_id):
         if not certificado:
             return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
         
-        # Extrair dados do certificado PFX
+        # Cancelamento deve usar o mesmo certificado da emissão: PKCS#12 do cliente.
         cert_data = certificado.get('cert_data') or certificado.get('arquivo_certificado')
         cert_senha = certificado.get('password') or certificado.get('senha_certificado')
-        
-        if not cert_data or not cert_senha:
-            return jsonify({'success': False, 'message': 'Dados do certificado incompletos'}), 400
+
+        if not cert_data:
+            return jsonify({'success': False, 'message': 'Certificado do cliente não configurado para cancelamento'}), 400
+
+        if not cert_senha:
+            return jsonify({'success': False, 'message': 'Senha do certificado do cliente não configurada para cancelamento'}), 400
         
         # Cancelar na SEFAZ
         from services.sefaz_service import SefazService
         
-        sefaz = SefazService(
-            ambiente=ambiente,
-            cert_path=certificado.get('cert_path'),
-            key_path=certificado.get('key_path')
-        )
+        sefaz = SefazService(ambiente=ambiente)
         
         resultado = sefaz.cancelar_nfe(
             chave_nfe=chave_acesso,
