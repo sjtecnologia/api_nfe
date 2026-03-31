@@ -476,7 +476,7 @@ async function _enviarEmailParaNfe(nfeId, email, modalId) {
         const response = await fetch(`/admin/nfe/compartilhar/${nfeId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, include_danfe: true, include_xml: false })
+            body: JSON.stringify({ email: email, include_danfe: true, include_xml: true })
         });
 
         const result = await response.json();
