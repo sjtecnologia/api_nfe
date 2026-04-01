@@ -1,102 +1,52 @@
 <div class="table-responsive">
     {% if regras_existentes %}
-        <table class="table table-hover">
+        <table class="table table-bordered table-hover table-sm align-middle mb-0">
             <thead class="table-light">
                 <tr>
                     <th>ID</th>
-                    <th>Prioridade</th>
+                    <th>Descrição da Regra</th>
+                    <th>Regime</th>
                     <th>CFOP</th>
                     <th>NCM</th>
-                    <th>UF Origem</th>
-                    <th>UF Destino</th>
-                    <th>CST ICMS</th>
-                    <th>Alíq. ICMS</th>
-                    <th>Alíq. PIS</th>
-                    <th>Ações</th>
+                    <th>Prioridade</th>
+                    <th>Ativo</th>
+                    <th style="width: 110px;">Ações</th>
                 </tr>
             </thead>
             <tbody>
                 {% for regra in regras_existentes %}
                 <tr>
-                    <td><code>#{{ regra.regra_tributacao_id }}</code></td>
+                    <td>{{ regra.regra_tributacao_id }}</td>
+                    <td>{{ (regra.descricao_regra or 'Sem descrição') | truncate(50, True, '...') }}</td>
+                    <td>{{ regra.regime_tributario.nome if regra.regime_tributario else 'N/A' }}</td>
+                    <td>{{ regra.cfop.cfop if regra.cfop else 'N/A' }}</td>
+                    <td>{{ regra.ncm.codigo if regra.ncm else 'N/A' }}</td>
+                    <td>{{ regra.prioridade }}</td>
                     <td>
-                        <span class="badge bg-info">{{ regra.prioridade or 100 }}</span>
-                    </td>
-                    <td>
-                        {% if regra.cfop_codigo %}
-                            <small>
-                                <strong>{{ regra.cfop_codigo }}</strong><br>
-                                <span class="text-muted">{{ (regra.cfop_descricao or '')[:30] }}...</span>
-                            </small>
+                        {% if regra.ativo %}
+                            <span class="badge bg-success">Sim</span>
                         {% else %}
-                            <span class="text-muted">Todos</span>
+                            <span class="badge bg-danger">Não</span>
                         {% endif %}
                     </td>
                     <td>
-                        {% if regra.ncm_codigo %}
-                            <small>
-                                <strong>{{ regra.ncm_codigo }}</strong><br>
-                                <span class="text-muted">{{ (regra.ncm_descricao or '')[:25] }}...</span>
-                            </small>
-                        {% else %}
-                            <span class="text-muted">Todos</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span class="badge bg-secondary">{{ regra.uf_origem or 'Todas' }}</span>
-                    </td>
-                    <td>
-                        <span class="badge bg-secondary">{{ regra.uf_destino or 'Todas' }}</span>
-                    </td>
-                    <td>
-                        {% if regra.cst_icms %}
-                            <code>{{ regra.cst_icms }}</code>
-                        {% elif regra.csosn_icms %}
-                            <code>{{ regra.csosn_icms }}</code>
-                        {% else %}
-                            <span class="text-muted">N/A</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if regra.aliquota_icms %}
-                            <strong class="text-success">{{ "%.2f"|format(regra.aliquota_icms) }}%</strong>
-                        {% else %}
-                            <span class="text-muted">N/A</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if regra.aliquota_pis %}
-                            <strong class="text-info">{{ "%.2f"|format(regra.aliquota_pis) }}%</strong>
-                        {% else %}
-                            <span class="text-muted">N/A</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="btn-group btn-group-sm" role="group">
-                            <a href="{{ url_for('admin.edit_regra_tributacao', regra_tributacao_id=regra.regra_tributacao_id, cliente_id=cliente.cliente_id) }}"
-                               class="btn btn-warning" title="Editar">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                            <form action="{{ url_for('admin.delete_regra_tributacao', regra_tributacao_id=regra.regra_tributacao_id) }}" method="post"
-                                  style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta regra?');">
-                                <button type="submit" class="btn btn-danger" title="Excluir">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
-                        </div>
+                        <a href="{{ url_for('admin.edit_regra_tributacao', regra_tributacao_id=regra.regra_tributacao_id, cliente_id=cliente.cliente_id) }}" class="btn btn-sm btn-outline-primary me-1" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <form action="{{ url_for('admin.delete_regra_tributacao', regra_tributacao_id=regra.regra_tributacao_id) }}" method="post" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta regra?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir"><i class="fas fa-trash"></i></button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     {% else %}
-        <div class="text-center py-5">
-            <i class="fas fa-calculator fa-4x text-muted mb-4"></i>
-            <h5 class="text-muted">Nenhuma regra de tributação encontrada</h5>
-            <p class="text-muted">Adicione regras de tributação para automatizar o cálculo de impostos nas NF-e</p>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal"
-                    data-modal-title=""
-                    data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
+        <div class="text-center py-4">
+            <i class="fas fa-balance-scale fa-3x text-muted mb-3"></i>
+            <h5>Nenhuma regra tributária cadastrada</h5>
+            <p class="text-muted">Comece adicionando uma nova regra tributária para este cliente.</p>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal" data-modal-title="" data-modal-url="{{ url_for('admin.create_regra_tributacao', cliente_id=cliente.cliente_id, modal=true) }}">
                 <i class="fas fa-plus"></i> Adicionar Primeira Regra
             </button>
         </div>

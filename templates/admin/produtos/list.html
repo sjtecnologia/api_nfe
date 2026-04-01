@@ -137,6 +137,16 @@
                                                             title="{{ 'Desativar' if produto.ativo else 'Ativar' }}">
                                                         <i class="fas fa-{{ 'eye-slash' if produto.ativo else 'eye' }}"></i>
                                                     </button>
+                                                    <!-- Excluir (só se não foi usado em NFe) -->
+                                                    {% if produto.get('pode_excluir') %}
+                                                    <form method="post" action="{{ url_for('admin.delete_produto', produto_id=produto.produto_id) }}" style="display:inline;">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                                title="Excluir produto"
+                                                                onclick="return confirm('Tem certeza que deseja excluir o produto {{ produto.descricao|replace("'", "\\'") }}? Esta ação não pode ser desfeita.');">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                    {% endif %}
                                                 </div>
                                                 {% else %}
                                                 <span class="text-muted"><i class="fas fa-eye"></i> Visualização</span>

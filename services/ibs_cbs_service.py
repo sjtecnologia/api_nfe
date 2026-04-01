@@ -72,10 +72,14 @@ def gerar_xml_ibscbs(ibs_cbs_data: Dict[str, Any]) -> str:
     Returns:
         String XML formatada
     """
+    # Normalizar cClassTrib: schema exige exatamente 6 dígitos (\d{6})
+    # Banco pode ter formato antigo "XX-YYYYY" (ex: "00-00001") → remover traço e pegar últimos 6 dígitos
+    c_class_trib = str(ibs_cbs_data['cClassTrib']).replace('-', '')[-6:].zfill(6)
+
     # Estrutura conforme NFe 4.0 com Reforma Tributária - validada e aceita pelo SEFAZ SP
     xml = f"""<IBSCBS>
 <CST>{ibs_cbs_data['CST']}</CST>
-<cClassTrib>{ibs_cbs_data['cClassTrib']}</cClassTrib>
+<cClassTrib>{c_class_trib}</cClassTrib>
 <gIBSCBS>
 <vBC>{ibs_cbs_data['vBC']:.2f}</vBC>
 <gIBSUF>

@@ -95,6 +95,48 @@ class MotorIANCM:
         
         return []
     
+    def _construir_descricao_hierarquica(self, codigo_ncm: str, descricao_base: str, lista_ncm: List[Dict]) -> str:
+        """
+        Constrói descrição completa incluindo hierarquia de NCMs pais.
+        Ex: '0901.21.00' -> 'Café torrado não descafeinado'
+        """
+        # Remove pontos para facilitar comparação
+        codigo_limpo = codigo_ncm.replace('.', '')
+        
+        # Se já é um capítulo/posição genérico (2-4 dígitos), retorna direto
+        if len(codigo_limpo) <= 4:
+            return descricao_base
+        
+        # Busca NCMs pais (prefixos progressivos)
+        descricoes = []
+        
+        # Capítulo (2 dígitos): 09
+        if len(codigo_limpo) >= 2:
+            codigo_cap = f"{codigo_limpo[:2]}.{codigo_limpo[2:4]}"
+            ncm_cap = next((n for n in lista_ncm if n.get('Codigo', '') == codigo_cap), None)
+            if ncm_cap:
+                desc = ncm_cap.get('Descricao', '').strip('- ')
+                if desc and not desc.startswith('-'):
+                    descricoes.append(desc)
+        
+        # Posição (4 dígitos): 0901
+        if len(codigo_limpo) >= 4:
+            for prefixo in [f"{codigo_limpo[:4]}.{codigo_limpo[4:5]}", codigo_limpo[:4]]:
+                ncm_pos = next((n for n in lista_ncm if n.get('Codigo', '').replace('.', '') == prefixo.replace('.', '')), None)
+                if ncm_pos:
+                    desc = ncm_pos.get('Descricao', '').strip('- ')
+                    if desc and desc not in descricoes:
+                        descricoes.append(desc)
+                    break
+        
+        # Adiciona descrição do próprio NCM
+        desc_propria = descricao_base.strip('- ').lower()
+        if desc_propria and not desc_propria.startswith('--'):
+            descricoes.append(descricao_base.strip('- '))
+        
+        # Concatena hierarquia
+        return ' '.join(descricoes) if descricoes else descricao_base
+    
     def _gerar_ncm_exemplo(self) -> Dict:
         """Gera alguns exemplos de NCM para testes"""
         return {
@@ -172,17 +214,30 @@ class MotorIANCM:
         Calcula similaridade entre dois textos usando TF-IDF e cosine similarity
         """
         if not SKLEARN_AVAILABLE:
-            # Fallback simples: palavras em comum
+            # Fallback com pesos para palavras importantes
             palavras1 = set(self._normalizar_texto(texto1).split())
             palavras2 = set(self._normalizar_texto(texto2).split())
             
             if not palavras1 or not palavras2:
                 return 0.0
             
-            intersecao = palavras1.intersection(palavras2)
-            uniao = palavras1.union(palavras2)
+            # Palavras-chave importantes recebem peso maior
+            palavras_chave_importantes = {
+                'torrado', 'descafeinado', 'grao', 'cafe', 'moido', 'soluvel',
+                'verde', 'cru', 'tostado', 'descascado', 'beneficiado'
+            }
             
-            return len(intersecao) / len(uniao) if uniao else 0.0
+            intersecao = palavras1.intersection(palavras2)
+            
+            # Calcula score base (Jaccard)
+            uniao = palavras1.union(palavras2)
+            score_base = len(intersecao) / len(uniao) if uniao else 0.0
+            
+            # Bônus se palavras-chave importantes coincidem
+            palavras_importantes_comuns = intersecao.intersection(palavras_chave_importantes)
+            bonus = len(palavras_importantes_comuns) * 0.2  # 20% de bônus por palavra importante
+            
+            return min(1.0, score_base + bonus)
         
         # Usando TF-IDF e cosine similarity
         try:
@@ -256,7 +311,9 @@ class MotorIANCM:
         resultados = []
         
         # Verifica estrutura da tabela NCM
-        if 'ncm' in self.tabela_ncm:
+        if 'Nomenclaturas' in self.tabela_ncm:
+            lista_ncm = self.tabela_ncm['Nomenclaturas']
+        elif 'ncm' in self.tabela_ncm:
             lista_ncm = self.tabela_ncm['ncm']
         elif isinstance(self.tabela_ncm, list):
             lista_ncm = self.tabela_ncm
@@ -265,18 +322,96 @@ class MotorIANCM:
             return []
         
         for item_ncm in lista_ncm:
-            descricao_ncm = item_ncm.get('descricao', '')
+            # Normaliza campos PascalCase para lowercase
+            item_normalizado = {
+                'codigo': item_ncm.get('Codigo', item_ncm.get('codigo', '')),
+                'descricao': item_ncm.get('Descricao', item_ncm.get('descricao', '')),
+                'data_inicio': item_ncm.get('Data_Inicio', item_ncm.get('data_inicio', '')),
+                'data_fim': item_ncm.get('Data_Fim', item_ncm.get('data_fim', '')),
+                'capitulo': item_ncm.get('Capitulo', item_ncm.get('capitulo', '')),
+                'posicao': item_ncm.get('Posicao', item_ncm.get('posicao', ''))
+            }
             
-            # Calcula similaridade
-            score = self._calcular_similaridade_texto(texto, descricao_ncm)
+            # ✅ CORREÇÃO 4.1: Filtrar NCMs descontinuados por data_fim
+            data_fim = item_normalizado.get('data_fim')
+            if data_fim:
+                try:
+                    # Aceita formatos: YYYY-MM-DD, DD/MM/YYYY, YYYY-MM-DD HH:MM:SS, ou datetime object
+                    if isinstance(data_fim, str):
+                        from datetime import datetime
+                        # Remove timestamp se houver (YYYY-MM-DD HH:MM:SS -> YYYY-MM-DD)
+                        data_fim_clean = data_fim.split()[0] if ' ' in data_fim else data_fim
+                        
+                        # Tenta formato brasileiro DD/MM/YYYY
+                        if '/' in data_fim_clean:
+                            data_fim_dt = datetime.strptime(data_fim_clean, '%d/%m/%Y')
+                        else:
+                            # Formato ISO YYYY-MM-DD
+                            data_fim_dt = datetime.strptime(data_fim_clean, '%Y-%m-%d')
+                        
+                        # Ignora datas muito distantes no futuro (9999 = vigente)
+                        if data_fim_dt.year < 9999 and data_fim_dt < datetime.now():
+                            # NCM descontinuado - pula
+                            continue
+                    elif hasattr(data_fim, 'year'):  # datetime object
+                        from datetime import datetime
+                        if data_fim.year < 9999 and data_fim < datetime.now():
+                            continue
+                except Exception as e:
+                    # Se falhar ao parsear data, permite (assume vigente)
+                    pass
+            
+            descricao_ncm = item_normalizado.get('descricao', '')
+            codigo_ncm = item_normalizado.get('codigo', '')
+            
+            # ✅ Constrói descrição hierárquica completa (ex: "Café torrado não descafeinado")
+            descricao_completa = self._construir_descricao_hierarquica(codigo_ncm, descricao_ncm, lista_ncm)
+            
+            # Penaliza se buscamos "torrado" mas a descrição tem "não torrado"
+            penalidade = 0.0
+            texto_busca_lower = texto.lower()
+            descricao_lower = descricao_completa.lower()
+            
+            # Normaliza acentos para detecção de negação
+            descricao_normalizada = descricao_lower.replace('ã', 'a').replace('á', 'a').replace('â', 'a')
+            texto_normalizado = texto_busca_lower.replace('ã', 'a').replace('á', 'a').replace('â', 'a')
+            
+            # Detecta conflitos de negação
+            if 'torrado' in texto_normalizado:
+                # Se a descrição tem "não torrado" ou "nao torrado", aplica penalidade alta
+                if 'nao torrado' in descricao_normalizada or 'não torrado' in descricao_lower:
+                    penalidade += 0.5  # Aumentado de 0.3 para 0.5
+            
+            if 'descafeinado' in texto_normalizado:
+                # Se a descrição tem "não descafeinado" ou "nao descafeinado", aplica penalidade alta  
+                if 'nao descafeinado' in descricao_normalizada or 'não descafeinado' in descricao_lower:
+                    penalidade += 0.5
+            
+            # Calcula similaridade com descrição hierárquica
+            score = self._calcular_similaridade_texto(texto, descricao_completa)
+            score = max(0.0, score - penalidade)  # Aplica penalidade
+            
+            # Bônus para matches positivos exatos (evita confusão com negações)
+            if 'torrado' in texto_normalizado and 'torrado' in descricao_normalizada:
+                # Se tem "torrado" mas NÃO tem "não torrado", dá bônus
+                if 'nao torrado' not in descricao_normalizada and 'não torrado' not in descricao_lower:
+                    score *= 1.3  # Bônus de 30% para match positivo
+            
+            # Bônus para NCMs mais específicos (8 dígitos completos)
+            digitos_ncm = len(codigo_ncm.replace('.', '').replace('-', ''))
+            if digitos_ncm >= 8:  # NCM completo (ex: 0901.21.00)
+                score *= 1.3  # Aumentado de 1.2 para 1.3
+            elif digitos_ncm >= 6:  # NCM de 6 dígitos (ex: 0901.21)
+                score *= 1.15  # Aumentado de 1.1 para 1.15
+            # NCMs com 2-4 dígitos (capítulos/posições) não recebem bônus
             
             if score > 0.1:  # Threshold mínimo
                 resultados.append({
-                    'codigo': item_ncm.get('codigo', ''),
-                    'descricao': descricao_ncm,
+                    'codigo': codigo_ncm,
+                    'descricao': descricao_completa,  # Retorna descrição completa
                     'confianca': float(score),
-                    'capitulo': item_ncm.get('capitulo', ''),
-                    'posicao': item_ncm.get('posicao', '')
+                    'capitulo': item_normalizado.get('capitulo', ''),
+                    'posicao': item_normalizado.get('posicao', '')
                 })
         
         # Ordena por score
@@ -321,11 +456,24 @@ class MotorIANCM:
     
     def _buscar_info_ncm(self, codigo_ncm: str) -> Optional[Dict]:
         """Busca informações completas de um código NCM"""
-        lista_ncm = self.tabela_ncm.get('ncm', []) if isinstance(self.tabela_ncm, dict) else self.tabela_ncm
+        if 'Nomenclaturas' in self.tabela_ncm:
+            lista_ncm = self.tabela_ncm['Nomenclaturas']
+        elif 'ncm' in self.tabela_ncm:
+            lista_ncm = self.tabela_ncm.get('ncm', [])
+        elif isinstance(self.tabela_ncm, list):
+            lista_ncm = self.tabela_ncm
+        else:
+            return None
         
         for item in lista_ncm:
-            if item.get('codigo', '').replace('.', '') == codigo_ncm.replace('.', ''):
-                return item
+            codigo_item = item.get('Codigo', item.get('codigo', '')).replace('.', '')
+            if codigo_item == codigo_ncm.replace('.', ''):
+                return {
+                    'codigo': item.get('Codigo', item.get('codigo', '')),
+                    'descricao': item.get('Descricao', item.get('descricao', '')),
+                    'capitulo': item.get('Capitulo', item.get('capitulo', '')),
+                    'posicao': item.get('Posicao', item.get('posicao', ''))
+                }
         
         return None
     

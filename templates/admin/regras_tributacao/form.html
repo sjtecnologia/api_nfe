@@ -371,7 +371,30 @@
                                                value="{{ regra.aliquota_pis if regra else '' }}">
                                     </div>
                                 </div>
-                                
+                            </div>
+
+                            <div class="row mt-3">
+                                <!-- CST COFINS -->
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label for="cst_cofins">CST COFINS</label>
+                                        <select class="form-control js-select2" id="cst_cofins" name="cst_cofins">
+                                            <option value="">Selecione um CST COFINS...</option>
+                                            <option value="01" {% if regra and regra.cst_cofins == '01' %}selected{% endif %}>01 - Operação Tributável com Alíquota Básica</option>
+                                            <option value="02" {% if regra and regra.cst_cofins == '02' %}selected{% endif %}>02 - Operação Tributável com Alíquota por Unidade</option>
+                                            <option value="03" {% if regra and regra.cst_cofins == '03' %}selected{% endif %}>03 - Operação Tributável com Alíquota Diferenciada</option>
+                                            <option value="04" {% if regra and regra.cst_cofins == '04' %}selected{% endif %}>04 - Operação Tributável Monofásica</option>
+                                            <option value="05" {% if regra and regra.cst_cofins == '05' %}selected{% endif %}>05 - Operação Tributável por ST</option>
+                                            <option value="06" {% if regra and regra.cst_cofins == '06' %}selected{% endif %}>06 - Operação Tributável a Alíquota Zero</option>
+                                            <option value="07" {% if regra and regra.cst_cofins == '07' %}selected{% endif %}>07 - Operação Isenta da Contribuição</option>
+                                            <option value="08" {% if regra and regra.cst_cofins == '08' %}selected{% endif %}>08 - Operação sem Incidência da Contribuição</option>
+                                            <option value="09" {% if regra and regra.cst_cofins == '09' %}selected{% endif %}>09 - Operação com Suspensão da Contribuição</option>
+                                            <option value="49" {% if regra and regra.cst_cofins == '49' %}selected{% endif %}>49 - Outras Operações de Saída</option>
+                                            <option value="99" {% if regra and regra.cst_cofins == '99' %}selected{% endif %}>99 - Outras Operações</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div class="col-md-4">
                                     <div class="form-group">
                                         <label for="aliquota_cofins">Alíquota COFINS (%)</label>

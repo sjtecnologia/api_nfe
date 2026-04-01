@@ -3478,6 +3478,38 @@ def list_produtos():
             'preco_unitario_padrao','ncm_id','cfop_id','ativo','ncm_codigo'
         ]) for r in rows]
 
+        # Identificar produtos já usados em NFes (via json_nfe)
+        produtos_usados = set()
+        if produtos:
+            ids_pagina = [str(p['produto_id']) for p in produtos]
+            codigos_pagina = [p['codigo_interno'] for p in produtos if p.get('codigo_interno')]
+            try:
+                # Verificar por produto_id (NFes novas) ou por codigo_interno == codigo_produto (NFes antigas)
+                usados_rows = db.execute(text("""
+                    SELECT DISTINCT
+                        CASE
+                            WHEN elem->>'produto_id' = ANY(:ids) THEN elem->>'produto_id'
+                            ELSE p2.produto_id::text
+                        END as pid
+                    FROM nfe_emitidas ne,
+                         jsonb_array_elements(ne.json_nfe->'items') AS elem
+                    LEFT JOIN produtos p2
+                        ON p2.codigo_interno = elem->>'codigo_produto'
+                        AND p2.cliente_id = :cliente_id
+                    WHERE ne.cliente_id = :cliente_id
+                      AND (
+                          elem->>'produto_id' = ANY(:ids)
+                          OR elem->>'codigo_produto' = ANY(:codigos)
+                      )
+                """), {'cliente_id': cliente_id, 'ids': ids_pagina, 'codigos': codigos_pagina}).fetchall()
+                produtos_usados = {r[0] for r in usados_rows if r[0]}
+            except Exception as ex:
+                print(f'[WARN] Erro ao verificar produtos usados: {ex}')
+                pass  # fallback: nenhum marcado como usado
+
+        for p in produtos:
+            p['pode_excluir'] = str(p['produto_id']) not in produtos_usados
+
         total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
         pagination = {
             'page': page,
@@ -3838,6 +3870,21 @@ def alterar_status_produto():
 def delete_produto(produto_id: int):
     db = _get_db()
     try:
+        # Verificar se produto foi usado em alguma NFe
+        try:
+            usado = db.execute(text("""
+                SELECT 1 FROM nfe_emitidas ne,
+                     jsonb_array_elements(ne.json_nfe->'itens') AS elem
+                WHERE elem->>'produto_id' = :pid
+                LIMIT 1
+            """), {'pid': str(produto_id)}).fetchone()
+        except Exception:
+            usado = None
+
+        if usado:
+            flash('Produto não pode ser excluído pois já foi utilizado em uma NFe.', 'warning')
+            return redirect(url_for('admin.list_produtos'))
+
         db.execute(text("DELETE FROM produtos WHERE produto_id = :pid"), {'pid': produto_id})
         db.commit()
         flash('Produto excluído com sucesso', 'success')
