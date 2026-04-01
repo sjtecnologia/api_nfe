@@ -13,6 +13,30 @@ venv/
 static/danfe/
 static/xml/
 logs/
+build.log
+
+# Backups, dumps e pacotes gerados
+*.tar.gz
+backups/*.sql
+backups/*.csv
+deployment/backups/
+
+# Bases locais e artefatos de banco
+database/sjtnfedb
+*.sqlite
+*.sqlite3
+*.db
+
+# XMLs temporarios de debug/teste
+*_server.xml
+nfe_*.xml
+test_nfse_nt007_output.xml
+
+# Chaves e segredos fora do padrao raiz
+Documentacao/deploy_id_rsa
+Documentacao/deploy_id_rsa.pub
+Documentacao/nfe_api_key.pem
+Documentacao/nfe_api_key_lf.pem
 
 # Arquivos temporários de debug/migração
 fix_*.py
