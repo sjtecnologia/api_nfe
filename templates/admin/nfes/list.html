@@ -450,36 +450,61 @@ async function enviarEmailDanfe() {
         return;
     }
     
-    // Solicitar email do destinatário
-    const emailDestinatario = prompt('Digite o email do destinatário:');
-    
-    if (!emailDestinatario || !emailDestinatario.includes('@')) {
-        alert('Email inválido!');
-        return;
-    }
-    
-    // Validar formato do email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailDestinatario)) {
-        alert('Por favor, informe um email válido');
-        return;
-    }
+    const solicitarEmailDestinatario = () => {
+        const emailInformado = prompt('Digite o email do destinatário:');
+        if (!emailInformado) {
+            return null;
+        }
+        const email = emailInformado.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            alert('Por favor, informe um email válido');
+            return null;
+        }
+        return email;
+    };
     
     try {
-        // Usar a rota compartilhar (mesma do xml_preview.html)
-        const response = await fetch(`/admin/nfe/compartilhar/${nfeIdAtual}`, {
+        // Função auxiliar para parsear resposta com segurança
+        async function safeJson(resp) {
+            const text = await resp.text();
+            try { return JSON.parse(text); } catch(e) {
+                return { success: false, message: `Erro interno do servidor (${resp.status})` };
+            }
+        }
+
+        // 1) Tenta primeiro com o email já cadastrado no destinatário da NFe
+        let response = await fetch(`/admin/nfe/${nfeIdAtual}/enviar-danfe`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                email: emailDestinatario,
-                include_danfe: true,
-                include_xml: false
-            })
+            body: JSON.stringify({})
         });
-        
-        const result = await response.json();
+
+        let result = await safeJson(response);
+
+        // 2) Só solicita email manual se não existir no cadastro
+        if (!response.ok && result && result.needs_email_input) {
+            const emailDestinatario = solicitarEmailDestinatario();
+            if (!emailDestinatario) {
+                return;
+            }
+
+            // Mantém rota de compartilhamento nesta tela
+            response = await fetch(`/admin/nfe/compartilhar/${nfeIdAtual}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: emailDestinatario,
+                    include_danfe: true,
+                    include_xml: false
+                })
+            });
+            result = await safeJson(response);
+        }
         
         if (response.ok && result.success) {
             // Fechar modal
@@ -487,7 +512,7 @@ async function enviarEmailDanfe() {
             if (modal) modal.hide();
             
             // Mostrar mensagem de sucesso
-            alert(`DANFE enviado com sucesso para ${emailDestinatario}!`);
+            alert(result.message || 'DANFE enviado com sucesso!');
         } else {
             alert(`Erro ao enviar email: ${result.message || 'Erro desconhecido'}`);
         }

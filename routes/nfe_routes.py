@@ -5,6 +5,7 @@ from typing import Dict, Any
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
 from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
@@ -111,13 +112,14 @@ def api_proximo_numero():
         if not cliente_id:
             return jsonify({'success': False, 'error': 'cliente_id não informado'})
 
-        # Passo 1: descobrir a última série usada para este cliente/modelo
+                # Passo 1: descobrir a última série usada para este cliente/modelo.
+                # CANCELADA também deve contar para sequência fiscal; apenas RASCUNHO é ignorado.
         ultima = db.execute(text("""
             SELECT serie, numero
             FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
               AND modelo = :modelo
-              AND status NOT IN ('CANCELADA', 'RASCUNHO')
+                            AND status <> 'RASCUNHO'
             ORDER BY nfe_emitida_id DESC
             LIMIT 1
         """), {'cliente_id': cliente_id, 'modelo': modelo}).fetchone()
@@ -127,14 +129,15 @@ def api_proximo_numero():
         else:
             ultima_serie = serie
 
-        # Passo 2: próximo número dentro dessa série
+          # Passo 2: próximo número dentro dessa série.
+          # CANCELADA também deve contar para sequência fiscal; apenas RASCUNHO é ignorado.
         result = db.execute(text("""
             SELECT COALESCE(MAX(numero), 0) + 1
             FROM nfe_emitidas
             WHERE cliente_id = :cliente_id
               AND modelo = :modelo
               AND serie = :serie
-              AND status NOT IN ('CANCELADA', 'RASCUNHO')
+              AND status <> 'RASCUNHO'
         """), {'cliente_id': cliente_id, 'modelo': modelo, 'serie': ultima_serie}).fetchone()
 
         proximo = int(result[0]) if result and result[0] else 1
@@ -307,6 +310,7 @@ def emitir_nfe():
             'bairro': emitente_data.bairro,
             'cep': emitente_data.cep,
             'codigo_municipio': emitente_data.codigo_municipio,
+            'municipio': emitente_data.nome_municipio,
             'nome_municipio': emitente_data.nome_municipio,
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
@@ -397,6 +401,7 @@ def emitir_nfe():
                         'bairro': destinatario.bairro,
                         'cep': destinatario.cep,
                         'codigo_municipio': destinatario.codigo_municipio,
+                        'municipio': destinatario.nome_municipio,
                         'nome_municipio': destinatario.nome_municipio,
                         'uf': destinatario.uf
                     }
@@ -467,6 +472,7 @@ def emitir_nfe():
                         'bairro': destinatario.bairro,
                         'cep': destinatario.cep,
                         'codigo_municipio': destinatario.codigo_municipio,
+                        'municipio': destinatario.nome_municipio,
                         'nome_municipio': destinatario.nome_municipio,
                         'uf': destinatario.uf
                     }
@@ -586,6 +592,7 @@ def emitir_nfe():
                         'bairro': destinatario.bairro,
                         'cep': destinatario.cep,
                         'codigo_municipio': destinatario.codigo_municipio,
+                        'municipio': destinatario.nome_municipio,
                         'nome_municipio': destinatario.nome_municipio,
                         'uf': destinatario.uf
                     }
@@ -870,7 +877,47 @@ def emitir_nfe():
                         )
                         
                         db.add(nova_nfe)
-                        db.commit()
+                        try:
+                            db.commit()
+                        except IntegrityError as e:
+                            db.rollback()
+                            erro_txt = str(e)
+
+                            # Constraint de numeração única: evita erro genérico e orienta o usuário
+                            if 'idx_nfe_numeracao_unica' in erro_txt or 'duplicate key value' in erro_txt:
+                                numero_nfe = int(form_data_initial.get('numero_nfe', '1'))
+                                serie_nfe = int(form_data_initial.get('serie', '1'))
+
+                                ultima_existente = db.query(NFeEmitidas).filter(
+                                    NFeEmitidas.cliente_id == emitente_cliente_id,
+                                    NFeEmitidas.modelo == '55',
+                                    NFeEmitidas.serie == serie_nfe,
+                                    NFeEmitidas.numero == numero_nfe
+                                ).order_by(NFeEmitidas.data_criacao.desc()).first()
+
+                                proximo_numero = db.query(NFeEmitidas.numero).filter(
+                                    NFeEmitidas.cliente_id == emitente_cliente_id,
+                                    NFeEmitidas.modelo == '55',
+                                    NFeEmitidas.serie == serie_nfe
+                                ).order_by(NFeEmitidas.numero.desc()).first()
+
+                                numero_sugerido = (proximo_numero[0] + 1) if proximo_numero and proximo_numero[0] else (numero_nfe + 1)
+
+                                status_existente = ultima_existente.status if ultima_existente else 'DESCONHECIDO'
+                                chave_existente = ultima_existente.chave_acesso if ultima_existente else ''
+
+                                msg_dup = (
+                                    f'Numeração já utilizada para série {serie_nfe}, número {numero_nfe} '
+                                    f'(status atual: {status_existente}). Use o número {numero_sugerido}. '
+                                    f'{"Chave existente: " + chave_existente if chave_existente else ""}'
+                                ).strip()
+
+                                print(f"ERRO: Duplicidade de numeração NFe: {msg_dup}")
+                                flash(msg_dup, 'danger')
+                                return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+
+                            # Outras violações de integridade continuam sendo tratadas abaixo
+                            raise
                         print(f"💾 [DEBUG] NFe salva no banco - data_emissao: {nova_nfe.data_emissao}")
                         
                         # OK: CORREÇÃO: Refresh para obter o ID real após commit
@@ -1693,13 +1740,7 @@ def enviar_danfe_email(nfe_id):
     try:
         import re as _re
         data = request.json or {}
-        email_destinatario = data.get('email_destinatario')
-
-        if not email_destinatario:
-            return jsonify({'success': False, 'message': 'Email do destinatário não informado'}), 400
-
-        if not _re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
-            return jsonify({'success': False, 'message': 'Email inválido'}), 400
+        email_destinatario = (data.get('email_destinatario') or '').strip()
 
         # Buscar NFe no banco
         query = text("""
@@ -1717,6 +1758,39 @@ def enviar_danfe_email(nfe_id):
             return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
 
         nfe_data = dict(nfe._mapping)
+
+        if not email_destinatario:
+            email_destinatario = (nfe_data.get('destinatario_email') or '').strip()
+
+        if not email_destinatario:
+            # Busca pelo CNPJ/CPF do destinatário + cliente_id (nfe_emitidas não tem destinatario_id)
+            destinatario_cnpj = (nfe_data.get('destinatario_cnpj_cpf') or '').strip()
+            cliente_id = nfe_data.get('cliente_id')
+            if destinatario_cnpj and cliente_id:
+                destinatario_query = text("""
+                    SELECT email
+                    FROM destinatarios_nfe
+                    WHERE cpf_cnpj = :cpf_cnpj
+                      AND cliente_id = :cliente_id
+                      AND email IS NOT NULL AND email != ''
+                    LIMIT 1
+                """)
+                destinatario_row = db.execute(destinatario_query, {
+                    'cpf_cnpj': destinatario_cnpj,
+                    'cliente_id': cliente_id
+                }).first()
+                if destinatario_row and destinatario_row[0]:
+                    email_destinatario = str(destinatario_row[0]).strip()
+
+        if not email_destinatario:
+            return jsonify({
+                'success': False,
+                'needs_email_input': True,
+                'message': 'Email do destinatário não cadastrado. Informe um email para envio.'
+            }), 400
+
+        if not _re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
+            return jsonify({'success': False, 'message': 'Email inválido'}), 400
 
         # Verificar se DANFE existe
         danfe_path = os.path.join('static', 'danfe', f'danfe_{nfe_id}.pdf')
@@ -1821,21 +1895,44 @@ def enviar_danfe_email(nfe_id):
 
         anexos = [{'nome': f'NFe_{numero}_DANFE.pdf', 'conteudo': pdf_content}]
 
-        # Anexar XML se disponível em json_nfe
+        # Anexar XML autorizado (com protNFe) se disponível
         try:
+            import json as _json
             json_nfe = nfe_data.get('json_nfe') or {}
             if isinstance(json_nfe, str):
-                import json as _json
                 json_nfe = _json.loads(json_nfe)
-            xml_content = json_nfe.get('xml_content')
+            elif not isinstance(json_nfe, dict):
+                json_nfe = dict(json_nfe) if json_nfe else {}
+
+            xml_content = json_nfe.get('xml_content') or json_nfe.get('xml_autorizado') or ''
+
+            # Se autorizada e sem protocolo, tenta montar o XML autorizado
+            status_nfe = nfe_data.get('status', '')
+            protocolo_sefaz = nfe_data.get('protocolo_sefaz', '')
+            data_autorizacao = nfe_data.get('data_autorizacao')
+            if xml_content and status_nfe == 'AUTORIZADA' and protocolo_sefaz and '<protNFe' not in xml_content:
+                try:
+                    from services.nfe_service import NFeService as _NFeS
+                    _svc = _NFeS()
+                    resultado_fake = {
+                        'protocolo': protocolo_sefaz,
+                        'data_autorizacao': str(data_autorizacao) if data_autorizacao else ''
+                    }
+                    xml_content = _svc._gerar_xml_protocolo(xml_content, resultado_fake) or xml_content
+                except Exception as ep:
+                    print(f"[AVISO] Protocolo XML não adicionado ao e-mail: {ep}")
+
             if xml_content:
-                if isinstance(xml_content, str):
-                    xml_bytes = xml_content.encode('utf-8')
-                else:
-                    xml_bytes = xml_content
-                anexos.append({'nome': f'NFe_{numero}.xml', 'conteudo': xml_bytes})
+                xml_bytes = xml_content.encode('utf-8') if isinstance(xml_content, str) else xml_content
+                chave = chave_acesso.replace(' ', '') if chave_acesso != 'N/A' else numero
+                anexos.append({'nome': f'NFe_{chave}.xml', 'conteudo': xml_bytes})
+                print(f"[OK] XML anexado ao email: {len(xml_bytes)} bytes")
+            else:
+                print(f"[AVISO] xml_content vazio para NFe {nfe_id}")
         except Exception as e:
-            print(f"[AVISO] Não foi possível anexar XML: {e}")
+            import traceback
+            print(f"[ERRO] Não foi possível anexar XML: {e}")
+            traceback.print_exc()
 
         from services.email_service import EmailService
         try:

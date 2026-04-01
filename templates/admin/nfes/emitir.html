@@ -395,7 +395,7 @@ input[readonly] {
         </div>
 
         <!-- ✅ ITENS DA NFE -->
-        <div class="card mt-3">
+        <div class="card mt-3" id="cardItensNfe">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5>📦 Itens da NFe</h5>
                 <button type="button" class="btn btn-primary btn-sm" onclick="adicionarItem()">
@@ -419,7 +419,7 @@ input[readonly] {
         </div>
 
         <!-- ✅ INFORMAÇÕES DE PAGAMENTO -->
-        <div class="card mt-3">
+        <div class="card mt-3" id="cardPagamentoNfe">
             <div class="card-header">
                 <h5>💳 Informações de Pagamento *</h5>
             </div>
@@ -865,7 +865,7 @@ input[readonly] {
                         </button>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <button type="button" class="btn btn-info btn-lg btn-block shadow-sm" onclick="enviarEmailDanfe()" style="height: 120px;">
+                        <button type="button" class="btn btn-info btn-lg btn-block shadow-sm" onclick="enviarEmailDanfe(this)" style="height: 120px;">
                             <i class="fas fa-envelope fa-3x mb-2"></i>
                             <br>
                             <strong>Enviar por Email</strong>
@@ -1290,14 +1290,14 @@ function adicionarItem() {
                     <div class="form-group">
                         <label>Quantidade *</label>
                         <input type="number" step="0.0001" name="quantidade_${itemCounter}" 
-                               class="form-control" min="0.0001" onchange="calcularTotal(${itemCounter})" required>
+                               class="form-control" min="0.0001" oninput="calcularTotal(${itemCounter})" onchange="calcularTotal(${itemCounter})" required>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Valor Unitário *</label>
                         <input type="number" step="0.01" name="valor_unitario_${itemCounter}" 
-                               class="form-control" min="0.01" onchange="calcularTotal(${itemCounter})" required>
+                               class="form-control" min="0.01" oninput="calcularTotal(${itemCounter})" onchange="calcularTotal(${itemCounter})" required>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -1531,7 +1531,7 @@ function adicionarItem() {
                         <select name="classificacao_ibs_cbs_id_${itemCounter}" class="form-control js-select2-classificacao-ibs">
                             <option value="">Nenhuma (opcional)</option>
                             {% for clf in classificacoes_ibs_cbs %}
-                            <option value="{{ clf.classificacao_id }}">{{ clf.codigo }} - {{ clf.descricao }}</option>
+                            <option value="{{ clf.classificacao_id }}" {% if clf.codigo == '00-00001' %}selected{% endif %}>{{ clf.codigo }} - {{ clf.descricao }}</option>
                             {% endfor %}
                         </select>
                         <small class="form-text text-muted">
@@ -1802,6 +1802,13 @@ function carregarProduto(itemId) {
 // ✅ FUNÇÃO PARA APLICAR REGRA TRIBUTÁRIA AUTOMATICAMENTE
 async function aplicarRegraTributaria(itemId, produtoId) {
     try {
+        const normalizarCodigoTributario = (valor, tamanho) => {
+            if (valor === null || valor === undefined || valor === '') {
+                return '';
+            }
+            return String(valor).trim().padStart(tamanho, '0');
+        };
+
         // Buscar informações do cliente e produto
         const clienteId = {% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}null{% endif %};
         
@@ -1812,10 +1819,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         
         // Obter dados do produto selecionado
         const select = document.querySelector(`select[name="produto_${itemId}"]`);
-        const option = select.options[select.selectedIndex];
-        
-        const ncmCodigo = option.dataset.ncm;
-        const cfopCodigo = option.dataset.cfop;
+        const produtoSelecionado = $(`select[name="produto_${itemId}"]`).select2('data');
+        const produtoData = produtoSelecionado && produtoSelecionado.length > 0 ? produtoSelecionado[0] : null;
+
+        const ncmCodigo = produtoData?.ncm || document.querySelector(`select[name="ncm_${itemId}"]`)?.value || select?.options?.[select.selectedIndex]?.dataset?.ncm;
+        const cfopCodigo = produtoData?.cfop || document.querySelector(`select[name="cfop_${itemId}"]`)?.value || select?.options?.[select.selectedIndex]?.dataset?.cfop;
         
         if (!ncmCodigo || !cfopCodigo) {
             console.log('ℹ️ Produto sem NCM/CFOP definidos, pulando busca de regra');
@@ -1925,11 +1933,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             const aliquotaIcmsInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
             
             // PIS
-            const cstPisInput = document.querySelector(`input[name="cst_pis_${itemId}"]`);
+            const cstPisSelect = $(`select[name="cst_pis_${itemId}"]`);
             const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
             
             // COFINS
-            const cstCofinsInput = document.querySelector(`input[name="cst_cofins_${itemId}"]`);
+            const cstCofinsSelect = $(`select[name="cst_cofins_${itemId}"]`);
             const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
             
             // IPI
@@ -1948,11 +1956,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (aliquotaIcmsInput) aliquotaIcmsInput.value = '0.00';
             
             // Limpar PIS
-            if (cstPisInput) cstPisInput.value = '';
+            if (cstPisSelect.length) cstPisSelect.val('').trigger('change');
             if (aliquotaPisInput) aliquotaPisInput.value = '0.00';
             
             // Limpar COFINS
-            if (cstCofinsInput) cstCofinsInput.value = '';
+            if (cstCofinsSelect.length) cstCofinsSelect.val('').trigger('change');
             if (aliquotaCofinsInput) aliquotaCofinsInput.value = '0.00';
             
             // Limpar IPI
@@ -1965,11 +1973,13 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             
             // ICMS - Aplicar CSOSN ou CST
             if (result.regra.csosn_icms && csosnSelect.length) {
-                console.log('Aplicando CSOSN:', result.regra.csosn_icms);
-                csosnSelect.val(result.regra.csosn_icms).trigger('change');
+                const csosnIcms = normalizarCodigoTributario(result.regra.csosn_icms, 3);
+                console.log('Aplicando CSOSN:', csosnIcms);
+                csosnSelect.val(csosnIcms).trigger('change');
             } else if (result.regra.cst_icms && cstIcmsSelect.length) {
-                console.log('Aplicando CST ICMS:', result.regra.cst_icms);
-                cstIcmsSelect.val(result.regra.cst_icms).trigger('change');
+                const cstIcms = normalizarCodigoTributario(result.regra.cst_icms, 2);
+                console.log('Aplicando CST ICMS:', cstIcms);
+                cstIcmsSelect.val(cstIcms).trigger('change');
             }
             
             // ICMS - Aplicar alíquota
@@ -2000,21 +2010,23 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             }
             
             // PIS - Aplicar CST e alíquota
-            if (result.regra.cst_pis && cstPisInput) {
-                console.log('Aplicando CST PIS:', result.regra.cst_pis);
-                cstPisInput.value = result.regra.cst_pis;
+            if (result.regra.cst_pis !== null && result.regra.cst_pis !== undefined && result.regra.cst_pis !== '' && cstPisSelect.length) {
+                const cstPis = normalizarCodigoTributario(result.regra.cst_pis, 2);
+                console.log('Aplicando CST PIS:', cstPis);
+                cstPisSelect.val(cstPis).trigger('change');
             }
-            if (result.regra.aliquota_pis && aliquotaPisInput) {
+            if (result.regra.aliquota_pis !== null && result.regra.aliquota_pis !== undefined && result.regra.aliquota_pis !== '' && aliquotaPisInput) {
                 console.log('Aplicando alíquota PIS:', result.regra.aliquota_pis);
                 aliquotaPisInput.value = result.regra.aliquota_pis;
             }
             
             // COFINS - Aplicar CST e alíquota
-            if (result.regra.cst_cofins && cstCofinsInput) {
-                console.log('Aplicando CST COFINS:', result.regra.cst_cofins);
-                cstCofinsInput.value = result.regra.cst_cofins;
+            if (result.regra.cst_cofins !== null && result.regra.cst_cofins !== undefined && result.regra.cst_cofins !== '' && cstCofinsSelect.length) {
+                const cstCofins = normalizarCodigoTributario(result.regra.cst_cofins, 2);
+                console.log('Aplicando CST COFINS:', cstCofins);
+                cstCofinsSelect.val(cstCofins).trigger('change');
             }
-            if (result.regra.aliquota_cofins && aliquotaCofinsInput) {
+            if (result.regra.aliquota_cofins !== null && result.regra.aliquota_cofins !== undefined && result.regra.aliquota_cofins !== '' && aliquotaCofinsInput) {
                 console.log('Aplicando alíquota COFINS:', result.regra.aliquota_cofins);
                 aliquotaCofinsInput.value = result.regra.aliquota_cofins;
             }
@@ -2037,6 +2049,7 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             
             // Recalcular totais
             calcularTotal(itemId);
+            atualizarItemJSON(itemId);
         }
         
     } catch (error) {
@@ -2062,11 +2075,17 @@ async function aplicarRegraTributaria(itemId, produtoId) {
 
 // Calcular total do item
 function calcularTotal(itemId) {
-    const quantidade = parseFloat(document.querySelector(`input[name="quantidade_${itemId}"]`).value) || 0;
-    const valorUnitario = parseFloat(document.querySelector(`input[name="valor_unitario_${itemId}"]`).value) || 0;
+    const quantidadeInput = document.querySelector(`input[name="quantidade_${itemId}"]`);
+    const valorUnitarioInput = document.querySelector(`input[name="valor_unitario_${itemId}"]`);
+    const totalInput = document.querySelector(`input[name="valor_total_${itemId}"]`);
+
+    if (!quantidadeInput || !valorUnitarioInput || !totalInput) return;
+
+    const quantidade = parseFloat(quantidadeInput.value) || 0;
+    const valorUnitario = parseFloat(valorUnitarioInput.value) || 0;
     const total = quantidade * valorUnitario;
     
-    document.querySelector(`input[name="valor_total_${itemId}"]`).value = total.toFixed(2);
+    totalInput.value = total.toFixed(2);
     
     // Calcular ICMS - APENAS se houver alíquota diferente de zero
     const aliquotaIcms = parseFloat(document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value) || 0;
@@ -2131,7 +2150,7 @@ function atualizarItemJSON(itemId) {
         cst_cofins: document.querySelector(`select[name="cst_cofins_${itemId}"]`)?.value || '',
         aliquota_cofins: document.querySelector(`input[name="aliquota_cofins_${itemId}"]`)?.value || '0.00',
         // IPI
-        cst_ipi: document.querySelector(`select[name="cst_ipi_${itemId}"]`)?.value || '',
+        cst_ipi: document.querySelector(`input[name="cst_ipi_${itemId}"]`)?.value || '',
         aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00',
         // IBS/CBS (Reforma Tributária - CRT=3)
         classificacao_ibs_cbs_id: document.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`)?.value || ''
@@ -2193,10 +2212,39 @@ function calcularTotalGeral() {
 
 // Funções de formatação monetária
 function formatarValorInput(input) {
-    let valor = input.value.replace(/\D/g, ''); // Remove tudo que não é dígito
-    valor = (parseInt(valor) / 100).toFixed(2); // Divide por 100 e formata
-    input.value = valor;
-    input.setAttribute('data-valor-real', valor);
+    let valor = (input.value || '').replace(/\D/g, ''); // Remove tudo que não é dígito
+    if (!valor) {
+        input.value = '0,00';
+        input.setAttribute('data-valor-real', '0.00');
+        return;
+    }
+
+    const valorReal = (parseInt(valor, 10) / 100).toFixed(2);
+    input.value = Number(valorReal).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+    input.setAttribute('data-valor-real', valorReal);
+}
+
+function parseValorMonetario(valor) {
+    if (valor === null || valor === undefined) return 0;
+
+    const valorStr = String(valor).trim();
+    if (!valorStr) return 0;
+
+    // Aceita tanto formato brasileiro (1.234,56) quanto decimal simples (1234.56).
+    if (/^-?\d+(\.\d+)?$/.test(valorStr)) {
+        const numeroDireto = parseFloat(valorStr);
+        return Number.isFinite(numeroDireto) ? numeroDireto : 0;
+    }
+
+    const normalizado = valorStr
+        .replace(/\./g, '')
+        .replace(',', '.');
+
+    const numero = parseFloat(normalizado);
+    return Number.isFinite(numero) ? numero : 0;
 }
 
 function aplicarMascaraMoeda(inputId) {
@@ -2208,26 +2256,33 @@ function aplicarMascaraMoeda(inputId) {
     });
     
     input.addEventListener('blur', function() {
-        const valor = parseFloat(this.value || 0);
-        this.value = valor.toFixed(2);
+        const valor = parseValorMonetario(this.value);
+        const valorReal = valor.toFixed(2);
+        this.value = Number(valorReal).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        this.setAttribute('data-valor-real', valorReal);
     });
 }
 
 // Recalcular totais da NFe com frete, seguro e desconto
 function recalcularTotais() {
     const totalProdutos = totalGeral || 0;
-    const vFrete = parseFloat(document.getElementById('vFrete')?.value || 0);
-    const vSeg = parseFloat(document.getElementById('vSeg')?.value || 0);
-    const vDesc = parseFloat(document.getElementById('vDesc')?.value || 0);
+    const vFrete = parseValorMonetario(document.getElementById('vFrete')?.value || 0);
+    const vSeg = parseValorMonetario(document.getElementById('vSeg')?.value || 0);
+    const vDesc = parseValorMonetario(document.getElementById('vDesc')?.value || 0);
     
     const totalNFe = totalProdutos + vFrete + vSeg - vDesc;
     
     // Atualizar valor do pagamento com o total final
     const campoPagamento = document.getElementById('valorPagamento');
     if (campoPagamento && totalNFe > 0) {
-        // Remover os event listeners temporariamente para evitar formatação incorreta
         const valorFormatado = totalNFe.toFixed(2);
-        campoPagamento.value = valorFormatado;
+        campoPagamento.value = Number(valorFormatado).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
         campoPagamento.setAttribute('data-valor-real', valorFormatado);
         
         console.log(`💳 Valor do Pagamento atualizado: R$ ${valorFormatado}`);
@@ -2335,7 +2390,10 @@ function validarCamposObrigatorios() {
     
     // Campos obrigatórios principais
     const natOp = document.getElementById('natOp')?.value?.trim();
-    const valorPagamento = parseFloat(document.getElementById('valorPagamento')?.value || 0);
+    const campoValorPagamento = document.getElementById('valorPagamento');
+    const valorPagamento = parseValorMonetario(
+        campoValorPagamento?.getAttribute('data-valor-real') || campoValorPagamento?.value || 0
+    );
     
     // Verificar se tem pelo menos um item
     const itens = document.querySelectorAll('[id^="item-"]');
@@ -2369,6 +2427,13 @@ function validarCamposObrigatorios() {
 
 // Detectar mudança de modelo e redirecionar
 document.addEventListener('DOMContentLoaded', function() {
+    const cardPagamento = document.getElementById('cardPagamentoNfe');
+    const cardItens = document.getElementById('cardItensNfe');
+
+    if (cardPagamento && cardItens && cardItens.parentNode) {
+        cardItens.parentNode.insertBefore(cardPagamento, cardItens);
+    }
+
     const modeloSelect = document.getElementById('modelo');
     
     if (modeloSelect) {
@@ -3104,50 +3169,91 @@ function imprimirDanfe() {
 }
 
 // Função para enviar DANFE por email
-async function enviarEmailDanfe() {
+function solicitarEmailDestinatario() {
+    const emailInformado = prompt('Digite o email do destinatário:');
+    if (!emailInformado) {
+        return null;
+    }
+
+    const email = emailInformado.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        alert('Email inválido!');
+        return null;
+    }
+    return email;
+}
+
+async function enviarEmailDanfe(btnEmail) {
     if (!nfeIdAtual) {
         alert('Erro: ID da NFe não encontrado');
         return;
     }
     
-    // Solicitar email do destinatário
-    const emailDestinatario = prompt('Digite o email do destinatário:');
-    
-    if (!emailDestinatario || !emailDestinatario.includes('@')) {
-        alert('Email inválido!');
-        return;
-    }
-    
+    const botaoEmail = btnEmail || document.querySelector('#modalAcoesDanfe .btn-info');
+
     try {
         // Mostrar loading
-        const btnEmail = event.target;
-        const textoOriginal = btnEmail.innerHTML;
-        btnEmail.disabled = true;
-        btnEmail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        const textoOriginal = botaoEmail ? botaoEmail.innerHTML : '';
+        if (botaoEmail) {
+            botaoEmail.disabled = true;
+            botaoEmail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        }
         
-        // Fazer requisição para enviar email
-        const response = await fetch(`/admin/nfes/${nfeIdAtual}/enviar-danfe`, {
+        // Função auxiliar para parsear resposta com segurança
+        async function safeJson(resp) {
+            const text = await resp.text();
+            try { return JSON.parse(text); } catch(e) {
+                return { success: false, message: `Erro interno do servidor (${resp.status})` };
+            }
+        }
+
+        // 1) Tenta enviar com email cadastrado no destinatário
+        let response = await fetch(`/admin/nfe/${nfeIdAtual}/enviar-danfe`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                email_destinatario: emailDestinatario
-            })
+            body: JSON.stringify({})
         });
         
-        const result = await response.json();
+        let result = await safeJson(response);
+
+        // 2) Só pede email manual se não existir no cadastro
+        if (!response.ok && result && result.needs_email_input) {
+            const emailDestinatarioManual = solicitarEmailDestinatario();
+            if (!emailDestinatarioManual) {
+                if (botaoEmail) {
+                    botaoEmail.disabled = false;
+                    botaoEmail.innerHTML = textoOriginal;
+                }
+                return;
+            }
+
+            response = await fetch(`/admin/nfe/${nfeIdAtual}/enviar-danfe`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email_destinatario: emailDestinatarioManual
+                })
+            });
+            result = await safeJson(response);
+        }
         
         // Restaurar botão
-        btnEmail.disabled = false;
-        btnEmail.innerHTML = textoOriginal;
+        if (botaoEmail) {
+            botaoEmail.disabled = false;
+            botaoEmail.innerHTML = textoOriginal;
+        }
         
         if (response.ok && result.success) {
             // Fechar modal
             $('#modalAcoesDanfe').modal('hide');
             
             // Mostrar mensagem de sucesso
-            alert(`DANFE enviado com sucesso para ${emailDestinatario}!`);
+            alert(result.message || 'DANFE enviado com sucesso!');
         } else {
             alert(`Erro ao enviar email: ${result.message || 'Erro desconhecido'}`);
         }
@@ -3212,6 +3318,8 @@ async function carregarClassificacoesIBS() {
         if (data.success) {
             // Atualizar todos os selects de classificação IBS/CBS dos itens
             document.querySelectorAll('.js-select2-classificacao-ibs').forEach(select => {
+                const valorAtual = select.value;
+                let valorPadrao = '';
                 select.innerHTML = '<option value="">Nenhuma (opcional)</option>';
                 
                 data.data.forEach(c => {
@@ -3221,8 +3329,26 @@ async function carregarClassificacoesIBS() {
                     option.dataset.aliquotaIbsUf = c.aliquota_ibs_uf;
                     option.dataset.aliquotaIbsMun = c.aliquota_ibs_mun;
                     option.dataset.aliquotaCbs = c.aliquota_cbs;
+
+                    if (String(c.codigo || '').trim() === '00-00001') {
+                        valorPadrao = String(c.id);
+                    }
+
+                    if (valorAtual && String(c.id) === String(valorAtual)) {
+                        option.selected = true;
+                    }
+
                     select.appendChild(option);
                 });
+
+                // Quando não houver seleção prévia, usar o padrão solicitado (00-00001)
+                if (!select.value && valorPadrao) {
+                    select.value = valorPadrao;
+                }
+
+                if (window.jQuery && jQuery(select).data('select2')) {
+                    jQuery(select).trigger('change.select2');
+                }
             });
             
             console.log(`✅ ${data.data.length} classificações IBS/CBS carregadas para os itens`);
@@ -3327,7 +3453,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('🎯 SUBMIT INTERCEPTADO!', e);
             
             // Verificar qual botão foi clicado
-            const submitter = e.submitter;
+                const submitter = e.submitter || document.activeElement;
             console.log('🔍 Botão clicado:', submitter);
             console.log('🔍 Valor do botão:', submitter?.value);
             console.log('🔍 Name do botão:', submitter?.name);
@@ -3337,11 +3463,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('⚠️ Não é o botão Emitir, permitindo submit normal...');
                 return; // Deixa o navegador processar normalmente
             }
-            
-            // É o botão Emitir - prevenir submit padrão e processar com fetch
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
             
             console.log('🔍 INICIANDO VALIDAÇÃO...');
             
@@ -3379,6 +3500,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Se houver erros, mostrar e não prosseguir
             if (erros.length > 0) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+
                 let mensagemErro = 'CAMPOS OBRIGATÓRIOS NÃO PREENCHIDOS:\n\n';
                 erros.forEach((erro, index) => {
                     mensagemErro += `${index + 1}. ${erro}\n`;
@@ -3397,86 +3522,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 `⚠️ ATENÇÃO: Esta ação irá transmitir a nota fiscal para a SEFAZ e não poderá ser desfeita!\n\n` +
                 `Deseja realmente continuar?`;
             
-            if (confirm(mensagemConfirmacao)) {
-                console.log('✅ Confirmação OK - preparando submissão...');
-                
-                // Atualizar JSON de todos os itens antes de submeter
-                const itens = document.querySelectorAll('[id^="item-"]');
-                itens.forEach(item => {
-                    const itemId = item.id.split('-')[1];
-                    atualizarItemJSON(itemId);
-                });
-                
-                // Desabilitar botão
-                submitter.disabled = true;
-                submitter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
-                
-                console.log('🚀 Criando FormData e enviando via fetch...');
-                
-                // Criar FormData com todos os dados do form
-                const formData = new FormData(form);
-                
-                // IMPORTANTE: Verificar se está em modo edição
-                // Modo edição: action=emit (rota /admin/nfe/edit/X)
-                // Modo novo: usar o value do botão original (emitir)
-                const isEditMode = window.location.pathname.includes('/edit/');
-                const actionValue = isEditMode ? 'emit' : submitter.value;
-                
-                formData.append('action', actionValue);
-                console.log(`✅ Campo action=${actionValue} adicionado (modo: ${isEditMode ? 'edição' : 'novo'})`);
-                
-                // Determinar URL correta
-                const actionUrl = form.getAttribute('action') || window.location.href;
-                console.log('📍 URL de destino:', actionUrl);
-                
-                // Enviar via fetch (sem validação HTML5)
-                fetch(actionUrl, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    console.log('✅ Resposta recebida:', response.status);
-                    console.log('🔍 Response redirected?', response.redirected);
-                    console.log('🔍 Response URL:', response.url);
-                    
-                    // Se foi redirecionado, ir para a nova URL
-                    if (response.redirected) {
-                        console.log('🔀 Redirecionando para:', response.url);
-                        window.location.href = response.url;
-                        return;
-                    }
-                    
-                    // Processar resposta HTML
-                    return response.text().then(html => {
-                        console.log('📄 HTML recebido:', html.substring(0, 500));
-                        
-                        // Se a resposta contém "success" ou "autorizada", é sucesso
-                        if (html.includes('success') || html.includes('autorizada') || html.includes('Autorizada')) {
-                            console.log('✅ NFe emitida com sucesso! Redirecionando...');
-                            // Extrair URL de redirect se houver
-                            const match = html.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/);
-                            if (match) {
-                                window.location.href = match[1];
-                            } else {
-                                // Recarregar para mostrar lista de NFes
-                                window.location.href = '/admin/nfe/list';
-                            }
-                        } else {
-                            // Substituir página com a resposta
-                            console.log('📝 Substituindo conteúdo da página...');
-                            document.open();
-                            document.write(html);
-                            document.close();
-                        }
-                    });
-                })
-                .catch(error => {
-                    console.error('❌ Erro ao enviar:', error);
-                    alert('Erro ao enviar NFe: ' + error.message);
-                    submitter.disabled = false;
-                    submitter.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
-                });
+            if (!confirm(mensagemConfirmacao)) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                console.log('⚠️ Emissão cancelada pelo usuário.');
+                return;
             }
+
+            console.log('✅ Confirmação OK - enviando formulário normalmente...');
+
+            // Atualizar JSON de todos os itens antes de submeter
+            const itens = document.querySelectorAll('[id^="item-"]');
+            itens.forEach(item => {
+                const itemId = item.id.split('-')[1];
+                atualizarItemJSON(itemId);
+            });
+
+            // Garantir que a action correta seja enviada também no submit normal
+            let actionField = form.querySelector('input[name="action"][data-generated="true"]');
+            if (!actionField) {
+                actionField = document.createElement('input');
+                actionField.type = 'hidden';
+                actionField.name = 'action';
+                actionField.dataset.generated = 'true';
+                form.appendChild(actionField);
+            }
+
+            const isEditMode = window.location.pathname.includes('/edit/');
+            actionField.value = isEditMode ? 'emit' : submitter.value;
+            console.log(`✅ Campo action=${actionField.value} preparado para submit normal.`);
+
+            const campoValorPagamento = document.getElementById('valorPagamento');
+            if (campoValorPagamento) {
+                const valorReal = campoValorPagamento.getAttribute('data-valor-real') || campoValorPagamento.value || '0.00';
+                campoValorPagamento.value = parseValorMonetario(valorReal).toFixed(2);
+            }
+
+            submitter.disabled = true;
+            submitter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
         }, true); // Usar capture phase
     }
 });

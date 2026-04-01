@@ -64,6 +64,139 @@ def normalizar_municipio(codigo_ibge: str, nome_municipio: str) -> str:
     return nome_municipio.title()[:60]
 
 
+def normalizar_uf(uf_valor: str, fallback: str = 'SP') -> str:
+    """Normaliza UF para sigla de 2 letras aceita pela SEFAZ."""
+    if not uf_valor:
+        return fallback
+
+    uf = str(uf_valor).strip().upper()
+    if len(uf) == 2 and uf.isalpha():
+        return uf
+
+    mapa_uf = {
+        'SAO PAULO': 'SP',
+        'SÃO PAULO': 'SP',
+        'MINAS GERAIS': 'MG',
+        'RIO DE JANEIRO': 'RJ',
+        'ESPIRITO SANTO': 'ES',
+        'ESPÍRITO SANTO': 'ES',
+        'PARANA': 'PR',
+        'PARANÁ': 'PR',
+        'SANTA CATARINA': 'SC',
+        'RIO GRANDE DO SUL': 'RS',
+        'MATO GROSSO': 'MT',
+        'MATO GROSSO DO SUL': 'MS',
+        'DISTRITO FEDERAL': 'DF',
+        'GOIAS': 'GO',
+        'GOIÁS': 'GO',
+        'BAHIA': 'BA',
+        'SERGIPE': 'SE',
+        'ALAGOAS': 'AL',
+        'PERNAMBUCO': 'PE',
+        'PARAIBA': 'PB',
+        'PARAÍBA': 'PB',
+        'RIO GRANDE DO NORTE': 'RN',
+        'CEARA': 'CE',
+        'CEARÁ': 'CE',
+        'PIAUI': 'PI',
+        'PIAUÍ': 'PI',
+        'MARANHAO': 'MA',
+        'MARANHÃO': 'MA',
+        'PARA': 'PA',
+        'PARÁ': 'PA',
+        'AMAPA': 'AP',
+        'AMAPÁ': 'AP',
+        'AMAZONAS': 'AM',
+        'RORAIMA': 'RR',
+        'RONDONIA': 'RO',
+        'RONDÔNIA': 'RO',
+        'ACRE': 'AC',
+        'TOCANTINS': 'TO',
+    }
+
+    return mapa_uf.get(uf, fallback)
+
+
+def obter_aliquota_maxima_icms_interestadual(uf_origem: str, uf_destino: str, origem_mercadoria: str) -> Decimal:
+    """
+    Retorna a alíquota máxima permitida para ICMS interestadual.
+    Regras aplicadas:
+    - 4% para produtos de origem importada (orig 1,2,3,8)
+    - 7% quando origem é Sul/Sudeste (exceto ES) e destino é Norte/Nordeste/Centro-Oeste/ES
+    - 12% nos demais cenários interestaduais
+    """
+    uf_origem = (uf_origem or '').strip().upper()
+    uf_destino = (uf_destino or '').strip().upper()
+    origem_mercadoria = str(origem_mercadoria or '0').strip()
+
+    # Operação interna não usa teto interestadual.
+    if not uf_origem or not uf_destino or uf_origem == uf_destino:
+        return Decimal('0')
+
+    if origem_mercadoria in {'1', '2', '3', '8'}:
+        return Decimal('4')
+
+    sul_sudeste_sem_es = {'SP', 'RJ', 'MG', 'PR', 'SC', 'RS'}
+    norte_nordeste_centro_oeste_mais_es = {
+        'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+        'MT', 'MS', 'PA', 'PB', 'PE', 'PI', 'RN', 'RO', 'RR', 'SE', 'TO'
+    }
+
+    if uf_origem in sul_sudeste_sem_es and uf_destino in norte_nordeste_centro_oeste_mais_es:
+        return Decimal('7')
+
+    return Decimal('12')
+
+
+def ie_valida_basica_por_uf(ie_digits: str, uf: str) -> bool:
+    """Validação básica de IE por UF para evitar envio de valores claramente inválidos."""
+    if not ie_digits:
+        return False
+
+    # Sequências triviais são inválidas em qualquer UF.
+    if len(set(ie_digits)) == 1:
+        return False
+
+    tamanho_uf = {
+        'AC': 13,
+        'AL': 9,
+        'AM': 9,
+        'AP': 9,
+        'BA': (8, 9),
+        'CE': 9,
+        'DF': 13,
+        'ES': 9,
+        'GO': 9,
+        'MA': 9,
+        'MG': 13,
+        'MS': 9,
+        'MT': 11,
+        'PA': 9,
+        'PB': 9,
+        'PE': 14,
+        'PI': 9,
+        'PR': 10,
+        'RJ': 8,
+        'RN': (9, 10),
+        'RO': 14,
+        'RR': 9,
+        'RS': 10,
+        'SC': 9,
+        'SE': 9,
+        'SP': 12,
+        'TO': 11,
+    }
+
+    esperado = tamanho_uf.get((uf or '').upper())
+    if esperado is None:
+        return True
+
+    if isinstance(esperado, tuple):
+        return len(ie_digits) in esperado
+
+    return len(ie_digits) == esperado
+
+
 def calcular_dv_chave_acesso(chave_sem_dv: str) -> str:
     """Calcula o dígito verificador da chave de acesso da NFe"""
     multiplicadores = [2, 3, 4, 5, 6, 7, 8, 9]
@@ -189,6 +322,12 @@ def generate_nfe_xml_nfelib(
     
     # Remover microsegundos (apenas segundos como no XML aprovado)
     data_emissao = data_emissao.replace(microsecond=0)
+
+    # Evita rejeição/alerta por data de emissão futura.
+    agora_brt = datetime.now(brt).replace(microsecond=0)
+    if data_emissao > agora_brt:
+        print(f"⚠️  [NFELIB] dhEmi futura ({data_emissao.isoformat()}); ajustando para horário atual BRT")
+        data_emissao = agora_brt
     
     print(f"✅ [NFELIB] Data de emissão: {data_emissao.isoformat()}")
     
@@ -216,20 +355,22 @@ def generate_nfe_xml_nfelib(
     # Determinar idDest baseado no CFOP ou UF
     # 1=Operação interna, 2=Operação interestadual, 3=Operação com exterior
     cfop_primeiro_item = (items[0].get('cfop') or '') if items else ''
-    uf_emitente = emitente_data.get('uf', 'SP')
-    uf_destinatario = destinatario_data.get('uf', 'SP')
-    
-    if cfop_primeiro_item.startswith('6') or cfop_primeiro_item.startswith('7'):
-        # CFOP 6xxx ou 7xxx = Operação interestadual
-        id_dest = "2"
-    elif uf_emitente != uf_destinatario:
-        # UFs diferentes = Operação interestadual
-        id_dest = "2"
-    elif cfop_primeiro_item.startswith('3'):
-        # CFOP 3xxx = Operação com exterior
+    uf_emitente = normalizar_uf(emitente_data.get('uf', 'SP'))
+    uf_destinatario = normalizar_uf(
+        destinatario_data.get('uf')
+        or destinatario_data.get('estado')
+        or destinatario_data.get('uf_destino')
+        or 'SP'
+    )
+
+    if cfop_primeiro_item.startswith('7') or cfop_primeiro_item.startswith('3'):
+        # CFOP 7xxx/3xxx = operação com exterior
         id_dest = "3"
+    elif uf_emitente != uf_destinatario:
+        # UFs diferentes = operação interestadual
+        id_dest = "2"
     else:
-        # CFOP 5xxx e mesma UF = Operação interna
+        # UFs iguais = operação interna
         id_dest = "1"
     
     print(f"📋 [DEBUG] idDest: {id_dest} (CFOP: {cfop_primeiro_item}, UF Emit: {uf_emitente}, UF Dest: {uf_destinatario})")
@@ -264,7 +405,10 @@ def generate_nfe_xml_nfelib(
     
     # 5. Criar enderEmit
     cod_mun_emit = str(emitente_data.get('codigo_municipio', '3550308'))
-    nome_mun_emit = normalizar_municipio(cod_mun_emit, emitente_data.get('municipio', 'SAO PAULO'))
+    nome_mun_emit = normalizar_municipio(
+        cod_mun_emit,
+        emitente_data.get('municipio') or emitente_data.get('nome_municipio') or 'SAO PAULO'
+    )
     
     ender_emit = TenderEmi(
         xLgr=(emitente_data.get('logradouro') or 'RUA TESTE').strip()[:60],
@@ -273,7 +417,7 @@ def generate_nfe_xml_nfelib(
         xBairro=(emitente_data.get('bairro') or 'CENTRO').strip()[:60],
         cMun=cod_mun_emit,
         xMun=nome_mun_emit,
-        UF=(emitente_data.get('uf') or 'SP').strip(),
+        UF=uf_emitente,
         CEP=limpar_cnpj_cpf(emitente_data.get('cep') or '00000000'),
         cPais="1058",
         xPais="BRASIL"
@@ -317,7 +461,10 @@ def generate_nfe_xml_nfelib(
     
     # 7. Criar enderDest
     cod_mun_dest = str(destinatario_data.get('codigo_municipio', '3550308'))
-    nome_mun_dest = normalizar_municipio(cod_mun_dest, destinatario_data.get('municipio', 'SAO PAULO'))
+    nome_mun_dest = normalizar_municipio(
+        cod_mun_dest,
+        destinatario_data.get('municipio') or destinatario_data.get('nome_municipio') or 'SAO PAULO'
+    )
     
     ender_dest = Tendereco(
         xLgr=destinatario_data.get('logradouro', 'RUA TESTE')[:60],
@@ -326,7 +473,7 @@ def generate_nfe_xml_nfelib(
         xBairro=destinatario_data.get('bairro', 'CENTRO')[:60],
         cMun=cod_mun_dest,
         xMun=nome_mun_dest,
-        UF=destinatario_data.get('uf', 'SP'),
+        UF=uf_destinatario,
         CEP=limpar_cnpj_cpf(destinatario_data.get('cep', '00000000')),
         cPais="1058",
         xPais="BRASIL"
@@ -365,12 +512,31 @@ def generate_nfe_xml_nfelib(
     
     # Determinar indIEDest baseado em IE e tipo de documento
     # 1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte
-    ie_dest = destinatario_data.get('ie') or destinatario_data.get('inscricao_estadual', '')
+    ie_dest = (destinatario_data.get('ie') or destinatario_data.get('inscricao_estadual', '') or '').strip()
+    # Normalizar IE para evitar rejeicao por mascara/texto nao numerico
+    ie_dest_digits = ''.join(ch for ch in ie_dest if ch.isdigit())
+    ie_dest_upper = ie_dest.upper()
+    ie_placeholder = ie_dest_digits in {'', '0', '00', '000', '0000', '00000', '000000', '0000000', '00000000', '000000000', '0000000000', '00000000000', '000000000000', '0000000000000', '00000000000000'}
+
+    if ie_dest_upper in {'ISENTO', 'ISENTA'}:
+        ie_dest_norm = 'ISENTO'
+    elif ie_dest_digits and not ie_placeholder:
+        ie_dest_norm = ie_dest_digits
+    else:
+        ie_dest_norm = ''
+
+    if ie_dest_norm not in {'', 'ISENTO'} and not ie_valida_basica_por_uf(ie_dest_norm, uf_destinatario):
+        print(
+            f"⚠️  [NFELIB] IE do destinatario inválida para UF {uf_destinatario}: "
+            f"'{ie_dest_norm}'. Enviando como não contribuinte."
+        )
+        ie_dest_norm = ''
+
     if len(dest_cpf_cnpj) == 11:  # CPF = pessoa física = não contribuinte
         ind_ie_dest = "9"
-    elif ie_dest and ie_dest.upper() not in ('', 'ISENTO'):
+    elif ie_dest_norm and ie_dest_norm != 'ISENTO':
         ind_ie_dest = "1"  # Contribuinte ICMS
-    elif ie_dest and ie_dest.upper() == 'ISENTO':
+    elif ie_dest_norm == 'ISENTO':
         ind_ie_dest = "2"  # Contribuinte isento
     else:
         ind_ie_dest = "9"  # Não contribuinte
@@ -385,7 +551,7 @@ def generate_nfe_xml_nfelib(
     
     # Adicionar IE se for contribuinte
     if ind_ie_dest == "1":
-        dest_kwargs['IE'] = ie_dest
+        dest_kwargs['IE'] = ie_dest_norm
     
     if len(dest_cpf_cnpj) == 11:
         dest_kwargs['CPF'] = dest_cpf_cnpj
@@ -438,12 +604,22 @@ def generate_nfe_xml_nfelib(
         codigo_prod = item.get('codigo_produto') or item.get('codigo') or str(idx)
         descricao_prod = item.get('descricao') or 'PRODUTO SEM DESCRIÇÃO'
         
+        cfop_item = str(item.get('cfop') or '5102').strip()
+        if uf_emitente == uf_destinatario and cfop_item.startswith('6'):
+            cfop_corrigido = f"5{cfop_item[1:]}"
+            print(f"⚠️  [NFELIB] CFOP {cfop_item} corrigido para {cfop_corrigido} (UFs iguais)")
+            cfop_item = cfop_corrigido
+        elif uf_emitente != uf_destinatario and cfop_item.startswith('5'):
+            cfop_corrigido = f"6{cfop_item[1:]}"
+            print(f"⚠️  [NFELIB] CFOP {cfop_item} corrigido para {cfop_corrigido} (UFs diferentes)")
+            cfop_item = cfop_corrigido
+
         prod = Nfe.InfNfe.Det.Prod(
             cProd=str(codigo_prod).strip()[:60],
             cEAN=(item.get('ean') or 'SEM GTIN').strip(),
             xProd=descricao_prod.strip()[:120],
             NCM=(item.get('ncm') or '00000000').strip(),
-            CFOP=str(item.get('cfop') or '5102').strip(),
+            CFOP=cfop_item,
             uCom=(item.get('unidade') or 'UN').strip()[:6],
             qCom=qcom_str,
             vUnCom=vuncom_str,
@@ -466,7 +642,7 @@ def generate_nfe_xml_nfelib(
         # Buscar CST ou CSOSN do item
         cst_item = item.get('cst_icms') or item.get('cst')
         csosn_item = item.get('csosn_icms') or item.get('csosn')
-        cfop = str(item.get('cfop', '5102'))
+        cfop = cfop_item
         
         # DECISÃO: CST ou CSOSN baseado no CRT
         if usar_csosn:
@@ -529,13 +705,43 @@ def generate_nfe_xml_nfelib(
             origem = item.get('origem', '0')
             aliquota_icms = Decimal(str(item.get('aliquota_icms', '7')))
             reducao_bc = Decimal(str(item.get('reducao_base_icms', '0')))
-            bc_icms = Decimal(str(item.get('bc_icms', valor_total)))
+            bc_icms_raw = item.get('bc_icms', valor_total)
+            try:
+                bc_icms = Decimal(str(bc_icms_raw))
+            except Exception:
+                bc_icms = valor_total
             valor_icms = Decimal(str(item.get('valor_icms', '0')))
-            modalidade_bc = item.get('modalidade_bc_icms', '3')
+            modalidade_bc = str(item.get('modalidade_bc_icms') or '3').strip() or '3'
+            modalidade_bc_st = str(item.get('modalidade_bc_st') or '4').strip() or '4'
+
+            # Evita gerar tags vazias como <modBC/>, que quebram o schema da SEFAZ.
+            if modalidade_bc not in {'0', '1', '2', '3'}:
+                print(f"⚠️  [NFELIB] modalidade_bc_icms inválida '{modalidade_bc}' no item {idx}; usando padrão 3")
+                modalidade_bc = '3'
+            if modalidade_bc_st not in {'0', '1', '2', '3', '4', '5'}:
+                print(f"⚠️  [NFELIB] modalidade_bc_st inválida '{modalidade_bc_st}' no item {idx}; usando padrão 4")
+                modalidade_bc_st = '4'
+
+            # Evita rejeição SEFAZ por alíquota de ICMS acima do permitido em operação interestadual.
+            if id_dest == '2':
+                aliq_max = obter_aliquota_maxima_icms_interestadual(uf_emitente, uf_destinatario, origem)
+                if aliq_max > 0 and aliquota_icms > aliq_max:
+                    print(
+                        f"⚠️  [NFELIB] Item {idx} pICMS {aliquota_icms:.2f}% acima do permitido "
+                        f"para interestadual ({aliq_max:.2f}%). Ajustando automaticamente."
+                    )
+                    aliquota_icms = aliq_max
             
             # Criar ICMS com CST apropriado
             if cst_item == '00':
                 # Tributada integralmente
+                if bc_icms <= 0 and valor_total > 0:
+                    print(f"⚠️  [NFELIB] Item {idx} CST 00 com vBC<=0; ajustando vBC para valor do item")
+                    bc_icms = valor_total
+
+                if valor_icms <= 0 and bc_icms > 0 and aliquota_icms > 0:
+                    valor_icms = (bc_icms * aliquota_icms / Decimal('100')).quantize(Decimal('0.01'))
+
                 icms_obj = Nfe.InfNfe.Det.Imposto.Icms.Icms00(
                     orig=origem,
                     CST="00",
@@ -732,11 +938,30 @@ def generate_nfe_xml_nfelib(
         
         det_list.append(det)
     
-    # Calcular valor total da NFe considerando frete, seguro e desconto
+    # Calcular valor total da NFe conforme composição fiscal
+    # vNF = vProd - vDesc + vFrete + vSeg + vOutro + vII + vIPI + vST + vFCPST + vFCPSTRet + vIPIDevol
     v_frete = Decimal(str(form_data.get('vFrete', '0.00')))
     v_seg = Decimal(str(form_data.get('vSeg', '0.00')))
     v_desc = Decimal(str(form_data.get('vDesc', '0.00')))
-    v_nf_total = v_prod_total + v_frete + v_seg - v_desc
+    v_outro = Decimal(str(form_data.get('vOutro', '0.00')))
+    v_ii = Decimal(str(form_data.get('vII', '0.00')))
+    v_st = Decimal('0.00')
+    v_fcpst = Decimal('0.00')
+    v_fcpst_ret = Decimal('0.00')
+    v_ipi_devol = Decimal('0.00')
+    v_nf_total = (
+        v_prod_total
+        - v_desc
+        + v_frete
+        + v_seg
+        + v_outro
+        + v_ii
+        + v_ipi_total
+        + v_st
+        + v_fcpst
+        + v_fcpst_ret
+        + v_ipi_devol
+    )
     
     print(f"✅ [NFELIB] {len(det_list)} itens criados")
     print(f"💰 [NFELIB] Valores: Produtos={v_prod_total:.2f} + Frete={v_frete:.2f} + Seguro={v_seg:.2f} - Desconto={v_desc:.2f} = Total NFe={v_nf_total:.2f}")
@@ -751,19 +976,19 @@ def generate_nfe_xml_nfelib(
         vICMSUFRemet="0.00",  # ICMS interestadual
         vFCP="0.00",
         vBCST="0.00",
-        vST="0.00",
-        vFCPST="0.00",
-        vFCPSTRet="0.00",
+        vST=f"{v_st:.2f}",
+        vFCPST=f"{v_fcpst:.2f}",
+        vFCPSTRet=f"{v_fcpst_ret:.2f}",
         vProd=f"{v_prod_total:.2f}",
         vFrete=f"{float(form_data.get('vFrete', '0.00')):.2f}",
         vSeg=f"{float(form_data.get('vSeg', '0.00')):.2f}",
         vDesc=f"{float(form_data.get('vDesc', '0.00')):.2f}",
-        vII="0.00",
+        vII=f"{v_ii:.2f}",
         vIPI=f"{v_ipi_total:.2f}",
-        vIPIDevol="0.00",
+        vIPIDevol=f"{v_ipi_devol:.2f}",
         vPIS=f"{v_pis_total:.2f}",
         vCOFINS=f"{v_cofins_total:.2f}",
-        vOutro="0.00",
+        vOutro=f"{v_outro:.2f}",
         vNF=f"{v_nf_total:.2f}",
         vTotTrib="0.00"  # Valor total aproximado dos tributos
     )
@@ -910,7 +1135,8 @@ def generate_nfe_xml_nfelib(
             
             # REFORMA TRIBUTÁRIA: Adicionar IBS/CBS aos itens e totalizadores
             # Controlado pela flag HABILITAR_IBS_CBS em config/settings.py
-            if itens_ibs_cbs and HABILITAR_IBS_CBS:
+            habilitar_ibs_cbs_emissao = HABILITAR_IBS_CBS and str(tp_amb) != '1'
+            if itens_ibs_cbs and habilitar_ibs_cbs_emissao:
                 print(f"🏛️ [IBS/CBS] Adicionando tags aos {len(itens_ibs_cbs)} itens com classificação")
                 print(f"⚠️  [IBS/CBS] Flag HABILITAR_IBS_CBS = {HABILITAR_IBS_CBS}")
                 
@@ -952,6 +1178,8 @@ def generate_nfe_xml_nfelib(
                         parent_total.append(child)
                     
                     print(f"  [IBS/CBS] Totalizadores adicionados: IBS R$ {v_ibs_total:.2f}, CBS R$ {v_cbs_total:.2f}")
+            elif itens_ibs_cbs and str(tp_amb) == '1':
+                print("⚠️  [IBS/CBS] Tags não incluídas no XML de produção para evitar rejeição de schema")
             
             # ========== ADICIONAR cBenef MANUALMENTE (nfelib não suporta) ==========
             print(f"🔧 [cBenef] Verificando necessidade de adicionar cBenef manualmente...")
