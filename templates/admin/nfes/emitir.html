@@ -1244,6 +1244,18 @@ function atualizarDestinatarioInfo() {
 
 // Adicionar item à NFe
 function adicionarItem() {
+    // Impedir adição de item vazio se já existe item sem produto selecionado
+    const itensExistentes = document.querySelectorAll('#itensContainer [id^="item-"]');
+    for (const itemDiv of itensExistentes) {
+        const itemId = itemDiv.id.split('-')[1];
+        const produtoSelect = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
+        if (produtoSelect && !produtoSelect.value) {
+            alert('Preencha o produto do item atual antes de adicionar um novo item.');
+            produtoSelect.focus();
+            return;
+        }
+    }
+
     itemCounter++;
     const container = document.getElementById('itensContainer');
     
@@ -2175,11 +2187,23 @@ function atualizarItemJSON(itemId) {
     document.getElementById(`item_json_${itemId}`).value = JSON.stringify(itemData);
 }
 
+// Reordenar visualmente os itens após remoção e corrigir names dos hidden inputs
+function reordenarItens() {
+    const itens = document.querySelectorAll('#itensContainer [id^="item-"]');
+    itens.forEach((itemDiv, index) => {
+        const h6 = itemDiv.querySelector('.card-header h6');
+        if (h6) h6.textContent = `Item ${index + 1}`;
+        const hiddenJson = itemDiv.querySelector('input[type="hidden"][name*="[json]"]');
+        if (hiddenJson) hiddenJson.name = `items[${index}][json]`;
+    });
+}
+
 // Remover item
 function removerItem(itemId) {
     const itemDiv = document.getElementById(`item-${itemId}`);
     if (itemDiv) {
         itemDiv.remove();
+        reordenarItens();
         calcularTotalGeral();
         validarCamposObrigatorios();
     }
@@ -2359,6 +2383,25 @@ function confirmarAlteracaoNumero() {
 }
 
 // Validar formulário
+// Verifica se existe item sem produto selecionado; se sim, alerta e foca no campo.
+// Retorna true se tudo OK, false se encontrou item vazio.
+function verificarItensVazios() {
+    const itens = document.querySelectorAll('#itensContainer [id^="item-"]');
+    for (let i = 0; i < itens.length; i++) {
+        const itemDiv = itens[i];
+        const itemId = itemDiv.id.split('-')[1];
+        const produtoSelect = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
+        if (produtoSelect && !produtoSelect.value) {
+            const numero = i + 1;
+            alert(`O Item ${numero} está sem produto selecionado. Preencha ou remova o item antes de continuar.`);
+            itemDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { produtoSelect.focus(); }, 400);
+            return false;
+        }
+    }
+    return true;
+}
+
 function validarFormulario() {
     const itens = document.querySelectorAll('[id^="item-"]');
     
@@ -2366,6 +2409,8 @@ function validarFormulario() {
         alert('Adicione pelo menos um item à NFe');
         return false;
     }
+
+    if (!verificarItensVazios()) return false;
     
     // Validar número da NFe
     const numeroNfe = parseInt(document.getElementById('numero_nfe').value);
@@ -2780,6 +2825,9 @@ function previewXML() {
         alert('Corrija os seguintes erros antes de visualizar o XML:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
         return;
     }
+
+    // Verificar itens vazios
+    if (!verificarItensVazios()) return;
     
     // Mostrar loading
     const btnPreview = document.querySelector('button[onclick="previewXML()"]');
@@ -2966,6 +3014,9 @@ function previewDANFE() {
         alert('Corrija os seguintes erros antes de gerar o preview do DANFE:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
         return;
     }
+
+    // Verificar itens vazios
+    if (!verificarItensVazios()) return;
     
     // Mostrar loading
     const btnPreview = document.querySelector('button[onclick="previewDANFE()"]');

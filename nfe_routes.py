@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from flask import Blueprint, jsonify, request, render_template, redirect, session, url_for, flash
 from typing import Dict, Any
 from flask_login import login_required, current_user
@@ -221,13 +222,15 @@ def emitir_nfe():
                     }
                     
                     # PROCESSAR ITENS
-                    item_index = 0
-                    while f'items[{item_index}][json]' in request.form:
-                        item_json = request.form[f'items[{item_index}][json]']
+                    _item_keys = sorted(
+                        [k for k in request.form.keys() if re.match(r'^items\[\d+\]\[json\]$', k)],
+                        key=lambda k: int(re.search(r'\[(\d+)\]', k).group(1))
+                    )
+                    for _ik in _item_keys:
+                        item_json = request.form[_ik]
                         if item_json:
                             item_data = json.loads(item_json)
                             nfe_items.append(item_data)
-                        item_index += 1
                     
                     if not nfe_items:
                         return jsonify({'success': False, 'message': 'Adicione pelo menos um item'}), 400
@@ -291,13 +294,15 @@ def emitir_nfe():
                     }
                     
                     # PROCESSAR ITENS
-                    item_index = 0
-                    while f'items[{item_index}][json]' in request.form:
-                        item_json = request.form[f'items[{item_index}][json]']
+                    _item_keys = sorted(
+                        [k for k in request.form.keys() if re.match(r'^items\[\d+\]\[json\]$', k)],
+                        key=lambda k: int(re.search(r'\[(\d+)\]', k).group(1))
+                    )
+                    for _ik in _item_keys:
+                        item_json = request.form[_ik]
                         if item_json:
                             item_data = json.loads(item_json)
                             nfe_items.append(item_data)
-                        item_index += 1
                     
                     if not nfe_items:
                         return jsonify({'success': False, 'message': 'Adicione pelo menos um item'}), 400
@@ -414,20 +419,23 @@ def emitir_nfe():
                     
                     # OK: PROCESSAR ITENS DA NFE
                     print(" === PROCESSANDO ITENS ===")
-                    item_index = 0
+                    _item_keys = sorted(
+                        [k for k in request.form.keys() if re.match(r'^items\[\d+\]\[json\]$', k)],
+                        key=lambda k: int(re.search(r'\[(\d+)\]', k).group(1))
+                    )
                     
-                    while f'items[{item_index}][json]' in request.form:
-                        item_json = request.form[f'items[{item_index}][json]']
-                        print(f" Item {item_index} JSON: {item_json[:100]}...")
+                    for _ik_pos, _ik in enumerate(_item_keys):
+                        item_json = request.form[_ik]
+                        print(f" Item {_ik} JSON: {item_json[:100]}...")
                         
                         if item_json:
                             try:
                                 item_data = json.loads(item_json)
                                 nfe_items.append(item_data)
-                                print(f" Item {item_index + 1}: {item_data.get('descricao', 'Sem descrição')}")
+                                print(f" Item {_ik_pos + 1}: {item_data.get('descricao', 'Sem descrição')}")
                             except json.JSONDecodeError as e:
-                                print(f"ERRO: Erro JSON no item {item_index}: {e}")
-                                flash(f'Erro no formato do item {item_index + 1}: {str(e)}', 'danger')
+                                print(f"ERRO: Erro JSON no item {_ik}: {e}")
+                                flash(f'Erro no formato do item {_ik_pos + 1}: {str(e)}', 'danger')
                                 return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                         item_index += 1
                     
@@ -813,18 +821,19 @@ def emitir_nfe():
                 # OK: SALVAR COMO RASCUNHO (SEM VALIDAÇÕES RIGOROSAS)
                 try:
                     # Processar itens básicos para rascunho
-                    item_index = 0
                     rascunho_items = []
-                    
-                    while f'items[{item_index}][json]' in request.form:
-                        item_json = request.form[f'items[{item_index}][json]']
+                    _item_keys = sorted(
+                        [k for k in request.form.keys() if re.match(r'^items\[\d+\]\[json\]$', k)],
+                        key=lambda k: int(re.search(r'\[(\d+)\]', k).group(1))
+                    )
+                    for _ik in _item_keys:
+                        item_json = request.form[_ik]
                         if item_json:
                             try:
                                 item_data = json.loads(item_json)
                                 rascunho_items.append(item_data)
                             except (json.JSONDecodeError, ValueError):
                                 pass  # Ignorar erros em rascunho
-                        item_index += 1
                     
                     nova_nfe = NFeEmitidas(
                         cliente_id=emitente_cliente_id,
