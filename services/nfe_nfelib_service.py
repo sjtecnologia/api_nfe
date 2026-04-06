@@ -854,9 +854,10 @@ def generate_nfe_xml_nfelib(
                 v_bc_icms_total += bc_icms
                 v_icms_total += valor_icms
             
-            # DIFAL (EC 87/2015): grupo ICMSUFDest obrigatório para interestadual +
-            # consumidor final + regime normal (CRT != 1)
-            if id_dest == '2' and crt_int != 1:
+            # DIFAL (EC 87/2015): grupo ICMSUFDest obrigatório SOMENTE para:
+            # interestadual + consumidor final NÃO contribuinte (indIEDest=9) + regime normal
+            # Para contribuinte (indIEDest=1) ou isento (indIEDest=2) NÃO se aplica.
+            if id_dest == '2' and crt_int != 1 and ind_ie_dest == "9":
                 aliq_interna_dest = obter_aliquota_interna_icms_destino(uf_destinatario)
                 aliq_fcp_dest = obter_aliquota_fcp_uf_dest(uf_destinatario)
                 aliq_inter = aliquota_icms  # já ajustada para o máximo interestadual
