@@ -148,6 +148,38 @@ def obter_aliquota_maxima_icms_interestadual(uf_origem: str, uf_destino: str, or
     return Decimal('12')
 
 
+def obter_aliquota_interna_icms_destino(uf_destino: str) -> Decimal:
+    """Alíquota interna de ICMS do estado de destino para cálculo DIFAL (EC 87/2015)."""
+    tabela = {
+        'AC': Decimal('17'), 'AL': Decimal('17'), 'AM': Decimal('20'),
+        'AP': Decimal('18'), 'BA': Decimal('18'), 'CE': Decimal('18'),
+        'DF': Decimal('18'), 'ES': Decimal('17'), 'GO': Decimal('17'),
+        'MA': Decimal('20'), 'MG': Decimal('18'), 'MS': Decimal('17'),
+        'MT': Decimal('17'), 'PA': Decimal('17'), 'PB': Decimal('18'),
+        'PE': Decimal('18'), 'PI': Decimal('18'), 'PR': Decimal('18'),
+        'RJ': Decimal('20'), 'RN': Decimal('18'), 'RO': Decimal('17'),
+        'RR': Decimal('17'), 'RS': Decimal('17'), 'SC': Decimal('17'),
+        'SE': Decimal('18'), 'SP': Decimal('18'), 'TO': Decimal('20'),
+    }
+    return tabela.get((uf_destino or '').strip().upper(), Decimal('17'))
+
+
+def obter_aliquota_fcp_uf_dest(uf_destino: str) -> Decimal:
+    """Alíquota do Fundo de Combate à Pobreza (FCP) do estado de destino."""
+    tabela_fcp = {
+        'AC': Decimal('0'),  'AL': Decimal('2'),  'AM': Decimal('2'),
+        'AP': Decimal('0'),  'BA': Decimal('2'),  'CE': Decimal('2'),
+        'DF': Decimal('2'),  'ES': Decimal('2'),  'GO': Decimal('2'),
+        'MA': Decimal('2'),  'MG': Decimal('2'),  'MS': Decimal('2'),
+        'MT': Decimal('2'),  'PA': Decimal('0'),  'PB': Decimal('2'),
+        'PE': Decimal('2'),  'PI': Decimal('2'),  'PR': Decimal('0'),
+        'RJ': Decimal('2'),  'RN': Decimal('2'),  'RO': Decimal('0'),
+        'RR': Decimal('0'),  'RS': Decimal('0'),  'SC': Decimal('0'),
+        'SE': Decimal('2'),  'SP': Decimal('2'),  'TO': Decimal('2'),
+    }
+    return tabela_fcp.get((uf_destino or '').strip().upper(), Decimal('0'))
+
+
 def ie_valida_basica_por_uf(ie_digits: str, uf: str) -> bool:
     """Validação básica de IE por UF para evitar envio de valores claramente inválidos."""
     if not ie_digits:
@@ -579,6 +611,11 @@ def generate_nfe_xml_nfelib(
     v_ibs_total = Decimal('0')
     v_cbs_total = Decimal('0')
     itens_ibs_cbs = []  # Para armazenar dados IBS/CBS de cada item
+
+    # Totalizadores DIFAL (EC 87/2015)
+    v_fcp_uf_dest_total = Decimal('0')
+    v_icms_uf_dest_total = Decimal('0')
+    v_icms_uf_remet_total = Decimal('0')
     
     for idx, item in enumerate(items, start=1):
         print(f"📦 [ITEM {idx}] Dados recebidos:")
@@ -645,6 +682,7 @@ def generate_nfe_xml_nfelib(
         cfop = cfop_item
         
         # DECISÃO: CST ou CSOSN baseado no CRT
+        icms_uf_dest = None  # DIFAL (EC 87/2015) – definido no bloco regime normal se aplicável
         if usar_csosn:
             # SIMPLES NACIONAL - usar CSOSN
             if not csosn_item:
@@ -813,6 +851,40 @@ def generate_nfe_xml_nfelib(
                 v_bc_icms_total += bc_icms
                 v_icms_total += valor_icms
             
+            # DIFAL (EC 87/2015): grupo ICMSUFDest obrigatório para interestadual +
+            # consumidor final + regime normal (CRT != 1)
+            if id_dest == '2' and crt_int != 1:
+                aliq_interna_dest = obter_aliquota_interna_icms_destino(uf_destinatario)
+                aliq_fcp_dest = obter_aliquota_fcp_uf_dest(uf_destinatario)
+                aliq_inter = aliquota_icms  # já ajustada para o máximo interestadual
+                aliq_partilha = Decimal('100')
+                v_bc_difal = bc_icms if bc_icms > 0 else valor_total
+                v_fcp_item = (v_bc_difal * aliq_fcp_dest / Decimal('100')).quantize(Decimal('0.01'))
+                v_icms_uf_dest_item = (
+                    (v_bc_difal * aliq_interna_dest / Decimal('100') - v_bc_difal * aliq_inter / Decimal('100'))
+                    * aliq_partilha / Decimal('100')
+                ).quantize(Decimal('0.01'))
+                v_icms_uf_remet_item = Decimal('0.00')
+                icms_uf_dest = Nfe.InfNfe.Det.Imposto.Icmsufdest(
+                    vBCUFDest=f"{v_bc_difal:.2f}",
+                    vBCFCPUFDest=f"{v_bc_difal:.2f}",
+                    pFCPUFDest=f"{aliq_fcp_dest:.2f}",
+                    pICMSUFDest=f"{aliq_interna_dest:.2f}",
+                    pICMSInter=f"{aliq_inter:.2f}",
+                    pICMSInterPart=f"{aliq_partilha:.2f}",
+                    vFCPUFDest=f"{v_fcp_item:.2f}",
+                    vICMSUFDest=f"{v_icms_uf_dest_item:.2f}",
+                    vICMSUFRemet=f"{v_icms_uf_remet_item:.2f}"
+                )
+                v_fcp_uf_dest_total += v_fcp_item
+                v_icms_uf_dest_total += v_icms_uf_dest_item
+                v_icms_uf_remet_total += v_icms_uf_remet_item
+                print(
+                    f"  [DIFAL] Item {idx}: UF={uf_destinatario}, pICMSUFDest={aliq_interna_dest:.2f}%,"
+                    f" pICMSInter={aliq_inter:.2f}%, vICMSUFDest={v_icms_uf_dest_item:.2f},"
+                    f" vFCPUFDest={v_fcp_item:.2f}"
+                )
+
             # PIS/COFINS para regime normal
             cst_pis = item.get('cst_pis') or '01'
             cst_cofins = item.get('cst_cofins') or '01'
@@ -930,6 +1002,8 @@ def generate_nfe_xml_nfelib(
         }
         if ipi is not None:
             imposto_params['IPI'] = ipi
+        if icms_uf_dest is not None:
+            imposto_params['ICMSUFDest'] = icms_uf_dest
         
         imposto = Nfe.InfNfe.Det.Imposto(**imposto_params)
         
@@ -974,9 +1048,9 @@ def generate_nfe_xml_nfelib(
         vBC=f"{v_bc_icms_total:.2f}",
         vICMS=f"{v_icms_total:.2f}",
         vICMSDeson="0.00",
-        vFCPUFDest="0.00",  # ICMS interestadual
-        vICMSUFDest="0.00",  # ICMS interestadual
-        vICMSUFRemet="0.00",  # ICMS interestadual
+        vFCPUFDest=f"{v_fcp_uf_dest_total:.2f}",
+        vICMSUFDest=f"{v_icms_uf_dest_total:.2f}",
+        vICMSUFRemet=f"{v_icms_uf_remet_total:.2f}",
         vFCP="0.00",
         vBCST="0.00",
         vST=f"{v_st:.2f}",
