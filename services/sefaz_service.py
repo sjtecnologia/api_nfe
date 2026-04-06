@@ -38,11 +38,17 @@ class SefazService:
         self.key_path = key_path
         
         # Usar bundle de certificados que inclui ICP-Brasil
-        # Caminho absoluto para o bundle customizado no servidor
-        self.ca_bundle = '/home/ubuntu/api_nfe/ca-bundle-icpbrasil.pem'
-        if not os.path.exists(self.ca_bundle):
-            # Fallback para certificados do sistema se bundle não existir
-            self.ca_bundle = True
+        # Prioridade: bundle customizado > bundle do sistema (Linux) > certifi
+        _CA_CANDIDATES = [
+            '/home/ubuntu/api_nfe/ca-bundle-icpbrasil.pem',  # bundle customizado no servidor
+            '/etc/ssl/certs/ca-certificates.crt',             # Debian/Ubuntu - inclui ICP-Brasil quando instalado
+            '/etc/pki/tls/certs/ca-bundle.crt',               # RHEL/CentOS
+        ]
+        self.ca_bundle = True  # fallback: certifi (padrão requests)
+        for _ca in _CA_CANDIDATES:
+            if os.path.exists(_ca):
+                self.ca_bundle = _ca
+                break
             
         modo_str = 'CONTINGÊNCIA' if self._modo_contingencia else 'NORMAL'
         print(f"[?] SefazService inicializado - Ambiente: {ambiente} - Modo: {modo_str}")
