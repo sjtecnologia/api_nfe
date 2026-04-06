@@ -1787,10 +1787,22 @@ function carregarProduto(itemId) {
     }
     if (prod.cfop) {
         const $cfop = $(`select[name="cfop_${itemId}"]`);
-        if ($cfop.find(`option[value="${prod.cfop}"]`).length === 0) {
-            $cfop.append(new Option(prod.cfop, prod.cfop, true, true));
+        // Ajustar prefixo do CFOP conforme UF origem/destino
+        const ufOrigem = '{% if emitente_data and emitente_data.uf %}{{ emitente_data.uf }}{% else %}SP{% endif %}';
+        const destinatarioSelectEl = document.getElementById('destinatario');
+        const ufDestino = destinatarioSelectEl?.options[destinatarioSelectEl.selectedIndex]?.dataset?.uf || ufOrigem;
+        let cfopAjustado = String(prod.cfop);
+        if (ufOrigem !== ufDestino && cfopAjustado.startsWith('5')) {
+            cfopAjustado = '6' + cfopAjustado.slice(1);
+            console.log(`🔄 CFOP ajustado para interestadual: ${prod.cfop} → ${cfopAjustado}`);
+        } else if (ufOrigem === ufDestino && cfopAjustado.startsWith('6')) {
+            cfopAjustado = '5' + cfopAjustado.slice(1);
+            console.log(`🔄 CFOP ajustado para intraestadual: ${prod.cfop} → ${cfopAjustado}`);
         }
-        $cfop.val(prod.cfop).trigger('change');
+        if ($cfop.find(`option[value="${cfopAjustado}"]`).length === 0) {
+            $cfop.append(new Option(cfopAjustado, cfopAjustado, true, true));
+        }
+        $cfop.val(cfopAjustado).trigger('change');
     }
     if (prod.origem !== undefined && prod.origem !== null) {
         const origemSelect = document.querySelector(`select[name="origem_${itemId}"]`);
@@ -1835,7 +1847,8 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         const produtoData = produtoSelecionado && produtoSelecionado.length > 0 ? produtoSelecionado[0] : null;
 
         const ncmCodigo = produtoData?.ncm || document.querySelector(`select[name="ncm_${itemId}"]`)?.value || select?.options?.[select.selectedIndex]?.dataset?.ncm;
-        const cfopCodigo = produtoData?.cfop || document.querySelector(`select[name="cfop_${itemId}"]`)?.value || select?.options?.[select.selectedIndex]?.dataset?.cfop;
+        // Usar o CFOP já ajustado no campo (pode ter sido corrigido p/ interestadual)
+        const cfopCodigo = document.querySelector(`select[name="cfop_${itemId}"]`)?.value || produtoData?.cfop || select?.options?.[select.selectedIndex]?.dataset?.cfop;
         
         if (!ncmCodigo || !cfopCodigo) {
             console.log('ℹ️ Produto sem NCM/CFOP definidos, pulando busca de regra');
