@@ -1537,9 +1537,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         if totais_json:
             # Usar totais fornecidos no JSON
             total_produtos = float(totais_json.get('valor_produtos', 0))
-            total_icms = float(totais_json.get('valor_icms', 0))
             total_icms_st = float(totais_json.get('valor_icms_st', 0))
-            base_icms = float(totais_json.get('base_calculo_icms', 0))
             base_icms_st = float(totais_json.get('base_calculo_icms_st', 0))
             total_ipi = float(totais_json.get('valor_ipi', 0))
             total_pis = float(totais_json.get('valor_pis', 0))
@@ -1549,7 +1547,18 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             total_desconto = float(totais_json.get('valor_desconto', 0))
             total_outras = float(totais_json.get('valor_outras_despesas', 0))
             total_nfe = float(totais_json.get('valor_total_nota', 0))
-            print(f" Usando totais do JSON")
+            # Recalcular vBC e vICMS totais a partir dos itens para garantir consistência
+            base_icms = 0.0
+            total_icms = 0.0
+            for _item in items:
+                _icms = _item.get('icms', {})
+                _bc = round(float(_icms.get('base_calculo', 0)), 2)
+                _aliq = float(_icms.get('aliquota', 0))
+                base_icms += _bc
+                total_icms += round(_bc * _aliq / 100, 2)
+            base_icms = round(base_icms, 2)
+            total_icms = round(total_icms, 2)
+            print(f" Usando totais do JSON (ICMS recalculado: vBC={base_icms:.2f} vICMS={total_icms:.2f})")
         else:
             # Calcular totais dos itens
             total_produtos = 0
@@ -1576,9 +1585,11 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                     cofins_item = item.get('cofins', {})
                     
                     total_produtos += valor_total_item
-                    total_icms += float(icms_item.get('valor', 0))
+                    _bc_item = round(float(icms_item.get('base_calculo', 0)), 2)
+                    _aliq_item = float(icms_item.get('aliquota', 0))
+                    total_icms += round(_bc_item * _aliq_item / 100, 2)
                     total_icms_st += float(icms_item.get('valor_st', 0))
-                    base_icms += float(icms_item.get('base_calculo', 0))
+                    base_icms += _bc_item
                     base_icms_st += float(icms_item.get('base_calculo_st', 0))
                     total_ipi += float(ipi_item.get('valor', 0))
                     total_pis += float(pis_item.get('valor', 0))
@@ -1821,8 +1832,8 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 # CSOSN 101, 201, 202, 203, 900: Incluir campos de crédito SOMENTE se houver alíquota
                 elif csosn in ['101', '201', '202', '203', '900']:
                     aliq_icms = float(icms_data.get('aliquota', 0))
-                    bc_icms = float(icms_data.get('base_calculo', valor_total))
-                    valor_icms = float(icms_data.get('valor', bc_icms * aliq_icms / 100)) if aliq_icms > 0 else 0.0
+                    bc_icms = round(float(icms_data.get('base_calculo', valor_total)), 2)
+                    valor_icms = round(bc_icms * aliq_icms / 100, 2) if aliq_icms > 0 else 0.0
                     # Adicionar campos SOMENTE se alíquota > 0 (se zero, OMITIR pCredSN/vCredICMSSN)
                     if aliq_icms > 0:
                         etree.SubElement(icms_sn, "pCredSN").text = f"{aliq_icms:.2f}"
@@ -1866,11 +1877,14 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 if cst_icms in ['00', '10', '20', '51', '70', '90']:  # Tributados
                     aliq_icms = float(icms_data.get('aliquota', 0))
                     bc_icms = float(icms_data.get('base_calculo', 0))
-                    valor_icms = float(icms_data.get('valor', 0))
+                    # vICMS deve ser SEMPRE recalculado a partir de vBC e pICMS já arredondados
+                    # para garantir que vICMS == round(vBC * pICMS / 100, 2) conforme SEFAZ exige
+                    bc_icms_r = round(bc_icms, 2)
+                    valor_icms = round(bc_icms_r * aliq_icms / 100, 2) if bc_icms_r > 0 and aliq_icms > 0 else 0.0
                     
-                    if bc_icms > 0 and aliq_icms > 0:
+                    if bc_icms_r > 0 and aliq_icms > 0:
                         etree.SubElement(icms_tributado, "modBC").text = str(icms_data.get('modalidade_bc', '3'))
-                        etree.SubElement(icms_tributado, "vBC").text = f"{bc_icms:.2f}"
+                        etree.SubElement(icms_tributado, "vBC").text = f"{bc_icms_r:.2f}"
                         etree.SubElement(icms_tributado, "pICMS").text = f"{aliq_icms:.2f}"
                         etree.SubElement(icms_tributado, "vICMS").text = f"{valor_icms:.2f}"
                     
