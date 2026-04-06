@@ -127,9 +127,17 @@ def buscar_regra_tributacao():
         
         # Filtros condicionais
         if cfop_codigo:
-            cfop_subquery = db.query(Cfop.cfop_id).filter(Cfop.cfop == cfop_codigo)
+            # Buscar também a variante 5xxx↔6xxx do CFOP, pois a mesma regra
+            # cobre operações intra e interestaduais do mesmo tipo (ex.: 5102 e 6102).
+            cfop_variantes = {cfop_codigo}
+            if cfop_codigo and len(cfop_codigo) >= 4:
+                if cfop_codigo[0] == '5':
+                    cfop_variantes.add('6' + cfop_codigo[1:])
+                elif cfop_codigo[0] == '6':
+                    cfop_variantes.add('5' + cfop_codigo[1:])
+            cfop_subquery = db.query(Cfop.cfop_id).filter(Cfop.cfop.in_(cfop_variantes))
             cfop_ids = [c.cfop_id for c in cfop_subquery.all()]
-            print(f"[SEARCH] CFOP '{cfop_codigo}' -> IDs encontrados: {cfop_ids}")
+            print(f"[SEARCH] CFOP '{cfop_codigo}' (variantes: {cfop_variantes}) -> IDs encontrados: {cfop_ids}")
             query = query.filter(or_(RegraTributacao.cfop_id.in_(cfop_subquery), RegraTributacao.cfop_id.is_(None)))
         
         if ncm_codigo:
