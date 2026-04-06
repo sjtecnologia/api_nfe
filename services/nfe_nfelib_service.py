@@ -731,6 +731,9 @@ def generate_nfe_xml_nfelib(
                         f"para interestadual ({aliq_max:.2f}%). Ajustando automaticamente."
                     )
                     aliquota_icms = aliq_max
+                    # Recalcular vICMS com a alíquota corrigida para evitar inconsistência
+                    if bc_icms > 0:
+                        valor_icms = (bc_icms * aliquota_icms / Decimal('100')).quantize(Decimal('0.01'))
             
             # Criar ICMS com CST apropriado
             if cst_item == '00':
