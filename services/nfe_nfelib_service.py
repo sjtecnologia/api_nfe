@@ -202,7 +202,7 @@ def ie_valida_basica_por_uf(ie_digits: str, uf: str) -> bool:
         'MA': 9,
         'MG': 13,
         'MS': 9,
-        'MT': 11,
+        'MT': (9, 11),  # MT aceita 9 ou 11 dígitos (formatos antigo/novo)
         'PA': 9,
         'PB': 9,
         'PE': 14,
@@ -560,9 +560,9 @@ def generate_nfe_xml_nfelib(
     if ie_dest_norm not in {'', 'ISENTO'} and not ie_valida_basica_por_uf(ie_dest_norm, uf_destinatario):
         print(
             f"⚠️  [NFELIB] IE do destinatario inválida para UF {uf_destinatario}: "
-            f"'{ie_dest_norm}'. Enviando como não contribuinte."
+            f"'{ie_dest_norm}'. Tratando como isento para evitar rejeição."
         )
-        ie_dest_norm = ''
+        ie_dest_norm = 'ISENTO'
 
     if len(dest_cpf_cnpj) == 11:  # CPF = pessoa física = não contribuinte
         ind_ie_dest = "9"
@@ -571,7 +571,10 @@ def generate_nfe_xml_nfelib(
     elif ie_dest_norm == 'ISENTO':
         ind_ie_dest = "2"  # Contribuinte isento
     else:
-        ind_ie_dest = "9"  # Não contribuinte
+        # CNPJ sem IE informada: usar indIEDest=2 + <IE>ISENTO</IE>
+        # (indIEDest=9 sem <IE> é rejeitado pela SEFAZ para CNPJ interestadual)
+        ind_ie_dest = "2"
+        ie_dest_norm = 'ISENTO'
     
     print(f"✅ [NFELIB] Nome Destinatário: {nome_dest}, indIEDest: {ind_ie_dest}")
     
@@ -581,8 +584,8 @@ def generate_nfe_xml_nfelib(
         'indIEDest': ind_ie_dest
     }
     
-    # Adicionar IE se for contribuinte
-    if ind_ie_dest == "1":
+    # Adicionar IE: obrigatória para contribuinte (1) e isento (2="ISENTO")
+    if ind_ie_dest in ("1", "2"):
         dest_kwargs['IE'] = ie_dest_norm
     
     if len(dest_cpf_cnpj) == 11:
