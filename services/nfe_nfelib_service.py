@@ -294,7 +294,8 @@ def generate_nfe_xml_nfelib(
     items: list,
     form_data: Dict[str, Any],
     numero_nfe: int,
-    certificado_data: Dict[str, Any]
+    certificado_data: Dict[str, Any],
+    include_resp_tec: bool = True
 ) -> str:
     """
     Gera XML da NFe usando a biblioteca nfelib
@@ -482,8 +483,8 @@ def generate_nfe_xml_nfelib(
     
     emit = Nfe.InfNfe.Emit(
         CNPJ=cnpj_emitente,
-        xNome=emitente_data.get('razao_social', '')[:60],
-        xFant=emitente_data.get('nome_fantasia', '')[:60] if emitente_data.get('nome_fantasia') else None,
+        xNome=(emitente_data.get('razao_social') or '').strip()[:60],
+        xFant=emitente_data.get('nome_fantasia', '').strip()[:60] if emitente_data.get('nome_fantasia') else None,
         enderEmit=ender_emit,
         IE=ie_emitente,
         CRT=crt_emitente
@@ -499,10 +500,10 @@ def generate_nfe_xml_nfelib(
     )
     
     ender_dest = Tendereco(
-        xLgr=destinatario_data.get('logradouro', 'RUA TESTE')[:60],
-        nro=str(destinatario_data.get('numero', '0'))[:60],
-        xCpl=destinatario_data.get('complemento', '')[:60] if destinatario_data.get('complemento') else None,
-        xBairro=destinatario_data.get('bairro', 'CENTRO')[:60],
+        xLgr=(destinatario_data.get('logradouro') or 'RUA TESTE').strip()[:60],
+        nro=str(destinatario_data.get('numero') or '0').strip()[:60],
+        xCpl=destinatario_data.get('complemento', '').strip()[:60] if destinatario_data.get('complemento') else None,
+        xBairro=(destinatario_data.get('bairro') or 'CENTRO').strip()[:60],
         cMun=cod_mun_dest,
         xMun=nome_mun_dest,
         UF=uf_destinatario,
@@ -545,6 +546,8 @@ def generate_nfe_xml_nfelib(
     # Determinar indIEDest baseado em IE e tipo de documento
     # 1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte
     ie_dest = (destinatario_data.get('ie') or destinatario_data.get('inscricao_estadual', '') or '').strip()
+    # Ler indicador NF-e do destinatário: C=contribuinte, E=isento, N=não contribuinte
+    ie_indicador_nfe = (destinatario_data.get('ie_indicador_nfe') or '').strip().upper()
     # Normalizar IE para evitar rejeicao por mascara/texto nao numerico
     ie_dest_digits = ''.join(ch for ch in ie_dest if ch.isdigit())
     ie_dest_upper = ie_dest.upper()
@@ -566,13 +569,18 @@ def generate_nfe_xml_nfelib(
 
     if len(dest_cpf_cnpj) == 11:  # CPF = pessoa física = não contribuinte
         ind_ie_dest = "9"
+    elif ie_indicador_nfe == 'N':
+        # CNPJ explicitamente marcado como não contribuinte no cadastro
+        ind_ie_dest = "9"
+        ie_dest_norm = ''
+        print(f"⚠️  [NFELIB] CNPJ com ie_indicador=N → indIEDest=9 (não contribuinte)")
     elif ie_dest_norm and ie_dest_norm != 'ISENTO':
         ind_ie_dest = "1"  # Contribuinte ICMS
-    elif ie_dest_norm == 'ISENTO':
+    elif ie_dest_norm == 'ISENTO' or ie_indicador_nfe == 'E':
         ind_ie_dest = "2"  # Contribuinte isento
+        ie_dest_norm = 'ISENTO'
     else:
         # CNPJ sem IE informada: usar indIEDest=2 + <IE>ISENTO</IE>
-        # (indIEDest=9 sem <IE> é rejeitado pela SEFAZ para CNPJ interestadual)
         ind_ie_dest = "2"
         ie_dest_norm = 'ISENTO'
     
@@ -619,7 +627,16 @@ def generate_nfe_xml_nfelib(
     v_fcp_uf_dest_total = Decimal('0')
     v_icms_uf_dest_total = Decimal('0')
     v_icms_uf_remet_total = Decimal('0')
-    
+
+    # Conexão única para IBS/CBS (evita esgotar o pool com uma query por item)
+    _db_ibs_cbs = None
+    _ibs_cbs_cache = {}  # cache: classificacao_id_int -> ibs_cbs_data (alíquotas fixas por classificação)
+    try:
+        from database.connection import get_db as _get_db_ibs
+        _db_ibs_cbs = next(_get_db_ibs())
+    except Exception as _e:
+        print(f"  [AVISO] Não foi possível abrir conexão para IBS/CBS: {_e}")
+
     for idx, item in enumerate(items, start=1):
         print(f"📦 [ITEM {idx}] Dados recebidos:")
         print(f"   - codigo_produto: {item.get('codigo_produto')}")
@@ -962,33 +979,29 @@ def generate_nfe_xml_nfelib(
         print(f"  [IBS/CBS] Item {idx} - CRT={crt_int}, classificacao_ibs_cbs_id='{classificacao_ibs_cbs_id}' (tipo: {type(classificacao_ibs_cbs_id).__name__})")
         
         # Verificar se é CRT=3 (Lucro Real/Presumido) e tem classificação
-        if crt_int == 3 and classificacao_ibs_cbs_id:
+        if crt_int == 3 and classificacao_ibs_cbs_id and _db_ibs_cbs is not None:
             try:
-                from database.connection import get_db
-                db = next(get_db())
-                
-                # ⚠️ CORREÇÃO: Converter para inteiro (vem como string do formulário)
                 classificacao_id_int = int(classificacao_ibs_cbs_id)
                 print(f"  [IBS/CBS] Item {idx} - Convertido para int: {classificacao_id_int}")
-                
-                # Calcular IBS/CBS
-                ibs_cbs_data = calcular_ibs_cbs(valor_total, classificacao_id_int, db)
-                
+
+                # Calcular IBS/CBS usando conexão compartilhada
+                ibs_cbs_data = calcular_ibs_cbs(valor_total, classificacao_id_int, _db_ibs_cbs)
+
                 # Gerar XML IBS/CBS
                 ibs_cbs_xml = gerar_xml_ibscbs(ibs_cbs_data)
-                
+
                 # Acumular totais
                 v_bc_ibs_cbs_total += Decimal(str(ibs_cbs_data['vBC']))
                 v_ibs_uf_total += Decimal(str(ibs_cbs_data['vIBSUF']))
                 v_ibs_mun_total += Decimal(str(ibs_cbs_data['vIBSMun']))
                 v_ibs_total += Decimal(str(ibs_cbs_data['vIBS']))
                 v_cbs_total += Decimal(str(ibs_cbs_data['vCBS']))
-                
+
                 itens_ibs_cbs.append(ibs_cbs_data)
-                
+
                 print(f"  [IBS/CBS] Item {idx} - Classificação {ibs_cbs_data['cClassTrib']}: "
                       f"IBS R$ {ibs_cbs_data['vIBS']:.2f}, CBS R$ {ibs_cbs_data['vCBS']:.2f}")
-                
+
             except Exception as e:
                 print(f"  [AVISO] Erro ao calcular IBS/CBS para item {idx}: {e}")
                 # Continuar sem IBS/CBS se houver erro
@@ -1018,7 +1031,14 @@ def generate_nfe_xml_nfelib(
         )
         
         det_list.append(det)
-    
+
+    # Fechar conexão IBS/CBS após processar todos os itens
+    if _db_ibs_cbs is not None:
+        try:
+            _db_ibs_cbs.close()
+        except Exception:
+            pass
+
     # Calcular valor total da NFe conforme composição fiscal
     # vNF = vProd - vDesc + vFrete + vSeg + vOutro + vII + vIPI + vST + vFCPST + vFCPSTRet + vIPIDevol
     v_frete = Decimal(str(form_data.get('vFrete', '0.00')))
@@ -1306,27 +1326,30 @@ def generate_nfe_xml_nfelib(
                 inf_nfe_elem.append(inf_adic)
                 print(f"✅ [NFELIB] infAdic adicionado: {inf_cpl_text[:50]}...")
             
-            # Criar infRespTec (após infAdic)
-            inf_resp_tec = etree.Element('{http://www.portalfiscal.inf.br/nfe}infRespTec')
-            
-            cnpj = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}CNPJ')
-            cnpj.text = '46840224000102'
-            
-            x_contato = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}xContato')
-            x_contato.text = 'Carlos Renato'
-            
-            email = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}email')
-            email.text = 'contato@emitemax.com.br'
-            
-            fone = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}fone')
-            fone.text = '1732118981'
-            
-            # Adicionar infRespTec ao final do infNFe (antes da assinatura)
-            inf_nfe_elem.append(inf_resp_tec)
+            # Criar infRespTec (após infAdic) — omitido no retry para nós SEFAZ legados
+            if include_resp_tec:
+                inf_resp_tec = etree.Element('{http://www.portalfiscal.inf.br/nfe}infRespTec')
+                
+                cnpj = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}CNPJ')
+                cnpj.text = '46840224000102'
+                
+                x_contato = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}xContato')
+                x_contato.text = 'Carlos Renato'
+                
+                email = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}email')
+                email.text = 'contato@emitemax.com.br'
+                
+                fone = etree.SubElement(inf_resp_tec, '{http://www.portalfiscal.inf.br/nfe}fone')
+                fone.text = '1732118981'
+                
+                # Adicionar infRespTec ao final do infNFe (antes da assinatura)
+                inf_nfe_elem.append(inf_resp_tec)
+                print("✅ [NFELIB] infRespTec adicionado manualmente")
+            else:
+                print("⚠️  [NFELIB] infRespTec OMITIDO (retry para nó legado SEFAZ)")
             
             # Reconverter para string
             xml_string = etree.tostring(xml_tree, encoding='unicode')
-            print("✅ [NFELIB] infRespTec adicionado manualmente")
         
         # CRÍTICO: Remover TODAS as quebras de linha para evitar erro de assinatura
         # A assinatura deve ser calculada sobre XML compacto (sem \n, \r, \t)

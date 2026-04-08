@@ -36,8 +36,14 @@
                         </div>
                         
                         <div id="pkcs11Error" class="alert alert-danger mt-3" style="display: none;">
-                            <strong>PyKCS11 não instalado!</strong>
-                            <p class="mb-0 mt-2">Execute: <code>pip install PyKCS11</code></p>
+                            <h5><i class="fas fa-exclamation-circle"></i> Suporte A3 não disponível no servidor</h5>
+                            <p>O certificado A3 (token/smartcard) é um dispositivo físico conectado ao <strong>seu computador</strong>. Este sistema não consegue acessá-lo diretamente via web.</p>
+                            <hr>
+                            <p class="mb-1"><strong>Opções:</strong></p>
+                            <ul class="mb-0">
+                                <li>Se possui certificado A3, utilize o software do fabricante do token para <strong>exportar o certificado A1</strong> (.pfx / .p12) e cadastre-o na opção "<strong>Certificado A1</strong>".</li>
+                                <li>Consulte o suporte para habilitação do módulo A3 com assinatura local.</li>
+                            </ul>
                         </div>
                     </div>
                     
@@ -346,7 +352,7 @@ function displayCertificates(certificates) {
             card.style.cursor = 'not-allowed';
         }
         
-        certsList.appendChild(card));
+        certsList.appendChild(card);
     });
 }
 

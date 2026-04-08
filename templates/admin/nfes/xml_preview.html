@@ -491,11 +491,14 @@
                 <div class="tab-pane fade" id="xml" role="tabpanel" aria-labelledby="xml-tab">
                     {% if nfe.json_nfe and nfe.json_nfe.xml_content %}
                     <div class="d-flex justify-content-end mb-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard(document.querySelector('#xml code').textContent)">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard(document.getElementById('xmlCode').textContent)">
                             <i class="fas fa-copy"></i> Copiar XML
                         </button>
                     </div>
-                    <pre><code class="language-xml">{{ nfe.json_nfe.xml_content|e }}</code></pre>
+                    <pre id="xmlCodeBlock"><code id="xmlCode" class="language-xml"></code></pre>
+                    {% if nfe.json_nfe and nfe.json_nfe.xml_content %}
+                    <script>window._nfeXmlContent = {{ nfe.json_nfe.xml_content|tojson }};</script>
+                    {% endif %}
                     {% else %}
                     <div class="alert alert-warning m-3">
                         <i class="fas fa-exclamation-triangle"></i> XML não disponível para esta NF-e.
@@ -698,8 +701,41 @@
         hasXml: window.nfeConfig.hasXml
     };
     
+    // Formatar XML com indentação
+    function _formatarXML(xmlStr) {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(xmlStr.trim(), 'application/xml');
+            if (doc.querySelector('parsererror')) return xmlStr; // fallback: retorna original
+            const xs = new XMLSerializer();
+            const raw = xs.serializeToString(doc);
+            // Indentação manual
+            let indent = 0;
+            return raw
+                .replace(/></g, '>\n<')
+                .split('\n')
+                .map(function(line) {
+                    line = line.trim();
+                    if (!line) return '';
+                    if (line.match(/^<\/[^>]+>/)) indent = Math.max(0, indent - 1);
+                    const out = '  '.repeat(indent) + line;
+                    if (line.match(/^<[^/?!][^>]*[^/]>$/) && !line.match(/^<[^>]+>.*<\/[^>]+>$/)) indent++;
+                    return out;
+                })
+                .filter(function(l) { return l !== ''; })
+                .join('\n');
+        } catch(e) {
+            return xmlStr;
+        }
+    }
+
     // Inicializar quando a página carregar
     document.addEventListener('DOMContentLoaded', function() {
+        // Formatar e exibir XML
+        const codeEl = document.getElementById('xmlCode');
+        if (codeEl && window._nfeXmlContent) {
+            codeEl.textContent = _formatarXML(window._nfeXmlContent);
+        }
         if (typeof hljs !== 'undefined') {
             hljs.highlightAll();
         }

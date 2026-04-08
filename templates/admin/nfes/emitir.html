@@ -765,16 +765,16 @@ input[readonly] {
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-12 text-center">
-                        <button type="button" class="btn btn-primary" onclick="validarComIA()" id="btnValidarIA">
+                        <button type="button" class="btn btn-primary" onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar();validarComIA()" id="btnValidarIA">
                             <i class="fas fa-robot"></i> Validar com IA
                         </button>
-                        <button type="button" class="btn btn-info" onclick="previewXML()">
+                        <button type="button" class="btn btn-info" onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar();previewXML()">
                             <i class="fas fa-eye"></i> Visualizar XML
                         </button>
-                        <button type="button" class="btn btn-secondary" onclick="previewDANFE()">
+                        <button type="button" class="btn btn-secondary" onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar();previewDANFE()">
                             <i class="fas fa-file-pdf"></i> Preview DANFE
                         </button>
-                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled>
+                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar()">
                             <i class="fas fa-paper-plane"></i> Emitir NFe
                         </button>
                         <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary">
@@ -837,6 +837,26 @@ input[readonly] {
                 <button type="button" class="btn btn-success" id="btnContinuarEmissao" data-bs-dismiss="modal">
                     <i class="fas fa-check"></i> Continuar para Emissão
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ MODAL DE PRÉ-VALIDAÇÃO (erros de campos antes de IA/XML/DANFE) -->
+<div class="modal fade" id="modalPreValidacao" tabindex="-1" aria-labelledby="modalPreValidacaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalPreValidacaoLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Corrija os erros antes de continuar
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalPreValidacaoBody">
+                <!-- Preenchido via JS -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar e corrigir</button>
             </div>
         </div>
     </div>
@@ -1245,14 +1265,17 @@ function atualizarDestinatarioInfo() {
 // Adicionar item à NFe
 function adicionarItem() {
     // Impedir adição de item vazio se já existe item sem produto selecionado
-    const itensExistentes = document.querySelectorAll('#itensContainer [id^="item-"]');
-    for (const itemDiv of itensExistentes) {
-        const itemId = itemDiv.id.split('-')[1];
-        const produtoSelect = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
-        if (produtoSelect && !produtoSelect.value) {
-            alert('Preencha o produto do item atual antes de adicionar um novo item.');
-            produtoSelect.focus();
-            return;
+    // (bypass durante restauração de rascunho)
+    if (!window._nfeRestaurandoRascunho) {
+        const itensExistentes = document.querySelectorAll('#itensContainer [id^="item-"]');
+        for (const itemDiv of itensExistentes) {
+            const itemId = itemDiv.id.split('-')[1];
+            const produtoSelect = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
+            if (produtoSelect && !produtoSelect.value) {
+                alert('Preencha o produto do item atual antes de adicionar um novo item.');
+                produtoSelect.focus();
+                return;
+            }
         }
     }
 
@@ -2415,6 +2438,190 @@ function verificarItensVazios() {
     return true;
 }
 
+// ========== PRÉ-VALIDAÇÃO COMPLETA (IA / XML / DANFE) ==========
+/**
+ * Valida todos os campos do formulário antes de qualquer ação.
+ * Retorna true se OK, false se houver erros (e exibe o modal com a lista).
+ */
+function _marcarInvalido(el, lista) {
+    if (!el) return;
+    el.classList.add('is-invalid', 'is-invalid-validacao');
+    el.addEventListener('input',  () => el.classList.remove('is-invalid', 'is-invalid-validacao'), { once: true });
+    el.addEventListener('change', () => el.classList.remove('is-invalid', 'is-invalid-validacao'), { once: true });
+    lista.push(el);
+}
+
+function validarFormularioCompleto(acao) {
+    const erros = [];
+    const camposInvalidos = [];
+
+    // Limpar marcações anteriores
+    document.querySelectorAll('.is-invalid-validacao').forEach(el => {
+        el.classList.remove('is-invalid', 'is-invalid-validacao');
+    });
+
+    // --- Cabeçalho ---
+    const destinatarioEl = document.getElementById('destinatario');
+    if (!destinatarioEl?.value) {
+        erros.push({ secao: 'Cabeçalho', campo: 'Destinatário', msg: 'Selecione o destinatário da NFe.' });
+    }
+
+    const natOpEl = document.getElementById('natOp');
+    if (!natOpEl?.value?.trim()) {
+        erros.push({ secao: 'Cabeçalho', campo: 'Natureza da Operação', msg: 'Campo obrigatório não preenchido.' });
+        _marcarInvalido(natOpEl, camposInvalidos);
+    }
+
+    const dataEmissaoEl = document.querySelector('input[name="dataEmissao"]');
+    if (!dataEmissaoEl?.value) {
+        erros.push({ secao: 'Cabeçalho', campo: 'Data de Emissão', msg: 'Selecione a data de emissão.' });
+        _marcarInvalido(dataEmissaoEl, camposInvalidos);
+    }
+
+    const numeroNfeEl = document.getElementById('numero_nfe');
+    const numeroNfe = parseInt(numeroNfeEl?.value || 0);
+    if (!numeroNfe || numeroNfe < 1) {
+        erros.push({ secao: 'Cabeçalho', campo: 'Número da NFe', msg: 'O número da NFe deve ser maior que zero.' });
+        _marcarInvalido(numeroNfeEl, camposInvalidos);
+    }
+
+    // --- Itens ---
+    const itensContainer = document.getElementById('itensContainer');
+    const itensDiv = itensContainer ? itensContainer.querySelectorAll('[id^="item-"]') : [];
+
+    if (itensDiv.length === 0) {
+        erros.push({ secao: 'Itens', campo: 'Produtos', msg: 'Adicione pelo menos um item à NFe.' });
+    }
+
+    itensDiv.forEach((itemDiv, idx) => {
+        const itemId = itemDiv.id.split('-')[1];
+        const nItem = idx + 1;
+
+        // Produto
+        const produtoEl = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
+        if (!produtoEl?.value) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'Produto', msg: 'Nenhum produto selecionado.' });
+        }
+
+        // Quantidade — checagem explícita de string vazia
+        const qtdEl = itemDiv.querySelector(`input[name="quantidade_${itemId}"]`);
+        const qtdStr = (qtdEl?.value ?? '').trim();
+        const qtd = qtdStr === '' ? NaN : Number(qtdStr);
+        if (qtdStr === '' || isNaN(qtd) || qtd <= 0) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'Quantidade', msg: 'Informe a quantidade (deve ser maior que zero).' });
+            _marcarInvalido(qtdEl, camposInvalidos);
+        }
+
+        // Valor Unitário — checagem explícita de string vazia
+        const vlrUnitEl = itemDiv.querySelector(`input[name="valor_unitario_${itemId}"]`);
+        const vlrUnitStr = (vlrUnitEl?.value ?? '').trim();
+        const vlrUnit = vlrUnitStr === '' ? NaN : Number(vlrUnitStr);
+        if (vlrUnitStr === '' || isNaN(vlrUnit) || vlrUnit <= 0) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'Valor Unitário', msg: 'Informe o valor unitário (deve ser maior que zero).' });
+            _marcarInvalido(vlrUnitEl, camposInvalidos);
+        }
+
+        // Valor Total (calculado automaticamente — só verifica)
+        const vlrTotalEl = itemDiv.querySelector(`input[name="valor_total_${itemId}"]`);
+        const vlrTotalStr = (vlrTotalEl?.value ?? '').trim();
+        const vlrTotal = vlrTotalStr === '' ? NaN : Number(vlrTotalStr);
+        if (vlrTotalStr === '' || isNaN(vlrTotal) || vlrTotal <= 0) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'Valor Total', msg: 'Valor total zerado. Informe a quantidade e valor unitário.' });
+            _marcarInvalido(vlrTotalEl, camposInvalidos);
+        }
+
+        // NCM
+        const ncmEl = itemDiv.querySelector(`select[name="ncm_${itemId}"]`) || itemDiv.querySelector(`input[name="ncm_${itemId}"]`);
+        if (!ncmEl?.value) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'NCM', msg: 'NCM não preenchido.' });
+        }
+
+        // CFOP
+        const cfopEl = itemDiv.querySelector(`select[name="cfop_${itemId}"]`) || itemDiv.querySelector(`input[name="cfop_${itemId}"]`);
+        if (!cfopEl?.value) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'CFOP', msg: 'CFOP não preenchido.' });
+        }
+
+        // CST/CSOSN
+        const csosnEl = itemDiv.querySelector(`select[name="csosn_${itemId}"]`);
+        const cstIcmsEl = itemDiv.querySelector(`select[name="cst_icms_${itemId}"]`);
+        if (!(csosnEl?.value) && !(cstIcmsEl?.value)) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'CST/CSOSN', msg: 'Tributação ICMS (CST ou CSOSN) não selecionada.' });
+        }
+    });
+
+    // --- Pagamento ---
+    const formaPagamentoEl = document.getElementById('formaPagamento');
+    if (!formaPagamentoEl?.value) {
+        erros.push({ secao: 'Pagamento', campo: 'Forma de Pagamento', msg: 'Selecione a forma de pagamento.' });
+    }
+
+    try {
+        const campoPagamento = document.getElementById('valorPagamento');
+        const vlrPagamento = parseValorMonetario(
+            campoPagamento?.getAttribute('data-valor-real') || campoPagamento?.value || '0'
+        );
+        if (vlrPagamento <= 0) {
+            erros.push({ secao: 'Pagamento', campo: 'Valor do Pagamento', msg: `Valor de pagamento inválido ou zero (campo mostra: "${campoPagamento?.value || ''}"). Verifique se o valor foi informado.` });
+            _marcarInvalido(campoPagamento, camposInvalidos);
+        }
+    } catch (e) {
+        console.warn('[Validação] Erro ao ler pagamento:', e);
+    }
+
+    if (erros.length === 0) return true;
+
+    _exibirModalPreValidacao(erros, acao, camposInvalidos);
+    return false;
+}
+
+function _exibirModalPreValidacao(erros, acao, camposInvalidos) {
+    // Agrupar por seção
+    const grupos = {};
+    erros.forEach(e => {
+        if (!grupos[e.secao]) grupos[e.secao] = [];
+        grupos[e.secao].push(e);
+    });
+
+    const acaoLabel = { 'ia': 'Validar com IA', 'xml': 'Visualizar XML', 'danfe': 'Preview DANFE' }[acao] || acao;
+
+    let html = `<p class="text-muted mb-3">Encontramos <strong>${erros.length} problema(s)</strong> que impedem a ação "<strong>${acaoLabel}</strong>". Corrija-os antes de continuar:</p>`;
+
+    Object.keys(grupos).forEach(secao => {
+        const isItem = secao.startsWith('Item ');
+        const icon = isItem ? 'fa-box' : (secao === 'Pagamento' ? 'fa-money-bill' : 'fa-file-alt');
+        html += `<div class="mb-3">
+            <h6 class="text-danger"><i class="fas ${icon}"></i> ${secao}</h6>
+            <ul class="list-unstyled mb-0 ps-3">`;
+        grupos[secao].forEach(e => {
+            html += `<li class="mb-1">
+                <span class="badge bg-secondary me-1">${e.campo}</span>
+                <span class="text-dark">${e.msg}</span>
+            </li>`;
+        });
+        html += `</ul></div>`;
+    });
+
+    document.getElementById('modalPreValidacaoBody').innerHTML = html;
+
+    const modalEl = document.getElementById('modalPreValidacao');
+    // Remover instância anterior caso exista
+    const instanciaAnterior = bootstrap.Modal.getInstance(modalEl);
+    if (instanciaAnterior) instanciaAnterior.dispose();
+    const modal = new bootstrap.Modal(modalEl);
+
+    // Após fechar o modal: scroll e foco no primeiro campo inválido
+    modalEl.addEventListener('hidden.bs.modal', function() {
+        const primeiro = camposInvalidos && camposInvalidos[0];
+        if (primeiro) {
+            primeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { try { primeiro.focus(); } catch (e) {} }, 350);
+        }
+    }, { once: true });
+
+    modal.show();
+}
+
 function validarFormulario() {
     const itens = document.querySelectorAll('[id^="item-"]');
     
@@ -2519,7 +2726,10 @@ let modalValidacaoIA = null;
 function validarComIA() {
     console.log('[IA] ========================================');
     console.log('[IA] validarComIA() iniciado');
-    
+
+    // Pré-validação completa antes de enviar à IA
+    if (!validarFormularioCompleto('ia')) return;
+
     // Inicializar modal Bootstrap 5 se necessário
     if (!modalValidacaoIA) {
         console.log('[IA] Criando nova instância do modal');
@@ -2669,17 +2879,13 @@ function coletarDadosFormulario() {
     // Calcular totais
     const valorProdutos = itens.reduce((sum, item) => sum + item.valor_total, 0);
     
-    // Coletar dados do pagamento
-    let valorPagamento = 0;
-    let formaPagamento = '01';
-    const pagRows = document.querySelectorAll('#tabelaPagamentos tbody tr');
-    if (pagRows.length > 0) {
-        const primeiraForma = pagRows[0].querySelector('select[name$="[forma]"]')?.value || '01';
-        formaPagamento = primeiraForma;
-        pagRows.forEach(row => {
-            valorPagamento += parseFloat(row.querySelector('input[name$="[valor]"]')?.value || 0);
-        });
-    }
+    // Coletar dados do pagamento — campo simples #valorPagamento com data-valor-real
+    const campoPagamento = document.getElementById('valorPagamento');
+    const formaPagamentoEl = document.getElementById('formaPagamento');
+    const valorPagamento = parseValorMonetario(
+        campoPagamento?.getAttribute('data-valor-real') || campoPagamento?.value || '0'
+    );
+    const formaPagamento = formaPagamentoEl?.value || '01';
     
     // Montar objeto de validação
     return {
@@ -2812,35 +3018,8 @@ function mostrarResultadoValidacao(data) {
 
 // Visualizar XML - Gera preview do XML da NFe sem enviar ao SEFAZ
 function previewXML() {
-    // Validar campos obrigatórios antes de gerar XML
-    const errors = [];
-    
-    // Validar destinatário
-    const destinatarioSelect = document.getElementById('destinatario');
-    if (!destinatarioSelect || !destinatarioSelect.value) {
-        errors.push('Destinatário é obrigatório');
-    }
-    
-    // Validar produtos
-    const itensContainer = document.getElementById('itensContainer');
-    const itensCards = itensContainer?.querySelectorAll('.card');
-    if (!itensCards || itensCards.length === 0) {
-        errors.push('Adicione pelo menos um produto');
-    }
-    
-    // Validar pagamento
-    const formaPagamento = document.getElementById('formaPagamento')?.value;
-    if (!formaPagamento || formaPagamento.trim() === '') {
-        errors.push('Selecione a forma de pagamento');
-    }
-    
-    if (errors.length > 0) {
-        alert('Corrija os seguintes erros antes de visualizar o XML:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
-        return;
-    }
-
-    // Verificar itens vazios
-    if (!verificarItensVazios()) return;
+    // Pré-validação completa antes de gerar XML
+    if (!validarFormularioCompleto('xml')) return;
     
     // Mostrar loading
     const btnPreview = document.querySelector('button[onclick="previewXML()"]');
@@ -3001,35 +3180,8 @@ function escapeHtml(text) {
 
 // ==================== PREVIEW DANFE ====================
 function previewDANFE() {
-    // Validar campos obrigatórios antes de gerar DANFE
-    const errors = [];
-    
-    // Validar destinatário
-    const destinatarioSelect = document.getElementById('destinatario');
-    if (!destinatarioSelect || !destinatarioSelect.value) {
-        errors.push('Destinatário é obrigatório');
-    }
-    
-    // Validar produtos
-    const itensContainer = document.getElementById('itensContainer');
-    const itensCards = itensContainer?.querySelectorAll('.card');
-    if (!itensCards || itensCards.length === 0) {
-        errors.push('Adicione pelo menos um produto');
-    }
-    
-    // Validar pagamento
-    const formaPagamento = document.getElementById('formaPagamento')?.value;
-    if (!formaPagamento || formaPagamento.trim() === '') {
-        errors.push('Selecione a forma de pagamento');
-    }
-    
-    if (errors.length > 0) {
-        alert('Corrija os seguintes erros antes de gerar o preview do DANFE:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
-        return;
-    }
-
-    // Verificar itens vazios
-    if (!verificarItensVazios()) return;
+    // Pré-validação completa antes de gerar DANFE
+    if (!validarFormularioCompleto('danfe')) return;
     
     // Mostrar loading
     const btnPreview = document.querySelector('button[onclick="previewDANFE()"]');
@@ -3104,7 +3256,7 @@ function previewDANFE() {
         
         if (data.success && data.pdf_base64) {
             console.log('[DANFE PREVIEW] Convertendo base64 para blob...');
-            // Converter base64 para blob e abrir em nova aba
+            // Converter base64 para blob e abrir via link (evita bloqueio de popup)
             try {
                 const binaryString = atob(data.pdf_base64);
                 const bytes = new Uint8Array(binaryString.length);
@@ -3113,8 +3265,15 @@ function previewDANFE() {
                 }
                 const blob = new Blob([bytes], { type: 'application/pdf' });
                 const url = URL.createObjectURL(blob);
-                console.log('[DANFE PREVIEW] Abrindo URL:', url);
-                window.open(url, '_blank');
+                // Usar <a> com target="_blank" para não ser bloqueado por popup blocker
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
                 console.log('[DANFE PREVIEW] PDF aberto em nova aba');
             } catch (error) {
                 console.error('[DANFE PREVIEW] Erro ao converter base64:', error);
@@ -3124,9 +3283,15 @@ function previewDANFE() {
             // PDF já foi aberto
             console.log('[DANFE PREVIEW] PDF já foi aberto');
         } else if (data.success && data.danfe_url) {
-            // Abrir URL do DANFE em nova aba
+            // Abrir URL do DANFE via link
             console.log('[DANFE PREVIEW] Abrindo URL do DANFE:', data.danfe_url);
-            window.open(data.danfe_url, '_blank');
+            const link = document.createElement('a');
+            link.href = data.danfe_url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         } else if (data.success) {
             console.warn('[DANFE PREVIEW] Sucesso mas sem PDF - data:', data);
             alert('DANFE gerado com sucesso, mas PDF não foi retornado. Verifique o console.');
@@ -3596,6 +3761,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             console.log('✅ Confirmação OK - enviando formulário normalmente...');
 
+            // Rascunho emitido — limpar localStorage agora que o usuário confirmou
+            if (typeof window._rascunhoLimpar === 'function') window._rascunhoLimpar();
+
             // Atualizar JSON de todos os itens antes de submeter
             const itens = document.querySelectorAll('[id^="item-"]');
             itens.forEach(item => {
@@ -3925,5 +4093,306 @@ $(document).ready(function() {
     
     console.log('🎉 Assistente IA inicializado com sucesso!');
 });
+
+// ============================================================
+// AUTO-SAVE / RASCUNHO LOCAL (localStorage)
+// ============================================================
+(function() {
+    const _clienteId = {% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}null{% endif %};
+    const _editMode = {% if edit_mode %}true{% else %}false{% endif %};
+    const _STORAGE_KEY = _clienteId ? `nfe_rascunho_cliente_${_clienteId}` : null;
+
+    if (!_STORAGE_KEY) return; // Segurança: não salvar sem cliente_id
+
+    // ── Serializar estado atual do formulário ───────────────
+    function _rascunhoSerializar() {
+        try {
+            // Campos cabeçalho
+            const dados = {
+                ts: Date.now(),
+                natOp:           document.getElementById('natOp')?.value || '',
+                tpNF:            document.getElementById('tpNF')?.value || '',
+                finNFe:          document.getElementById('finNFe')?.value || '',
+                indPres:         document.getElementById('indPres')?.value || '',
+                formaPagamento:  document.getElementById('formaPagamento')?.value || '',
+                modFrete:        document.getElementById('modFrete')?.value || '',
+                infCpl:          document.getElementById('infCpl')?.value || '',
+                destinatario:    document.getElementById('destinatario')?.value || '',
+                items: []
+            };
+
+            // Coletar JSON de cada item (já mantido atualizado por atualizarItemJSON)
+            document.querySelectorAll('[id^="item-"]').forEach(function(itemDiv) {
+                const itemId = itemDiv.id.split('-')[1];
+                const hiddenJson = document.getElementById(`item_json_${itemId}`);
+                if (hiddenJson && hiddenJson.value) {
+                    try {
+                        dados.items.push(JSON.parse(hiddenJson.value));
+                    } catch(e) { /* ignorar item inválido */ }
+                }
+            });
+
+            return dados;
+        } catch(e) {
+            console.warn('[Rascunho] Erro ao serializar:', e);
+            return null;
+        }
+    }
+
+    // ── Salvar no localStorage ───────────────────────────────
+    function _rascunhoSalvar() {
+        if (_editMode) return; // Não sobrescrever rascunho em modo edição
+        if (window._nfeRestaurandoRascunho) return; // Não salvar durante restauração
+        const dados = _rascunhoSerializar();
+        if (!dados) return;
+        try {
+            localStorage.setItem(_STORAGE_KEY, JSON.stringify(dados));
+            _rascunhoAtualizarIndicador(dados.ts);
+        } catch(e) {
+            console.warn('[Rascunho] Não foi possível salvar (localStorage cheio?):', e);
+        }
+    }
+
+    // ── Limpar rascunho ──────────────────────────────────────
+    function _rascunhoLimpar() {
+        if (!_STORAGE_KEY) return;
+        localStorage.removeItem(_STORAGE_KEY);
+        const ind = document.getElementById('_rascunhoIndicador');
+        if (ind) ind.style.display = 'none';
+    }
+
+    // ── Atualizar indicador visual ───────────────────────────
+    function _rascunhoAtualizarIndicador(ts) {
+        let ind = document.getElementById('_rascunhoIndicador');
+        if (!ind) return;
+        const hora = new Date(ts).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+        ind.textContent = `Rascunho salvo às ${hora}`;
+        ind.style.display = 'inline';
+    }
+
+    // ── Preencher campos de um item já adicionado ────────────
+    function _preencherItem(itemId, d) {
+        function _set(sel, val) { const el = document.querySelector(sel); if(el) el.value = val; }
+        function _setS2(name, val, text) {
+            // Para selects AJAX (produto/ncm/cfop): injeta opção e aciona Select2
+            const el = document.querySelector(`select[name="${name}"]`);
+            if (!el || !val) return;
+            if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
+                const opt = new Option(text || val, val, true, true);
+                $(el).append(opt).trigger('change');
+            } else {
+                // Select2 ainda não inicializado: adicionar option diretamente
+                const opt = document.createElement('option');
+                opt.value = val; opt.text = text || val; opt.selected = true;
+                el.appendChild(opt);
+                el.value = val;
+            }
+        }
+        function _setSelect(name, val) {
+            const el = document.querySelector(`select[name="${name}"]`);
+            if (!el || val === undefined || val === null || val === '') return;
+            el.value = val;
+            if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
+                $(el).val(val).trigger('change');
+            }
+        }
+
+        if (d.descricao)      _setS2(`produto_${itemId}`,     d.descricao,  d.descricao);
+        if (d.codigo_produto) _set(`input[name="codigo_produto_${itemId}"]`, d.codigo_produto);
+        if (d.unidade)        _set(`input[name="unidade_${itemId}"]`,        d.unidade);
+        if (d.quantidade)     _set(`input[name="quantidade_${itemId}"]`,     d.quantidade);
+        if (d.valor_unitario) _set(`input[name="valor_unitario_${itemId}"]`, d.valor_unitario);
+        if (d.valor_total)    _set(`input[name="valor_total_${itemId}"]`,    d.valor_total);
+        if (d.ncm)            _setS2(`ncm_${itemId}`,  d.ncm,  d.ncm);
+        if (d.cfop)           _setS2(`cfop_${itemId}`, d.cfop, d.cfop);
+        _setSelect(`origem_${itemId}`,               d.origem);
+        _setSelect(`csosn_${itemId}`,                d.csosn_icms);
+        _setSelect(`cst_icms_${itemId}`,             d.cst_icms);
+        _setSelect(`modalidade_bc_icms_${itemId}`,   d.modalidade_bc_icms);
+        _setSelect(`motivo_desoneracao_icms_${itemId}`, d.motivo_desoneracao_icms);
+        _setSelect(`cst_pis_${itemId}`,              d.cst_pis);
+        _setSelect(`cst_cofins_${itemId}`,           d.cst_cofins);
+        if (d.aliquota_icms)    _set(`input[name="aliquota_icms_${itemId}"]`,    d.aliquota_icms);
+        if (d.reducao_base_icms) _set(`input[name="reducao_base_icms_${itemId}"]`, d.reducao_base_icms);
+        if (d.cbenef)           _set(`input[name="cbenef_${itemId}"]`,           d.cbenef);
+        if (d.aliquota_pis)     _set(`input[name="aliquota_pis_${itemId}"]`,     d.aliquota_pis);
+        if (d.aliquota_cofins)  _set(`input[name="aliquota_cofins_${itemId}"]`,  d.aliquota_cofins);
+        if (d.cst_ipi)          _set(`input[name="cst_ipi_${itemId}"]`,          d.cst_ipi);
+        if (d.aliquota_ipi)     _set(`input[name="aliquota_ipi_${itemId}"]`,     d.aliquota_ipi);
+        if (d.classificacao_ibs_cbs_id) _setSelect(`classificacao_ibs_cbs_id_${itemId}`, d.classificacao_ibs_cbs_id);
+
+        // Definir hidden JSON diretamente (garante envio correto independente do visual)
+        const hidden = document.getElementById(`item_json_${itemId}`);
+        if (hidden) hidden.value = JSON.stringify(d);
+
+        if (typeof calcularTotal === 'function') try { calcularTotal(itemId); } catch(e) {}
+    }
+
+    // ── Restaurar dados no formulário ────────────────────────
+    function _rascunhoRestaurar(dados) {
+        try {
+            // Campos cabeçalho
+            if (dados.natOp)          { const el = document.getElementById('natOp');          if(el) el.value = dados.natOp; }
+            if (dados.tpNF)           { const el = document.getElementById('tpNF');           if(el) el.value = dados.tpNF; }
+            if (dados.finNFe)         { const el = document.getElementById('finNFe');         if(el) el.value = dados.finNFe; }
+            if (dados.indPres)        { const el = document.getElementById('indPres');        if(el) el.value = dados.indPres; }
+            if (dados.formaPagamento) { const el = document.getElementById('formaPagamento'); if(el) el.value = dados.formaPagamento; }
+            // valorPagamento será restaurado APÓS os itens (evita ser sobrescrito por recalcularTotais)
+            if (dados.modFrete)  { const el = document.getElementById('modFrete');  if(el) { el.value = dados.modFrete; if(typeof toggleDadosTransportadora === 'function') toggleDadosTransportadora(); } }
+            if (dados.infCpl)    { const el = document.getElementById('infCpl');    if(el) el.value = dados.infCpl; }
+
+            // Destinatário
+            if (dados.destinatario) {
+                const sel = document.getElementById('destinatario');
+                if (sel) {
+                    sel.value = dados.destinatario;
+                    if (typeof $ !== 'undefined' && $(sel).hasClass('select2-hidden-accessible')) {
+                        $(sel).val(dados.destinatario).trigger('change');
+                    }
+                    if (typeof atualizarDestinatarioInfo === 'function') atualizarDestinatarioInfo();
+                }
+            }
+
+            // Remover item vazio adicionado automaticamente
+            document.querySelectorAll('#itensContainer [id^="item-"]').forEach(function(el) { el.remove(); });
+
+            if (!Array.isArray(dados.items) || dados.items.length === 0) return;
+
+            // Zerar contador para que os itens restaurados comecem em 1, 2, 3...
+            itemCounter = 0;
+
+            // Adicionar todos os itens vazios de uma vez (com flag que desativa a guarda)
+            // itemCounter é var de escopo externo incrementada por adicionarItem()
+            window._nfeRestaurandoRascunho = true;
+            const itemIds = [];
+            dados.items.forEach(function() {
+                adicionarItem();
+                itemIds.push(itemCounter); // valor após incremento = ID do item recém criado
+            });
+
+            // Preencher cada item após Select2 inicializar (~500ms)
+            // Flag é mantida até DEPOIS do preenchimento para evitar save com dados vazios
+            setTimeout(function() {
+                dados.items.forEach(function(itemData, i) {
+                    const itemId = itemIds[i];
+                    if (itemId) _preencherItem(itemId, itemData);
+                });
+
+                // Recalcular total geral uma vez final para garantir valor correto
+                // (não restauramos valorPagamento do rascunho pois é sempre derivado dos itens)
+                if (typeof calcularTotalGeral === 'function') try { calcularTotalGeral(); } catch(e) {}
+
+                window._nfeRestaurandoRascunho = false;
+                console.log('[Rascunho] ' + dados.items.length + ' item(ns) restaurado(s).');
+            }, 500);
+
+        } catch(e) {
+            console.error('[Rascunho] Erro ao restaurar:', e);
+        }
+    }
+
+    // ── Mostrar toast de recuperação ─────────────────────────
+    function _rascunhoMostrarToast(dados) {
+        const toastHtml = `
+        <div id="_rascunhoToast" class="toast align-items-center text-white bg-primary border-0 position-fixed"
+             style="bottom:20px;right:20px;z-index:9999;min-width:340px;" role="alert" aria-live="assertive">
+          <div class="d-flex">
+            <div class="toast-body">
+              <i class="fas fa-save me-1"></i>
+              <strong>Rascunho encontrado</strong> (${new Date(dados.ts).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})})<br>
+              ${dados.items.length} item(ns) — deseja restaurar?
+            </div>
+            <div class="d-flex flex-column justify-content-center me-2 gap-1">
+              <button type="button" class="btn btn-light btn-sm" id="_btnRascunhoRestaurar">Restaurar</button>
+              <button type="button" class="btn btn-outline-light btn-sm" id="_btnRascunhoDescartar">Descartar</button>
+            </div>
+          </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', toastHtml);
+
+        const toastEl = document.getElementById('_rascunhoToast');
+        const bsToast = new bootstrap.Toast(toastEl, {autohide: false});
+        bsToast.show();
+
+        document.getElementById('_btnRascunhoRestaurar').addEventListener('click', function() {
+            bsToast.hide();
+            toastEl.remove();
+            _rascunhoRestaurar(dados);
+            _rascunhoAtualizarIndicador(dados.ts);
+        });
+        document.getElementById('_btnRascunhoDescartar').addEventListener('click', function() {
+            bsToast.hide();
+            toastEl.remove();
+            _rascunhoLimpar();
+            window._nfeRestaurandoRascunho = false; // libera auto-save após descarte
+        });
+    }
+
+    // ── Inicialização ────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function() {
+        // Criar indicador visual de rascunho salvo
+        const areaAcoes = document.querySelector('.col-md-12.text-center');
+        if (areaAcoes) {
+            const ind = document.createElement('small');
+            ind.id = '_rascunhoIndicador';
+            ind.className = 'text-muted ms-3';
+            ind.style.display = 'none';
+            areaAcoes.appendChild(ind);
+        }
+
+        // Verificar se existe rascunho salvo (só em modo criação)
+        if (!_editMode) {
+            try {
+                const salvo = localStorage.getItem(_STORAGE_KEY);
+                if (salvo) {
+                    const dados = JSON.parse(salvo);
+                    // Só mostrar se o rascunho tem menos de 7 dias
+                    const diasAtras = (Date.now() - dados.ts) / (1000 * 60 * 60 * 24);
+                    if (diasAtras <= 7) {
+                        // Bloquear qualquer auto-save IMEDIATAMENTE para não sobrescrever
+                        // o rascunho bom com o item vazio adicionado automaticamente na página
+                        window._nfeRestaurandoRascunho = true;
+                        // Aguardar Select2 inicializar antes de mostrar o toast
+                        setTimeout(function() { _rascunhoMostrarToast(dados); }, 1200);
+                    } else {
+                        localStorage.removeItem(_STORAGE_KEY); // Rascunho expirado
+                    }
+                }
+            } catch(e) {
+                console.warn('[Rascunho] Erro ao ler localStorage:', e);
+            }
+        }
+
+        // Auto-save a cada 60 segundos
+        setInterval(_rascunhoSalvar, 60000);
+
+        // Salvar ao adicionar/remover item (observar mudanças no container)
+        const container = document.getElementById('itensContainer');
+        if (container) {
+            const observer = new MutationObserver(function(mutations) {
+                const relevante = mutations.some(function(m) {
+                    return m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0);
+                });
+                if (relevante) setTimeout(_rascunhoSalvar, 400);
+            });
+            observer.observe(container, {childList: true, subtree: false});
+        }
+
+        // Salvar ao trocar destinatário
+        const destSelect = document.getElementById('destinatario');
+        if (destSelect) destSelect.addEventListener('change', function() { setTimeout(_rascunhoSalvar, 200); });
+
+        // Salvar ao trocar forma de pagamento
+        const pagSelect = document.getElementById('formaPagamento');
+        if (pagSelect) pagSelect.addEventListener('change', _rascunhoSalvar);
+    });
+
+    // Limpar rascunho ao submeter formulário (emitir ou salvar rascunho manual)
+    document.addEventListener('DOMContentLoaded', function() {
+        // Expor globalmente para uso externo
+        window._rascunhoLimpar = _rascunhoLimpar;
+        window._rascunhoSalvar = _rascunhoSalvar;
+    });
+})();
 </script>
 {% endblock %}
