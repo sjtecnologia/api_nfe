@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from flask import Blueprint, jsonify, request, render_template, redirect, session, url_for, flash
 from typing import Dict, Any
 from flask_login import login_required, current_user
@@ -587,6 +588,7 @@ def emitir_nfe():
                         'nome_razao_social': destinatario.nome_razao_social,
                         'cpf_cnpj': destinatario.cpf_cnpj,
                         'inscricao_estadual': destinatario.ie,
+                        'ie_indicador_nfe': getattr(destinatario, 'ie_indicador_nfe', ''),
                         'logradouro': destinatario.logradouro,
                         'numero': destinatario.numero,
                         'bairro': destinatario.bairro,
@@ -758,7 +760,7 @@ def emitir_nfe():
                                 print(f"⚠️  IA detectou {len(erros_ia)} problema(s):")
                                 for erro in erros_ia:
                                     print(f"  • {erro.get('campo', '?')}: {erro.get('erro', '')}")
-                                    flash(f"⚠️ Alerta IA: {erro.get('campo', '?')} - {erro.get('erro', '')}", 'warning')
+                                    # Alertas IA não exibidos na UI (falsos positivos)
                             
                             avisos_ia = resultado_ia.get("avisos", [])
                             if avisos_ia:
@@ -787,6 +789,83 @@ def emitir_nfe():
                             emitente_cliente_id
                         )
                         print(f" Resultado SEFAZ: {resultado_sefaz}")
+
+                        # ─── RETRIES PARA cStat=225 ───────────────────────────────────────
+                        # cStat=225 = Falha no Schema XML. Causas conhecidas:
+                        #  1) Espaços no início/fim de campos de texto (ex: xBairro com trailing space)
+                        #  2) infRespTec (NT2018.005) rejeitado pelo validador PL_008i2 (homolog. SP)
+                        #  3) gIBSCBS (NT007) rejeitado pelo validador PL_008i2 (homolog. SP)
+                        # Causa 1 é corrigida preventivamente com .strip() na geração do XML.
+                        # Causas 2 e 3: retry regenera XML sem infRespTec/IBSCBS para fallback.
+
+                        # [Passo 1] Strip IBSCBS + infRespTec para cStat=225
+                        # PL_008i2 rejeita: infRespTec (NT2018.005) e gIBSCBS (NT007)
+                        # Gerar XML sem ambos para aumentar chance de aceitação
+                        xml_limpo = xml_assinado          # XML a usar nas retransmissões
+                        items_limpos = nfe_items          # itens correspondentes
+                        if resultado_sefaz.get('codigo') == '225':
+                            print("⚠️  [RETRY] cStat=225 — gerando XML sem infRespTec/IBSCBS (nó legado)...")
+                            try:
+                                items_sem_ibs = [{**it, 'classificacao_ibs_cbs_id': None} for it in nfe_items]
+                                xml_nfe_retry = generate_nfe_xml(
+                                    form_data_initial,
+                                    emitente_data_for_template,
+                                    destinatario_data,
+                                    items_sem_ibs,
+                                    tp_amb,
+                                    'emitir',
+                                    include_resp_tec=False  # omite infRespTec para PL_008i2
+                                )
+                                xml_assinado_retry = xml_signature_service.sign_nfe_xml(
+                                    xml_nfe_retry, db, emitente_cliente_id
+                                )
+                                xml_limpo = xml_assinado_retry
+                                items_limpos = items_sem_ibs
+                                resultado_sefaz = nfe_service._processar_envio_sefaz(
+                                    xml_limpo, certificado, ambiente, emitente_cliente_id
+                                )
+                                if resultado_sefaz.get('success'):
+                                    print("✅ [RETRY] Autorizada sem infRespTec/IBSCBS")
+                                    xml_assinado = xml_limpo
+                                    nfe_items = items_limpos
+                                else:
+                                    print(f"⚠️  [RETRY] Ainda falhou: cStat={resultado_sefaz.get('codigo')}")
+                            except Exception as e_retry:
+                                print(f"ERRO: [RETRY] Exceção no reenvio sem infRespTec: {e_retry}")
+
+                        # [Passo 2] Retransmissão genérica para cStat=225 (até 3 tentativas)
+                        # Cada chamada usa conexão HTTP nova → chance de cair no nó PL009_V4.
+                        # Delay de 2s entre tentativas para evitar cStat=656 (Consumo Indevido).
+                        if resultado_sefaz.get('codigo') == '225':
+                            print("⚠️  [RETRY-LOOP] cStat=225 persistente — retransmitindo (máx 3x, delay 2s)...")
+                            for tentativa in range(1, 4):
+                                time.sleep(2)  # Evita rate-limit SEFAZ (cStat=656)
+                                try:
+                                    r_loop = nfe_service._processar_envio_sefaz(
+                                        xml_limpo, certificado, ambiente, emitente_cliente_id
+                                    )
+                                    codigo_loop = str(r_loop.get('codigo', ''))
+                                    print(f"  [RETRY-LOOP] Tentativa {tentativa}: cStat={codigo_loop}")
+                                    if r_loop.get('success'):
+                                        print(f"✅ [RETRY-LOOP] Autorizada na tentativa {tentativa}")
+                                        xml_assinado = xml_limpo
+                                        nfe_items = items_limpos
+                                        resultado_sefaz = r_loop
+                                        break
+                                    elif codigo_loop not in ('225', '656'):
+                                        # Erro funcional real (ex: 233, 204…) — não adianta retentar
+                                        resultado_sefaz = r_loop
+                                        print(f"  [RETRY-LOOP] Erro funcional {codigo_loop} — parando retries")
+                                        break
+                                    elif codigo_loop == '656':
+                                        # Rate-limit: aguarda mais antes de tentar de novo
+                                        print(f"  [RETRY-LOOP] cStat=656 (Consumo Indevido) — aguardando 5s...")
+                                        time.sleep(5)
+                                    # Se ainda 225, continua o loop
+                                except Exception as e_loop:
+                                    print(f"ERRO: [RETRY-LOOP] Tentativa {tentativa}: {e_loop}")
+                            else:
+                                print("❌ [RETRY-LOOP] Todas as tentativas retornaram 225 (nó legado SEFAZ)")
                     except Exception as e:
                         print(f"ERRO: ERRO ao enviar para SEFAZ: {e}")
                         import traceback

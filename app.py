@@ -7,6 +7,13 @@ from auth.login_manager import init_login_manager
 from auth.permissions import has_permission
 from flask_login import current_user, login_required
 from models.user import User
+from flask.wrappers import Request as FlaskRequest
+
+
+class CustomRequest(FlaskRequest):
+    # Suporta NFe com até 990 itens (cada item tem ~15 campos = ~14850 campos)
+    max_form_parts = 15000
+    max_form_memory_size = 16 * 1024 * 1024  # 16MB
 
 # Configurar encoding UTF-8 no stdout para Windows
 import sys
@@ -44,6 +51,7 @@ from auth.login_manager import init_login_manager
 
 
 app = Flask(__name__)
+app.request_class = CustomRequest
 app.secret_key = SECRET_KEY
 
 # Configurações de sessão para compatibilidade com iOS/Safari

@@ -1346,7 +1346,8 @@ class NFeService:
 # OK: FUNÇÕES AUXILIARES CORRIGIDAS
 def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any], 
                     destinatario_data: Dict[str, Any], items: list, 
-                    tp_amb: int = 2, finalidade: str = 'emitir') -> str:
+                    tp_amb: int = 2, finalidade: str = 'emitir',
+                    include_resp_tec: bool = True) -> str:
     """
     Gerar XML da NFe usando biblioteca nfelib (XSD-validated)
     
@@ -1376,7 +1377,8 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             items=items,
             form_data=form_data,
             numero_nfe=numero_nfe,
-            certificado_data={}  # Será usado depois na assinatura
+            certificado_data={},  # Será usado depois na assinatura
+            include_resp_tec=include_resp_tec
         )
         
         print(f"✅ [NFELIB] XML gerado com sucesso: {len(xml_nfe)} caracteres")
