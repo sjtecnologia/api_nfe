@@ -9,7 +9,7 @@ from sqlalchemy import text, func
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
-from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, NFeInutilizacao
+from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, NFeInutilizacao, UserModel
 from auth.decorators import (
     admin_required,
     block_viewer_access,
@@ -4480,11 +4480,29 @@ def listar_inutilizacoes():
             flash('Você não tem acesso a este cliente.', 'danger')
             return redirect(url_for('nfe.list_nfes'))
 
-        inutilizacoes = db.query(NFeInutilizacao).options(
-            joinedload(NFeInutilizacao.created_by_user)
-        ).filter(
+        inutilizacoes = db.query(NFeInutilizacao).filter(
             NFeInutilizacao.cliente_id == cliente_id
         ).order_by(NFeInutilizacao.data_criacao.desc()).all()
+
+        # Resolver usernames antes de fechar a sessão, evitando lazy-load
+        user_cache = {}
+        for inut in inutilizacoes:
+            uid = inut.created_by_user_id
+            if uid and uid not in user_cache:
+                uname = db.query(UserModel.username).filter(UserModel.id == uid).scalar()
+                user_cache[uid] = uname
+
+        # Desanexar objetos da sessão ANTES de atribuir stubs,
+        # caso contrário SQLAlchemy tenta trackear _UserStub como entidade
+        db.expunge_all()
+
+        class _UserStub:
+            __slots__ = ('username',)
+            def __init__(self, username): self.username = username
+
+        for inut in inutilizacoes:
+            uid = inut.created_by_user_id
+            inut.created_by_user = _UserStub(user_cache[uid]) if uid and user_cache.get(uid) else None
 
         stats = {
             'autorizadas': db.query(func.count(NFeInutilizacao.inutilizacao_id)).filter(
@@ -4523,9 +4541,7 @@ def detalhes_inutilizacao(inutilizacao_id):
     db = None
     try:
         db = next(get_db())
-        inut = db.query(NFeInutilizacao).options(
-            joinedload(NFeInutilizacao.created_by_user)
-        ).filter_by(inutilizacao_id=inutilizacao_id).first()
+        inut = db.query(NFeInutilizacao).filter_by(inutilizacao_id=inutilizacao_id).first()
 
         if not inut:
             return jsonify({'success': False, 'message': 'Inutilização não encontrada'}), 404
@@ -4550,7 +4566,7 @@ def detalhes_inutilizacao(inutilizacao_id):
                 'codigo_status': inut.codigo_status,
                 'mensagem_sefaz': inut.mensagem_sefaz,
                 'data_criacao': inut.data_criacao.strftime('%d/%m/%Y %H:%M:%S') if inut.data_criacao else None,
-                'created_by_user': inut.created_by_user.username if inut.created_by_user else None
+                'created_by_user': db.query(UserModel).filter_by(id=inut.created_by_user_id).with_entities(UserModel.username).scalar() if inut.created_by_user_id else None
             }
         })
     except Exception as e:
@@ -4583,10 +4599,10 @@ def download_xml_inutilizacao(inutilizacao_id, tipo):
 
         if tipo == 'pedido':
             xml_content = inut.xml_pedido
-            filename = f'inut_pedido_{inutilizacao_id}.xml'
+            filename = f'inut_{inut.modelo}_s{int(inut.serie):03d}_{int(inut.numero_inicial):09d}-{int(inut.numero_final):09d}_pedido.xml'
         elif tipo == 'resposta':
             xml_content = inut.xml_resposta
-            filename = f'inut_resposta_{inutilizacao_id}.xml'
+            filename = f'inut_{inut.modelo}_s{int(inut.serie):03d}_{int(inut.numero_inicial):09d}-{int(inut.numero_final):09d}_resposta.xml'
         else:
             flash('Tipo de XML inválido', 'danger')
             return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=inut.cliente_id))
@@ -4605,6 +4621,81 @@ def download_xml_inutilizacao(inutilizacao_id, tipo):
         import traceback; traceback.print_exc()
         flash(f'Erro ao baixar XML: {str(e)}', 'danger')
         return redirect(url_for('nfe.list_nfes'))
+    finally:
+        if db:
+            db.close()
+
+
+@nfe_bp.route('/inutilizacoes/download-lote', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def download_lote_xmls_inutilizacao():
+    """Baixa todos os XMLs de inutilização de um período como arquivo ZIP."""
+    import zipfile
+    import io
+    from flask import Response
+    db = None
+    try:
+        cliente_id = request.args.get('cliente_id', type=int)
+        data_inicio_str = request.args.get('data_inicio', '').strip()
+        data_fim_str = request.args.get('data_fim', '').strip()
+
+        if not cliente_id or not data_inicio_str or not data_fim_str:
+            flash('Informe cliente, data de início e data de fim.', 'danger')
+            return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=cliente_id or 0))
+
+        try:
+            dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+            dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+        except ValueError:
+            flash('Formato de data inválido. Use AAAA-MM-DD.', 'danger')
+            return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=cliente_id))
+
+        if dt_inicio > dt_fim:
+            flash('A data de início deve ser anterior à data de fim.', 'danger')
+            return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=cliente_id))
+
+        db = next(get_db())
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            flash('Você não tem acesso a este cliente.', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        inutilizacoes = db.query(NFeInutilizacao).filter(
+            NFeInutilizacao.cliente_id == cliente_id,
+            NFeInutilizacao.data_criacao >= dt_inicio,
+            NFeInutilizacao.data_criacao <= dt_fim,
+            NFeInutilizacao.status == 'AUTORIZADA'
+        ).order_by(NFeInutilizacao.data_criacao.asc()).all()
+
+        if not inutilizacoes:
+            flash('Nenhuma inutilização autorizada encontrada no período selecionado.', 'warning')
+            return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=cliente_id))
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for inut in inutilizacoes:
+                base = (f'inut_{inut.modelo}_s{int(inut.serie):03d}'
+                        f'_{int(inut.numero_inicial):09d}-{int(inut.numero_final):09d}')
+                if inut.xml_pedido:
+                    zf.writestr(f'{base}_pedido.xml', inut.xml_pedido)
+                if inut.xml_resposta:
+                    zf.writestr(f'{base}_resposta.xml', inut.xml_resposta)
+
+        buf.seek(0)
+        periodo = f'{data_inicio_str}_a_{data_fim_str}'.replace('-', '')
+        zip_filename = f'inutilizacoes_{cliente_id}_{periodo}.zip'
+
+        return Response(
+            buf.read(),
+            mimetype='application/zip',
+            headers={'Content-Disposition': f'attachment; filename={zip_filename}'}
+        )
+    except Exception as e:
+        print(f"[ERRO] download_lote_xmls_inutilizacao: {e}")
+        import traceback; traceback.print_exc()
+        flash(f'Erro ao gerar lote: {str(e)}', 'danger')
+        return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=cliente_id or 0))
     finally:
         if db:
             db.close()

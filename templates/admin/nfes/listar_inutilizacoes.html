@@ -16,6 +16,9 @@
                     <a href="{{ url_for('nfe.list_nfes', cliente_id=cliente_id) }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left"></i> Voltar para NFes
                     </a>
+                    <button type="button" class="btn btn-success" onclick="abrirModalLote()">
+                        <i class="fas fa-file-archive"></i> Baixar Lote por Período
+                    </button>
                     <a href="{{ url_for('nfe.form_inutilizar', cliente_id=cliente_id) }}" class="btn btn-danger">
                         <i class="fas fa-ban"></i> Nova Inutilização
                     </a>
@@ -265,6 +268,51 @@
     </div>
 </div>
 
+<!-- Modal Download em Lote -->
+<div class="modal fade" id="modalLote" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-archive"></i> Baixar XMLs em Lote
+                </h5>
+                <button type="button" class="close text-white" data-bs-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form id="formLote" method="GET" action="{{ url_for('nfe.download_lote_xmls_inutilizacao') }}">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="modal-body">
+                    <p class="text-muted">
+                        Gera um arquivo <strong>.zip</strong> com todos os XMLs das inutilizações
+                        <span class="badge bg-success text-white">Autorizadas</span> no período informado.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="loteDataInicio" class="form-label fw-bold">Data Início</label>
+                            <input type="date" class="form-control" id="loteDataInicio" name="data_inicio" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="loteDataFim" class="form-label fw-bold">Data Fim</label>
+                            <input type="date" class="form-control" id="loteDataFim" name="data_fim" required>
+                        </div>
+                    </div>
+                    <div class="alert alert-info py-2">
+                        <i class="fas fa-info-circle"></i>
+                        O ZIP incluirá o XML de pedido e o XML de resposta de cada inutilização autorizada.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-download"></i> Baixar ZIP
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 // Aplicar filtros na tabela
 function aplicarFiltros() {
@@ -432,6 +480,20 @@ function fecharModal() {
 // Baixar XML
 function baixarXML(inutilizacaoId, tipo) {
     window.open(`/admin/nfe/inutilizacao/${inutilizacaoId}/xml/${tipo}`, '_blank');
+}
+
+// Abrir modal de download em lote — pré-preenche com mês atual
+function abrirModalLote() {
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoje.getDate()).padStart(2, '0');
+    const primeiroDia = `${ano}-${mes}-01`;
+    const ultimoDia = `${ano}-${mes}-${dia}`;
+    document.getElementById('loteDataInicio').value = primeiroDia;
+    document.getElementById('loteDataFim').value = ultimoDia;
+    const modal = new bootstrap.Modal(document.getElementById('modalLote'));
+    modal.show();
 }
 </script>
 {% endblock %}
