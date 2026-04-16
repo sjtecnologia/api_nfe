@@ -4699,3 +4699,102 @@ def download_lote_xmls_inutilizacao():
     finally:
         if db:
             db.close()
+
+
+@nfe_bp.route('/download-lote', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def download_lote_xmls_nfe():
+    """Baixa XMLs de NFes emitidas de um período como arquivo ZIP."""
+    import zipfile
+    import io
+    from flask import Response
+    db = None
+    try:
+        cliente_id = request.args.get('cliente_id', type=int)
+        data_inicio_str = request.args.get('data_inicio', '').strip()
+        data_fim_str = request.args.get('data_fim', '').strip()
+        modelo_filtro = request.args.get('modelo', '').strip()
+
+        if not data_inicio_str or not data_fim_str:
+            flash('Informe data de início e data de fim.', 'danger')
+            return redirect(url_for('nfe.list_nfes', cliente_id=cliente_id or ''))
+
+        try:
+            dt_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
+            dt_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+        except ValueError:
+            flash('Formato de data inválido. Use AAAA-MM-DD.', 'danger')
+            return redirect(url_for('nfe.list_nfes', cliente_id=cliente_id or ''))
+
+        if dt_inicio > dt_fim:
+            flash('A data de início deve ser anterior à data de fim.', 'danger')
+            return redirect(url_for('nfe.list_nfes', cliente_id=cliente_id or ''))
+
+        db = next(get_db())
+        accessible_clients = get_accessible_client_ids(db)
+
+        q = db.query(NFeEmitidas).filter(
+            NFeEmitidas.status.in_(['AUTORIZADA', 'CANCELADA']),
+            NFeEmitidas.data_autorizacao >= dt_inicio,
+            NFeEmitidas.data_autorizacao <= dt_fim,
+        )
+        if cliente_id:
+            if cliente_id not in accessible_clients:
+                flash('Você não tem acesso a este cliente.', 'danger')
+                return redirect(url_for('nfe.list_nfes'))
+            q = q.filter(NFeEmitidas.cliente_id == cliente_id)
+        else:
+            q = q.filter(NFeEmitidas.cliente_id.in_(accessible_clients))
+
+        if modelo_filtro in ('55', '65'):
+            q = q.filter(NFeEmitidas.modelo == modelo_filtro)
+
+        nfes = q.order_by(NFeEmitidas.data_autorizacao.asc()).all()
+
+        if not nfes:
+            flash('Nenhuma NFe autorizada/cancelada encontrada no período selecionado.', 'warning')
+            return redirect(url_for('nfe.list_nfes', cliente_id=cliente_id or ''))
+
+        buf = io.BytesIO()
+        sem_xml = 0
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for nfe in nfes:
+                json_nfe = nfe.json_nfe or {}
+                if isinstance(json_nfe, str):
+                    import json as _json
+                    try:
+                        json_nfe = _json.loads(json_nfe)
+                    except Exception:
+                        json_nfe = {}
+                xml_content = json_nfe.get('xml_content') or json_nfe.get('xml_autorizado')
+                if not xml_content:
+                    sem_xml += 1
+                    continue
+                chave = nfe.chave_acesso or f'nfe_{nfe.nfe_emitida_id}'
+                suffix = '_cancelada' if nfe.status == 'CANCELADA' else ''
+                filename = f'{chave}{suffix}.xml'
+                zf.writestr(filename, xml_content)
+
+        buf.seek(0)
+        periodo = f'{data_inicio_str}_a_{data_fim_str}'.replace('-', '')
+        suffix_modelo = f'_{modelo_filtro}' if modelo_filtro else ''
+        zip_filename = f'nfes{suffix_modelo}_{periodo}.zip'
+
+        resp = Response(
+            buf.read(),
+            mimetype='application/zip',
+            headers={'Content-Disposition': f'attachment; filename={zip_filename}'}
+        )
+        if sem_xml:
+            # Apenas loga, não bloqueia o download
+            print(f"[AVISO] download_lote_xmls_nfe: {sem_xml} NFe(s) sem xml_content ignoradas")
+        return resp
+    except Exception as e:
+        print(f"[ERRO] download_lote_xmls_nfe: {e}")
+        import traceback; traceback.print_exc()
+        flash(f'Erro ao gerar lote: {str(e)}', 'danger')
+        return redirect(url_for('nfe.list_nfes', cliente_id=cliente_id or ''))
+    finally:
+        if db:
+            db.close()
