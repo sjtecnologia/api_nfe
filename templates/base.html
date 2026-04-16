@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <!-- Anti-flash: aplica tema antes do render -->
+    <script>(function(){var t=localStorage.getItem('emitemax_theme')||'light';document.documentElement.setAttribute('data-theme',t);})()</script>
     <script src="https://unpkg.com/imask"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -650,6 +652,120 @@
             }
         }
 
+        /* ===== DARK MODE ===== */
+        [data-theme="dark"] body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+        [data-theme="dark"] .card {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.4);
+        }
+        [data-theme="dark"] .card-body {
+            background-color: #161b22;
+            color: #c9d1d9;
+        }
+        [data-theme="dark"] .card-header.bg-light {
+            background: linear-gradient(135deg, #21262d 0%, #161b22 100%) !important;
+            color: #c9d1d9 !important;
+            border-bottom: 1px solid #30363d;
+        }
+        [data-theme="dark"] .card-header.bg-light .card-title,
+        [data-theme="dark"] .card-header.bg-light h5,
+        [data-theme="dark"] .card-header.bg-light i { color: #c9d1d9 !important; }
+        [data-theme="dark"] .table { color: #c9d1d9; border-color: #30363d; }
+        [data-theme="dark"] .table thead th {
+            background-color: #21262d;
+            color: #c9d1d9;
+            border-bottom-color: var(--sj-primary);
+        }
+        [data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) { background-color: rgba(255,255,255,0.03); }
+        [data-theme="dark"] .table tbody tr { background-color: #161b22; border-color: #30363d; }
+        [data-theme="dark"] .table-hover tbody tr:hover { background-color: #21262d !important; color: #c9d1d9; }
+        [data-theme="dark"] .dropdown-menu {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+        }
+        [data-theme="dark"] .dropdown-item { color: #c9d1d9; }
+        [data-theme="dark"] .dropdown-item:hover,
+        [data-theme="dark"] .dropdown-item:focus { background-color: #21262d; color: #fff; }
+        [data-theme="dark"] .dropdown-header { color: #8b949e; }
+        [data-theme="dark"] .dropdown-divider { border-color: #30363d; }
+        [data-theme="dark"] .dropdown-item-text { color: #c9d1d9; }
+        [data-theme="dark"] .form-control,
+        [data-theme="dark"] .form-select {
+            background-color: #21262d;
+            border-color: #30363d;
+            color: #c9d1d9;
+        }
+        [data-theme="dark"] .form-control::placeholder { color: #6e7681; }
+        [data-theme="dark"] .form-control:focus,
+        [data-theme="dark"] .form-select:focus {
+            background-color: #21262d;
+            border-color: var(--sj-primary);
+            color: #c9d1d9;
+            box-shadow: 0 0 0 0.2rem rgba(0,188,212,0.25);
+        }
+        [data-theme="dark"] .input-group-text {
+            background-color: #21262d;
+            border-color: #30363d;
+            color: #c9d1d9;
+        }
+        [data-theme="dark"] .modal-content {
+            background-color: #161b22;
+            border: 1px solid #30363d;
+        }
+        [data-theme="dark"] .modal-body,
+        [data-theme="dark"] .modal-footer {
+            background-color: #161b22;
+            color: #c9d1d9;
+            border-color: #30363d;
+        }
+        [data-theme="dark"] .text-muted { color: #8b949e !important; }
+        [data-theme="dark"] .text-dark { color: #c9d1d9 !important; }
+        [data-theme="dark"] .bg-white { background-color: #161b22 !important; }
+        [data-theme="dark"] .bg-light { background-color: #21262d !important; color: #c9d1d9 !important; }
+        [data-theme="dark"] .border { border-color: #30363d !important; }
+        [data-theme="dark"] hr { border-color: #30363d; }
+        [data-theme="dark"] code { background-color: #21262d; color: #79c0ff; }
+        [data-theme="dark"] .list-group-item {
+            background-color: #161b22;
+            border-color: #30363d;
+            color: #c9d1d9;
+        }
+        [data-theme="dark"] .page-link {
+            background-color: #161b22;
+            border-color: #30363d;
+            color: var(--sj-primary);
+        }
+        [data-theme="dark"] .page-link:hover { background-color: var(--sj-primary); color: #fff; }
+        [data-theme="dark"] .page-item.disabled .page-link {
+            background-color: #21262d; border-color: #30363d; color: #6e7681;
+        }
+        [data-theme="dark"] .nav-tabs { border-color: #30363d; }
+        [data-theme="dark"] .nav-tabs .nav-link { color: #8b949e !important; }
+        [data-theme="dark"] .nav-tabs .nav-link.active {
+            background-color: #21262d !important;
+            color: #c9d1d9 !important;
+            border-color: #30363d #30363d #21262d;
+        }
+        [data-theme="dark"] .select2-container--default .select2-selection--single,
+        [data-theme="dark"] .select2-container--default .select2-selection--multiple {
+            background-color: #21262d; border-color: #30363d;
+        }
+        [data-theme="dark"] .select2-container--default .select2-selection--single .select2-selection__rendered { color: #c9d1d9; }
+        [data-theme="dark"] .select2-dropdown { background-color: #161b22; border-color: #30363d; }
+        [data-theme="dark"] .select2-container--default .select2-results__option { color: #c9d1d9; background-color: #161b22; }
+        [data-theme="dark"] .select2-container--default .select2-results__option--highlighted { background-color: #21262d !important; }
+        [data-theme="dark"] .select2-search--dropdown .select2-search__field {
+            background-color: #21262d; border-color: #30363d; color: #c9d1d9;
+        }
+        [data-theme="dark"] ::-webkit-scrollbar-track { background: #0d1117; }
+        [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #30363d; }
+        [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: var(--sj-primary); }
+        /* ===== FIM DARK MODE ===== */
+
         .loading-overlay {
             display: none;
             position: fixed;
@@ -660,6 +776,7 @@
             align-items: center;
             flex-direction: column;
         }
+        [data-theme="dark"] .loading-overlay { background: rgba(13,17,23,0.85); }
         .loading-overlay.active {
             display: flex !important;
         }
@@ -939,6 +1056,9 @@
                                     <i class="fas fa-exchange-alt"></i> Trocar Cliente
                                 </a> -->
 
+                                <a class="dropdown-item" href="#" onclick="toggleTheme(); return false;" id="themeToggleBtn">
+                                    <i class="fas fa-moon" id="themeIcon"></i> <span id="themeLabel">Modo Escuro</span>
+                                </a>
                                 <a class="dropdown-item" href="{{ url_for('admin.perfil') }}">
                                     <i class="fas fa-user-edit"></i> Meu Perfil
                                 </a>
@@ -1117,6 +1237,32 @@
     <!-- Select2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     {% block extra_js %}{% endblock %}
-    
+
+    <script>
+    function toggleTheme() {
+        var html = document.documentElement;
+        var current = html.getAttribute('data-theme') || 'light';
+        var next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('emitemax_theme', next);
+        _updateThemeBtn(next);
+    }
+    function _updateThemeBtn(theme) {
+        var icon = document.getElementById('themeIcon');
+        var label = document.getElementById('themeLabel');
+        if (!icon) return;
+        if (theme === 'dark') {
+            icon.className = 'fas fa-sun';
+            label.textContent = 'Modo Claro';
+        } else {
+            icon.className = 'fas fa-moon';
+            label.textContent = 'Modo Escuro';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        _updateThemeBtn(document.documentElement.getAttribute('data-theme') || 'light');
+    });
+    </script>
+
 </body>
 </html>
