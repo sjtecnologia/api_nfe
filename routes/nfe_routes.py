@@ -5,11 +5,11 @@ from flask import Blueprint, jsonify, request, render_template, redirect, sessio
 from typing import Dict, Any
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
-from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario
+from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, NFeInutilizacao
 from auth.decorators import (
     admin_required,
     block_viewer_access,
@@ -4258,4 +4258,353 @@ def duplicar_nfe(nfe_id):
         }), 500
     finally:
         if hasattr(db, 'close'):
+            db.close()
+
+
+# ===== INUTILIZAÇÃO DE NUMERAÇÃO =====
+
+@nfe_bp.route('/inutilizar/form', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def form_inutilizar():
+    """Exibe formulário de inutilização de numeração."""
+    db = None
+    try:
+        cliente_id = request.args.get('cliente_id', type=int)
+        if not cliente_id:
+            flash('Cliente não especificado', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        db = next(get_db())
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            flash('Você não tem acesso a este cliente.', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        if not cliente:
+            flash('Cliente não encontrado', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        # Busca último número autorizado por série/modelo
+        ultimas = db.query(
+            NFeEmitidas.serie,
+            NFeEmitidas.modelo,
+            func.max(NFeEmitidas.numero).label('ultimo_numero')
+        ).filter(
+            NFeEmitidas.cliente_id == cliente_id,
+            NFeEmitidas.status == 'AUTORIZADA'
+        ).group_by(NFeEmitidas.serie, NFeEmitidas.modelo).all()
+
+        series_info = []
+        for serie, modelo, ultimo_num in ultimas:
+            series_info.append({
+                'serie': serie,
+                'modelo': modelo,
+                'modelo_desc': 'NFe' if modelo == '55' else 'NFCe',
+                'ultimo_numero': ultimo_num,
+                'sugestao_inicial': (ultimo_num + 1) if ultimo_num else 1
+            })
+
+        return render_template('admin/nfes/inutilizar.html',
+                               cliente=cliente,
+                               series_info=series_info,
+                               cliente_id=cliente_id)
+    except Exception as e:
+        print(f"[ERRO] form_inutilizar: {e}")
+        import traceback; traceback.print_exc()
+        flash(f'Erro ao carregar formulário: {str(e)}', 'danger')
+        return redirect(url_for('nfe.list_nfes'))
+    finally:
+        if db:
+            db.close()
+
+
+@nfe_bp.route('/inutilizar', methods=['POST'])
+@login_required
+@editor_or_admin_required()
+def processar_inutilizacao():
+    """Processa inutilização de numeração na SEFAZ."""
+    db = None
+    cert_path = key_path = None
+    try:
+        cliente_id = request.form.get('cliente_id', type=int)
+        modelo = request.form.get('modelo')
+        serie = request.form.get('serie', type=int)
+        numero_inicial = request.form.get('numero_inicial', type=int)
+        numero_final = request.form.get('numero_final', type=int)
+        ano = request.form.get('ano', '').strip()
+        justificativa = request.form.get('justificativa', '').strip()
+
+        print(f"[INUTILIZAR] cliente={cliente_id} mod={modelo} serie={serie} "
+              f"{numero_inicial}-{numero_final} ano={ano}")
+
+        if not all([cliente_id, modelo, serie is not None,
+                    numero_inicial, numero_final, ano, justificativa]):
+            return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios'}), 400
+        if len(justificativa) < 15:
+            return jsonify({'success': False, 'message': 'Justificativa deve ter no mínimo 15 caracteres'}), 400
+        if numero_final < numero_inicial:
+            return jsonify({'success': False, 'message': 'Número final deve ser >= número inicial'}), 400
+        if modelo not in ['55', '65']:
+            return jsonify({'success': False, 'message': 'Modelo inválido (55 ou 65)'}), 400
+
+        db = next(get_db())
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            return jsonify({'success': False, 'message': 'Sem acesso a este cliente'}), 403
+
+        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+        if not cliente:
+            return jsonify({'success': False, 'message': 'Cliente não encontrado'}), 404
+
+        # Certificado
+        certificado = get_active_certificate_for_client(db, cliente_id)
+        if not certificado or certificado.get('modo_simulado'):
+            return jsonify({'success': False,
+                            'message': 'Certificado digital não configurado ou em modo simulado'}), 400
+
+        ambiente = 'producao' if getattr(cliente, 'ambiente', 2) == 1 else 'homologacao'
+
+        # Extrair PEM para mTLS
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.serialization import pkcs12 as _pkcs12
+        cert_data = certificado['cert_data']
+        password = certificado['password'].encode('utf-8')
+        private_key, certificate, _ = _pkcs12.load_key_and_certificates(cert_data, password)
+
+        import tempfile as _tmp
+        with _tmp.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cf:
+            cf.write(certificate.public_bytes(serialization.Encoding.PEM))
+            cert_path = cf.name
+        with _tmp.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as kf:
+            kf.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+            key_path = kf.name
+
+        from services.sefaz_service import SefazService
+        sefaz = SefazService(ambiente=ambiente, cert_path=cert_path, key_path=key_path)
+
+        resultado = sefaz.inutilizar_numeracao(
+            cnpj_emitente=cliente.cnpj,
+            modelo=modelo,
+            serie=serie,
+            numero_inicial=numero_inicial,
+            numero_final=numero_final,
+            ano=ano,
+            justificativa=justificativa,
+            certificado_pfx=cert_data,
+            senha_certificado=certificado['password']
+        )
+
+        print(f"[INUTILIZAR] Resultado: {resultado.get('status')}")
+
+        # Normalizar status
+        status_db = resultado.get('status', 'ERRO')
+        if status_db not in ('PROCESSANDO', 'AUTORIZADA', 'REJEITADA'):
+            status_db = 'ERRO'
+
+        inut = NFeInutilizacao(
+            cliente_id=cliente_id,
+            modelo=modelo,
+            serie=serie,
+            numero_inicial=numero_inicial,
+            numero_final=numero_final,
+            ano=ano,
+            justificativa=justificativa,
+            status=status_db,
+            protocolo=resultado.get('protocolo'),
+            chave_inutilizacao=resultado.get('chave_inutilizacao'),
+            codigo_status=resultado.get('codigo'),
+            mensagem_sefaz=resultado.get('mensagem'),
+            xml_pedido=resultado.get('xml_pedido'),
+            xml_resposta=resultado.get('xml_resposta'),
+            data_inutilizacao=datetime.now() if resultado.get('success') else None,
+            created_by_user_id=current_user.id
+        )
+        db.add(inut)
+        db.commit()
+        print(f"[INUTILIZAR] Salvo: ID {inut.inutilizacao_id}")
+
+        if resultado.get('success'):
+            return jsonify({
+                'success': True,
+                'message': 'Numeração inutilizada com sucesso!',
+                'protocolo': resultado.get('protocolo'),
+                'codigo': resultado.get('codigo'),
+                'inutilizacao_id': inut.inutilizacao_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': resultado.get('mensagem', 'Erro ao inutilizar na SEFAZ'),
+                'codigo': resultado.get('codigo'),
+                'inutilizacao_id': inut.inutilizacao_id
+            })
+
+    except Exception as e:
+        if db:
+            db.rollback()
+        print(f"[ERRO] processar_inutilizacao: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro ao processar: {str(e)}'}), 500
+    finally:
+        for _p in (cert_path, key_path):
+            if _p and os.path.exists(_p):
+                try:
+                    os.unlink(_p)
+                except Exception:
+                    pass
+        if db:
+            db.close()
+
+
+@nfe_bp.route('/inutilizacoes', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def listar_inutilizacoes():
+    """Lista inutilizações de numeração de um cliente."""
+    db = None
+    try:
+        cliente_id = request.args.get('cliente_id', type=int)
+        if not cliente_id:
+            flash('Cliente não especificado', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        db = next(get_db())
+        accessible_clients = get_accessible_client_ids(db)
+        if cliente_id not in accessible_clients:
+            flash('Você não tem acesso a este cliente.', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        inutilizacoes = db.query(NFeInutilizacao).options(
+            joinedload(NFeInutilizacao.created_by_user)
+        ).filter(
+            NFeInutilizacao.cliente_id == cliente_id
+        ).order_by(NFeInutilizacao.data_criacao.desc()).all()
+
+        stats = {
+            'autorizadas': db.query(func.count(NFeInutilizacao.inutilizacao_id)).filter(
+                NFeInutilizacao.cliente_id == cliente_id,
+                NFeInutilizacao.status == 'AUTORIZADA').scalar() or 0,
+            'rejeitadas': db.query(func.count(NFeInutilizacao.inutilizacao_id)).filter(
+                NFeInutilizacao.cliente_id == cliente_id,
+                NFeInutilizacao.status == 'REJEITADA').scalar() or 0,
+            'processando': db.query(func.count(NFeInutilizacao.inutilizacao_id)).filter(
+                NFeInutilizacao.cliente_id == cliente_id,
+                NFeInutilizacao.status == 'PROCESSANDO').scalar() or 0,
+        }
+
+        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
+
+        return render_template('admin/nfes/listar_inutilizacoes.html',
+                               inutilizacoes=inutilizacoes,
+                               cliente=cliente,
+                               cliente_id=cliente_id,
+                               stats=stats)
+    except Exception as e:
+        print(f"[ERRO] listar_inutilizacoes: {e}")
+        import traceback; traceback.print_exc()
+        flash(f'Erro ao listar: {str(e)}', 'danger')
+        return redirect(url_for('nfe.list_nfes'))
+    finally:
+        if db:
+            db.close()
+
+
+@nfe_bp.route('/inutilizacao/<int:inutilizacao_id>/detalhes', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def detalhes_inutilizacao(inutilizacao_id):
+    """Retorna detalhes de uma inutilização em JSON."""
+    db = None
+    try:
+        db = next(get_db())
+        inut = db.query(NFeInutilizacao).options(
+            joinedload(NFeInutilizacao.created_by_user)
+        ).filter_by(inutilizacao_id=inutilizacao_id).first()
+
+        if not inut:
+            return jsonify({'success': False, 'message': 'Inutilização não encontrada'}), 404
+
+        accessible_clients = get_accessible_client_ids(db)
+        if inut.cliente_id not in accessible_clients:
+            return jsonify({'success': False, 'message': 'Sem permissão'}), 403
+
+        return jsonify({
+            'success': True,
+            'inutilizacao': {
+                'inutilizacao_id': inut.inutilizacao_id,
+                'modelo': inut.modelo,
+                'serie': inut.serie,
+                'numero_inicial': inut.numero_inicial,
+                'numero_final': inut.numero_final,
+                'ano': inut.ano,
+                'justificativa': inut.justificativa,
+                'status': inut.status,
+                'protocolo': inut.protocolo,
+                'chave_inutilizacao': inut.chave_inutilizacao,
+                'codigo_status': inut.codigo_status,
+                'mensagem_sefaz': inut.mensagem_sefaz,
+                'data_criacao': inut.data_criacao.strftime('%d/%m/%Y %H:%M:%S') if inut.data_criacao else None,
+                'created_by_user': inut.created_by_user.username if inut.created_by_user else None
+            }
+        })
+    except Exception as e:
+        print(f"[ERRO] detalhes_inutilizacao: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        if db:
+            db.close()
+
+
+@nfe_bp.route('/inutilizacao/<int:inutilizacao_id>/xml/<tipo>', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def download_xml_inutilizacao(inutilizacao_id, tipo):
+    """Baixa XML de pedido ou resposta da inutilização."""
+    from flask import Response
+    db = None
+    try:
+        db = next(get_db())
+        inut = db.query(NFeInutilizacao).filter_by(inutilizacao_id=inutilizacao_id).first()
+        if not inut:
+            flash('Inutilização não encontrada', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        accessible_clients = get_accessible_client_ids(db)
+        if inut.cliente_id not in accessible_clients:
+            flash('Sem permissão para acessar', 'danger')
+            return redirect(url_for('nfe.list_nfes'))
+
+        if tipo == 'pedido':
+            xml_content = inut.xml_pedido
+            filename = f'inut_pedido_{inutilizacao_id}.xml'
+        elif tipo == 'resposta':
+            xml_content = inut.xml_resposta
+            filename = f'inut_resposta_{inutilizacao_id}.xml'
+        else:
+            flash('Tipo de XML inválido', 'danger')
+            return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=inut.cliente_id))
+
+        if not xml_content:
+            flash(f'XML de {tipo} não disponível', 'warning')
+            return redirect(url_for('nfe.listar_inutilizacoes', cliente_id=inut.cliente_id))
+
+        return Response(
+            xml_content,
+            mimetype='application/xml',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+    except Exception as e:
+        print(f"[ERRO] download_xml_inutilizacao: {e}")
+        import traceback; traceback.print_exc()
+        flash(f'Erro ao baixar XML: {str(e)}', 'danger')
+        return redirect(url_for('nfe.list_nfes'))
+    finally:
+        if db:
             db.close()

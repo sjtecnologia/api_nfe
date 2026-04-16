@@ -436,6 +436,7 @@ class Cliente(Base):
     regime_tributario = relationship('RegimeTributario', back_populates='clientes')
     certificados = relationship('CertificadoDigital', back_populates='cliente', cascade='all, delete-orphan')
     nfes_emitidas = relationship('NFeEmitidas', back_populates='cliente', cascade='all, delete-orphan')
+    inutilizacoes = relationship('NFeInutilizacao', back_populates='cliente', cascade='all, delete-orphan')
     produtos = relationship('Produto', back_populates='cliente', cascade='all, delete-orphan')
     regras_tributacao = relationship('RegraTributacao', back_populates='cliente', cascade='all, delete-orphan')
     regras_servicos = relationship('RegraTributacaoServico', back_populates='cliente', cascade='all, delete-orphan')
@@ -584,6 +585,34 @@ class NFeEmitidas(Base):
 
     def __repr__(self):
         return f"<NFeEmitidas(id={self.nfe_emitida_id}, tipo_nfe='{self.tipo_nfe}', cliente_id={self.cliente_id})>"
+
+class NFeInutilizacao(Base):
+    __tablename__ = 'nfe_inutilizacoes'
+    inutilizacao_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(BigInteger, ForeignKey('clientes.cliente_id'), nullable=False)
+    modelo = Column(String(2), nullable=False)   # 55=NFe, 65=NFCe
+    serie = Column(Integer, nullable=False)
+    numero_inicial = Column(Integer, nullable=False)
+    numero_final = Column(Integer, nullable=False)
+    ano = Column(String(2), nullable=False)       # 2 dígitos, ex: 26
+    justificativa = Column(Text, nullable=False)
+    status = Column(String(50), default='PROCESSANDO')  # PROCESSANDO|AUTORIZADA|REJEITADA|ERRO
+    protocolo = Column(String(15))
+    chave_inutilizacao = Column(String(44))
+    codigo_status = Column(String(3))
+    mensagem_sefaz = Column(Text)
+    xml_pedido = Column(Text)
+    xml_resposta = Column(Text)
+    data_criacao = Column(DateTime, default=datetime_now_brt)
+    data_inutilizacao = Column(DateTime)
+    created_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True)
+
+    cliente = relationship('Cliente', back_populates='inutilizacoes')
+    created_by_user = relationship('UserModel', foreign_keys=[created_by_user_id])
+
+    def __repr__(self):
+        return f"<NFeInutilizacao(id={self.inutilizacao_id}, mod={self.modelo}, serie={self.serie}, {self.numero_inicial}-{self.numero_final}, status={self.status})>"
+
 
 class Ncm(Base):
     __tablename__ = 'ncms'
