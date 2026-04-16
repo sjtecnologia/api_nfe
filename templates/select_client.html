@@ -3,40 +3,304 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Selecionar Cliente</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>EmiteMax — Selecionar Empresa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --sj-primary: #00BCD4;
+            --sj-secondary: #0288D1;
+            --sj-dark: #263238;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--sj-dark) 0%, #37474F 50%, #1a3a4a 100%);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        /* ---- Header / Logo ---- */
+        .brand-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            animation: fadeDown .5s ease both;
+        }
+        .brand-logo {
+            width: 64px; height: 64px;
+            background: linear-gradient(135deg, var(--sj-primary), var(--sj-secondary));
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            color: #fff;
+            margin-bottom: .75rem;
+            box-shadow: 0 8px 24px rgba(0,188,212,.35);
+        }
+        .brand-header h1 {
+            color: #fff;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: .25rem;
+        }
+        .brand-header p { color: rgba(255,255,255,.6); font-size: .9rem; margin: 0; }
+
+        /* ---- Search ---- */
+        .search-wrap {
+            width: 100%;
+            max-width: 680px;
+            margin-bottom: 1.5rem;
+            animation: fadeDown .55s ease both;
+        }
+        .search-box {
+            position: relative;
+        }
+        .search-box input {
+            width: 100%;
+            padding: .75rem 1rem .75rem 2.8rem;
+            border-radius: 12px;
+            border: 1.5px solid rgba(255,255,255,.15);
+            background: rgba(255,255,255,.08);
+            color: #fff;
+            font-size: .95rem;
+            outline: none;
+            transition: border-color .2s, background .2s;
+        }
+        .search-box input::placeholder { color: rgba(255,255,255,.4); }
+        .search-box input:focus {
+            border-color: var(--sj-primary);
+            background: rgba(255,255,255,.12);
+        }
+        .search-box i {
+            position: absolute;
+            left: .95rem; top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,.45);
+            font-size: .9rem;
+            pointer-events: none;
+        }
+
+        /* ---- Grid ---- */
+        .clients-grid {
+            width: 100%;
+            max-width: 900px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1rem;
+            animation: fadeUp .6s ease both;
+        }
+
+        /* ---- Card ---- */
+        .client-card {
+            background: rgba(255,255,255,.07);
+            border: 1.5px solid rgba(255,255,255,.1);
+            border-radius: 16px;
+            padding: 1.4rem 1.3rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: background .2s, border-color .2s, transform .18s, box-shadow .18s;
+            position: relative;
+            overflow: hidden;
+        }
+        .client-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, var(--sj-primary), var(--sj-secondary));
+            opacity: 0;
+            transition: opacity .2s;
+            border-radius: inherit;
+        }
+        .client-card:hover {
+            border-color: var(--sj-primary);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(0,188,212,.25);
+        }
+        .client-card:hover::before { opacity: .08; }
+
+        .client-card > * { position: relative; z-index: 1; }
+
+        /* Avatar com iniciais */
+        .client-avatar {
+            flex-shrink: 0;
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--sj-primary), var(--sj-secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0,188,212,.3);
+        }
+
+        .client-info { flex: 1; min-width: 0; }
+        .client-name {
+            color: #fff;
+            font-size: .93rem;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-bottom: .2rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .client-sub {
+            color: rgba(255,255,255,.5);
+            font-size: .78rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .client-arrow {
+            color: rgba(255,255,255,.3);
+            font-size: .8rem;
+            transition: color .2s, transform .2s;
+            flex-shrink: 0;
+        }
+        .client-card:hover .client-arrow {
+            color: var(--sj-primary);
+            transform: translateX(3px);
+        }
+
+        /* Sem resultados */
+        .empty-state {
+            text-align: center;
+            color: rgba(255,255,255,.5);
+            padding: 2rem;
+            grid-column: 1/-1;
+        }
+        .empty-state i { font-size: 2.5rem; margin-bottom: .75rem; display: block; }
+
+        /* Footer */
+        .page-footer {
+            margin-top: 2rem;
+            color: rgba(255,255,255,.3);
+            font-size: .78rem;
+            text-align: center;
+            animation: fadeUp .7s ease both;
+        }
+
+        /* Animações */
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Contagem */
+        .client-count {
+            color: rgba(255,255,255,.4);
+            font-size: .8rem;
+            margin-bottom: .75rem;
+            text-align: right;
+            max-width: 900px;
+            width: 100%;
+        }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h4>Selecionar Cliente</h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            {% for cliente in clientes %}
-                            <div class="col-md-6 mb-3">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h5>{{ cliente.razao_social }}</h5>
-                                        {% if cliente.nome_fantasia %}
-                                        <p class="text-muted">{{ cliente.nome_fantasia }}</p>
-                                        {% endif %}
-                                        <a href="{{ url_for('home.select_client', cliente_id=cliente.cliente_id) }}" 
-                                           class="btn btn-primary">
-                                            Acessar
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
+<body>
+
+    <!-- Logo / Header -->
+    <div class="brand-header">
+        <div class="brand-logo"><i class="fas fa-file-invoice"></i></div>
+        <h1>EmiteMax</h1>
+        <p>Selecione a empresa para continuar</p>
+    </div>
+
+    <!-- Busca (exibida apenas se >5 clientes) -->
+    {% if clientes|length > 5 %}
+    <div class="search-wrap">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="searchInput"
+                   placeholder="Buscar empresa por nome ou CNPJ…"
+                   autocomplete="off">
         </div>
     </div>
+    {% endif %}
+
+    <!-- Contagem -->
+    <div class="client-count" id="clientCount">
+        {{ clientes|length }} empresa{{ 's' if clientes|length != 1 else '' }} disponível{{ 'is' if clientes|length != 1 else '' }}
+    </div>
+
+    <!-- Grid de clientes -->
+    <div class="clients-grid" id="clientsGrid">
+        {% for cliente in clientes %}
+        {% set initials = (cliente.razao_social or cliente.nome_fantasia or '?')[:2]|upper %}
+        <a href="{{ url_for('home.select_client', cliente_id=cliente.cliente_id) }}"
+           class="client-card"
+           data-name="{{ (cliente.razao_social or '')|lower }} {{ (cliente.nome_fantasia or '')|lower }}"
+           data-cnpj="{{ cliente.cnpj or '' }}">
+            <div class="client-avatar">{{ initials }}</div>
+            <div class="client-info">
+                <div class="client-name">{{ cliente.razao_social or cliente.nome_fantasia }}</div>
+                {% if cliente.nome_fantasia and cliente.nome_fantasia != cliente.razao_social %}
+                <div class="client-sub">{{ cliente.nome_fantasia }}</div>
+                {% elif cliente.cnpj %}
+                <div class="client-sub">{{ cliente.cnpj[:2] }}.{{ cliente.cnpj[2:5] }}.{{ cliente.cnpj[5:8] }}/{{ cliente.cnpj[8:12] }}-{{ cliente.cnpj[12:] }}</div>
+                {% endif %}
+            </div>
+            <i class="fas fa-chevron-right client-arrow"></i>
+        </a>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-building"></i>
+            Nenhuma empresa disponível para seu usuário.
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="page-footer">EmiteMax &copy; {{ now.year if now else '2026' }} &mdash; SJ Tecnologia</div>
+
+    <script>
+    (function () {
+        const input = document.getElementById('searchInput');
+        const grid  = document.getElementById('clientsGrid');
+        const countEl = document.getElementById('clientCount');
+        if (!input) return;
+
+        input.addEventListener('input', function () {
+            const q = this.value.trim().toLowerCase().replace(/[.\-\/]/g, '');
+            let visible = 0;
+            grid.querySelectorAll('.client-card').forEach(card => {
+                const name = card.dataset.name || '';
+                const cnpj = (card.dataset.cnpj || '').replace(/[.\-\/]/g, '');
+                const match = !q || name.includes(q) || cnpj.includes(q);
+                card.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+
+            // Atualizar contagem e empty-state
+            let empty = grid.querySelector('.dynamic-empty');
+            if (visible === 0) {
+                if (!empty) {
+                    empty = document.createElement('div');
+                    empty.className = 'empty-state dynamic-empty';
+                    empty.innerHTML = '<i class="fas fa-search"></i>Nenhuma empresa encontrada para "<strong>' + this.value + '</strong>".';
+                    grid.appendChild(empty);
+                }
+            } else if (empty) {
+                empty.remove();
+            }
+            countEl.textContent = visible + ' empresa' + (visible !== 1 ? 's' : '') + ' encontrada' + (visible !== 1 ? 's' : '');
+        });
+    })();
+    </script>
 </body>
 </html>

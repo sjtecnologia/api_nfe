@@ -1,18 +1,202 @@
 {% extends "base.html" %}
 
-{% block title %}Selecionar Cliente{% endblock %}
+{% block title %}Trocar Empresa — EmiteMax{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <h2 class="mb-4"><i class="fas fa-exchange-alt"></i> Trocar Cliente</h2>
-    <div class="list-group">
+<style>
+    .sc-hero {
+        background: linear-gradient(135deg, var(--sj-dark, #263238) 0%, #37474F 100%);
+        border-radius: 16px;
+        padding: 2rem 2.5rem;
+        margin-bottom: 1.75rem;
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+    .sc-hero-icon {
+        width: 56px; height: 56px;
+        background: linear-gradient(135deg, var(--sj-primary, #00BCD4), var(--sj-secondary, #0288D1));
+        border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.5rem; color: #fff; flex-shrink: 0;
+        box-shadow: 0 6px 18px rgba(0,188,212,.35);
+    }
+    .sc-hero-title { color: #fff; font-size: 1.3rem; font-weight: 700; margin-bottom: .15rem; }
+    .sc-hero-sub   { color: rgba(255,255,255,.55); font-size: .88rem; margin: 0; }
+
+    .sc-search {
+        position: relative;
+        margin-bottom: 1.25rem;
+    }
+    .sc-search input {
+        width: 100%;
+        padding: .65rem 1rem .65rem 2.5rem;
+        border-radius: 10px;
+        border: 1.5px solid #dee2e6;
+        font-size: .9rem;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+        background: #fff;
+    }
+    .sc-search input:focus {
+        border-color: var(--sj-primary, #00BCD4);
+        box-shadow: 0 0 0 3px rgba(0,188,212,.15);
+    }
+    .sc-search i {
+        position: absolute; left: .85rem; top: 50%;
+        transform: translateY(-50%);
+        color: #adb5bd; font-size: .85rem;
+        pointer-events: none;
+    }
+
+    .sc-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: .9rem;
+    }
+
+    .sc-card {
+        display: flex;
+        align-items: center;
+        gap: .9rem;
+        padding: 1.1rem 1rem;
+        border: 1.5px solid #e9ecef;
+        border-radius: 12px;
+        text-decoration: none;
+        background: #fff;
+        transition: border-color .18s, box-shadow .18s, transform .18s;
+    }
+    .sc-card:hover {
+        border-color: var(--sj-primary, #00BCD4);
+        box-shadow: 0 6px 20px rgba(0,188,212,.15);
+        transform: translateY(-2px);
+        text-decoration: none;
+    }
+
+    .sc-avatar {
+        flex-shrink: 0;
+        width: 44px; height: 44px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--sj-primary, #00BCD4), var(--sj-secondary, #0288D1));
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem; font-weight: 700; color: #fff;
+        box-shadow: 0 3px 10px rgba(0,188,212,.25);
+    }
+
+    .sc-name {
+        color: #212529;
+        font-size: .9rem;
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sc-sub {
+        color: #9aa0a6;
+        font-size: .77rem;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sc-arrow {
+        margin-left: auto;
+        color: #ced4da;
+        font-size: .8rem;
+        flex-shrink: 0;
+        transition: color .15s, transform .15s;
+    }
+    .sc-card:hover .sc-arrow {
+        color: var(--sj-primary, #00BCD4);
+        transform: translateX(3px);
+    }
+
+    .sc-count { color: #6c757d; font-size: .82rem; margin-bottom: .75rem; }
+
+    .sc-empty {
+        text-align: center;
+        color: #adb5bd;
+        padding: 2.5rem 1rem;
+        grid-column: 1/-1;
+    }
+    .sc-empty i { font-size: 2rem; margin-bottom: .6rem; display: block; }
+</style>
+
+<div class="container-fluid" style="max-width:960px;">
+
+    <!-- Hero header -->
+    <div class="sc-hero">
+        <div class="sc-hero-icon"><i class="fas fa-building"></i></div>
+        <div>
+            <div class="sc-hero-title">Trocar Empresa</div>
+            <p class="sc-hero-sub">Selecione a empresa com que deseja trabalhar agora</p>
+        </div>
+    </div>
+
+    <!-- Busca (só exibe se >4 clientes) -->
+    {% if clientes_do_usuario|length > 4 %}
+    <div class="sc-search">
+        <i class="fas fa-search"></i>
+        <input type="text" id="scSearch" placeholder="Buscar empresa…" autocomplete="off">
+    </div>
+    {% endif %}
+
+    <!-- Contagem -->
+    <div class="sc-count" id="scCount">
+        {{ clientes_do_usuario|length }} empresa{{ 's' if clientes_do_usuario|length != 1 else '' }} disponível{{ 'is' if clientes_do_usuario|length != 1 else '' }}
+    </div>
+
+    <!-- Grid -->
+    <div class="sc-grid" id="scGrid">
         {% for cliente in clientes_do_usuario %}
-            <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(cliente.cliente_id)) }}" class="list-group-item list-group-item-action">
-                <i class="fas fa-building"></i> {{ cliente.razao_social }}
-            </a>
+        {% set nm = (cliente.razao_social or '?') %}
+        {% set initials = nm[:2]|upper %}
+        <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(cliente.cliente_id)) }}"
+           class="sc-card"
+           data-name="{{ nm|lower }}">
+            <div class="sc-avatar">{{ initials }}</div>
+            <div style="min-width:0; flex:1;">
+                <div class="sc-name">{{ nm }}</div>
+                {% if cliente.get('cnpj') %}
+                <div class="sc-sub">
+                    {{ cliente.cnpj[:2] }}.{{ cliente.cnpj[2:5] }}.{{ cliente.cnpj[5:8] }}/{{ cliente.cnpj[8:12] }}-{{ cliente.cnpj[12:] }}
+                </div>
+                {% endif %}
+            </div>
+            <i class="fas fa-chevron-right sc-arrow"></i>
+        </a>
         {% else %}
-            <div class="alert alert-warning">Nenhum cliente disponível para este usuário.</div>
+        <div class="sc-empty">
+            <i class="fas fa-building"></i>
+            Nenhuma empresa disponível para seu usuário.
+        </div>
         {% endfor %}
     </div>
+
 </div>
+
+<script>
+(function () {
+    const input = document.getElementById('scSearch');
+    const grid  = document.getElementById('scGrid');
+    const countEl = document.getElementById('scCount');
+    if (!input) return;
+
+    input.addEventListener('input', function () {
+        const q = this.value.trim().toLowerCase();
+        let visible = 0;
+        grid.querySelectorAll('.sc-card').forEach(card => {
+            const match = !q || (card.dataset.name || '').includes(q);
+            card.style.display = match ? '' : 'none';
+            if (match) visible++;
+        });
+        let empty = grid.querySelector('.sc-dynamic-empty');
+        if (visible === 0 && q) {
+            if (!empty) {
+                empty = document.createElement('div');
+                empty.className = 'sc-empty sc-dynamic-empty';
+                empty.innerHTML = '<i class="fas fa-search"></i>Nenhuma empresa encontrada.';
+                grid.appendChild(empty);
+            }
+        } else if (empty) { empty.remove(); }
+        countEl.textContent = visible + ' empresa' + (visible !== 1 ? 's' : '') + ' encontrada' + (visible !== 1 ? 's' : '');
+    });
+})();
+</script>
 {% endblock %}
