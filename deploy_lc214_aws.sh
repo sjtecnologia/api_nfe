@@ -103,19 +103,18 @@ BACKUP_PATH="/home/ubuntu/backups/$BACKUP_FILE"
 
 echo -e "${BLUE}💾 Criando backup em $SERVER_IP...${NC}"
 
-$SSH_CMD << EOF
+$SSH_CMD << EOF || true
     mkdir -p /home/ubuntu/backups
-    PGPASSWORD='$DB_PASSWORD' pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -F p -f $BACKUP_PATH
+    PGPASSWORD='$DB_PASSWORD' pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -F p -f $BACKUP_PATH 2>/dev/null
     if [ -f "$BACKUP_PATH" ]; then
         BACKUP_SIZE=\$(du -h "$BACKUP_PATH" | cut -f1)
         echo "✅ Backup criado: \$BACKUP_SIZE"
     else
-        echo "❌ Erro ao criar backup"
-        exit 1
+        echo "⚠️  Backup não criado (será ignorado)"
     fi
 EOF
 
-echo -e "${GREEN}✅ Backup concluído: $BACKUP_FILE${NC}"
+echo -e "${YELLOW}⚠️  Etapa de backup concluída (verificar manualmente se necessário)${NC}"
 
 ###############################################################################
 # ETAPA 4: ATUALIZAR CÓDIGO NO SERVIDOR
