@@ -19,6 +19,10 @@ build.log
 *.tar.gz
 backups/*.sql
 backups/*.csv
+backups/*.py
+backups/*.py.*
+backups/*.bak
+backups/backup_*/
 deployment/backups/
 
 # Bases locais e artefatos de banco
