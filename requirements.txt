@@ -1,4 +1,4 @@
-lxml==6.0.1
+lxml==6.1.0
 nfelib==2.2.0
 typing_extensions==4.15.0
 xsdata==25.7
