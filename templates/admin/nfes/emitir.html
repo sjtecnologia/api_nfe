@@ -2257,14 +2257,14 @@ function calcularTotalGeral() {
     });
     
     document.getElementById('totalGeral').textContent = total.toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
     });
+    
+    totalGeral = total;
     
     // Calcular total da NFe considerando frete, seguro e desconto
     recalcularTotais();
-    
-    totalGeral = total;
     
     // Validar campos obrigatórios
     validarCamposObrigatorios();
@@ -2328,6 +2328,8 @@ function aplicarMascaraMoeda(inputId) {
 
 // Recalcular totais da NFe com frete, seguro e desconto
 function recalcularTotais() {
+    // Nao atualizar durante carregamento de itens (modo edicao) para evitar valor parcial
+    if (window._nfeRestaurandoRascunho) return;
     const totalProdutos = totalGeral || 0;
     const vFrete = parseValorMonetario(document.getElementById('vFrete')?.value || 0);
     const vSeg = parseValorMonetario(document.getElementById('vSeg')?.value || 0);
@@ -3857,7 +3859,13 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
     
     {% if form_data.valorPagamento %}
-    document.getElementById('valorPagamento').value = '{{ form_data.valorPagamento }}';
+    (function() {
+        var _vp = document.getElementById('valorPagamento');
+        if (_vp) {
+            _vp.value = '{{ form_data.valorPagamento }}';
+            _vp.setAttribute('data-valor-real', '{{ form_data.valorPagamento }}');
+        }
+    })();
     {% endif %}
     
     {% if form_data.modFrete %}
@@ -3872,11 +3880,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Preencher itens
     {% if initial_nfe_items %}
     console.log('📦 Adicionando {{ initial_nfe_items|length }} item(ns)...');
-    {% for item in initial_nfe_items %}
-    setTimeout(function() {
-        adicionarItemComDados({{ item|tojson }});
-    }, {{ loop.index0 * 100 }});
-    {% endfor %}
+    window._nfeRestaurandoRascunho = true; // bypass validação durante carga de itens em modo edição
+    (function() {
+        var _editItems = {{ initial_nfe_items|tojson }};
+        _editItems.forEach(function(item) { adicionarItemComDados(item); });
+        setTimeout(function() { window._nfeRestaurandoRascunho = false; calcularTotalGeral(); }, _editItems.length * 200 + 500);
+    })();
     {% endif %}
     
     console.log('✅ Dados carregados em modo edição');
@@ -3886,41 +3895,40 @@ document.addEventListener('DOMContentLoaded', function() {
 function adicionarItemComDados(itemData) {
     console.log('➕ Adicionando item com dados:', itemData);
     
-    // Adicionar um item vazio primeiro
+    // Adicionar um item vazio primeiro (bypass validação - carregamento programático)
+    var _prevFlag = window._nfeRestaurandoRascunho;
+    window._nfeRestaurandoRascunho = true;
     adicionarItem();
+    window._nfeRestaurandoRascunho = _prevFlag;
     
-    // Aguardar o item ser criado e preencher os dados
+    // ⚠️ Capturar itemId SINCRONAMENTE após adicionarItem() para evitar race condition
+    // quando múltiplos itens são adicionados em sequência rápida (modo edição).
+    // Se capturado dentro do setTimeout, o DOM já terá N itens adicionados e
+    // items[last] apontará para o item errado, deixando os anteriores vazios.
+    const _itensApos = document.querySelectorAll('#itensContainer [id^="item-"]');
+    const _novoItem = _itensApos[0]; // adicionarItem() insere NO TOPO (insertBefore firstChild)
+    if (!_novoItem) {
+        console.error('❌ Item não encontrado após adicionarItem()!');
+        return;
+    }
+    const itemId = itemCounter; // adicionarItem() incrementa itemCounter
+    console.log('📝 Item ID capturado sincronamente:', itemId);
+
+    // Aguardar Select2 estar pronto e preencher os dados usando o itemId já capturado
     setTimeout(function() {
-        const items = document.querySelectorAll('[id^="item-"]');
-        const ultimoItem = items[items.length - 1];
-        if (!ultimoItem) {
-            console.error('❌ Item não encontrado!');
-            return;
-        }
-        
-        const itemId = ultimoItem.id.split('-')[1];
-        console.log('📝 Preenchendo item ID:', itemId);
-        
         // Preencher campos do item (usando os nomes corretos do HTML)
         try {
-            // Preencher select "Produto" com descrição
+            // Preencher select "Produto" — Select2 AJAX: injetar opção diretamente
+            // (não há opções pré-carregadas em AJAX Select2, campo.options estaria vazio)
             if (itemData.descricao) {
-                const campo = document.querySelector(`select[name="produto_${itemId}"]`);
-                if (campo) {
-                    // Procurar option com essa descrição
-                    for (let option of campo.options) {
-                        if (option.text === itemData.descricao || option.dataset.descricao === itemData.descricao) {
-                            option.selected = true;
-                            campo.value = option.value;
-                            // Atualizar Select2 se estiver inicializado
-                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
-                                $(campo).val(option.value).trigger('change');
-                            }
-                            console.log('✅ Produto selecionado:', itemData.descricao);
-                            // Não chamar carregarProduto() aqui - campos já serão preenchidos manualmente
-                            break;
-                        }
-                    }
+                var $prodSelect = $(`select[name="produto_${itemId}"]`);
+                if ($prodSelect.length) {
+                    // Usar produto_id salvo (se disponível) ou a própria descrição como valor
+                    var prodVal = itemData.produto_id || itemData.descricao;
+                    var prodOpt = new Option(itemData.descricao, prodVal, true, true);
+                    $prodSelect.empty().append(prodOpt).trigger('change');
+                    console.log('✅ Produto injetado no Select2 (modo edição):', itemData.descricao);
+                    // Não disparar carregarProduto() — campos serão preenchidos manualmente abaixo
                 }
             }
             if (itemData.codigo_produto || itemData.codigo) {
@@ -3951,6 +3959,11 @@ function adicionarItemComDados(itemData) {
                     console.log('✅ Valor unitário preenchido:', campo.value);
                     // Calcular total
                     calcularTotal(itemId);
+                    // Forçar valor_total armazenado para garantir exatidão
+                    if (itemData.valor_total) {
+                        var _tc = document.querySelector('input[name="valor_total_' + itemId + '"]');
+                        if (_tc) _tc.value = String(itemData.valor_total);
+                    }
                 }
             }
             if (itemData.ncm) {
@@ -3972,21 +3985,12 @@ function adicionarItemComDados(itemData) {
                 }
             }
             if (itemData.cfop) {
-                const campo = document.querySelector(`select[name="cfop_${itemId}"]`);
-                if (campo) {
-                    // Procurar option com esse CFOP
-                    for (let option of campo.options) {
-                        if (option.value === itemData.cfop) {
-                            option.selected = true;
-                            campo.value = itemData.cfop;
-                            // Atualizar Select2 se estiver inicializado
-                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
-                                $(campo).val(itemData.cfop).trigger('change');
-                            }
-                            console.log('✅ CFOP selecionado:', itemData.cfop);
-                            break;
-                        }
-                    }
+                // CFOP usa Select2 AJAX — injetar opção diretamente
+                var $cfopSelect = $(`select[name="cfop_${itemId}"]`);
+                if ($cfopSelect.length) {
+                    var cfopOpt = new Option(itemData.cfop, itemData.cfop, true, true);
+                    $cfopSelect.empty().append(cfopOpt).trigger('change');
+                    console.log('✅ CFOP injetado no Select2 (modo edição):', itemData.cfop);
                 }
             }
             if (itemData.origem !== undefined) {
@@ -4015,10 +4019,15 @@ function adicionarItemComDados(itemData) {
                 }
             }
             
-            console.log('✅ Item preenchido');
+            console.log('✅ Item preenchido (modo edição)');
             
-            // Atualizar JSON do item
-            atualizarItemJSON(itemId);
+            // Gravar JSON original diretamente no campo hidden para preservar todos os dados
+            // fiscais (NCM, CFOP, CST, descrição, etc.) sem depender dos selects estarem preenchidos
+            var hiddenJson = document.getElementById(`item_json_${itemId}`);
+            if (hiddenJson) {
+                hiddenJson.value = JSON.stringify(itemData);
+                console.log('✅ JSON do item gravado diretamente (modo edição)');
+            }
         } catch (error) {
             console.error('❌ Erro ao preencher item:', error);
         }

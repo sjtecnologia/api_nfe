@@ -593,7 +593,7 @@ def generate_nfe_xml_nfelib(
     }
     
     # Adicionar IE: obrigatória para contribuinte (1) e isento (2="ISENTO")
-    if ind_ie_dest in ("1", "2"):
+    if ind_ie_dest == "1":  # NT 2024/007: omitir <IE> para isento e nao-contribuinte
         dest_kwargs['IE'] = ie_dest_norm
     
     if len(dest_cpf_cnpj) == 11:
@@ -971,14 +971,23 @@ def generate_nfe_xml_nfelib(
                 ipi = Nfe.InfNfe.Det.Imposto.Ipi(IPINT=ipi_nt)
                 print(f"  [IPI] Item {idx} - CST {cst_ipi}: Não tributado")
         
-        # IBS/CBS - Reforma Tributária (opcional, apenas se CRT=3 e classificacao_ibs_cbs_id presente)
+        # IBS/CBS - Reforma Tributaria (obrigatorio quando classificacao_ibs_cbs_id presente - NT 2024/007)
         ibs_cbs_xml = None
         classificacao_ibs_cbs_id = item.get('classificacao_ibs_cbs_id')
         
         # DEBUG: Sempre mostrar se campo IBS/CBS foi recebido
         print(f"  [IBS/CBS] Item {idx} - CRT={crt_int}, classificacao_ibs_cbs_id='{classificacao_ibs_cbs_id}' (tipo: {type(classificacao_ibs_cbs_id).__name__})")
         
-        # Verificar se é CRT=3 (Lucro Real/Presumido) e tem classificação
+        # IBS/CBS obrigatorio para CRT=3 (Lucro Real/Presumido) - NT 2024/007
+        # Fallback: se CRT=3 e sem classificacao no item, usar padrao 00-00001
+        if crt_int == 3 and not classificacao_ibs_cbs_id and _db_ibs_cbs is not None:
+            try:
+                _clf = _db_ibs_cbs.execute(text("SELECT classificacao_id FROM classificacoes_ibs_cbs WHERE codigo = '00-00001' LIMIT 1")).fetchone()
+                if _clf:
+                    classificacao_ibs_cbs_id = str(_clf[0])
+                    print(f"  [IBS/CBS] Item {idx} - Fallback classificacao padrao 00-00001: {classificacao_ibs_cbs_id}")
+            except Exception as _e:
+                print(f"  [AVISO] IBS/CBS fallback erro: {_e}")
         if crt_int == 3 and classificacao_ibs_cbs_id and _db_ibs_cbs is not None:
             try:
                 classificacao_id_int = int(classificacao_ibs_cbs_id)
@@ -1236,7 +1245,7 @@ def generate_nfe_xml_nfelib(
             
             # REFORMA TRIBUTÁRIA: Adicionar IBS/CBS aos itens e totalizadores
             # Controlado pela flag HABILITAR_IBS_CBS em config/settings.py
-            habilitar_ibs_cbs_emissao = HABILITAR_IBS_CBS and str(tp_amb) != '1'
+            habilitar_ibs_cbs_emissao = HABILITAR_IBS_CBS
             if itens_ibs_cbs and habilitar_ibs_cbs_emissao:
                 print(f"🏛️ [IBS/CBS] Adicionando tags aos {len(itens_ibs_cbs)} itens com classificação")
                 print(f"⚠️  [IBS/CBS] Flag HABILITAR_IBS_CBS = {HABILITAR_IBS_CBS}")
@@ -1251,9 +1260,9 @@ def generate_nfe_xml_nfelib(
                         ibs_cbs_fragment = etree.fromstring(f'<root xmlns="http://www.portalfiscal.inf.br/nfe">{ibs_cbs_xml_str}</root>')
                         ibs_cbs_elem = ibs_cbs_fragment[0]  # Primeiro filho
                         
-                        # Adicionar após COFINS
+                        # Adicionar dentro de <imposto> (conforme XML de referencia)
                         imposto_elem.append(ibs_cbs_elem)
-                        print(f"  [IBS/CBS] Item {idx} - Tag <IBSCBS> adicionada")
+                        print(f"  [IBS/CBS] Item {idx} - Tag <IBSCBS> adicionada em imposto")
                 
                 # Adicionar <IBSCBSTot> aos totais
                 total_elem = xml_tree.find('.//nfe:total/nfe:ICMSTot', ns)
@@ -1279,8 +1288,7 @@ def generate_nfe_xml_nfelib(
                         parent_total.append(child)
                     
                     print(f"  [IBS/CBS] Totalizadores adicionados: IBS R$ {v_ibs_total:.2f}, CBS R$ {v_cbs_total:.2f}")
-            elif itens_ibs_cbs and str(tp_amb) == '1':
-                print("⚠️  [IBS/CBS] Tags não incluídas no XML de produção para evitar rejeição de schema")
+
             
             # ========== ADICIONAR cBenef MANUALMENTE (nfelib não suporta) ==========
             print(f"🔧 [cBenef] Verificando necessidade de adicionar cBenef manualmente...")

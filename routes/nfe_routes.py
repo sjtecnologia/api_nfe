@@ -52,7 +52,8 @@ def api_produtos():
             SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
                    p.unidade_comercial, p.origem_mercadoria,
                    n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
-                   cst.codigo as cst_codigo, cs.codigo as csosn_codigo
+                   cst.codigo as cst_codigo, cs.codigo as csosn_codigo,
+                   p.classificacao_ibs_cbs_id
             FROM produtos p
             LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
             LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
@@ -90,6 +91,7 @@ def api_produtos():
                 'cst': d.get('cst_codigo') or '',
                 'csosn': d.get('csosn_codigo') or '',
                 'origem': d.get('origem_mercadoria') if d.get('origem_mercadoria') is not None else 0,
+                'classificacao_ibs_cbs_id': d.get('classificacao_ibs_cbs_id') or '',
             })
 
         return jsonify({'results': results, 'pagination': {'more': has_more}})
@@ -2163,6 +2165,19 @@ def edit(nfe_id):
                             form_data['destinatario_cnpj_cpf'] = nfe_data['destinatario_cnpj_cpf']
                         if nfe_data.get('destinatario_razao_social'):
                             form_data['destinatario_razao_social'] = nfe_data['destinatario_razao_social']
+
+                        # Recalcular valorPagamento a partir dos itens para evitar valor desatualizado
+                        if items_data:
+                            try:
+                                valor_total_calculado = sum(
+                                    float(item.get('valor_total') or 0)
+                                    for item in items_data
+                                )
+                                if valor_total_calculado > 0:
+                                    form_data['valorPagamento'] = f'{valor_total_calculado:.2f}'
+                                    print(f" valorPagamento recalculado dos itens: {valor_total_calculado:.2f}")
+                            except Exception as e_vp:
+                                print(f"AVISO: Erro ao recalcular valorPagamento: {e_vp}")
                         
                         print(f" Form data extraído: {len(form_data)} campos")
                         print(f" Items extraídos: {len(items_data)} itens")
@@ -2952,7 +2967,8 @@ def reenviar_nfe(nfe_id):
             destinatario_data,
             json_data.get('items', []),
             tp_amb,
-            'emitir'
+            'emitir',
+            include_resp_tec=False  # SEFAZ-SP rejeita infRespTec com 225
         )
         
         # Assinar XML - BLOQUEIA SE FALHAR
@@ -2977,7 +2993,51 @@ def reenviar_nfe(nfe_id):
         
         # Enviar para SEFAZ
         resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente, nfe_data['cliente_id'])
-        
+
+        # cStat=656: Consumo Indevido - aguardar e retentar (ate 2x, com backoff exponencial)
+        for _t656 in range(2):
+            if str(resultado_sefaz.get('codigo', '')) != '656':
+                break
+            _wait = 15
+            print(f'[REENVIO] cStat=656 (Consumo Indevido) - tentativa {_t656 + 1}/2, aguardando {_wait}s...')
+            time.sleep(_wait)
+            resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente, nfe_data['cliente_id'])
+            print(f'  [REENVIO-656] Apos espera: cStat={resultado_sefaz.get("codigo")} - {resultado_sefaz.get("message")}')
+
+        # cStat=225: Falha no Schema XML - regenerar sem infRespTec e retentar
+        # IBS/CBS e obrigatorio - nao zerar classificacao_ibs_cbs_id
+        if str(resultado_sefaz.get('codigo', '')) == '225':
+            print('[REENVIO] cStat=225 - gerando XML sem infRespTec (mantendo IBS/CBS obrigatorio)...')
+            try:
+                items_reenvio = json_data.get('items', [])
+                xml_retry_225 = generate_nfe_xml(
+                    json_data.get('form_data', {}),
+                    emitente_data_for_template,
+                    destinatario_data,
+                    items_reenvio,
+                    tp_amb,
+                    'emitir',
+                    include_resp_tec=False
+                )
+                xml_assinado_retry = xml_signature_service.sign_nfe_xml(xml_retry_225, db, nfe_data['cliente_id'])
+                print('[REENVIO-225] Aguardando 15s antes de reenviar (evitar 656)...')
+                time.sleep(15)
+                resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado_retry, certificado, ambiente, nfe_data['cliente_id'])
+                print(f'  [REENVIO-225] Resultado sem infRespTec: cStat={resultado_sefaz.get("codigo")} - {resultado_sefaz.get("message")}')
+                # Se ainda retornar 656, aguardar e retentar
+                for _t656_225 in range(2):
+                    if str(resultado_sefaz.get('codigo', '')) != '656':
+                        break
+                    _wait_656 = 15
+                    print(f'  [REENVIO-225-656] cStat=656 - tentativa {_t656_225+1}/2, aguardando {_wait_656}s...')
+                    time.sleep(_wait_656)
+                    resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado_retry, certificado, ambiente, nfe_data['cliente_id'])
+                    print(f'  [REENVIO-225-656] Apos espera: cStat={resultado_sefaz.get("codigo")} - {resultado_sefaz.get("message")}')
+                if resultado_sefaz.get('success'):
+                    xml_assinado = xml_assinado_retry
+            except Exception as e_225:
+                print(f'ERRO: [REENVIO-225] Falha ao regenerar sem infRespTec: {e_225}')
+
         # Preparar resultado
         resultado = {
             'success': resultado_sefaz.get('success', False),

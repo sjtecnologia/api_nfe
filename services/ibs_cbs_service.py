@@ -76,7 +76,9 @@ def gerar_xml_ibscbs(ibs_cbs_data: Dict[str, Any]) -> str:
     # Banco pode ter formato antigo "XX-YYYYY" (ex: "00-00001") → remover traço e pegar últimos 6 dígitos
     c_class_trib = str(ibs_cbs_data['cClassTrib']).replace('-', '')[-6:].zfill(6)
 
-    # Estrutura conforme NFe 4.0 com Reforma Tributária - validada e aceita pelo SEFAZ SP
+    # Estrutura conforme NFe 4.0 com Reforma Tributária - TCIBS (DFeTiposBasicos_v1.00.xsd)
+    # Sequência obrigatória: vBC → gIBSUF(pIBSUF,vIBSUF) → gIBSMun(pIBSMun,vIBSMun) → vIBS → gCBS(pCBS,vCBS)
+    # CONFIRMADO pelo XSD linha 706-849: <vIBS> é OBRIGATÓRIO (sem minOccurs=0) em TCIBS, entre gIBSMun e gCBS
     xml = f"""<IBSCBS>
 <CST>{ibs_cbs_data['CST']}</CST>
 <cClassTrib>{c_class_trib}</cClassTrib>
@@ -144,7 +146,8 @@ def gerar_xml_totais_ibscbs(totais_ibs: Dict[str, Any], totais_cbs: Dict[str, An
     Returns:
         String XML formatada
     """
-    # Estrutura conforme NFe 4.0 com Reforma Tributária - validada e aceita pelo SEFAZ SP
+    # Estrutura conforme TIBSCBSMonoTot (DFeTiposBasicos_v1.00.xsd linhas 397-595)
+    # gIBS/gCBS sao minOccurs=0 mas se presentes exigem: vDif, vDevTrib, valor, vCredPres, vCredPresCondSus
     xml = f"""<IBSCBSTot>
 <vBCIBSCBS>{totais_ibs['vBCTotal']:.2f}</vBCIBSCBS>
 <gIBS>
