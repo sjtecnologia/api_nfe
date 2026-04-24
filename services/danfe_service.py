@@ -173,6 +173,28 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
             
             print("[OK] Tags IBS/CBS removidas para geração do DANFE")
         
+        # ⚠️ CORREÇÃO: brazilfiscalreport busca <fone> como filho DIRETO de <dest>,
+        # mas o padrão NFe coloca <fone> dentro de <enderDest>.
+        # Copiamos o fone de <enderDest> para direto em <dest> (antes de </dest>).
+        import re as _re
+        def _inject_fone_no_dest(xml_s: str) -> str:
+            def _substituir(m):
+                bloco_dest = m.group(0)
+                # Se já tem <fone> diretamente (não dentro de sub-tag)
+                if _re.search(r'<fone>[^<]+</fone>', bloco_dest):
+                    return bloco_dest
+                # Tentar extrair <fone> de dentro de <enderDest>
+                fone_match = _re.search(r'<enderDest>.*?<fone>([^<]+)</fone>.*?</enderDest>', bloco_dest, _re.DOTALL)
+                if fone_match:
+                    fone_val = fone_match.group(1)
+                    # Inserir <fone> antes de </dest>
+                    bloco_dest = bloco_dest.replace('</dest>', f'<fone>{fone_val}</fone></dest>', 1)
+                    print(f"[OK] fone do destinatário injetado no <dest>: {fone_val}")
+                return bloco_dest
+            return _re.sub(r'<dest>.*?</dest>', _substituir, xml_s, flags=_re.DOTALL)
+        xml_str = _inject_fone_no_dest(xml_str)
+        print("[OK] Pré-processamento do fone do destinatário concluído")
+        
         # Verificar se já é nfeProc ou se precisa extrair NFe
         is_nfeproc = "<nfeProc" in xml_str
         print(f"[?] XML tipo: {'nfeProc (com protocolo)' if is_nfeproc else 'NFe simples'}")

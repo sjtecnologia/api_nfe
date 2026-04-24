@@ -499,6 +499,10 @@ def generate_nfe_xml_nfelib(
         destinatario_data.get('municipio') or destinatario_data.get('nome_municipio') or 'SAO PAULO'
     )
     
+    # Telefone do destinatário: apenas dígitos, 6-14 chars conforme schema NFe
+    _fone_dest_raw = (destinatario_data.get('telefone') or '').strip()
+    _fone_dest = ''.join(ch for ch in _fone_dest_raw if ch.isdigit())[:14]
+    
     ender_dest = Tendereco(
         xLgr=(destinatario_data.get('logradouro') or 'RUA TESTE').strip()[:60],
         nro=str(destinatario_data.get('numero') or '0').strip()[:60],
@@ -509,7 +513,8 @@ def generate_nfe_xml_nfelib(
         UF=uf_destinatario,
         CEP=limpar_cnpj_cpf(destinatario_data.get('cep', '00000000')),
         cPais="1058",
-        xPais="BRASIL"
+        xPais="BRASIL",
+        fone=_fone_dest if len(_fone_dest) >= 6 else None
     )
     
     # 8. Criar DEST (destinatário) com endereço
