@@ -44,10 +44,12 @@
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label for="ie">Inscrição Estadual</label>
+                                    <label for="ie">Inscrição Estadual *</label>
                                     <input type="text" class="form-control" id="ie" name="ie" 
                                            value="{{ destinatario.ie if destinatario else '' }}" 
-                                           maxlength="14" placeholder="Ex: ISENTO">
+                                           maxlength="20" placeholder="Ex: 123456789012 ou ISENTO"
+                                           required>
+                                    <small class="form-text text-muted">Obrigatório. Informe o número da IE ou <strong>ISENTO</strong></small>
                                 </div>
                             </div>
                         </div>
@@ -338,11 +340,19 @@ $(document).ready(function() {
         }
     });
     
+    // Auto-uppercase no campo IE
+    $('#ie').on('input', function() {
+        const pos = this.selectionStart;
+        this.value = this.value.toUpperCase();
+        this.setSelectionRange(pos, pos);
+    });
+
     // Validação antes do envio
     $('#destinatarioForm').on('submit', function(e) {
         const cep = $('#cep').val().replace(/\D/g, '');
         const cpf_cnpj = $('#cpf_cnpj').val().replace(/\D/g, '');
         const uf = $('#uf').val();
+        const ie = $('#ie').val().trim();
         
         if (cep.length !== 8) {
             e.preventDefault();
@@ -362,6 +372,13 @@ $(document).ready(function() {
             e.preventDefault();
             alert('Selecione o estado (UF)!');
             $('#uf').focus();
+            return false;
+        }
+        
+        if (!ie) {
+            e.preventDefault();
+            alert('A Inscrição Estadual é obrigatória. Informe o número da IE ou "ISENTO".');
+            $('#ie').focus();
             return false;
         }
         

@@ -3313,6 +3313,14 @@ def admin_destinatarios_nfe_add(cliente_id: int):
             cpf_cnpj_raw = request.form.get('cpf_cnpj', '')
             cpf_cnpj_limpo = ''.join(filter(str.isdigit, cpf_cnpj_raw))
             
+            # Normalizar e validar IE
+            ie = (request.form.get('ie', '') or '').strip()
+            if ie.upper() == 'ISENTO':
+                ie = 'ISENTO'
+            if not ie:
+                flash('A Inscrição Estadual é obrigatória. Informe o número da IE ou "ISENTO".', 'error')
+                return redirect(url_for('admin.admin_destinatarios_nfe_add', cliente_id=cliente_id))
+            
             # Garantir codigo_uf (campo obrigatório)
             codigo_uf = request.form.get('codigo_uf')
             if not codigo_uf or codigo_uf == 'None':
@@ -3334,7 +3342,7 @@ def admin_destinatarios_nfe_add(cliente_id: int):
                 'tipo_pessoa': request.form.get('tipo_pessoa'),  # Adicionado
                 'nome_razao_social': request.form.get('nome_razao_social'),  # Adicionado
                 'cpf_cnpj': cpf_cnpj_limpo,  # Limpo
-                'ie': request.form.get('ie'),  # Adicionado
+                'ie': ie,
                 'ie_indicador_nfe': request.form.get('ie_indicador_nfe', 'C'),  # Adicionado
                 'email': request.form.get('email'),  # Adicionado
                 'telefone': request.form.get('telefone'),  # Adicionado
@@ -3945,6 +3953,15 @@ def salvar_destinatario():
         cpf_cnpj_raw = request.form.get('cpf_cnpj', '')
         cpf_cnpj_limpo = ''.join(filter(str.isdigit, cpf_cnpj_raw))
         
+        # Normalizar e validar IE
+        ie = (request.form.get('ie', '') or '').strip()
+        if ie.upper() == 'ISENTO':
+            ie = 'ISENTO'
+        if not ie:
+            flash('A Inscrição Estadual é obrigatória. Informe o número da IE ou "ISENTO".', 'error')
+            cliente_id = request.form.get('cliente_id')
+            return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
+        
         # Garantir codigo_uf (campo obrigatório)
         codigo_uf = request.form.get('codigo_uf')
         if not codigo_uf or codigo_uf == 'None':
@@ -3966,7 +3983,7 @@ def salvar_destinatario():
             'tipo_pessoa': request.form.get('tipo_pessoa'),
             'nome_razao_social': request.form.get('nome_razao_social'),
             'cpf_cnpj': cpf_cnpj_limpo,  # Limpo
-            'ie': request.form.get('ie'),
+            'ie': ie,
             'ie_indicador_nfe': request.form.get('ie_indicador_nfe'),
             'email': request.form.get('email'),
             'telefone': request.form.get('telefone'),
@@ -4042,11 +4059,19 @@ def edit_destinatario(destinatario_id: int):
                 }
                 codigo_uf = uf_map.get(uf, '99')
             
+            # Normalizar e validar IE
+            ie = (request.form.get('ie', '') or '').strip()
+            if ie.upper() == 'ISENTO':
+                ie = 'ISENTO'
+            if not ie:
+                flash('A Inscrição Estadual é obrigatória. Informe o número da IE ou "ISENTO".', 'error')
+                return redirect(url_for('admin.edit_destinatario', destinatario_id=destinatario_id))
+            
             data = {
                 'tipo_pessoa': request.form.get('tipo_pessoa'),
                 'nome_razao_social': request.form.get('nome_razao_social'),
                 'cpf_cnpj': cpf_cnpj_limpo,
-                'ie': request.form.get('ie'),
+                'ie': ie,
                 'ie_indicador_nfe': request.form.get('ie_indicador_nfe', '9'),
                 'email': request.form.get('email'),
                 'telefone': request.form.get('telefone'),
