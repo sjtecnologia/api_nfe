@@ -15,15 +15,23 @@ from database.models import CertificadoDigital
 import hashlib
 
 def _get_encryption_key():
-    """Gera chave de criptografia baseada em uma chave mestra"""
-    # Use uma chave mestra do ambiente ou gere uma
-    master_key = os.environ.get('CERT_MASTER_KEY', 'default_master_key_change_in_production_2024')
-    
-    # Deriva uma chave consistente
+    """Gera chave de criptografia baseada em uma chave mestra.
+    CERT_MASTER_KEY deve estar configurada como variável de ambiente.
+    """
+    master_key = os.environ.get('CERT_MASTER_KEY')
+    if not master_key:
+        raise RuntimeError(
+            "CERT_MASTER_KEY não configurada. "
+            "Defina essa variável de ambiente antes de iniciar o servidor."
+        )
+
+    # Salt derivado da própria chave para ser determinístico mas não fixo em código
+    salt = hashlib.sha256(master_key.encode()).digest()[:16]
+
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=b'cert_salt_nfe_2024',  # Salt fixo para consistência
+        salt=salt,
         iterations=100000,
     )
     key = base64.urlsafe_b64encode(kdf.derive(master_key.encode()))
@@ -32,35 +40,23 @@ def _get_encryption_key():
 def _encrypt_password(password):
     """Criptografa a senha do certificado"""
     try:
-        print(f"[AUTH] _encrypt_password: Iniciando criptografia de senha com {len(password)} caracteres")
-        
         if not password or len(password) == 0:
             raise Exception("Senha vazia ou nula")
-        
+
         key = _get_encryption_key()
         f = Fernet(key)
-        
-        # Garantir que é string UTF-8
+
         if isinstance(password, bytes):
             password_str = password.decode('utf-8')
         else:
             password_str = str(password)
-        
-        print(f"[AUTH] _encrypt_password: Senha preparada para criptografia: {len(password_str)} chars")
-        
-        # Criptografar
+
         encrypted_bytes = f.encrypt(password_str.encode('utf-8'))
-        
-        # Codificar em base64 para armazenar no banco
         encrypted_b64 = base64.b64encode(encrypted_bytes).decode('utf-8')
-        
-        print(f"[OK] _encrypt_password: Senha criptografada - {len(encrypted_b64)} caracteres")
-        print(f"[OK] _encrypt_password: Resultado: {encrypted_b64[:50]}...")
-        
+
         return encrypted_b64
-        
+
     except Exception as e:
-        print(f"[X] _encrypt_password: ERRO CRÍTICO: {e}")
         import traceback
         traceback.print_exc()
         raise Exception(f"Falha crítica na criptografia da senha: {e}")
@@ -68,49 +64,27 @@ def _encrypt_password(password):
 def _decrypt_password(encrypted_password):
     """Descriptografa a senha do certificado"""
     try:
-        print(f"[UNLOCK] _decrypt_password: Iniciando descriptografia de {len(encrypted_password)} caracteres")
-        print(f"[UNLOCK] _decrypt_password: Dados: {encrypted_password[:50]}...")
-        
-        # [OK] USAR MESMA LÓGICA DO TESTE QUE FUNCIONOU
         key = _get_encryption_key()
         f = Fernet(key)
-        
-        # Decodificar base64
+
         encrypted_bytes = base64.b64decode(encrypted_password.encode('utf-8'))
-        print(f"[UNLOCK] _decrypt_password: Base64 decodificado: {len(encrypted_bytes)} bytes")
-        
-        # Descriptografar com Fernet
         decrypted_bytes = f.decrypt(encrypted_bytes)
-        decrypted_str = decrypted_bytes.decode('utf-8')
-        
-        print(f"[OK] _decrypt_password: Fernet SUCCESS! Senha descriptografada: {len(decrypted_str)} chars")
-        return decrypted_str
-        
-    except Exception as e:
-        print(f"[X] _decrypt_password: Erro Fernet: {e}")
-        print(f"[X] _decrypt_password: Tentando fallback...")
+        return decrypted_bytes.decode('utf-8')
+
+    except Exception:
         return _decrypt_password_fallback(encrypted_password)
 
 def _decrypt_password_fallback(encrypted_password):
-    """Fallback para senhas antigas ou em texto plano"""
+    """Fallback para senhas antigas (base64 simples ou texto plano).
+    Usado apenas para migração de dados legados.
+    """
     try:
-        print(f"[?] _decrypt_password_fallback: Tentando fallback para {len(encrypted_password)} chars")
-        
-        # Tentar base64 simples (método antigo)
-        try:
-            decoded = base64.b64decode(encrypted_password.encode('utf-8')).decode('utf-8')
-            print(f"[OK] _decrypt_password_fallback: Base64 simples funcionou")
-            return decoded
-        except Exception as b64_e:
-            print(f"[X] _decrypt_password_fallback: Base64 falhou: {b64_e}")
-        
-        # Se não é base64, pode ser texto plano (senhas muito antigas)
-        print(f"[!] _decrypt_password_fallback: Assumindo texto plano")
-        return encrypted_password
-        
-    except Exception as e:
-        print(f"[X] _decrypt_password_fallback: Todos os fallbacks falharam: {e}")
-        return encrypted_password
+        decoded = base64.b64decode(encrypted_password.encode('utf-8')).decode('utf-8')
+        return decoded
+    except Exception:
+        pass
+    # Último recurso: assumir texto plano (senhas muito antigas)
+    return encrypted_password
 
 def process_certificate_a3_registration(db_session, cliente_id, a3_data):
     """
@@ -246,30 +220,14 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
             encoded_content = base64.b64encode(file_content).decode('utf-8')
             print(f"[DATA] process_certificate_upload: Arquivo codificado em Base64 - {len(encoded_content)} chars")
             
-            # [AUTH] CRIPTOGRAFAR SENHA - CRÍTICO!
-            print(f"[AUTH] process_certificate_upload: === INICIANDO CRIPTOGRAFIA DE SENHA ===")
-            print(f"[AUTH] process_certificate_upload: Senha original: '{cert_password}' (tipo: {type(cert_password)})")
-            print(f"[AUTH] process_certificate_upload: Tamanho: {len(cert_password)} caracteres")
-            
+            # Criptografar senha do certificado
             try:
                 encrypted_password = _encrypt_password(cert_password)
-                print(f"[OK] process_certificate_upload: CRIPTOGRAFIA EXECUTADA!")
-                print(f"[OK] process_certificate_upload: Resultado: {len(encrypted_password)} chars")
-                print(f"[OK] process_certificate_upload: Primeiros 50 chars: {encrypted_password[:50]}")
-                
-                # [OK] TESTE IMEDIATO DE ROUND-TRIP
-                print(f"[?] process_certificate_upload: Testando descriptografia imediata...")
+                # Verificar round-trip sem logar o valor
                 test_decrypt = _decrypt_password(encrypted_password)
-                print(f"[?] process_certificate_upload: Descriptografia testada: '{test_decrypt}'")
-                print(f"[?] process_certificate_upload: Original == Descriptografada? {test_decrypt == cert_password}")
-                
                 if test_decrypt != cert_password:
-                    raise Exception(f"FALHA CRÍTICA: Round-trip falhou! Original: '{cert_password}', Descriptografada: '{test_decrypt}'")
-                
-                print(f"[OK] process_certificate_upload: Teste de round-trip passou!")
-                    
+                    raise Exception("Falha na verificação de round-trip da criptografia")
             except Exception as crypto_error:
-                print(f"[X] process_certificate_upload: ERRO CRÍTICO NA CRIPTOGRAFIA: {crypto_error}")
                 import traceback
                 traceback.print_exc()
                 flash(f'Erro crítico na criptografia da senha: {crypto_error}', 'danger')
@@ -329,44 +287,10 @@ def process_certificate_upload(db_session, cliente_id, request_form, request_fil
                 created_by_user_id=current_user.id if current_user.is_authenticated else None
             )
             
-            print(f"[SAVE] process_certificate_upload: Objeto criado - senha no objeto: {cert_obj.senha_certificado[:50]}...")
-            
-            # [OK] SALVAR NO BANCO
-            print(f"[SAVE] process_certificate_upload: Salvando no banco...")
+            # Salvar no banco
             db_session.add(cert_obj)
             db_session.commit()
-            
-            print(f"[OK] process_certificate_upload: Certificado salvo com ID: {cert_obj.certificado_digital_id}")
-            
-            # [OK] VERIFICAÇÃO PÓS-SALVAMENTO
-            print(f"[SEARCH] process_certificate_upload: Verificando dados salvos...")
-            cert_verificacao = db_session.query(CertificadoDigital).filter_by(
-                certificado_digital_id=cert_obj.certificado_digital_id
-            ).first()
-            
-            if cert_verificacao:
-                saved_password = cert_verificacao.senha_certificado
-                print(f"[SEARCH] process_certificate_upload: Senha salva no banco: {len(saved_password)} chars")
-                print(f"[SEARCH] process_certificate_upload: Primeiros 50 chars: {saved_password[:50]}")
-                
-                if saved_password.startswith('gAAAAA'):
-                    print("[OK] process_certificate_upload: SENHA SALVA CRIPTOGRAFADA! [OK]")
-                elif saved_password == cert_password:
-                    print("[X] process_certificate_upload: SENHA SALVA EM TEXTO PLANO! [X]")
-                else:
-                    print("[!] process_certificate_upload: Senha em formato desconhecido")
-                
-                # Teste final de descriptografia
-                try:
-                    final_test = _decrypt_password(saved_password)
-                    if final_test == cert_password:
-                        print("[?] process_certificate_upload: TESTE FINAL PASSOU! Criptografia funcionando 100%")
-                    else:
-                        print("[X] process_certificate_upload: TESTE FINAL FALHOU!")
-                except Exception as final_e:
-                    print(f"[X] process_certificate_upload: ERRO NO TESTE FINAL: {final_e}")
-            
-            print("[OK] process_certificate_upload: Upload concluído com sucesso!")
+
             flash('Certificado enviado e validado com sucesso!', 'success')
             return True, cert_obj
             

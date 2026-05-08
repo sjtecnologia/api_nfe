@@ -443,6 +443,10 @@ def generate_nfe_xml_nfelib(
         emitente_data.get('municipio') or emitente_data.get('nome_municipio') or 'SAO PAULO'
     )
     
+    # Telefone do emitente: apenas dígitos, 6-14 chars conforme schema NFe
+    _fone_emit_raw = (emitente_data.get('telefone') or emitente_data.get('fone') or '').strip()
+    _fone_emit = ''.join(ch for ch in _fone_emit_raw if ch.isdigit())[:14]
+
     ender_emit = TenderEmi(
         xLgr=(emitente_data.get('logradouro') or 'RUA TESTE').strip()[:60],
         nro=str(emitente_data.get('numero') or '0').strip()[:60],
@@ -453,7 +457,8 @@ def generate_nfe_xml_nfelib(
         UF=uf_emitente,
         CEP=limpar_cnpj_cpf(emitente_data.get('cep') or '00000000'),
         cPais="1058",
-        xPais="BRASIL"
+        xPais="BRASIL",
+        fone=_fone_emit if len(_fone_emit) >= 6 else None
     )
     
     # 6. Criar EMIT (emitente) com endereço
@@ -480,7 +485,7 @@ def generate_nfe_xml_nfelib(
     # Buscar regime tributário (pode estar em diferentes campos)
     crt_emitente = str(emitente_data.get('regime_tributario') or 
                       emitente_data.get('regime_tributario_id') or '1')
-    
+
     emit = Nfe.InfNfe.Emit(
         CNPJ=cnpj_emitente,
         xNome=(emitente_data.get('razao_social') or '').strip()[:60],
@@ -1055,11 +1060,19 @@ def generate_nfe_xml_nfelib(
 
     # Calcular valor total da NFe conforme composição fiscal
     # vNF = vProd - vDesc + vFrete + vSeg + vOutro + vII + vIPI + vST + vFCPST + vFCPSTRet + vIPIDevol
-    v_frete = Decimal(str(form_data.get('vFrete', '0.00')))
-    v_seg = Decimal(str(form_data.get('vSeg', '0.00')))
-    v_desc = Decimal(str(form_data.get('vDesc', '0.00')))
-    v_outro = Decimal(str(form_data.get('vOutro', '0.00')))
-    v_ii = Decimal(str(form_data.get('vII', '0.00')))
+    def _to_decimal(value, default='0.00'):
+        """Converte valor para Decimal tratando vírgula, None e strings inválidas."""
+        try:
+            v = str(value).strip().replace(',', '.') if value is not None else default
+            return Decimal(v if v else default)
+        except Exception:
+            return Decimal(default)
+
+    v_frete = _to_decimal(form_data.get('vFrete'), '0.00')
+    v_seg   = _to_decimal(form_data.get('vSeg'),   '0.00')
+    v_desc  = _to_decimal(form_data.get('vDesc'),  '0.00')
+    v_outro = _to_decimal(form_data.get('vOutro'), '0.00')
+    v_ii    = _to_decimal(form_data.get('vII'),    '0.00')
     v_st = Decimal('0.00')
     v_fcpst = Decimal('0.00')
     v_fcpst_ret = Decimal('0.00')
@@ -1095,9 +1108,9 @@ def generate_nfe_xml_nfelib(
         vFCPST=f"{v_fcpst:.2f}",
         vFCPSTRet=f"{v_fcpst_ret:.2f}",
         vProd=f"{v_prod_total:.2f}",
-        vFrete=f"{float(form_data.get('vFrete', '0.00')):.2f}",
-        vSeg=f"{float(form_data.get('vSeg', '0.00')):.2f}",
-        vDesc=f"{float(form_data.get('vDesc', '0.00')):.2f}",
+        vFrete=f"{v_frete:.2f}",
+        vSeg=f"{v_seg:.2f}",
+        vDesc=f"{v_desc:.2f}",
         vII=f"{v_ii:.2f}",
         vIPI=f"{v_ipi_total:.2f}",
         vIPIDevol=f"{v_ipi_devol:.2f}",

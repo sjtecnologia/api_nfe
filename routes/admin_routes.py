@@ -4210,13 +4210,13 @@ def list_certificados():
         row_cliente = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
         cliente_nome = row_cliente[0] if row_cliente else 'Cliente'
         rows = db.execute(text("""
-            SELECT certificado_digital_id, fingerprint, conteudo_certificado, validade_fim, ativo, nome_arquivo_original, data_upload
+            SELECT certificado_digital_id, fingerprint, validade_fim, ativo, nome_arquivo_original, data_upload
             FROM certificados_digitais
             WHERE cliente_id = :cid
             ORDER BY certificado_digital_id DESC
         """), {'cid': cliente_id}).fetchall()
         certificados = [_safe_row_to_dict(r, [
-            'certificado_digital_id','fingerprint','conteudo_certificado','validade_fim','ativo','nome_arquivo_original','data_upload'
+            'certificado_digital_id','fingerprint','validade_fim','ativo','nome_arquivo_original','data_upload'
         ]) for r in rows]
         return render_template('admin/certificados/list.html', certificados=certificados, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:

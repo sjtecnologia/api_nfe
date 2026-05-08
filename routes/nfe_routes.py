@@ -318,7 +318,8 @@ def emitir_nfe():
             'uf': emitente_data.uf,
             'inscricao_estadual': emitente_data.inscricao_estadual,
             'regime_tributario_id': emitente_data.regime_tributario_id,  # [?] CRÍTICO para buscar regras tributárias
-            'ambiente': emitente_data.ambiente  # Campo ambiente (1=Produção, 2=Homologação - padrão SEFAZ)
+            'ambiente': emitente_data.ambiente,  # Campo ambiente (1=Produção, 2=Homologação - padrão SEFAZ)
+            'telefone': emitente_data.telefone_contato  # Telefone do emitente para DANFE
         }
         
         if request.method == 'POST':
@@ -1079,6 +1080,26 @@ def emitir_nfe():
                             traceback.print_exc()
                             # Não falhar a emissão por causa do DANFE
                             flash(f'NFe emitida com sucesso! DANFE: {str(e)}', 'warning')
+                        
+                        # === ENVIAR EMAIL AUTOMATICAMENTE PARA O DESTINATÁRIO ===
+                        try:
+                            print(" === ENVIANDO EMAIL AUTOMÁTICO PARA DESTINATÁRIO ===")
+                            from services.email_service import enviar_nfe_automaticamente
+                            resultado_email = enviar_nfe_automaticamente(nfe_id, db)
+                            if resultado_email.get('success'):
+                                print(f"✅ Email automático enviado com sucesso!")
+                                flash('Email com NFe enviado automaticamente para o destinatário!', 'success')
+                            else:
+                                msg_erro = resultado_email.get('message', 'Erro desconhecido')
+                                print(f"⚠️  Email automático não enviado: {msg_erro}")
+                                if 'sem email' not in msg_erro.lower() and 'não cadastrado' not in msg_erro.lower():
+                                    flash(f'Aviso: Não foi possível enviar email automático - {msg_erro}', 'warning')
+                        except Exception as email_error:
+                            import traceback
+                            print(f"❌ Erro ao enviar email automático: {str(email_error)}")
+                            traceback.print_exc()
+                            # Não bloquear a emissão por causa do email
+                            flash('NFe emitida com sucesso, mas houve erro no envio automático do email.', 'warning')
                     else:
                         msg = f'ERRO: NFe rejeitada: {resultado_sefaz.get("message")}'
                         print(msg)
@@ -3567,8 +3588,10 @@ def compartilhar_nfe(nfe_id):
                     
                     xml_content = json_nfe.get('xml_content')
                     if xml_content:
+                        chave = nfe_data.get('chave_acesso') or ''
+                        xml_filename = f'{chave}.xml' if chave else f'nfe-{nfe_data.get("numero", nfe_id)}.xml'
                         anexos.append({
-                            'nome': f'nfe_{nfe_id}.xml',
+                            'nome': xml_filename,
                             'conteudo': xml_content.encode('utf-8'),
                             'tipo': 'application/xml'
                         })
@@ -3627,8 +3650,10 @@ def compartilhar_nfe(nfe_id):
                                 if os.path.exists(pdf_path):
                                     with open(pdf_path, 'rb') as pdf_file:
                                         pdf_content = pdf_file.read()
+                                        chave = nfe_data.get('chave_acesso') or ''
+                                        danfe_filename = f'danfe_{chave}.pdf' if chave else f'danfe-{nfe_data.get("numero", nfe_id)}.pdf'
                                         anexos.append({
-                                            'nome': f'danfe_{nfe_id}.pdf',
+                                            'nome': danfe_filename,
                                             'conteudo': pdf_content,
                                             'tipo': 'application/pdf'
                                         })
@@ -3679,60 +3704,18 @@ def compartilhar_nfe(nfe_id):
 
             assunto = f'NF-e nº {_numero_comp} – {_emitente_comp}'
 
-            _anexos_lista = ""
-            if include_danfe:
-                _anexos_lista += "<li>DANFE (PDF)</li>"
-            if include_xml:
-                _anexos_lista += "<li>XML da NF-e</li>"
-
-            corpo_html = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  body {{ margin:0; padding:20px; background:#f4f4f4; font-family:Arial,sans-serif; }}
-  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #dadce0; border-radius:8px; overflow:hidden; }}
-  .header {{ background:#1565c0; color:#ffffff; padding:28px 30px; text-align:center; }}
-  .header h1 {{ margin:0; font-size:22px; font-weight:700; line-height:1.3; }}
-  .body {{ padding:30px 30px 10px 30px; color:#333333; }}
-  .body p {{ margin:0 0 14px 0; font-size:14px; line-height:1.6; }}
-  .info-table {{ width:100%; border-collapse:collapse; background:#f8f9fa; margin:18px 0 22px 0; font-size:13px; }}
-  .info-table td {{ padding:10px 14px; border-bottom:1px solid #e0e0e0; vertical-align:top; }}
-  .info-table td:first-child {{ color:#555; font-weight:600; white-space:nowrap; width:38%; }}
-  .info-table td:last-child {{ color:#111; word-break:break-all; }}
-  .info-table tr:last-child td {{ border-bottom:none; }}
-  .anexos {{ margin:0 0 20px 0; font-size:14px; }}
-  .anexos strong {{ display:block; margin-bottom:6px; }}
-  .anexos ul {{ margin:0; padding-left:20px; }}
-  .anexos li {{ margin-bottom:4px; }}
-  .footer {{ text-align:center; padding:16px 30px; font-size:12px; color:#888888; border-top:1px solid #eeeeee; }}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="header">
-    <h1>NF-e {_numero_comp} de {_emitente_comp}</h1>
-  </div>
-  <div class="body">
-    <p>Prezado(a),</p>
-    <p>Segue anexo a nota fiscal eletrônica emitida por <strong>{_emitente_comp}</strong>.</p>
-    <table class="info-table">
-      <tr><td>Numero da NF-e</td><td>{_numero_comp}</td></tr>
-      <tr><td>Emitente</td><td>{_emitente_comp}</td></tr>
-      <tr><td>Destinatário</td><td>{_dest_comp}</td></tr>
-      <tr><td>Chave de acesso</td><td style="font-size:11px">{_chave_comp}</td></tr>
-      <tr><td>Protocolo</td><td>{_proto_comp}</td></tr>
-      <tr><td>Data de autorização</td><td>{_data_aut_comp_fmt}</td></tr>
-    </table>
-    <div class="anexos">
-      <strong>Anexos incluídos:</strong>
-      <ul>{_anexos_lista}</ul>
-    </div>
-  </div>
-  <div class="footer">Este email foi enviado automaticamente pelo EmiteMax.</div>
-</div>
-</body>
-</html>"""
+            from services.email_service import gerar_template_email_nfe
+            corpo_html = gerar_template_email_nfe(
+                nfe_id=nfe_id,
+                numero_nfe=_numero_comp,
+                emitente=_emitente_comp,
+                destinatario=_dest_comp,
+                chave_acesso=_chave_comp,
+                protocolo=_proto_comp,
+                data_autorizacao=_data_aut_comp_fmt,
+                valor_total=nfe_data.get('valor_total', 0),
+                anexos=anexos,
+            )
             
             print(f" Enviando email...")
             

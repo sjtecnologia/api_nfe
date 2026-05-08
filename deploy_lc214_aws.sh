@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 # Configurações do servidor
 SSH_KEY="$HOME/Downloads/nfe-new-api-key.pem"
 SERVER_USER="ubuntu"
-SERVER_IP="100.26.12.107"
+SERVER_IP="3.87.73.106"
 SERVER_PATH="/home/ubuntu/api_nfe"
 SSH_CMD="ssh -i $SSH_KEY $SERVER_USER@$SERVER_IP"
 SCP_CMD="scp -i $SSH_KEY"
@@ -103,18 +103,19 @@ BACKUP_PATH="/home/ubuntu/backups/$BACKUP_FILE"
 
 echo -e "${BLUE}💾 Criando backup em $SERVER_IP...${NC}"
 
-$SSH_CMD << EOF || true
+$SSH_CMD << EOF
     mkdir -p /home/ubuntu/backups
-    PGPASSWORD='$DB_PASSWORD' pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -F p -f $BACKUP_PATH 2>/dev/null
+    PGPASSWORD='$DB_PASSWORD' pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -F p -f $BACKUP_PATH
     if [ -f "$BACKUP_PATH" ]; then
         BACKUP_SIZE=\$(du -h "$BACKUP_PATH" | cut -f1)
         echo "✅ Backup criado: \$BACKUP_SIZE"
     else
-        echo "⚠️  Backup não criado (será ignorado)"
+        echo "❌ Erro ao criar backup"
+        exit 1
     fi
 EOF
 
-echo -e "${YELLOW}⚠️  Etapa de backup concluída (verificar manualmente se necessário)${NC}"
+echo -e "${GREEN}✅ Backup concluído: $BACKUP_FILE${NC}"
 
 ###############################################################################
 # ETAPA 4: ATUALIZAR CÓDIGO NO SERVIDOR

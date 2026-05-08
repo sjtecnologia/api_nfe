@@ -7,13 +7,6 @@ from auth.login_manager import init_login_manager
 from auth.permissions import has_permission
 from flask_login import current_user, login_required
 from models.user import User
-from flask.wrappers import Request as FlaskRequest
-
-
-class CustomRequest(FlaskRequest):
-    # Suporta NFe com até 990 itens (cada item tem ~15 campos = ~14850 campos)
-    max_form_parts = 15000
-    max_form_memory_size = 16 * 1024 * 1024  # 16MB
 
 # Configurar encoding UTF-8 no stdout para Windows
 import sys
@@ -51,8 +44,15 @@ from auth.login_manager import init_login_manager
 
 
 app = Flask(__name__)
-app.request_class = CustomRequest
 app.secret_key = SECRET_KEY
+
+# Werkzeug 3.x define max_form_memory_size=500KB e max_form_parts=1000 como atributos de classe.
+# Flask 2.3.x não repassa app.config para esses atributos — é preciso fazer monkey-patch direto.
+# NFes com muitos itens excedem esses limites e geram erro 413.
+from werkzeug.wrappers import Request as WerkzeugRequest
+WerkzeugRequest.max_form_memory_size = 50 * 1024 * 1024  # 50MB (padrão: 500KB)
+WerkzeugRequest.max_form_parts = 10000                    # 10.000 campos (padrão: 1000)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024       # 50MB
 
 # Configurações de sessão para compatibilidade com iOS/Safari
 app.config['SESSION_COOKIE_SECURE'] = True  # Apenas HTTPS
@@ -166,6 +166,18 @@ def inject_permissions():
         is_viewer_only=is_viewer_only,
         encode_id=encode_id
     )
+
+@app.after_request
+def add_security_headers(response):
+    """Adiciona headers de segurança HTTP em todas as respostas"""
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    return response
+
 
 @app.route('/')
 def home():

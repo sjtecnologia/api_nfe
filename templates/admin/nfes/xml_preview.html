@@ -630,6 +630,8 @@
     "id": {{ (nfe.nfe_emitida_id or 0)|tojson|safe }},
     "status": {{ (nfe.status or "")|tojson|safe }},
     "chaveAcesso": {{ (nfe.chave_acesso or "")|tojson|safe }},
+    "numero": {{ (nfe.numero or 0)|tojson|safe }},
+    "serie": {{ (nfe.serie or 1)|tojson|safe }},
     "hasXml": {{ (nfe.json_nfe and nfe.json_nfe.get('xml_content') if nfe.json_nfe else false)|tojson|safe }}
 }
 </script>
@@ -869,7 +871,8 @@
                 
                 var a = document.createElement('a');
                 a.href = url;
-                a.download = `nfe-${nfeData.id}.xml`;
+                var xmlFilename = nfeData.chaveAcesso ? `${nfeData.chaveAcesso}.xml` : `nfe-${String(nfeData.numero).padStart(9, '0')}-${nfeData.serie}.xml`;
+                a.download = xmlFilename;
                 a.style.display = 'none';
                 
                 document.body.appendChild(a);

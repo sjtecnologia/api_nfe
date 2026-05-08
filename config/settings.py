@@ -1,7 +1,17 @@
 import os
+from dotenv import load_dotenv
+
+# Carregar .env antes de qualquer leitura de variável de ambiente
+load_dotenv()
 
 # Configurações do Flask
-SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'sua_chave_secreta_padrao_muito_complexa_e_longa_aqui')
+_secret_key = os.getenv('FLASK_SECRET_KEY')
+if not _secret_key:
+    raise RuntimeError(
+        "FLASK_SECRET_KEY não configurada. "
+        "Defina essa variável de ambiente antes de iniciar o servidor."
+    )
+SECRET_KEY = _secret_key
 
 # Configurações do Banco de Dados
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo2505@localhost:5432/sjtnfe")
@@ -10,8 +20,8 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo250
 SEFAZ_AMBIENTE_HOMOLOGACAO = True  # True = Homologação, False = Produção
 USAR_CERTIFICADO_REAL = True  # True = Usar certificado real, False = Simulado
 
-# Configurações de Debug
-DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+# Configurações de Debug — padrão False para segurança em produção
+DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
 HOST = os.getenv('FLASK_HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', 8080))
 

@@ -135,7 +135,7 @@ def extract_basic_info_from_xml(xml_content: Union[str, bytes]) -> Dict[str, str
     
     return info
 
-def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, logo_path: Optional[str] = None) -> bool:
+def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, logo_path: Optional[str] = None, fone_emitente: Optional[str] = None) -> bool:
     """
     Gera o DANFE oficial usando a biblioteca nfelib
     
@@ -143,6 +143,7 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
         xml_content: Conteúdo XML da NFe
         output_pdf_path: Caminho para salvar o PDF
         logo_path: Caminho opcional para o logo da empresa
+        fone_emitente: Telefone do emitente para injetar no XML se não estiver presente
         
     Returns:
         bool: True se gerado com sucesso, False caso contrário
@@ -194,6 +195,28 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
             return _re.sub(r'<dest>.*?</dest>', _substituir, xml_s, flags=_re.DOTALL)
         xml_str = _inject_fone_no_dest(xml_str)
         print("[OK] Pré-processamento do fone do destinatário concluído")
+
+        # ⚠️ CORREÇÃO: brazilfiscalreport busca <fone> como filho DIRETO de <emit>,
+        # mas o nfelib coloca <fone> dentro de <enderEmit>.
+        # Copiamos o fone de <enderEmit> para direto em <emit> (antes de </emit>).
+        def _inject_fone_no_emit(xml_s: str) -> str:
+            def _substituir_emit(m):
+                bloco_emit = m.group(0)
+                # Verificar se já tem <fone> diretamente em <emit> (fora de <enderEmit>)
+                # Remove bloco enderEmit para checar apenas filhos diretos de emit
+                bloco_sem_ender = _re.sub(r'<enderEmit>.*?</enderEmit>', '', bloco_emit, flags=_re.DOTALL)
+                if '<fone>' in bloco_sem_ender:
+                    return bloco_emit  # já tem fone direto, nada a fazer
+                # Usar fone_emitente do banco de dados (passado como parâmetro)
+                if fone_emitente:
+                    fone_val = ''.join(ch for ch in fone_emitente if ch.isdigit())[:14]
+                    if len(fone_val) >= 6:
+                        bloco_emit = bloco_emit.replace('</emit>', f'<fone>{fone_val}</fone></emit>', 1)
+                        print(f"[OK] fone do emitente injetado no <emit> (via banco): {fone_val}")
+                return bloco_emit
+            return _re.sub(r'<emit>.*?</emit>', _substituir_emit, xml_s, flags=_re.DOTALL)
+        xml_str = _inject_fone_no_emit(xml_str)
+        print("[OK] Pré-processamento do fone do emitente concluído")
         
         # Verificar se já é nfeProc ou se precisa extrair NFe
         is_nfeproc = "<nfeProc" in xml_str
@@ -287,83 +310,40 @@ def generate_danfe_nfelib(xml_content: Union[str, bytes], output_pdf_path: str, 
                     print(f"[!] Não foi possível extrair detalhes: {e}")
                 
             except Exception as e:
-                logger.error(f"[X] Erro ao carregar NFe do XML: {str(e)}")
-                print(f"[X] ERRO ao carregar NFe do XML: {str(e)}")
-                print(f"[X] Traceback: {traceback.format_exc()}")
-                
-                # Tentar remover nfeProc wrapper se houver
-                if "<nfeProc" in xml_str and "<NFe" in xml_str:
-                    print("[?] Tentando extrair NFe de dentro de nfeProc...")
-                    try:
-                        # Extrair apenas o conteúdo NFe
-                        import re
-                        nfe_match = re.search(r'<NFe[^>]*>.*?</NFe>', xml_str, re.DOTALL)
-                        if nfe_match:
-                            xml_nfe_only = '<?xml version="1.0" encoding="UTF-8"?>\n' + nfe_match.group(0)
-                            nfe_proc = NfeProc.from_xml(xml_nfe_only)
-                            print("[OK] NFe extraída e carregada com sucesso")
-                        else:
-                            print("[X] Não foi possível extrair NFe")
-                            return False
-                    except Exception as e2:
-                        print(f"[X] Falha ao extrair NFe: {e2}")
-                        return False
-                else:
-                    return False
+                logger.warning(f"[!] NfeProc.from_xml falhou (usando XML direto): {str(e)}")
+                print(f"[!] NfeProc.from_xml falhou (continuando com XML direto): {str(e)}")
+                nfe_proc = None
             
-            # Gerar PDF
+            # Gerar PDF usando brazilfiscalreport diretamente com o XML pré-processado
+            # (que já tem <fone> injetado). Não usar nfe_proc.to_pdf() pois ele re-serializa
+            # o XML via xsdata perdendo o <fone> injetado.
             try:
-                logger.info("[?] Gerando PDF...")
-                print("[?] Gerando PDF...")
+                logger.info("[?] Gerando PDF com brazilfiscalreport diretamente...")
+                print("[?] Gerando PDF com brazilfiscalreport diretamente...")
                 
-                # Tentar diferentes abordagens para gerar PDF
+                from brazilfiscalreport.danfe import Danfe as BFRDanfe
+                xml_bytes = xml_str.encode('utf-8') if isinstance(xml_str, str) else xml_str
+                
                 pdf_bytes = None
                 used_method = None
                 
-                # Método 1: Tentar com config (logo) se disponível
+                # Método 1: Com logo
                 if logo_path and os.path.exists(logo_path):
                     try:
                         from brazilfiscalreport.danfe import DanfeConfig
                         config = DanfeConfig(logo=logo_path)
-                        logger.info(f"[OK] Logo configurada: {logo_path}")
-                        print(f"[OK] Logo configurada: {logo_path}")
-                        
-                        print("[?] Tentando to_pdf() com logo...")
-                        pdf_bytes = nfe_proc.to_pdf(config=config)
+                        pdf_bytes = bytes(BFRDanfe(xml=xml_bytes, config=config).output(dest="S"))
                         used_method = "com logo"
-                        print(f"[OK] PDF gerado com logo: {len(pdf_bytes) if pdf_bytes else 0} bytes")
-                    except ImportError:
-                        logger.warning(f"[!] DanfeConfig não disponível")
-                        print(f"[!] DanfeConfig não disponível")
+                        print(f"[OK] PDF gerado com logo: {len(pdf_bytes)} bytes")
                     except Exception as e:
                         logger.warning(f"[!] Erro ao gerar com logo: {e}")
                         print(f"[!] Erro ao gerar com logo: {e}")
                 
-                # Método 2: Sem logo/config
+                # Método 2: Sem logo
                 if not pdf_bytes:
-                    try:
-                        print("[?] Tentando to_pdf() sem logo...")
-                        pdf_bytes = nfe_proc.to_pdf()
-                        used_method = "sem logo"
-                        print(f"[OK] PDF gerado sem logo: {len(pdf_bytes) if pdf_bytes else 0} bytes")
-                    except Exception as e:
-                        logger.warning(f"[!] Erro ao gerar sem logo: {e}")
-                        print(f"[!] Erro ao gerar sem logo: {e}")
-                        print(f"   Traceback: {traceback.format_exc()}")
-                
-                # Método 3: Tentar diferentes engines explicitamente
-                if not pdf_bytes:
-                    engines_to_try = ['brazilfiscalreport', 'weasyprint']
-                    for engine_name in engines_to_try:
-                        try:
-                            print(f"[?] Tentando engine explícita: {engine_name}")
-                            pdf_bytes = nfe_proc.to_pdf(engine=engine_name)
-                            used_method = f"engine {engine_name}"
-                            print(f"[OK] PDF gerado com {engine_name}: {len(pdf_bytes) if pdf_bytes else 0} bytes")
-                            break
-                        except Exception as e:
-                            print(f"[X] Engine {engine_name} falhou: {e}")
-                            continue
+                    pdf_bytes = bytes(BFRDanfe(xml=xml_bytes).output(dest="S"))
+                    used_method = "sem logo"
+                    print(f"[OK] PDF gerado sem logo: {len(pdf_bytes)} bytes")
                 
                 if not pdf_bytes:
                     logger.error("[X] Nenhum método de geração de PDF funcionou")
@@ -685,8 +665,9 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str], clie
         
         # Buscar logo do cliente (prioridade) ou logo padrão
         logo_path = None
+        fone_emitente = None
         
-        # 1. Tentar buscar logo do cliente no banco de dados
+        # 1. Tentar buscar logo e telefone do cliente no banco de dados
         if cliente_id:
             try:
                 from database.connection import SessionLocal
@@ -724,6 +705,14 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str], clie
                     logger.warning(f"[!] Coluna logo_path não existe na tabela clientes - migration não foi executada")
                     print(f"[!] ATENÇÃO: Execute a migration SQL para adicionar logo_path!")
                     
+                # Buscar telefone do cliente
+                try:
+                    fone_row = db.execute(text("SELECT telefone_contato FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
+                    if fone_row and fone_row[0]:
+                        fone_emitente = fone_row[0]
+                        print(f"[OK] Telefone do emitente encontrado: {fone_emitente}")
+                except Exception as fe:
+                    print(f"[!] Erro ao buscar telefone do cliente: {fe}")
                 db.close()
             except Exception as e:
                 logger.warning(f"[!] Erro ao buscar logo do cliente: {e}")
@@ -781,7 +770,7 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str], clie
                 if nfelib_available:
                     print("[START] Chamando generate_danfe_nfelib...")
                     try:
-                        resultado = generate_danfe_nfelib(xml_content, output_pdf_path, logo_path)
+                        resultado = generate_danfe_nfelib(xml_content, output_pdf_path, logo_path, fone_emitente=fone_emitente)
                         print(f"[DATA] Resultado generate_danfe_nfelib: {resultado}")
                         
                         if resultado:

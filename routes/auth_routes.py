@@ -25,13 +25,14 @@ def login():
             db = next(get_db())
             print("[OK] Conexão estabelecida")
             
-            print("[SEARCH] Buscando usuário no banco por EMAIL...")
-            # [OK] BUSCA POR EMAIL AO INVÉS DE USERNAME
+            print("[SEARCH] Buscando usuário no banco por EMAIL ou USERNAME...")
+            # Aceita email ou username, sem distinção de maiúsculas/minúsculas
             result = db.execute(text("""
                 SELECT id, username, email, password_hash, _is_active
                 FROM users
-                WHERE email = :email AND _is_active = true
-            """), {"email": email})
+                WHERE (LOWER(email) = LOWER(:login) OR LOWER(username) = LOWER(:login))
+                  AND _is_active = true
+            """), {"login": email})
             
             user_data = result.first()
             print(f"[LOG] Resultado da query: {'Usuário encontrado' if user_data else 'Usuário não encontrado'}")

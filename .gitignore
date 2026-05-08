@@ -1,65 +1,33 @@
 .env
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-
-# Virtualenv
+# Ambiente virtual
 venv/
 .venv/
+env/
 
-# Arquivos gerados em runtime
-static/danfe/
-static/xml/
+# Logs
 logs/
-build.log
+*.log
 
-# Backups, dumps e pacotes gerados
-*.tar.gz
-backups/*.sql
-backups/*.csv
-backups/*.py
-backups/*.py.*
-backups/*.bak
-backups/backup_*/
-deployment/backups/
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Bases locais e artefatos de banco
-database/sjtnfedb
-*.sqlite
-*.sqlite3
-*.db
-
-# XMLs temporarios de debug/teste
-*_server.xml
-nfe_*.xml
-test_nfse_nt007_output.xml
-
-# Chaves e segredos fora do padrao raiz
-Documentacao/deploy_id_rsa
-Documentacao/deploy_id_rsa.pub
-Documentacao/nfe_api_key.pem
-Documentacao/nfe_api_key_lf.pem
-
-# Arquivos temporários de debug/migração
-fix_*.py
-debug_*.py
-nfe_latest.xml
+# Backups
+backups/
 *.bak
 *.bak-*
 
-# Certificados e chaves
-*.pfx
-*.p12
-*.pem
-*.key
-*.cer
+# Arquivos de ambiente
+.env.bak*
+.env.bak_*
 
-# IDE
-.vscode/
-.idea/
-
-# OS
+# Arquivos do sistema
 .DS_Store
-Thumbs.db
+*.DS_Store
+
+# Banco de dados local
+database/sjtnfedb
+database/*.sql
