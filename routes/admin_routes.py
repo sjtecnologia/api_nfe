@@ -19,7 +19,8 @@ from auth.decorators import (
     admin_required, 
     super_admin_required,
     block_viewer_access,
-    editor_or_admin_required
+    editor_or_admin_required,
+    permission_required,
 )
 
 # Inicializa get_db na primeira chamada
@@ -181,14 +182,7 @@ def upload_ncm_csv():
         return redirect(url_for('admin.list_ncms'))
     return render_template('admin/ncms/upload_csv.html')
 
-# Defina o decorator permission_required (stub ou real)
-try:
-    from ..core.permissions import permission_required  # type: ignore
-except Exception:
-    def permission_required(permission):
-        def decorator(f):
-            return f
-        return decorator
+# permission_required importado de auth.decorators no topo do arquivo.
 
 # Inicializa get_db na primeira chamada
 from database.connection import get_db
@@ -230,15 +224,7 @@ def edit_ncm(ncm_id):
 
 
 
-# Defina o decorator permission_required (stub ou real)
-try:
-    # Tente importar o real
-    from ..core.permissions import permission_required  # type: ignore
-except Exception:
-    def permission_required(permission):
-        def decorator(f):
-            return f
-        return decorator
+# permission_required importado de auth.decorators no topo do arquivo.
 
 # ...existing code...
 @admin_bp.route('/produtos/<int:produto_id>/duplicar', methods=['POST'])
@@ -288,47 +274,7 @@ def duplicar_produto(produto_id: int):
     finally:
         db.close()
 
-# Importe o decorator permission_required
-try:
-    import sys
-    from pathlib import Path
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    core_dir = BASE_DIR / "core"
-    if str(BASE_DIR) not in sys.path:
-        sys.path.append(str(BASE_DIR))
-    if str(core_dir) not in sys.path:
-        sys.path.append(str(core_dir))
-    # Certifique-se que core/permissions.py existe e core tem __init__.py
-    # Se o erro persistir, tente importar via caminho relativo:
-    try:
-        # Tente importar via caminho relativo se estiver dentro de um pacote
-        try:
-            from ..core.permissions import permission_required  # type: ignore
-        except ImportError:
-            # Fallback: tente importar absoluto se sys.path estiver correto
-            try:
-                from ..core.permissions import permission_required  # type: ignore
-            except ImportError:
-                # Defina um stub para evitar erro de importação (ajuste conforme sua implementação real)
-                def permission_required(permission):
-                    def decorator(f):
-                        return f
-                    return decorator
-    except ImportError:
-        try:
-            from ..core.permissions import permission_required  # type: ignore
-        except ImportError:
-            # Defina um stub para evitar erro de importação (ajuste conforme sua implementação real)
-            def permission_required(permission):
-                def decorator(f):
-                    return f
-                return decorator
-except ImportError:
-    # Defina um stub para evitar erro de importação (ajuste conforme sua implementação real)
-    def permission_required(permission):
-        def decorator(f):
-            return f
-        return decorator
+# permission_required importado de auth.decorators no topo do arquivo.
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
@@ -412,15 +358,12 @@ def _safe_row_to_dict(row, columns: Optional[List[str]] = None) -> Dict[str, Any
         return {}
 
 def resolve_cliente_id(param_name: str = 'cliente_id', required: bool = False) -> Optional[int]:
-    cid = request.args.get(param_name) or request.form.get(param_name) or session.get('active_cliente_id')
-    if cid is None:
-        return None
-    try:
-        return int(cid)
-    except (TypeError, ValueError):
-        if required:
-            raise
-        return None
+    """Resolve cliente_id de args, form ou sessão (centralizado em utils.request_utils)."""
+    from utils.request_utils import get_current_cliente_id
+    result = get_current_cliente_id(param_name)
+    if result is None and required:
+        raise ValueError(f'Parâmetro {param_name} obrigatório não fornecido')
+    return result
 
 # Inicializa get_db na primeira chamada
 from database.connection import get_db
@@ -1872,32 +1815,9 @@ def dashboard():
         periodo = request.args.get('periodo', 'tudo')
         data_inicio_str = request.args.get('data_inicio')
         data_fim_str = request.args.get('data_fim')
-        
-        # Calcular datas de filtro
-        hoje = datetime.now()
-        data_inicio = None
-        data_fim = None
-        
-        if data_inicio_str and data_fim_str:
-            # Período customizado
-            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
-            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
-        elif periodo == 'hoje':
-            data_inicio = hoje.replace(hour=0, minute=0, second=0, microsecond=0)
-            data_fim = hoje.replace(hour=23, minute=59, second=59, microsecond=999999)
-        elif periodo == 'semana':
-            data_inicio = hoje - timedelta(days=hoje.weekday())
-            data_fim = hoje
-        elif periodo == 'mes':
-            data_inicio = hoje.replace(day=1)
-            data_fim = hoje
-        elif periodo == 'trimestre':
-            data_inicio = hoje - timedelta(days=90)
-            data_fim = hoje
-        elif periodo == 'ano':
-            data_inicio = hoje.replace(month=1, day=1)
-            data_fim = hoje
-        # periodo == 'tudo' não define filtros
+
+        from utils.date_utils import parse_date_range
+        data_inicio, data_fim = parse_date_range(data_inicio_str, data_fim_str, periodo)
         
         # KPIs principais
         kpis = {}
@@ -2162,35 +2082,9 @@ def dashboard_api_data():
         periodo = request.args.get('periodo', 'tudo')
         data_inicio_str = request.args.get('data_inicio')
         data_fim_str = request.args.get('data_fim')
-        
-        print(f"[DEBUG] Período: {periodo}, data_inicio: {data_inicio_str}, data_fim: {data_fim_str}")
-        
-        # Calcular datas de filtro
-        hoje = datetime.now()
-        data_inicio = None
-        data_fim = None
-        
-        if data_inicio_str and data_fim_str:
-            try:
-                data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d')
-                data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d')
-            except Exception as e:
-                print(f"[WARN] Erro ao parsear datas: {e}")
-        elif periodo == 'hoje':
-            data_inicio = hoje.replace(hour=0, minute=0, second=0, microsecond=0)
-            data_fim = hoje.replace(hour=23, minute=59, second=59, microsecond=999999)
-        elif periodo == 'semana':
-            data_inicio = hoje - timedelta(days=hoje.weekday())
-            data_fim = hoje
-        elif periodo == 'mes':
-            data_inicio = hoje.replace(day=1)
-            data_fim = hoje
-        elif periodo == 'trimestre':
-            data_inicio = hoje - timedelta(days=90)
-            data_fim = hoje
-        elif periodo == 'ano':
-            data_inicio = hoje.replace(month=1, day=1)
-            data_fim = hoje
+
+        from utils.date_utils import parse_date_range
+        data_inicio, data_fim = parse_date_range(data_inicio_str, data_fim_str, periodo)
         
         print(f"[DEBUG] Datas calculadas: {data_inicio} até {data_fim}")
         

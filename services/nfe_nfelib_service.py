@@ -8,11 +8,10 @@ from typing import Dict, Any
 from decimal import Decimal
 from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe
 from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import TenderEmi, Tendereco
-from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
+from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf, normalizar_texto as remover_acentos
 from services.ibs_cbs_service import calcular_ibs_cbs, gerar_xml_ibscbs, gerar_xml_totais_ibscbs
 from config.settings import HABILITAR_IBS_CBS
 import re
-import unicodedata
 
 
 # Mapeamento de códigos IBGE mais comuns → nome do município
@@ -31,19 +30,7 @@ MUNICIPIOS_IBGE = {
 }
 
 
-def remover_acentos(texto: str) -> str:
-    """
-    Remove acentos e caracteres especiais de um texto
-    Exemplo: 'ASSOCIAÇÃO' → 'ASSOCIACAO'
-    """
-    if not texto:
-        return texto
-    # Normaliza para NFD (separa caracteres base de acentos)
-    nfd = unicodedata.normalize('NFD', texto)
-    # Remove marcas de acentuação (categoria 'Mn')
-    sem_acentos = ''.join(char for char in nfd if unicodedata.category(char) != 'Mn')
-    return sem_acentos
-
+# remover_acentos foi removida: importada de utils.helpers como normalizar_texto (acima).
 
 def normalizar_municipio(codigo_ibge: str, nome_municipio: str) -> str:
     """

@@ -4,6 +4,7 @@ Validadores específicos para NFC-e (Nota Fiscal de Consumidor Eletrônica)
 
 from typing import Dict, List, Any
 import re
+from utils.helpers import limpar_cnpj_cpf
 
 
 def validar_dados_nfce(dados: Dict[str, Any]) -> List[str]:
@@ -82,7 +83,7 @@ def validar_dados_nfce(dados: Dict[str, Any]) -> List[str]:
         
         if cpf_cnpj:
             # Remove formatação
-            cpf_cnpj_limpo = re.sub(r'[^\d]', '', cpf_cnpj)
+            cpf_cnpj_limpo = limpar_cnpj_cpf(cpf_cnpj)
             
             if len(cpf_cnpj_limpo) == 11:
                 # Validar CPF
@@ -385,7 +386,7 @@ def formatar_cpf_cnpj(valor: str) -> str:
         CPF/CNPJ formatado
     """
     # Remove caracteres não numéricos
-    numeros = re.sub(r'[^\d]', '', valor)
+    numeros = limpar_cnpj_cpf(valor)
     
     if len(numeros) == 11:
         # Formatar CPF: 000.000.000-00

@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from decimal import Decimal
+from utils.helpers import limpar_cnpj_cpf, formatar_cnpj, formatar_cpf  # noqa: F401 (reexported)
 
 def validar_cnpj(cnpj):
     """
@@ -308,28 +309,5 @@ def validar_xml_nfe(xml_content):
     print(f"[OK] VALIDAÇÃO XML - XML válido!")
     return True, []
 
-def limpar_cnpj_cpf(documento):
-    """
-    Remove caracteres não numéricos de CPF/CNPJ
-    """
-    if not documento:
-        return ''
-    return re.sub(r'[^0-9]', '', str(documento))
-
-def formatar_cnpj(cnpj):
-    """
-    Formata CNPJ no padrão XX.XXX.XXX/XXXX-XX
-    """
-    cnpj = limpar_cnpj_cpf(cnpj)
-    if len(cnpj) == 14:
-        return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:14]}"
-    return cnpj
-
-def formatar_cpf(cpf):
-    """
-    Formata CPF no padrão XXX.XXX.XXX-XX
-    """
-    cpf = limpar_cnpj_cpf(cpf)
-    if len(cpf) == 11:
-        return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:11]}"
-    return cpf
+# limpar_cnpj_cpf, formatar_cnpj e formatar_cpf são importadas de utils.helpers (acima).
+# As definições locais foram removidas para eliminar duplicação (princípio DRY).

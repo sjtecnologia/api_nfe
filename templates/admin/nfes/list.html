@@ -408,8 +408,12 @@ function gerarDANFE(nfeId, buttonEl) {
     .catch(error => {
         buttonEl.innerHTML = originalHtml;
         buttonEl.disabled = false;
-        console.error('[DEBUG] Erro ao gerar DANFE:', error); // Print debug
-        alert('Erro ao gerar DANFE. Tente novamente mais tarde.');
+        console.error('[DEBUG] Erro ao gerar DANFE:', error);
+        if (typeof showToast !== 'undefined') {
+            showToast('Erro ao gerar DANFE. Tente novamente mais tarde.', 'danger');
+        } else {
+            alert('Erro ao gerar DANFE. Tente novamente mais tarde.');
+        }
     });
 }
 
@@ -730,8 +734,11 @@ async function confirmarCancelamento(nfeId) {
         
     } catch (error) {
         console.error('Erro ao cancelar NFe:', error);
-        alert(`Erro ao cancelar NFe: ${error.message}`);
-        
+        if (typeof showToast !== 'undefined') {
+            showToast(`Erro ao cancelar NFe: ${error.message}`, 'danger');
+        } else {
+            alert(`Erro ao cancelar NFe: ${error.message}`);
+        }
         const btnConfirmar = document.querySelector('#modalCancelarNfe .btn-danger');
         if (btnConfirmar) {
             btnConfirmar.disabled = false;

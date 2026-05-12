@@ -19,6 +19,7 @@ from auth.decorators import (
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
 from services.nfe_service import NFeService, generate_nfe_xml, sign_xml, send_to_sefaz, validar_tributacao_nfe
+from services.danfe_service import generate_danfe
 from utils.helpers import produto_to_dict_for_template, get_uf_ibge_code
 from utils.nfe_validators import validar_cpf, validar_cnpj
 from utils.nfe_validators import validar_dados_nfe, validar_xml_nfe
@@ -96,8 +97,9 @@ def api_produtos():
 
         return jsonify({'results': results, 'pagination': {'more': has_more}})
     except Exception as e:
-        print(f"[X] Erro api_produtos: {e}")
-        return jsonify({'results': [], 'pagination': {'more': False}})
+        import logging as _log
+        _log.getLogger(__name__).error("Erro api_produtos: %s", e, exc_info=True)
+        return jsonify({'error': 'Erro ao buscar produtos', 'results': [], 'pagination': {'more': False}}), 500
     finally:
         db.close()
 
@@ -504,7 +506,6 @@ def emitir_nfe():
                     )
                     
                     # GERAR DANFE em PDF usando o serviço existente
-                    from services.danfe_service import generate_danfe
                     
                     # Gerar DANFE usando ID temporário (não será salvo no banco)
                     # O generate_danfe retorna o caminho do arquivo PDF gerado
@@ -517,7 +518,7 @@ def emitir_nfe():
                     # Limpar arquivo temporário
                     try:
                         os.remove(pdf_path)
-                    except:
+                    except OSError:
                         pass
                     
                     # Retornar PDF como base64 para exibir no frontend
@@ -888,7 +889,7 @@ def emitir_nfe():
                         if resultado_sefaz.get('data_autorizacao'):
                             try:
                                 data_autorizacao_nfe = datetime.fromisoformat(resultado_sefaz['data_autorizacao'])
-                            except:
+                            except (ValueError, TypeError):
                                 data_autorizacao_nfe = datetime.now() if status_nfe == 'AUTORIZADA' else None
                         elif status_nfe == 'AUTORIZADA':
                             data_autorizacao_nfe = datetime.now()
@@ -1050,7 +1051,6 @@ def emitir_nfe():
                         # Gerar DANFE automaticamente sempre que NFe for autorizada
                         try:
                             print(" === GERANDO DANFE AUTOMATICAMENTE ===")
-                            from services.danfe_service import generate_danfe
                             # OK: CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
                             pdf_path = generate_danfe(xml_assinado, nfe_id, emitente_cliente_id)
                             
@@ -1108,7 +1108,7 @@ def emitir_nfe():
                     # Commit da sessão antes do redirect
                     try:
                         db.commit()
-                    except:
+                    except Exception:
                         pass  # Já foi commitado antes
                     
                     print(" Redirecionando para lista de NFes...")
@@ -1515,7 +1515,7 @@ def view(nfe_id):
         if isinstance(value, bytes):
             try:
                 return value.decode('utf-8')
-            except:
+            except (UnicodeDecodeError, AttributeError):
                 return None
         # Se for dict, sanitiza recursivamente
         if isinstance(value, dict):
@@ -1681,7 +1681,6 @@ def generate_danfe(nfe_id):
         if status == 'AUTORIZADA' and '<protNFe' not in xml_original:
             print(f"[DANFE] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
             try:
-                from services.nfe_service import NFeService
                 
                 # XML já é só NFe sem protocolo
                 nfe_service = NFeService()
@@ -1707,7 +1706,6 @@ def generate_danfe(nfe_id):
                 traceback.print_exc()
         
         # Gerar DANFE usando a biblioteca Python NFe
-        from services.danfe_service import generate_danfe
         import time
         
         try:
@@ -1783,7 +1781,6 @@ def generate_danfe_after_issue():
         if status == 'AUTORIZADA' and '<protNFe' not in xml_original:
             print(f"[DANFE-AFTER] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
             try:
-                from services.nfe_service import NFeService
                 
                 # XML já é só NFe sem protocolo
                 nfe_service = NFeService()
@@ -1803,7 +1800,6 @@ def generate_danfe_after_issue():
                 traceback.print_exc()
         
         # Gerar DANFE usando o serviço
-        from services.danfe_service import generate_danfe
         import time
         
         try:
@@ -2014,8 +2010,7 @@ def enviar_danfe_email(nfe_id):
             data_autorizacao = nfe_data.get('data_autorizacao')
             if xml_content and status_nfe == 'AUTORIZADA' and protocolo_sefaz and '<protNFe' not in xml_content:
                 try:
-                    from services.nfe_service import NFeService as _NFeS
-                    _svc = _NFeS()
+                    _svc = NFeService()
                     resultado_fake = {
                         'protocolo': protocolo_sefaz,
                         'data_autorizacao': str(data_autorizacao) if data_autorizacao else ''
@@ -2746,7 +2741,6 @@ def edit(nfe_id):
                         print(f" Tentando emitir NFe {nfe_id}...")
                         
                         # Usar serviço NFeService para processar
-                        from services.nfe_service import NFeService
                         nfe_service = NFeService(db)
                         
                         # Processar emissão usando o nfe_id existente
@@ -2851,7 +2845,6 @@ def reenviar_nfe(nfe_id):
         print(f" Status atualizado para PROCESSANDO")
         
         # Reenviar para SEFAZ
-        from services.nfe_service import NFeService
         nfe_service = NFeService(db)
         
         # Extrair dados do JSON
@@ -3188,7 +3181,6 @@ def emitir_rascunho(nfe_id):
         print(f" Status atualizado para PROCESSANDO")
         
         # Emitir na SEFAZ
-        from services.nfe_service import NFeService
         nfe_service = NFeService(db)
         
         # Extrair dados do JSON
@@ -3617,7 +3609,6 @@ def compartilhar_nfe(nfe_id):
                             if status == 'AUTORIZADA' and '<protNFe' not in xml_content:
                                 print(f"[EMAIL] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
                                 try:
-                                    from services.nfe_service import NFeService
                                     nfe_service = NFeService()
                                     resultado_sefaz = {
                                         'chave_acesso': nfe_data.get('chave_acesso'),
@@ -3632,7 +3623,6 @@ def compartilhar_nfe(nfe_id):
                                     print(f"[EMAIL] Erro ao gerar protocolo: {ex}")
                             
                             # OK: CORREÇÃO: Usar caminho absoluto e verificar se existe
-                            from services.danfe_service import generate_danfe
                             
                             # Gerar DANFE com XML corrigido
                             pdf_path = generate_danfe(xml_para_danfe, nfe_id)
@@ -3811,7 +3801,6 @@ def consultar_status_sefaz(nfe_id):
             return jsonify({'success': False, 'message': 'Chave de acesso não encontrada'}), 400
         
         # Consultar na SEFAZ
-        from services.nfe_service import NFeService
         nfe_service = NFeService()
         
         # Determinar ambiente
@@ -4164,7 +4153,7 @@ def duplicar_nfe(nfe_id):
                     try:
                         item_data = json.loads(item_json_str) if isinstance(item_json_str, str) else item_json_str
                         items_data.append(item_data)
-                    except:
+                    except (json.JSONDecodeError, ValueError):
                         pass
                 idx += 1
             print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items[N][json]")
@@ -4177,7 +4166,6 @@ def duplicar_nfe(nfe_id):
         
         # 7. Processar emissão completa usando o serviço existente
         # IMPORTANTE: Usar processar_nfe() que salva no banco, não processar_emissao_completa()
-        from services.nfe_service import NFeService
         
         # Tentar emitir, se houver duplicidade, incrementar número e tentar novamente
         max_tentativas = 5

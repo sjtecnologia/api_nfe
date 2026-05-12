@@ -3537,6 +3537,7 @@ async function verificarRegimeTributario() {
         }
     } catch (error) {
         console.error('❌ Erro ao verificar regime tributário:', error);
+        if (typeof showToast !== 'undefined') showToast('Erro ao verificar regime tributário', 'warning');
     }
 }
 
@@ -3586,6 +3587,7 @@ async function carregarClassificacoesIBS() {
         }
     } catch (error) {
         console.error('❌ Erro ao carregar classificações IBS/CBS:', error);
+        if (typeof showToast !== 'undefined') showToast('Erro ao carregar classificações IBS/CBS', 'warning');
     }
 }
 

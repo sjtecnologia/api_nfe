@@ -552,7 +552,7 @@ class NFeService:
                 try:
                     destinatario_cnpj_cpf = limpar_cnpj_cpf(destinatario_cnpj_cpf)
                 except Exception:
-                    destinatario_cnpj_cpf = re.sub(r'\D', '', str(destinatario_cnpj_cpf))
+                    destinatario_cnpj_cpf = limpar_cnpj_cpf(str(destinatario_cnpj_cpf))
             else:
                 return {'success': False, 'message': 'CNPJ/CPF do destinatário não informado'}
             

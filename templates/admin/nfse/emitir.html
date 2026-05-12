@@ -1309,7 +1309,9 @@ function buscarRegraTributaria() {
         },
         error: function(xhr, status, error) {
             console.error('❌ Erro ao buscar regra:', error);
-            // Não mostra alerta em caso de erro de rede
+            if (typeof showToast !== 'undefined') {
+                showToast('Erro ao buscar regra tributária. Verifique a conexão.', 'warning');
+            }
         }
     });
 }

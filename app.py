@@ -1,12 +1,15 @@
-from flask import Flask, render_template, jsonify, redirect, url_for
+from flask import Flask, render_template, jsonify, redirect, url_for, request
 from flask_cors import CORS
 from datetime import datetime
 from config.settings import SECRET_KEY, DEBUG, HOST, PORT
+from config.logging_config import configure_logging
 from database.connection import get_db
 from auth.login_manager import init_login_manager
 from auth.permissions import has_permission
 from flask_login import current_user, login_required
 from models.user import User
+
+configure_logging()
 
 # Configurar encoding UTF-8 no stdout para Windows
 import sys
@@ -204,69 +207,75 @@ def favicon():
         return send_from_directory(os.path.join(app.root_path, 'static', 'img'), 'Logonew.ico', mimetype='image/vnd.microsoft.icon')
     return '', 204
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _is_api_request():
+    """Retorna True se a requisição espera JSON (API/fetch) em vez de HTML."""
+    return (
+        request.path.startswith('/api/')
+        or request.path.startswith('/admin/api/')
+        or request.path.startswith('/admin/nfe/api/')
+        or request.path.startswith('/admin/nfse/api/')
+        or request.headers.get('Accept', '').startswith('application/json')
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.content_type == 'application/json'
+    )
+
+
+@app.errorhandler(400)
+def bad_request(error):
+    """400 Bad Request"""
+    if _is_api_request():
+        return jsonify({'success': False, 'error': 'Requisição inválida', 'message': str(error)}), 400
+    return render_template('errors/400.html', error=error), 400
+
+
+@app.errorhandler(403)
+def forbidden(error):
+    """403 Forbidden"""
+    if _is_api_request():
+        return jsonify({'success': False, 'error': 'Acesso negado', 'message': str(error)}), 403
+    return render_template('errors/403.html', error=error), 403
+
+
+@app.errorhandler(404)
+def not_found(error):
+    """404 Not Found"""
+    if _is_api_request():
+        return jsonify({'success': False, 'error': 'Recurso não encontrado', 'message': str(error)}), 404
+    return render_template('errors/404.html', error=error), 404
+
+
 @app.errorhandler(500)
 def internal_error(error):
-    """Handler para erro 500 - loga detalhes completos"""
+    """Handler para erro 500 — loga detalhes completos"""
     import traceback
     import sys
-    
-    # Obter informações do erro
+
     exc_type, exc_value, exc_tb = sys.exc_info()
-    
-    # Logar erro completo no console
-    print("\n" + "="*80, flush=True)
-    print("[X] ERRO 500 - INTERNAL SERVER ERROR", flush=True)
-    print("="*80, flush=True)
-    print(f"[RED] Tipo do erro: {exc_type.__name__ if exc_type else 'Unknown'}", flush=True)
-    print(f"[LOG] Mensagem: {str(error)}", flush=True)
-    print(f"[ERROR] Exceção: {str(exc_value)}", flush=True)
-    
-    if exc_tb:
-        print("\n[TRACE] Traceback completo:", flush=True)
-        traceback.print_tb(exc_tb, file=sys.stdout)
-        print("\n[LIST] Traceback formatado:", flush=True)
-        for line in traceback.format_tb(exc_tb):
-            print(line, flush=True)
-    else:
-        print("[!] Nenhum traceback disponível", flush=True)
-    
-    print("\n[SEARCH] Exception completa:", flush=True)
-    traceback.print_exc(file=sys.stdout)
-    print("="*80 + "\n", flush=True)
-    
-    # Se DEBUG está ativo, mostrar erro na página
-    if DEBUG:
-        tb_lines = traceback.format_exception(exc_type, exc_value, exc_tb) if exc_tb else []
-        return f"""
-        <h1>Internal Server Error</h1>
-        <h2>Tipo: {exc_type.__name__ if exc_type else 'Unknown'}</h2>
-        <pre>{str(error)}</pre>
-        <h2>Exceção:</h2>
-        <pre>{str(exc_value)}</pre>
-        <h2>Traceback:</h2>
-        <pre>{''.join(tb_lines)}</pre>
-        """, 500
-    
-    # Em produção, página genérica
-    return render_template('error.html', error=error), 500
+
+    logger.error(
+        "ERRO 500 — %s: %s",
+        exc_type.__name__ if exc_type else 'Unknown',
+        str(exc_value or error),
+        exc_info=True,
+    )
+
+    if _is_api_request():
+        return jsonify({'success': False, 'error': 'Erro interno do servidor', 'message': 'Tente novamente mais tarde.'}), 500
+
+    return render_template('errors/500.html', error=error), 500
+
 
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Handler para TODAS as exceções não tratadas"""
-    import traceback
-    import sys
-    
-    print("\n" + "="*80, flush=True)
-    print("[ERROR] EXCEÇÃO NÃO TRATADA", flush=True)
-    print("="*80, flush=True)
-    print(f"[RED] Tipo: {type(e).__name__}", flush=True)
-    print(f"[LOG] Mensagem: {str(e)}", flush=True)
-    print("\n[TRACE] Traceback completo:", flush=True)
-    traceback.print_exc(file=sys.stdout)
-    print("="*80 + "\n", flush=True)
-    
-    # Passar para o handler 500
+    logger.error("Exceção não tratada — %s: %s", type(e).__name__, str(e), exc_info=True)
     return internal_error(e)
+
 
 @app.route('/docs/<path:filename>')
 @login_required

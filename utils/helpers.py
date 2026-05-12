@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from decimal import Decimal, InvalidOperation
 
 def get_uf_ibge_code(uf):
@@ -102,32 +103,12 @@ def validar_email(email):
 
 def normalizar_texto(texto):
     """
-    Remove acentos e caracteres especiais
+    Remove acentos e diacríticos usando unicodedata (cobertura completa).
     """
     if not texto:
         return ''
-    
-    # Dicionário de substituições
-    substituicoes = {
-        'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
-        'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-        'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
-        'ó': 'o', 'ò': 'o', 'õ': 'o', 'ô': 'o', 'ö': 'o',
-        'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
-        'ç': 'c', 'ñ': 'n',
-        'Á': 'A', 'À': 'A', 'Ã': 'A', 'Â': 'A', 'Ä': 'A',
-        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
-        'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
-        'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
-        'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
-        'Ç': 'C', 'Ñ': 'N'
-    }
-    
-    texto_normalizado = texto
-    for original, substituto in substituicoes.items():
-        texto_normalizado = texto_normalizado.replace(original, substituto)
-    
-    return texto_normalizado
+    nfd = unicodedata.normalize('NFD', str(texto))
+    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
 
 def truncar_texto(texto, max_length):
     """
