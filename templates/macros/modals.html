@@ -1,0 +1,143 @@
+{#
+  macros/modals.html — Macros Jinja2 para modais Bootstrap 5 reutilizáveis.
+
+  Uso:
+    {% from 'macros/modals.html' import modal_confirm, modal_danfe_actions %}
+
+    {{ modal_confirm(
+        'modalCancelar',
+        'Confirmar Cancelamento',
+        'Tem certeza que deseja cancelar esta NFe?',
+        confirm_label='Confirmar',
+        confirm_class='danger',
+        confirm_onclick='confirmarCancelamento()'
+    ) }}
+
+    {{ modal_danfe_actions('modalAcoesDanfe') }}
+#}
+
+
+{# ─── Modal de confirmação genérico ──────────────────────────────────────── #}
+{% macro modal_confirm(
+    modal_id,
+    title,
+    body_text,
+    confirm_label='Confirmar',
+    confirm_class='primary',
+    confirm_onclick='',
+    confirm_id='',
+    cancel_label='Cancelar',
+    icon='question-circle',
+    header_class='bg-warning text-dark',
+    size=''
+) %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered{% if size %} modal-{{ size }}{% endif %}" role="document">
+        <div class="modal-content">
+            <div class="modal-header {{ header_class }}">
+                <h5 class="modal-title">
+                    <i class="fas fa-{{ icon }}"></i> {{ title }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                {{ body_text }}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> {{ cancel_label }}
+                </button>
+                <button type="button"
+                        class="btn btn-{{ confirm_class }}"
+                        {% if confirm_id %}id="{{ confirm_id }}"{% endif %}
+                        {% if confirm_onclick %}onclick="{{ confirm_onclick }}"{% endif %}>
+                    {{ confirm_label }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{# ─── Modal de ações pós-DANFE ────────────────────────────────────────────── #}
+{% macro modal_danfe_actions(
+    modal_id='modalAcoesDanfe',
+    title='DANFE Gerado com Sucesso!',
+    subtitle='O que deseja fazer com o DANFE?',
+    print_onclick='imprimirDanfe()',
+    email_onclick='enviarEmailDanfe()'
+) %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" role="dialog"
+     aria-labelledby="{{ modal_id }}Label" aria-hidden="true"
+     data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="{{ modal_id }}Label">
+                    <i class="fas fa-check-circle"></i> {{ title }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="lead mb-4">{{ subtitle }}</p>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-primary btn-lg w-100 shadow-sm"
+                                onclick="{{ print_onclick }}" style="height: 120px;">
+                            <i class="fas fa-print fa-3x mb-2"></i>
+                            <br><strong>Imprimir</strong>
+                        </button>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <button type="button" class="btn btn-info btn-lg w-100 shadow-sm"
+                                onclick="{{ email_onclick }}" style="height: 120px;">
+                            <i class="fas fa-envelope fa-3x mb-2"></i>
+                            <br><strong>Enviar por Email</strong>
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <button type="button" class="btn btn-secondary btn-sm w-100" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Fechar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+{# ─── Modal de alerta informativo ─────────────────────────────────────────── #}
+{% macro modal_info(
+    modal_id,
+    title,
+    body_text,
+    close_label='Fechar',
+    icon='info-circle',
+    header_class='bg-info text-white'
+) %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header {{ header_class }}">
+                <h5 class="modal-title">
+                    <i class="fas fa-{{ icon }}"></i> {{ title }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                {{ body_text }}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> {{ close_label }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

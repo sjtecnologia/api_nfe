@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/badges.html' import finalidade_badge, status_badge %}
 
 {% block title %}
     {% if current_user.is_super_admin() %}
@@ -161,66 +162,21 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                {% if nfe.finalidade_emissao %}
-                                                    {% if nfe.finalidade_emissao == 1 or nfe.finalidade_emissao == '1' %}
-                                                        <span class="badge bg-primary">Normal</span>
-                                                    {% elif nfe.finalidade_emissao == 2 or nfe.finalidade_emissao == '2' %}
-                                                        <span class="badge bg-info">Complementar</span>
-                                                    {% elif nfe.finalidade_emissao == 3 or nfe.finalidade_emissao == '3' %}
-                                                        <span class="badge bg-warning text-dark">Ajuste</span>
-                                                    {% elif nfe.finalidade_emissao == 4 or nfe.finalidade_emissao == '4' %}
-                                                        <span class="badge bg-secondary">Devolução</span>
-                                                    {% else %}
-                                                        <span class="badge bg-secondary text-white">{{ nfe.finalidade_emissao }}</span>
-                                                    {% endif %}
-                                                {% else %}
-                                                    <span class="badge bg-secondary text-white">N/A</span>
-                                                {% endif %}
+                                                {{ finalidade_badge(nfe.finalidade_emissao) }}
                                             </td>
                                             <td>
-                                                {% if nfe.status|upper == 'AUTORIZADA' %}
-                                                    <span class="badge bg-success">
-                                                        <i class="fas fa-check-circle"></i> Autorizada
-                                                    </span>
-                                                {% elif nfe.status|upper == 'CANCELADA' %}
-                                                    <span class="badge bg-dark">
-                                                        <i class="fas fa-ban"></i> Cancelada
-                                                    </span>
-                                                {% elif nfe.status|upper == 'DENEGADA' %}
-                                                    <span class="badge bg-danger">
-                                                        <i class="fas fa-exclamation-triangle"></i> Denegada
-                                                    </span>
-                                                {% elif nfe.status|upper == 'REJEITADA' %}
-                                                    <span class="badge bg-danger" 
-                                                          {% if nfe.mensagem_sefaz %}
-                                                          data-bs-toggle="tooltip" 
-                                                          data-bs-placement="top" 
-                                                          title="{{ nfe.mensagem_sefaz }}"
-                                                          {% endif %}>
-                                                        <i class="fas fa-times-circle"></i> Rejeitada
-                                                    </span>
-                                                {% elif nfe.status|upper == 'PROCESSANDO' %}
-                                                    <span class="badge bg-warning text-dark">
-                                                        <i class="fas fa-clock"></i> Processando
-                                                    </span>
-                                                {% elif nfe.status|upper == 'RASCUNHO' %}
-                                                    <span class="badge bg-secondary">
-                                                        <i class="fas fa-edit"></i> Rascunho
-                                                    </span>
-                                                {% else %}
-                                                    <span class="badge bg-secondary text-white">{{ nfe.status or 'N/A' }}</span>
-                                                {% endif %}
+                                                {{ status_badge(nfe.status) }}
                                             </td>
                                             <td>
                                                 {% if nfe.data_criacao %}
-                                                    {{ nfe.data_criacao.strftime('%d/%m/%Y %H:%M') if nfe.data_criacao.strftime else nfe.data_criacao }}
+                                                    {{ nfe.data_criacao | format_datetime }}
                                                 {% else %}
                                                     <span class="text-muted">N/A</span>
                                                 {% endif %}
                                             </td>
                                             <td>
                                                 {% if nfe.chave_acesso %}
-                                                    <small class="font-monospace">{{ nfe.chave_acesso[:8] }}...{{ nfe.chave_acesso[-8:] }}</small>
+                                                    <small class="font-monospace">{{ nfe.chave_acesso | truncate_chave }}</small>
                                                     <button class="btn btn-sm btn-outline-secondary ms-1" 
                                                             onclick="copiarChave('{{ nfe.chave_acesso }}')" 
                                                             title="Copiar chave completa">

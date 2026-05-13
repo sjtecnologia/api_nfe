@@ -115,6 +115,10 @@ def highlight(text, query):
 
 app.jinja_env.filters['highlight'] = highlight
 
+# Registrar filtros Jinja2 customizados (badges, datas, moeda, etc.)
+from utils.template_filters import register_filters
+register_filters(app)
+
 
 @app.context_processor
 def inject_permissions():

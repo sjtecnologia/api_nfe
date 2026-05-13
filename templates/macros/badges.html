@@ -44,6 +44,34 @@
   {% endif %}
 {% endmacro %}
 
+{% macro finalidade_badge(finalidade) %}
+  {# Exibe o tipo/finalidade de emissão da NFe #}
+  {% set f = (finalidade | string) if finalidade else '' %}
+  {% if f in ('1', 'NF-e normal') %}
+    <span class="badge bg-primary">NF-e normal</span>
+  {% elif f in ('2', 'NF-e complementar') %}
+    <span class="badge bg-info text-dark">Complementar</span>
+  {% elif f in ('3', 'NF-e de ajuste') %}
+    <span class="badge bg-warning text-dark">Ajuste</span>
+  {% elif f in ('4', 'Devolução de mercadoria') %}
+    <span class="badge bg-secondary">Devolução</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ finalidade or 'N/A' }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro tipo_nfe_badge(tipo) %}
+  {# Exibe o modelo da NFe: 55 = NF-e, 65 = NFC-e #}
+  {% set t = (tipo | string) if tipo else '' %}
+  {% if t == '55' %}
+    <span class="badge bg-primary">NF-e</span>
+  {% elif t == '65' %}
+    <span class="badge bg-success">NFC-e</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ tipo or '—' }}</span>
+  {% endif %}
+{% endmacro %}
+
 {% macro bool_badge(valor, label_true='Ativo', label_false='Inativo') %}
   {% if valor %}
     <span class="badge bg-success">{{ label_true }}</span>

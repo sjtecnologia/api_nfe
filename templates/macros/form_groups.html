@@ -1,0 +1,188 @@
+{#
+  macros/form_groups.html — Macros Jinja2 para campos de formulário reutilizáveis.
+
+  Elimina a repetição de <div class="form-group"> / <input> / <label> em templates
+  de emissão (nfse/emitir.html, nfes/emitir.html, etc.).
+
+  Uso:
+    {% from 'macros/form_groups.html' import text_field, number_field, select_field,
+                                             retentions_fields, currency_field %}
+
+    {{ text_field('nome', 'Nome completo', required=true) }}
+    {{ number_field('valor_servico', 'Valor (R$)', required=true, onchange='calcularTotais()') }}
+    {{ retentions_fields() }}
+#}
+
+
+{# ─── Campo de texto genérico ─────────────────────────────────────────────── #}
+{% macro text_field(
+    name,
+    label,
+    value='',
+    required=false,
+    placeholder='',
+    col_class='col-md-3',
+    readonly=false,
+    maxlength='',
+    help_text='',
+    extra_class=''
+) %}
+<div class="{{ col_class }}">
+    <div class="form-group">
+        <label for="{{ name }}">
+            {{ label }}{% if required %} <span class="text-danger">*</span>{% endif %}
+        </label>
+        <input type="text"
+               class="form-control{{ ' ' + extra_class if extra_class }}"
+               name="{{ name }}"
+               id="{{ name }}"
+               value="{{ value }}"
+               {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+               {% if maxlength %}maxlength="{{ maxlength }}"{% endif %}
+               {% if required %}required{% endif %}
+               {% if readonly %}readonly{% endif %}>
+        {% if help_text %}<small class="text-muted">{{ help_text }}</small>{% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+
+{# ─── Campo de moeda (máscara monetária) ──────────────────────────────────── #}
+{% macro currency_field(
+    name,
+    label,
+    value='0,00',
+    required=false,
+    col_class='col-md-3',
+    readonly=false,
+    onchange='',
+    help_text=''
+) %}
+<div class="{{ col_class }}">
+    <div class="form-group">
+        <label for="{{ name }}">
+            {{ label }}{% if required %} <span class="text-danger">*</span>{% endif %}
+        </label>
+        <input type="text"
+               class="form-control"
+               name="{{ name }}"
+               id="{{ name }}"
+               value="{{ value }}"
+               placeholder="0,00"
+               {% if required %}required{% endif %}
+               {% if readonly %}readonly{% endif %}
+               {% if onchange %}onchange="{{ onchange }}"{% endif %}>
+        {% if help_text %}<small class="text-muted">{{ help_text }}</small>{% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+
+{# ─── Campo numérico ──────────────────────────────────────────────────────── #}
+{% macro number_field(
+    name,
+    label,
+    value='',
+    step='0.01',
+    min='0',
+    max='',
+    required=false,
+    col_class='col-md-3',
+    readonly=false,
+    onchange='',
+    oninput='',
+    help_text=''
+) %}
+<div class="{{ col_class }}">
+    <div class="form-group">
+        <label for="{{ name }}">
+            {{ label }}{% if required %} <span class="text-danger">*</span>{% endif %}
+        </label>
+        <input type="number"
+               class="form-control"
+               name="{{ name }}"
+               id="{{ name }}"
+               step="{{ step }}"
+               min="{{ min }}"
+               {% if max %}max="{{ max }}"{% endif %}
+               {% if value != '' %}value="{{ value }}"{% endif %}
+               {% if required %}required{% endif %}
+               {% if readonly %}readonly{% endif %}
+               {% if onchange %}onchange="{{ onchange }}"{% endif %}
+               {% if oninput %}oninput="{{ oninput }}"{% endif %}>
+        {% if help_text %}<small class="text-muted">{{ help_text }}</small>{% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+
+{# ─── Campo select ────────────────────────────────────────────────────────── #}
+{% macro select_field(
+    name,
+    label,
+    options,
+    selected_value='',
+    required=false,
+    col_class='col-md-3',
+    placeholder='Selecione...',
+    onchange='',
+    extra_class=''
+) %}
+<div class="{{ col_class }}">
+    <div class="form-group">
+        <label for="{{ name }}">
+            {{ label }}{% if required %} <span class="text-danger">*</span>{% endif %}
+        </label>
+        <select class="form-control{{ ' ' + extra_class if extra_class }}"
+                name="{{ name }}"
+                id="{{ name }}"
+                {% if required %}required{% endif %}
+                {% if onchange %}onchange="{{ onchange }}"{% endif %}>
+            <option value="">{{ placeholder }}</option>
+            {% for opt in options %}
+                {% if opt is mapping %}
+                    <option value="{{ opt.value }}"
+                            {% if opt.value|string == selected_value|string %}selected{% endif %}>
+                        {{ opt.label }}
+                    </option>
+                {% else %}
+                    <option value="{{ opt }}"
+                            {% if opt|string == selected_value|string %}selected{% endif %}>
+                        {{ opt }}
+                    </option>
+                {% endif %}
+            {% endfor %}
+        </select>
+    </div>
+</div>
+{% endmacro %}
+
+
+{# ─── Bloco de retenções (PIS/COFINS/INSS/IR/CSLL/Outras) ────────────────── #}
+{% macro retentions_fields(
+    title='💼 Retenções',
+    col_class='col-md-2',
+    values={}
+) %}
+<h6>{{ title }}</h6>
+<div class="row">
+    {{ currency_field('valor_pis',         'PIS (R$)',     values.get('valor_pis', '0,00'),         col_class=col_class) }}
+    {{ currency_field('valor_cofins',      'COFINS (R$)',  values.get('valor_cofins', '0,00'),      col_class=col_class) }}
+    {{ currency_field('valor_inss',        'INSS (R$)',    values.get('valor_inss', '0,00'),        col_class=col_class) }}
+    {{ currency_field('valor_ir',          'IR (R$)',      values.get('valor_ir', '0,00'),          col_class=col_class) }}
+    {{ currency_field('valor_csll',        'CSLL (R$)',    values.get('valor_csll', '0,00'),        col_class=col_class) }}
+    {{ currency_field('outras_retencoes',  'Outras (R$)',  values.get('outras_retencoes', '0,00'),  col_class=col_class) }}
+</div>
+{% endmacro %}
+
+
+{# ─── Linha de campos de tributos totais (percentuais) ──────────────────── #}
+{% macro total_tributos_fields(values={}) %}
+<h6><i class="fas fa-percentage"></i> Tributos Totais (Reforma Tributária)</h6>
+<div class="row">
+    {{ number_field('percentual_total_tributos_federais',   '% Tributos Federais',   values.get('federais', '0'),   '0.01', '0', '100', true, 'col-md-4',
+                    help_text='Percentual do valor do serviço') }}
+    {{ number_field('percentual_total_tributos_estaduais',  '% Tributos Estaduais',  values.get('estaduais', '0'),  '0.01', '0', '100', true, 'col-md-4') }}
+    {{ number_field('percentual_total_tributos_municipais', '% Tributos Municipais', values.get('municipais', '0'), '0.01', '0', '100', true, 'col-md-4') }}
+</div>
+{% endmacro %}

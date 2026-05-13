@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
 from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, NFeInutilizacao, UserModel
+from database.repositories.product_repository import ProductRepository
 from auth.decorators import (
     admin_required,
     block_viewer_access,
@@ -38,64 +39,12 @@ def api_produtos():
         if not cliente_id:
             return jsonify({'results': [], 'pagination': {'more': False}})
 
-        q = request.args.get('q', '').strip()
+        q    = request.args.get('q', '').strip()
         page = request.args.get('page', 1, type=int)
-        PER_PAGE = 30
-        offset = (page - 1) * PER_PAGE
 
-        params = {'cliente_id': cliente_id, 'limit': PER_PAGE + 1, 'offset': offset}
-        where_extra = ''
-        if q:
-            where_extra = " AND (p.descricao ILIKE :q OR p.codigo_interno ILIKE :q)"
-            params['q'] = f'%{q}%'
-
-        rows = db.execute(text(f"""
-            SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
-                   p.unidade_comercial, p.origem_mercadoria,
-                   n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
-                   cst.codigo as cst_codigo, cs.codigo as csosn_codigo,
-                   p.classificacao_ibs_cbs_id
-            FROM produtos p
-            LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
-            LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
-            LEFT JOIN cst_icms cst ON p.cst_id = cst.cst_id
-            LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
-            WHERE p.cliente_id = :cliente_id AND p.ativo = true{where_extra}
-            ORDER BY p.descricao
-            LIMIT :limit OFFSET :offset
-        """), params).fetchall()
-
-        has_more = len(rows) > PER_PAGE
-        rows = rows[:PER_PAGE]
-
-        results = []
-        for r in rows:
-            if hasattr(r, '_mapping'):
-                d = dict(r._mapping)
-            elif hasattr(r, '_asdict'):
-                d = r._asdict()
-            else:
-                d = {
-                    'produto_id': r[0], 'codigo_interno': r[1], 'descricao': r[2],
-                    'preco_unitario_padrao': r[3], 'unidade_comercial': r[4],
-                    'origem_mercadoria': r[5], 'ncm_codigo': r[6], 'cfop_codigo': r[7],
-                    'cst_codigo': r[8], 'csosn_codigo': r[9]
-                }
-            results.append({
-                'id': d.get('produto_id'),
-                'text': f"{d.get('codigo_interno','') or ''} - {d.get('descricao','')}".strip(' -'),
-                'codigo': d.get('codigo_interno') or '',
-                'preco': float(d.get('preco_unitario_padrao') or 0),
-                'unidade': d.get('unidade_comercial') or 'UN',
-                'ncm': d.get('ncm_codigo') or '',
-                'cfop': d.get('cfop_codigo') or '',
-                'cst': d.get('cst_codigo') or '',
-                'csosn': d.get('csosn_codigo') or '',
-                'origem': d.get('origem_mercadoria') if d.get('origem_mercadoria') is not None else 0,
-                'classificacao_ibs_cbs_id': d.get('classificacao_ibs_cbs_id') or '',
-            })
-
-        return jsonify({'results': results, 'pagination': {'more': has_more}})
+        repo   = ProductRepository(db)
+        result = repo.search_for_select2(cliente_id=cliente_id, term=q, page=page)
+        return jsonify(result)
     except Exception as e:
         import logging as _log
         _log.getLogger(__name__).error("Erro api_produtos: %s", e, exc_info=True)
