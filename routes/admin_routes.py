@@ -4959,218 +4959,61 @@ def admin_health():
 @login_required
 def api_sugestao_tributaria():
     """
-    Endpoint que chama a API IA Unificada (porta 9000) e converte
-    códigos para IDs do banco de dados para preenchimento automático
+    Endpoint que chama a API IA Unificada (porta 8081) e converte
+    códigos para IDs do banco de dados para preenchimento automático.
+    Delegado para ProductClassificationService.
     """
-    import requests as req_lib
-    
-    # Recebe dados do formulário via JSON
-    dados = request.get_json()
+    from services.product_classification_service import (
+        ProductClassificationService,
+        ProductClassificationError,
+        ProductClassificationUnavailable,
+    )
+
+    dados = request.get_json() or {}
     print(f"[IA] [?] Nova solicitação de sugestão: {dados.get('descricao', 'N/A')}")
-    
-    # Validação básica
+
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descrição do produto é obrigatória'}), 400
-    
+
     db = _get_db()
-    
     try:
-        # Enriquece dados com informações do cliente se disponível
-        cliente_id = dados.get('cliente_id')
-        if cliente_id:
-            # Busca informações do cliente
-            cliente_row = db.execute(text("""
-                SELECT c.uf, c.regime_tributario_id, rt.nome as regime_nome
-                FROM clientes c
-                LEFT JOIN regimes_tributarios rt ON c.regime_tributario_id = rt.regime_tributario_id
-                WHERE c.cliente_id = :cliente_id
-            """), {'cliente_id': cliente_id}).fetchone()
-            
-            if cliente_row:
-                cliente = dict(cliente_row._mapping)
-                dados['uf_origem'] = cliente.get('uf')
-                dados['regime_tributario'] = cliente.get('regime_nome')
-                print(f"[IA] [TRACE] Contexto cliente: UF={cliente.get('uf')}, Regime={cliente.get('regime_nome')}")
-        
-        # Chama API IA Unificada (porta 8081)
-        print(f"[IA] [?] Chamando API IA Unificada...")
-        api_response = req_lib.post(
-            'http://localhost:8081/sugestao',
-            json={
-                'descricao': dados.get('descricao'),
-                'tipo_item': dados.get('tipo_item', 'Produto'),
-                'uf_origem': dados.get('uf_origem'),
-                'regime_tributario': dados.get('regime_tributario'),
-                'unidade_comercial': dados.get('unidade_comercial', 'UN'),
-                'codigo_interno': dados.get('codigo_interno'),
-                'cliente_id': cliente_id
-            },
-            timeout=150  # Aumentado para 150s para LLM lenta (120s + margem)
+        svc = ProductClassificationService(db)
+        resultado = svc.classify(
+            descricao=dados['descricao'],
+            cliente_id=dados.get('cliente_id'),
+            tipo_item=dados.get('tipo_item', 'Produto'),
+            unidade_comercial=dados.get('unidade_comercial', 'UN'),
+            codigo_interno=dados.get('codigo_interno', ''),
         )
-        
-        if api_response.status_code != 200:
-            print(f"[IA] [X] Erro na API: {api_response.status_code}")
-            return jsonify({'erro': 'Erro ao consultar API de IA'}), 500
-        
-        resultado_api = api_response.json()
-        
-        # Verifica se há erro explícito na resposta
-        if resultado_api.get('erro'):
-            print(f"[IA] [X] API retornou erro: {resultado_api.get('erro')}")
-            return jsonify({'erro': resultado_api.get('erro')}), 500
-        
-        # A API de IA retorna direto os campos (ncm, cfop, cst, etc)
-        # Se não houver campo 'ncm', considera como erro
-        if not resultado_api.get('ncm'):
-            print(f"[IA] [X] Resposta da API inválida: {resultado_api}")
-            return jsonify({'erro': 'Resposta da API de IA inválida'}), 500
-        
-        classificacao = resultado_api  # A resposta já é a classificação
-        print(f"[IA] [OK] Classificação recebida: NCM={classificacao.get('ncm')}")
-        
-        # Converte códigos para IDs do banco de dados
-        resultado_final = {
-            'sucesso': True,
-            'classificacao': classificacao,
-            'ids': {}  # IDs para preencher os selects
-        }
-        
-        # Busca NCM_ID pelo código
-        if classificacao.get('ncm'):
-            ncm_codigo = classificacao['ncm'].replace('.', '')  # Remove pontos
-            ncm_row = db.execute(text("""
-                SELECT ncm_id, codigo, descricao 
-                FROM ncms 
-                WHERE REPLACE(codigo, '.', '') = :codigo
-                LIMIT 1
-            """), {'codigo': ncm_codigo}).fetchone()
-            
-            if ncm_row:
-                ncm = dict(ncm_row._mapping)
-                resultado_final['ids']['ncm_id'] = ncm['ncm_id']
-                resultado_final['ncm_descricao'] = ncm['descricao']
-                print(f"[IA] [OK] NCM encontrado: {ncm['codigo']} (ID: {ncm['ncm_id']})")
-            else:
-                print(f"[IA] [!] NCM {ncm_codigo} não encontrado no banco")
-        
-        # Busca CFOP_ID pelo código
-        if classificacao.get('cfop'):
-            cfop_codigo = classificacao['cfop']
-            # Tenta com e sem pontos (ex: "5101" ou "5.101")
-            cfop_row = db.execute(text("""
-                SELECT cfop_id, cfop, descricao 
-                FROM cfops 
-                WHERE REPLACE(cfop, '.', '') = :cfop OR cfop = :cfop
-                LIMIT 1
-            """), {'cfop': cfop_codigo}).fetchone()
-            
-            if cfop_row:
-                cfop = dict(cfop_row._mapping)
-                resultado_final['ids']['cfop_id'] = cfop['cfop_id']
-                resultado_final['cfop_descricao'] = cfop['descricao']
-                print(f"[IA] [OK] CFOP encontrado: {cfop['cfop']} (ID: {cfop['cfop_id']})")
-            else:
-                print(f"[IA] [!] CFOP {cfop_codigo} não encontrado no banco")
-        
-        # Busca CST_ID pelo código (se aplicável)
-        if classificacao.get('cst'):
-            cst_codigo = classificacao['cst']
-            cst_row = db.execute(text("""
-                SELECT cst_id, codigo, descricao 
-                FROM cst_icms 
-                WHERE codigo = :cst
-                LIMIT 1
-            """), {'cst': cst_codigo}).fetchone()
-            
-            if cst_row:
-                cst = dict(cst_row._mapping)
-                resultado_final['ids']['cst_id'] = cst['cst_id']
-                resultado_final['cst_descricao'] = cst['descricao']
-                print(f"[IA] [OK] CST encontrado: {cst['codigo']} (ID: {cst['cst_id']})")
-        
-        # Busca CSOSN_ID pelo código (se aplicável)
-        if classificacao.get('csosn'):
-            csosn_codigo = classificacao['csosn']
-            csosn_row = db.execute(text("""
-                SELECT csosn_id, codigo, descricao 
-                FROM csosn_icms 
-                WHERE codigo = :csosn
-                LIMIT 1
-            """), {'csosn': csosn_codigo}).fetchone()
-            
-            if csosn_row:
-                csosn = dict(csosn_row._mapping)
-                resultado_final['ids']['csosn_id'] = csosn['csosn_id']
-                resultado_final['csosn_descricao'] = csosn['descricao']
-                print(f"[IA] [OK] CSOSN encontrado: {csosn['codigo']} (ID: {csosn['csosn_id']})")
-        
-        # CEST é campo texto livre (não tem tabela de IDs)
-        if classificacao.get('cest'):
-            resultado_final['ids']['cest'] = classificacao['cest']
-            print(f"[IA] [OK] CEST recebido: {classificacao['cest']}")
-        else:
-            print(f"[IA] ℹ️  CEST não informado (opcional)")
-        
-        print(f"[IA] [?] Resultado final preparado com IDs do banco")
-        return jsonify(resultado_final)
-        
-    except req_lib.exceptions.RequestException as e:
-        print(f"[IA] [X] Erro ao conectar com API IA: {e}")
+        return jsonify(resultado)
+
+    except ProductClassificationUnavailable as e:
         return jsonify({
-            'erro': 'API de IA não está disponível. Certifique-se de que está rodando na porta 8081.',
-            'detalhes': str(e)
+            'erro': str(e),
+            'detalhes': 'Certifique-se de que o serviço de IA está rodando na porta 8081.',
         }), 503
-        
+
+    except ProductClassificationError as e:
+        return jsonify({'erro': str(e)}), 500
+
     except Exception as e:
         print(f"[IA] [X] Erro inesperado: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'erro': f'Erro no processamento: {str(e)}'}), 500
-        
+
     finally:
         db.close()
 
 # Endpoint para obter informações do cliente (regime tributário, etc.)
+# MOVIDO para routes/admin_api_routes.py (admin_api_bp).
+# Mantido aqui como STUB de compatibilidade — encaminha para o novo blueprint.
 @admin_bp.route('/api/cliente/<int:cliente_id>/info', methods=['GET'])
 @login_required
 def api_cliente_info(cliente_id):
-    """Retorna informações do cliente para ajustar interface dinamicamente"""
-    db = _get_db()
-    try:
-        # Busca informações do cliente
-        cliente_row = db.execute(text("""
-            SELECT c.cliente_id, c.razao_social, c.uf, c.regime_tributario_id, 
-                   rt.nome as regime_nome
-            FROM clientes c
-            LEFT JOIN regimes_tributarios rt ON c.regime_tributario_id = rt.regime_tributario_id
-            WHERE c.cliente_id = :cliente_id
-        """), {'cliente_id': cliente_id}).fetchone()
-        
-        if not cliente_row:
-            return jsonify({'erro': 'Cliente não encontrado'}), 404
-            
-        cliente = dict(cliente_row._mapping)
-        
-        # Determina se é Simples Nacional
-        regime_nome = cliente.get('regime_nome', '').lower()
-        is_simples_nacional = 'simples' in regime_nome
-        
-        return jsonify({
-            'cliente_id': cliente['cliente_id'],
-            'razao_social': cliente['razao_social'],
-            'uf': cliente['uf'],
-            'regime_tributario_id': cliente['regime_tributario_id'],
-            'regime_nome': cliente['regime_nome'],
-            'is_simples_nacional': is_simples_nacional,
-            'mostrar_cst': not is_simples_nacional,
-            'mostrar_csosn': is_simples_nacional
-        })
-        
-    except Exception as e:
-        print(f"[X] Erro ao buscar dados do cliente: {e}")
-        return jsonify({'erro': 'Erro interno do servidor'}), 500
-    finally:
-        db.close()
+    """Stub: delegado para admin_api.api_cliente_info."""
+    from routes.admin_api_routes import api_cliente_info as _impl
+    return _impl(cliente_id)
 
 # Rota de teste para preenchimento automático
 @admin_bp.route('/teste-preenchimento-ia')
@@ -6217,79 +6060,24 @@ def gerar_extrato_cliente(cliente_id):
 
 # ============================================================================
 # ROTAS API - CLASSIFICAÇÕES IBS/CBS (Reforma Tributária)
+# Movidas para routes/admin_api_routes.py (admin_api_bp).
+# Stubs abaixo mantêm compatibilidade com url_for('admin.api_*').
 # ============================================================================
 
 @admin_bp.route('/api/classificacoes-ibs-cbs', methods=['GET'])
 @login_required
 def api_classificacoes_ibs_cbs():
-    """
-    API para listar classificações IBS/CBS ativas
-    Usado em formulários de emissão quando cliente é CRT=3
-    """
-    from database.connection import SessionLocal
-    from database.models import ClassificacaoIBSCBS
-    
-    db = SessionLocal()
-    try:
-        classificacoes = db.query(ClassificacaoIBSCBS).filter_by(ativo=True).all()
-        
-        resultado = []
-        for c in classificacoes:
-            resultado.append({
-                'id': c.classificacao_id,
-                'codigo': c.codigo,
-                'descricao': c.descricao,
-                'aliquota_ibs_uf': float(c.aliquota_ibs_uf),
-                'aliquota_ibs_mun': float(c.aliquota_ibs_mun),
-                'aliquota_cbs': float(c.aliquota_cbs)
-            })
-        
-        return jsonify({'success': True, 'data': resultado})
-    
-    except Exception as e:
-        print(f"[X] Erro ao buscar classificações IBS/CBS: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
+    """Stub: delegado para admin_api.api_classificacoes_ibs_cbs."""
+    from routes.admin_api_routes import api_classificacoes_ibs_cbs as _impl
+    return _impl()
 
 
 @admin_bp.route('/api/regime-tributario/<int:cliente_id>', methods=['GET'])
 @login_required
 def api_regime_tributario_cliente(cliente_id):
-    """
-    API para obter CRT do regime tributário do cliente
-    Retorna se o cliente é CRT=1 (Simples) ou CRT=3 (Lucro Real/Presumido)
-    """
-    from database.connection import SessionLocal
-    from database.models import Cliente
-    
-    db = SessionLocal()
-    try:
-        cliente = db.query(Cliente).filter_by(cliente_id=cliente_id).first()
-        
-        if not cliente:
-            return jsonify({'success': False, 'error': 'Cliente não encontrado'}), 404
-        
-        # Pega o CRT do regime tributário
-        crt = cliente.regime_tributario.crt if cliente.regime_tributario else 1
-        regime_nome = cliente.regime_tributario.nome if cliente.regime_tributario else 'Simples Nacional'
-        
-        return jsonify({
-            'success': True,
-            'crt': crt,
-            'regime_nome': regime_nome,
-            'requer_ibs_cbs': crt == 3  # True se for Lucro Real/Presumido
-        })
-    
-    except Exception as e:
-        print(f"[X] Erro ao buscar regime tributário: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        db.close()
+    """Stub: delegado para admin_api.api_regime_tributario_cliente."""
+    from routes.admin_api_routes import api_regime_tributario_cliente as _impl
+    return _impl(cliente_id)
 
 
 # -------------------------------------------------------------------

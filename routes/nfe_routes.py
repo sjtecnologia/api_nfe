@@ -1135,97 +1135,15 @@ def emitir_nfe():
         # MÉTODO GET - CARREGAR DADOS PARA O FORMULÁRIO
         print(" === CARREGANDO FORMULÁRIO (GET) ===")
         
-        # BUSCAR Destinatários/Tomadores
-        destinatarios = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
-        destinatarios_data = []
-        for dest in destinatarios:
-            destinatarios_data.append({
-                'destinatario_id': dest.destinatario_id,
-                'nome_razao_social': dest.nome_razao_social,
-                'cpf_cnpj': dest.cpf_cnpj,
-                'logradouro': dest.logradouro,
-                'numero': dest.numero,
-                'bairro': dest.bairro,
-                'cep': dest.cep,
-                'codigo_municipio': dest.codigo_municipio,
-                'nome_municipio': dest.nome_municipio,
-                'uf': dest.uf
-            })
+        from services.nfe_creation_workflow import NFeCreationWorkflow
+        wf_ctx = NFeCreationWorkflow(db).prepare_emitter_context(emitente_cliente_id)
         
-        # PRODUTOS: carregados via AJAX (/nfe/api/produtos) — sem query aqui
-        produtos_data = []
-        
-        # CFOPs e NCMs carregados via AJAX (/nfe/api/cfops e /nfe/api/ncms)
-        cfops_data = []
-        ncms_data = []
-
-        # OK: BUSCAR CSTs E CSOSNs
-        try:
-            all_csts = db.query(Csticms).all()
-            csts_data = []
-            for cst in all_csts:
-                csts_data.append({
-                    'cst_id': cst.cst_id,
-                    'codigo': cst.codigo,
-                    'descricao': cst.descricao
-                })
-            
-            print(f" CSTs carregados: {len(csts_data)} registros")
-            
-        except Exception as e:
-            print(f"AVISO: Erro ao carregar CSTs: {e}")
-            csts_data = []
-        
-        try:
-            all_csosns = db.query(Csosnicms).all()
-            csosns_data = []
-            for csosn in all_csosns:
-                csosns_data.append({
-                    'csosn_id': csosn.csosn_id,
-                    'codigo': csosn.codigo,
-                    'descricao': csosn.descricao
-                })
-            
-            print(f" CSOSNs carregados: {len(csosns_data)} registros")
-            
-        except Exception as e:
-            print(f"AVISO: Erro ao carregar CSOSNs: {e}")
-            csosns_data = []
-        
-        # BUSCAR CLASSIFICAÇÕES IBS/CBS
-        try:
-            from database.models import ClassificacaoIBSCBS
-            all_classificacoes = db.query(ClassificacaoIBSCBS).filter_by(ativo=True).all()
-            classificacoes_ibs_cbs = []
-            for clf in all_classificacoes:
-                classificacoes_ibs_cbs.append({
-                    'classificacao_id': clf.classificacao_id,
-                    'codigo': clf.codigo,
-                    'descricao': clf.descricao,
-                    'aliquota_ibs_uf': float(clf.aliquota_ibs_uf),
-                    'aliquota_ibs_mun': float(clf.aliquota_ibs_mun),
-                    'aliquota_cbs': float(clf.aliquota_cbs)
-                })
-            
-            print(f" Classificações IBS/CBS carregadas: {len(classificacoes_ibs_cbs)} registros")
-            
-        except Exception as e:
-            print(f"AVISO: Erro ao carregar Classificações IBS/CBS: {e}")
-            classificacoes_ibs_cbs = []
-        
-        print(f" Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
+        print(f" Renderizando template com {len(wf_ctx['destinatarios'])} Destinatários/Tomadores para cliente {emitente_cliente_id}")
         
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,
-                             destinatarios=destinatarios_data,
-                             produtos=produtos_data,
-                             all_cfops=cfops_data,
-                             all_csts=csts_data,
-                             all_csosns=csosns_data,
-                             all_ncms=ncms_data,
-                             classificacoes_ibs_cbs=classificacoes_ibs_cbs,
                              regime_tributario=regime_tributario_nome,
-                             initial_nfe_items=[])
+                             **wf_ctx)
         
     except Exception as e:
         print(f"ERRO: Erro geral em emitir_nfe: {e}")
