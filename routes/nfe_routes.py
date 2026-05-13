@@ -10,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone, timedelta
 from database.connection import get_db
 from database.models import Cliente, DestinatarioNFe, Produto, NFeEmitidas, Cfop, Csticms, Csosnicms, Ncm, RegimeTributario, NFeInutilizacao, UserModel
-from database.repositories.product_repository import ProductRepository
 from auth.decorators import (
     admin_required,
     block_viewer_access,
@@ -20,7 +19,6 @@ from auth.decorators import (
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
 from services.nfe_service import NFeService, generate_nfe_xml, sign_xml, send_to_sefaz, validar_tributacao_nfe
-from services.danfe_service import generate_danfe
 from utils.helpers import produto_to_dict_for_template, get_uf_ibge_code
 from utils.nfe_validators import validar_cpf, validar_cnpj
 from utils.nfe_validators import validar_dados_nfe, validar_xml_nfe
@@ -39,16 +37,67 @@ def api_produtos():
         if not cliente_id:
             return jsonify({'results': [], 'pagination': {'more': False}})
 
-        q    = request.args.get('q', '').strip()
+        q = request.args.get('q', '').strip()
         page = request.args.get('page', 1, type=int)
+        PER_PAGE = 30
+        offset = (page - 1) * PER_PAGE
 
-        repo   = ProductRepository(db)
-        result = repo.search_for_select2(cliente_id=cliente_id, term=q, page=page)
-        return jsonify(result)
+        params = {'cliente_id': cliente_id, 'limit': PER_PAGE + 1, 'offset': offset}
+        where_extra = ''
+        if q:
+            where_extra = " AND (p.descricao ILIKE :q OR p.codigo_interno ILIKE :q)"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT p.produto_id, p.codigo_interno, p.descricao, p.preco_unitario_padrao,
+                   p.unidade_comercial, p.origem_mercadoria,
+                   n.codigo as ncm_codigo, cf.cfop as cfop_codigo,
+                   cst.codigo as cst_codigo, cs.codigo as csosn_codigo,
+                   p.classificacao_ibs_cbs_id
+            FROM produtos p
+            LEFT JOIN ncms n ON p.ncm_id = n.ncm_id
+            LEFT JOIN cfops cf ON p.cfop_id = cf.cfop_id
+            LEFT JOIN cst_icms cst ON p.cst_id = cst.cst_id
+            LEFT JOIN csosn_icms cs ON p.csosn_id = cs.csosn_id
+            WHERE p.cliente_id = :cliente_id AND p.ativo = true{where_extra}
+            ORDER BY p.descricao
+            LIMIT :limit OFFSET :offset
+        """), params).fetchall()
+
+        has_more = len(rows) > PER_PAGE
+        rows = rows[:PER_PAGE]
+
+        results = []
+        for r in rows:
+            if hasattr(r, '_mapping'):
+                d = dict(r._mapping)
+            elif hasattr(r, '_asdict'):
+                d = r._asdict()
+            else:
+                d = {
+                    'produto_id': r[0], 'codigo_interno': r[1], 'descricao': r[2],
+                    'preco_unitario_padrao': r[3], 'unidade_comercial': r[4],
+                    'origem_mercadoria': r[5], 'ncm_codigo': r[6], 'cfop_codigo': r[7],
+                    'cst_codigo': r[8], 'csosn_codigo': r[9]
+                }
+            results.append({
+                'id': d.get('produto_id'),
+                'text': f"{d.get('codigo_interno','') or ''} - {d.get('descricao','')}".strip(' -'),
+                'codigo': d.get('codigo_interno') or '',
+                'preco': float(d.get('preco_unitario_padrao') or 0),
+                'unidade': d.get('unidade_comercial') or 'UN',
+                'ncm': d.get('ncm_codigo') or '',
+                'cfop': d.get('cfop_codigo') or '',
+                'cst': d.get('cst_codigo') or '',
+                'csosn': d.get('csosn_codigo') or '',
+                'origem': d.get('origem_mercadoria') if d.get('origem_mercadoria') is not None else 0,
+                'classificacao_ibs_cbs_id': d.get('classificacao_ibs_cbs_id') or '',
+            })
+
+        return jsonify({'results': results, 'pagination': {'more': has_more}})
     except Exception as e:
-        import logging as _log
-        _log.getLogger(__name__).error("Erro api_produtos: %s", e, exc_info=True)
-        return jsonify({'error': 'Erro ao buscar produtos', 'results': [], 'pagination': {'more': False}}), 500
+        print(f"[X] Erro api_produtos: {e}")
+        return jsonify({'results': [], 'pagination': {'more': False}})
     finally:
         db.close()
 
@@ -455,6 +504,7 @@ def emitir_nfe():
                     )
                     
                     # GERAR DANFE em PDF usando o serviço existente
+                    from services.danfe_service import generate_danfe
                     
                     # Gerar DANFE usando ID temporário (não será salvo no banco)
                     # O generate_danfe retorna o caminho do arquivo PDF gerado
@@ -467,7 +517,7 @@ def emitir_nfe():
                     # Limpar arquivo temporário
                     try:
                         os.remove(pdf_path)
-                    except OSError:
+                    except:
                         pass
                     
                     # Retornar PDF como base64 para exibir no frontend
@@ -838,7 +888,7 @@ def emitir_nfe():
                         if resultado_sefaz.get('data_autorizacao'):
                             try:
                                 data_autorizacao_nfe = datetime.fromisoformat(resultado_sefaz['data_autorizacao'])
-                            except (ValueError, TypeError):
+                            except:
                                 data_autorizacao_nfe = datetime.now() if status_nfe == 'AUTORIZADA' else None
                         elif status_nfe == 'AUTORIZADA':
                             data_autorizacao_nfe = datetime.now()
@@ -1000,8 +1050,27 @@ def emitir_nfe():
                         # Gerar DANFE automaticamente sempre que NFe for autorizada
                         try:
                             print(" === GERANDO DANFE AUTOMATICAMENTE ===")
+                            from services.danfe_service import generate_danfe
                             # OK: CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
-                            pdf_path = generate_danfe(xml_assinado, nfe_id, emitente_cliente_id)
+                            # Garantir que o XML tem protNFe antes de gerar DANFE
+                            # Sem protNFe, brazilfiscalreport exibe "SEM VALOR FISCAL" mesmo em producao
+                            xml_para_danfe = xml_assinado
+                            if '<protNFe' not in xml_assinado:
+                                try:
+                                    from services.nfe_service import NFeService
+                                    _nfe_svc = NFeService()
+                                    _resultado_protocolo = {
+                                        'chave_acesso': resultado_sefaz.get('chave_acesso'),
+                                        'protocolo': resultado_sefaz.get('protocolo'),
+                                        'status': '100',
+                                        'digVal': 'N/A',
+                                        'ambiente_real': True
+                                    }
+                                    xml_para_danfe = _nfe_svc._gerar_xml_protocolo(xml_assinado, _resultado_protocolo)
+                                    print("[DANFE] protNFe injetado no XML antes de gerar DANFE")
+                                except Exception as _e_prot:
+                                    print(f"[DANFE] Aviso: nao foi possivel injetar protNFe: {_e_prot}")
+                            pdf_path = generate_danfe(xml_para_danfe, nfe_id, emitente_cliente_id)
                             
                             if pdf_path and os.path.exists(pdf_path):
                                 print(f"OK: DANFE gerado: {pdf_path}")
@@ -1057,7 +1126,7 @@ def emitir_nfe():
                     # Commit da sessão antes do redirect
                     try:
                         db.commit()
-                    except Exception:
+                    except:
                         pass  # Já foi commitado antes
                     
                     print(" Redirecionando para lista de NFes...")
@@ -1135,15 +1204,97 @@ def emitir_nfe():
         # MÉTODO GET - CARREGAR DADOS PARA O FORMULÁRIO
         print(" === CARREGANDO FORMULÁRIO (GET) ===")
         
-        from services.nfe_creation_workflow import NFeCreationWorkflow
-        wf_ctx = NFeCreationWorkflow(db).prepare_emitter_context(emitente_cliente_id)
+        # BUSCAR Destinatários/Tomadores
+        destinatarios = db.query(DestinatarioNFe).filter_by(cliente_id=emitente_cliente_id).all()
+        destinatarios_data = []
+        for dest in destinatarios:
+            destinatarios_data.append({
+                'destinatario_id': dest.destinatario_id,
+                'nome_razao_social': dest.nome_razao_social,
+                'cpf_cnpj': dest.cpf_cnpj,
+                'logradouro': dest.logradouro,
+                'numero': dest.numero,
+                'bairro': dest.bairro,
+                'cep': dest.cep,
+                'codigo_municipio': dest.codigo_municipio,
+                'nome_municipio': dest.nome_municipio,
+                'uf': dest.uf
+            })
         
-        print(f" Renderizando template com {len(wf_ctx['destinatarios'])} Destinatários/Tomadores para cliente {emitente_cliente_id}")
+        # PRODUTOS: carregados via AJAX (/nfe/api/produtos) — sem query aqui
+        produtos_data = []
+        
+        # CFOPs e NCMs carregados via AJAX (/nfe/api/cfops e /nfe/api/ncms)
+        cfops_data = []
+        ncms_data = []
+
+        # OK: BUSCAR CSTs E CSOSNs
+        try:
+            all_csts = db.query(Csticms).all()
+            csts_data = []
+            for cst in all_csts:
+                csts_data.append({
+                    'cst_id': cst.cst_id,
+                    'codigo': cst.codigo,
+                    'descricao': cst.descricao
+                })
+            
+            print(f" CSTs carregados: {len(csts_data)} registros")
+            
+        except Exception as e:
+            print(f"AVISO: Erro ao carregar CSTs: {e}")
+            csts_data = []
+        
+        try:
+            all_csosns = db.query(Csosnicms).all()
+            csosns_data = []
+            for csosn in all_csosns:
+                csosns_data.append({
+                    'csosn_id': csosn.csosn_id,
+                    'codigo': csosn.codigo,
+                    'descricao': csosn.descricao
+                })
+            
+            print(f" CSOSNs carregados: {len(csosns_data)} registros")
+            
+        except Exception as e:
+            print(f"AVISO: Erro ao carregar CSOSNs: {e}")
+            csosns_data = []
+        
+        # BUSCAR CLASSIFICAÇÕES IBS/CBS
+        try:
+            from database.models import ClassificacaoIBSCBS
+            all_classificacoes = db.query(ClassificacaoIBSCBS).filter_by(ativo=True).all()
+            classificacoes_ibs_cbs = []
+            for clf in all_classificacoes:
+                classificacoes_ibs_cbs.append({
+                    'classificacao_id': clf.classificacao_id,
+                    'codigo': clf.codigo,
+                    'descricao': clf.descricao,
+                    'aliquota_ibs_uf': float(clf.aliquota_ibs_uf),
+                    'aliquota_ibs_mun': float(clf.aliquota_ibs_mun),
+                    'aliquota_cbs': float(clf.aliquota_cbs)
+                })
+            
+            print(f" Classificações IBS/CBS carregadas: {len(classificacoes_ibs_cbs)} registros")
+            
+        except Exception as e:
+            print(f"AVISO: Erro ao carregar Classificações IBS/CBS: {e}")
+            classificacoes_ibs_cbs = []
+        
+        print(f" Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
         
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,
+                             destinatarios=destinatarios_data,
+                             produtos=produtos_data,
+                             all_cfops=cfops_data,
+                             all_csts=csts_data,
+                             all_csosns=csosns_data,
+                             all_ncms=ncms_data,
+                             classificacoes_ibs_cbs=classificacoes_ibs_cbs,
                              regime_tributario=regime_tributario_nome,
-                             **wf_ctx)
+                             initial_nfe_items=[])
         
     except Exception as e:
         print(f"ERRO: Erro geral em emitir_nfe: {e}")
@@ -1382,7 +1533,7 @@ def view(nfe_id):
         if isinstance(value, bytes):
             try:
                 return value.decode('utf-8')
-            except (UnicodeDecodeError, AttributeError):
+            except:
                 return None
         # Se for dict, sanitiza recursivamente
         if isinstance(value, dict):
@@ -1548,6 +1699,7 @@ def generate_danfe(nfe_id):
         if status == 'AUTORIZADA' and '<protNFe' not in xml_original:
             print(f"[DANFE] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
             try:
+                from services.nfe_service import NFeService
                 
                 # XML já é só NFe sem protocolo
                 nfe_service = NFeService()
@@ -1573,6 +1725,7 @@ def generate_danfe(nfe_id):
                 traceback.print_exc()
         
         # Gerar DANFE usando a biblioteca Python NFe
+        from services.danfe_service import generate_danfe
         import time
         
         try:
@@ -1648,6 +1801,7 @@ def generate_danfe_after_issue():
         if status == 'AUTORIZADA' and '<protNFe' not in xml_original:
             print(f"[DANFE-AFTER] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
             try:
+                from services.nfe_service import NFeService
                 
                 # XML já é só NFe sem protocolo
                 nfe_service = NFeService()
@@ -1667,6 +1821,7 @@ def generate_danfe_after_issue():
                 traceback.print_exc()
         
         # Gerar DANFE usando o serviço
+        from services.danfe_service import generate_danfe
         import time
         
         try:
@@ -1877,7 +2032,8 @@ def enviar_danfe_email(nfe_id):
             data_autorizacao = nfe_data.get('data_autorizacao')
             if xml_content and status_nfe == 'AUTORIZADA' and protocolo_sefaz and '<protNFe' not in xml_content:
                 try:
-                    _svc = NFeService()
+                    from services.nfe_service import NFeService as _NFeS
+                    _svc = _NFeS()
                     resultado_fake = {
                         'protocolo': protocolo_sefaz,
                         'data_autorizacao': str(data_autorizacao) if data_autorizacao else ''
@@ -2608,6 +2764,7 @@ def edit(nfe_id):
                         print(f" Tentando emitir NFe {nfe_id}...")
                         
                         # Usar serviço NFeService para processar
+                        from services.nfe_service import NFeService
                         nfe_service = NFeService(db)
                         
                         # Processar emissão usando o nfe_id existente
@@ -2712,6 +2869,7 @@ def reenviar_nfe(nfe_id):
         print(f" Status atualizado para PROCESSANDO")
         
         # Reenviar para SEFAZ
+        from services.nfe_service import NFeService
         nfe_service = NFeService(db)
         
         # Extrair dados do JSON
@@ -3048,6 +3206,7 @@ def emitir_rascunho(nfe_id):
         print(f" Status atualizado para PROCESSANDO")
         
         # Emitir na SEFAZ
+        from services.nfe_service import NFeService
         nfe_service = NFeService(db)
         
         # Extrair dados do JSON
@@ -3476,6 +3635,7 @@ def compartilhar_nfe(nfe_id):
                             if status == 'AUTORIZADA' and '<protNFe' not in xml_content:
                                 print(f"[EMAIL] NFe {nfe_id} autorizada sem protNFe, gerando protocolo com tpAmb=1...")
                                 try:
+                                    from services.nfe_service import NFeService
                                     nfe_service = NFeService()
                                     resultado_sefaz = {
                                         'chave_acesso': nfe_data.get('chave_acesso'),
@@ -3490,6 +3650,7 @@ def compartilhar_nfe(nfe_id):
                                     print(f"[EMAIL] Erro ao gerar protocolo: {ex}")
                             
                             # OK: CORREÇÃO: Usar caminho absoluto e verificar se existe
+                            from services.danfe_service import generate_danfe
                             
                             # Gerar DANFE com XML corrigido
                             pdf_path = generate_danfe(xml_para_danfe, nfe_id)
@@ -3668,6 +3829,7 @@ def consultar_status_sefaz(nfe_id):
             return jsonify({'success': False, 'message': 'Chave de acesso não encontrada'}), 400
         
         # Consultar na SEFAZ
+        from services.nfe_service import NFeService
         nfe_service = NFeService()
         
         # Determinar ambiente
@@ -4020,7 +4182,7 @@ def duplicar_nfe(nfe_id):
                     try:
                         item_data = json.loads(item_json_str) if isinstance(item_json_str, str) else item_json_str
                         items_data.append(item_data)
-                    except (json.JSONDecodeError, ValueError):
+                    except:
                         pass
                 idx += 1
             print(f"[DUPLICAR] Encontrados {len(items_data)} produtos em items[N][json]")
@@ -4033,6 +4195,7 @@ def duplicar_nfe(nfe_id):
         
         # 7. Processar emissão completa usando o serviço existente
         # IMPORTANTE: Usar processar_nfe() que salva no banco, não processar_emissao_completa()
+        from services.nfe_service import NFeService
         
         # Tentar emitir, se houver duplicidade, incrementar número e tentar novamente
         max_tentativas = 5
