@@ -1057,8 +1057,8 @@ def emitir_nfe():
                             xml_para_danfe = xml_assinado
                             if '<protNFe' not in xml_assinado:
                                 try:
-                                    from services.nfe_service import NFeService
-                                    _nfe_svc = NFeService()
+                                    from services.nfe_service import NFeService as _NFeS
+                                    _nfe_svc = _NFeS()
                                     _resultado_protocolo = {
                                         'chave_acesso': resultado_sefaz.get('chave_acesso'),
                                         'protocolo': resultado_sefaz.get('protocolo'),
@@ -1099,25 +1099,6 @@ def emitir_nfe():
                             # Não falhar a emissão por causa do DANFE
                             flash(f'NFe emitida com sucesso! DANFE: {str(e)}', 'warning')
                         
-                        # === ENVIAR EMAIL AUTOMATICAMENTE PARA O DESTINATÁRIO ===
-                        try:
-                            print(" === ENVIANDO EMAIL AUTOMÁTICO PARA DESTINATÁRIO ===")
-                            from services.email_service import enviar_nfe_automaticamente
-                            resultado_email = enviar_nfe_automaticamente(nfe_id, db)
-                            if resultado_email.get('success'):
-                                print(f"✅ Email automático enviado com sucesso!")
-                                flash('Email com NFe enviado automaticamente para o destinatário!', 'success')
-                            else:
-                                msg_erro = resultado_email.get('message', 'Erro desconhecido')
-                                print(f"⚠️  Email automático não enviado: {msg_erro}")
-                                if 'sem email' not in msg_erro.lower() and 'não cadastrado' not in msg_erro.lower():
-                                    flash(f'Aviso: Não foi possível enviar email automático - {msg_erro}', 'warning')
-                        except Exception as email_error:
-                            import traceback
-                            print(f"❌ Erro ao enviar email automático: {str(email_error)}")
-                            traceback.print_exc()
-                            # Não bloquear a emissão por causa do email
-                            flash('NFe emitida com sucesso, mas houve erro no envio automático do email.', 'warning')
                     else:
                         msg = f'ERRO: NFe rejeitada: {resultado_sefaz.get("message")}'
                         print(msg)
@@ -1918,12 +1899,13 @@ def enviar_danfe_email(nfe_id):
             return jsonify({'success': False, 'message': 'DANFE não encontrado. Gere o DANFE primeiro.'}), 404
 
         # Dados principais
-        chave_acesso  = nfe_data.get('chave_acesso', 'N/A')
-        numero        = nfe_data.get('numero', 'N/A')
-        serie         = nfe_data.get('serie', '')
-        protocolo     = nfe_data.get('protocolo_sefaz', 'N/A')
-        emitente_nome = nfe_data.get('cliente_fantasia') or nfe_data.get('cliente_razao_social', 'N/A')
-        dest_nome     = nfe_data.get('destinatario_razao_social', 'N/A')
+        chave_acesso = nfe_data.get('chave_acesso', 'N/A')
+        numero = nfe_data.get('numero', 'N/A')
+        protocolo = nfe_data.get('protocolo_sefaz', 'N/A')
+        emitente_fantasia = (nfe_data.get('cliente_fantasia') or '').strip()
+        emitente_razao = (nfe_data.get('cliente_razao_social') or '').strip()
+        emitente_nome = emitente_fantasia or emitente_razao or 'Emissor'
+        dest_nome = nfe_data.get('destinatario_razao_social', 'Cliente')
 
         data_aut = nfe_data.get('data_autorizacao')
         if data_aut:
@@ -1931,80 +1913,13 @@ def enviar_danfe_email(nfe_id):
                 from datetime import datetime as _dt
                 if isinstance(data_aut, str):
                     data_aut = _dt.fromisoformat(data_aut)
-                data_aut_fmt = data_aut.strftime('%d/%m/%Y %H:%M:%S')
+                data_aut_fmt = data_aut.strftime('%d/%m/%Y às %H:%M')
             except Exception:
                 data_aut_fmt = str(data_aut)
         else:
             data_aut_fmt = 'N/A'
 
-        assunto = f'NF-e nº {numero} – {emitente_nome}'
-
-        corpo_html = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  body {{ margin:0; padding:20px; background:#f4f4f4; font-family:Arial,sans-serif; }}
-  .wrap {{ max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #dadce0; border-radius:8px; overflow:hidden; }}
-  .header {{
-    background:#1565c0; color:#ffffff;
-    padding:28px 30px; text-align:center;
-  }}
-  .header h1 {{ margin:0; font-size:22px; font-weight:700; line-height:1.3; }}
-  .body {{ padding:30px 30px 10px 30px; color:#333333; }}
-  .body p {{ margin:0 0 14px 0; font-size:14px; line-height:1.6; }}
-  .info-table {{
-    width:100%; border-collapse:collapse;
-    background:#f8f9fa; border-radius:6px;
-    margin:18px 0 22px 0; font-size:13px;
-  }}
-  .info-table td {{ padding:10px 14px; border-bottom:1px solid #e0e0e0; vertical-align:top; }}
-  .info-table td:first-child {{ color:#555; font-weight:600; white-space:nowrap; width:38%; }}
-  .info-table td:last-child {{ color:#111; word-break:break-all; }}
-  .info-table tr:last-child td {{ border-bottom:none; }}
-  .anexos {{ margin:0 0 20px 0; font-size:14px; }}
-  .anexos strong {{ display:block; margin-bottom:6px; }}
-  .anexos ul {{ margin:0; padding-left:20px; }}
-  .anexos li {{ margin-bottom:4px; }}
-  .footer {{
-    text-align:center; padding:16px 30px;
-    font-size:12px; color:#888888;
-    border-top:1px solid #eeeeee;
-  }}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="header">
-    <h1>NF-e {numero} de {emitente_nome}</h1>
-  </div>
-  <div class="body">
-    <p>Prezado(a),</p>
-    <p>Segue anexo a nota fiscal eletrônica emitida por <strong>{emitente_nome}</strong>.</p>
-
-    <table class="info-table">
-      <tr><td>Numero da NF-e</td><td>{numero}</td></tr>
-      <tr><td>Emitente</td><td>{emitente_nome}</td></tr>
-      <tr><td>Destinatário</td><td>{dest_nome}</td></tr>
-      <tr><td>Chave de acesso</td><td style="font-size:11px">{chave_acesso}</td></tr>
-      <tr><td>Protocolo</td><td>{protocolo}</td></tr>
-      <tr><td>Data de autorização</td><td>{data_aut_fmt}</td></tr>
-    </table>
-
-    <div class="anexos">
-      <strong>Anexos incluídos:</strong>
-      <ul>
-        <li>DANFE (PDF)</li>
-        <li>XML da NF-e</li>
-      </ul>
-    </div>
-  </div>
-  <div class="footer">
-    Este email foi enviado automaticamente pelo EmiteMax.
-  </div>
-</div>
-</body>
-</html>"""
+        assunto = f'Nota Fiscal Eletrônica #{numero} - {emitente_nome}'
 
         # Ler PDF
         try:
@@ -2054,8 +1969,20 @@ def enviar_danfe_email(nfe_id):
             print(f"[ERRO] Não foi possível anexar XML: {e}")
             traceback.print_exc()
 
-        from services.email_service import EmailService
+        from services.email_service import EmailService, gerar_template_email_nfe
         try:
+            corpo_html = gerar_template_email_nfe(
+                nfe_id=nfe_id,
+                numero_nfe=numero,
+                emitente=emitente_nome,
+                destinatario=dest_nome,
+                chave_acesso=chave_acesso,
+                protocolo=protocolo,
+                data_autorizacao=data_aut_fmt,
+                valor_total=nfe_data.get('valor_total', 0),
+                anexos=anexos
+            )
+
             email_service = EmailService()
             resultado = email_service.enviar_email(
                 destinatario=email_destinatario,
