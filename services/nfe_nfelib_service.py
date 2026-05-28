@@ -968,23 +968,16 @@ def generate_nfe_xml_nfelib(
                 ipi = Nfe.InfNfe.Det.Imposto.Ipi(IPINT=ipi_nt)
                 print(f"  [IPI] Item {idx} - CST {cst_ipi}: Não tributado")
         
-        # IBS/CBS - Reforma Tributaria (obrigatorio quando classificacao_ibs_cbs_id presente - NT 2024/007)
+        # IBS/CBS - Reforma Tributaria (obrigatorio quando classificacao_ibs_cbs_id presente)
         ibs_cbs_xml = None
         classificacao_ibs_cbs_id = item.get('classificacao_ibs_cbs_id')
         
         # DEBUG: Sempre mostrar se campo IBS/CBS foi recebido
         print(f"  [IBS/CBS] Item {idx} - CRT={crt_int}, classificacao_ibs_cbs_id='{classificacao_ibs_cbs_id}' (tipo: {type(classificacao_ibs_cbs_id).__name__})")
         
-        # IBS/CBS obrigatorio para CRT=3 (Lucro Real/Presumido) - NT 2024/007
-        # Fallback: se CRT=3 e sem classificacao no item, usar padrao 00-00001
-        if crt_int == 3 and not classificacao_ibs_cbs_id and _db_ibs_cbs is not None:
-            try:
-                _clf = _db_ibs_cbs.execute(text("SELECT classificacao_id FROM classificacoes_ibs_cbs WHERE codigo = '00-00001' LIMIT 1")).fetchone()
-                if _clf:
-                    classificacao_ibs_cbs_id = str(_clf[0])
-                    print(f"  [IBS/CBS] Item {idx} - Fallback classificacao padrao 00-00001: {classificacao_ibs_cbs_id}")
-            except Exception as _e:
-                print(f"  [AVISO] IBS/CBS fallback erro: {_e}")
+        # CRT=3 exige classificação IBS/CBS explícita no item.
+        if crt_int == 3 and not classificacao_ibs_cbs_id:
+            raise ValueError(f"Item {idx}: Classificação IBS/CBS obrigatória para CRT=3")
         if crt_int == 3 and classificacao_ibs_cbs_id and _db_ibs_cbs is not None:
             try:
                 classificacao_id_int = int(classificacao_ibs_cbs_id)

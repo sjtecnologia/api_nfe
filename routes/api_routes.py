@@ -1,7 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_login import login_required
 from sqlalchemy.orm import joinedload
-from sqlalchemy import or_, text
+from sqlalchemy import or_, text, func
 from database.connection import get_db
 from database.models import (
     Cfop, Ncm, Produto, Cliente, CertificadoDigital, NFeEmitidas,
@@ -11,23 +11,65 @@ from auth.permissions import get_accessible_client_ids
 
 api_bp = Blueprint('api', __name__)
 
+
+def _get_cache():
+    return current_app.extensions.get('cache')
+
+
 @api_bp.route('/cfops', methods=['GET'])
 @login_required
 def get_cfops():
-    """Retorna lista de CFOPs"""
+    """Retorna lista de CFOPs com paginação e cache."""
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = min(500, request.args.get('per_page', 100, type=int))
+    cache_key = f'cfops_p{page}_pp{per_page}'
+    cache = _get_cache()
+    if cache:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
     db = next(get_db())
-    cfops = db.query(Cfop).all()
-    cfop_list = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in cfops]
-    return jsonify(cfop_list), 200
+    try:
+        total = db.query(func.count(Cfop.cfop_id)).scalar()
+        cfops = db.query(Cfop).order_by(Cfop.cfop).offset((page - 1) * per_page).limit(per_page).all()
+        cfop_list = [{"cfop_id": c.cfop_id, "cfop": c.cfop, "descricao": c.descricao} for c in cfops]
+        resp = jsonify(cfop_list)
+        resp.headers['X-Total-Count'] = str(total)
+        if cache:
+            cache.set(cache_key, resp, timeout=3600)
+        return resp, 200
+    finally:
+        db.close()
+
 
 @api_bp.route('/ncms', methods=['GET'])
 @login_required
 def get_ncms():
-    """Retorna lista de NCMs"""
+    """Retorna lista de NCMs com paginação e cache."""
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = min(500, request.args.get('per_page', 100, type=int))
+    q = request.args.get('q', '').strip()
+    cache_key = f'ncms_p{page}_pp{per_page}_q{q}'
+    cache = _get_cache()
+    if cache and not q:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
     db = next(get_db())
-    ncms = db.query(Ncm).all()
-    ncm_list = [{"ncm_id": n.ncm_id, "codigo": n.codigo, "descricao": n.descricao} for n in ncms]
-    return jsonify(ncm_list), 200
+    try:
+        query = db.query(Ncm)
+        if q:
+            query = query.filter(or_(Ncm.codigo.ilike(f'%{q}%'), Ncm.descricao.ilike(f'%{q}%')))
+        total = query.count()
+        ncms = query.order_by(Ncm.codigo).offset((page - 1) * per_page).limit(per_page).all()
+        ncm_list = [{"ncm_id": n.ncm_id, "codigo": n.codigo, "descricao": n.descricao} for n in ncms]
+        resp = jsonify(ncm_list)
+        resp.headers['X-Total-Count'] = str(total)
+        if cache and not q:
+            cache.set(cache_key, resp, timeout=3600)
+        return resp, 200
+    finally:
+        db.close()
 
 @api_bp.route('/produtos/cliente/<int:cliente_id>', methods=['GET'])
 @login_required
@@ -107,105 +149,94 @@ def buscar_regra_tributacao():
             print(f"[WARNING] ⚠️ NENHUMA REGRA TRIBUTÁRIA CADASTRADA NO BANCO!")
             return jsonify({"sucesso": False, "message": "Nenhuma regra tributária cadastrada. Cadastre regras em Admin > Regras de Tributação."}), 404
         
-        query = db.query(RegraTributacao).options(
-        joinedload(RegraTributacao.regime_tributario),
-        joinedload(RegraTributacao.cfop),
-        joinedload(RegraTributacao.ncm),
-        joinedload(RegraTributacao.cst_icms_obj),
-        joinedload(RegraTributacao.csosn_icms_obj),
-        joinedload(RegraTributacao.motivo_desoneracao)
-        ).filter(RegraTributacao.ativo == True)
-        
-        # Filtros obrigatórios
-        if cliente_id:
-            query = query.filter(or_(RegraTributacao.cliente_id == cliente_id, RegraTributacao.cliente_id.is_(None)))
-        else:
-            query = query.filter(RegraTributacao.cliente_id.is_(None))
-        
-        if regime_tributario_id:
-            query = query.filter(RegraTributacao.regime_tributario_id == regime_tributario_id)
-        
-        # Filtros condicionais
+        # --- pré-calcular subqueries de CFOP e NCM (reusadas nos níveis) ---
+        cfop_variantes = set()
+        cfop_subquery = None
         if cfop_codigo:
-            # Buscar também a variante 5xxx↔6xxx do CFOP, pois a mesma regra
-            # cobre operações intra e interestaduais do mesmo tipo (ex.: 5102 e 6102).
             cfop_variantes = {cfop_codigo}
-            if cfop_codigo and len(cfop_codigo) >= 4:
+            if len(cfop_codigo) >= 4:
                 if cfop_codigo[0] == '5':
                     cfop_variantes.add('6' + cfop_codigo[1:])
                 elif cfop_codigo[0] == '6':
                     cfop_variantes.add('5' + cfop_codigo[1:])
             cfop_subquery = db.query(Cfop.cfop_id).filter(Cfop.cfop.in_(cfop_variantes))
             cfop_ids = [c.cfop_id for c in cfop_subquery.all()]
-            print(f"[SEARCH] CFOP '{cfop_codigo}' (variantes: {cfop_variantes}) -> IDs encontrados: {cfop_ids}")
-            query = query.filter(or_(RegraTributacao.cfop_id.in_(cfop_subquery), RegraTributacao.cfop_id.is_(None)))
-        
+            print(f"[SEARCH] CFOP '{cfop_codigo}' (variantes: {cfop_variantes}) -> IDs: {cfop_ids}")
+
+        ncm_subquery = None
         if ncm_codigo:
             ncm_subquery = db.query(Ncm.ncm_id).filter(Ncm.codigo == ncm_codigo)
             ncm_ids = [n.ncm_id for n in ncm_subquery.all()]
-            print(f"[SEARCH] NCM '{ncm_codigo}' -> IDs encontrados: {ncm_ids}")
-            query = query.filter(or_(RegraTributacao.ncm_id.in_(ncm_subquery), RegraTributacao.ncm_id.is_(None)))
-            
-        if uf_origem:
-            query = query.filter(or_(RegraTributacao.uf_origem == uf_origem, RegraTributacao.uf_origem.is_(None)))
-        if uf_destino:
-            query = query.filter(or_(RegraTributacao.uf_destino == uf_destino, RegraTributacao.uf_destino.is_(None)))
-        if tipo_item:
-            # tipo_item já foi normalizado (capitalize) no início da função
-            query = query.filter(or_(RegraTributacao.tipo_item == tipo_item, RegraTributacao.tipo_item.is_(None)))
-        
-        # Ordenar por prioridade
-        query = query.order_by(
-            RegraTributacao.cliente_id.desc(),
-            RegraTributacao.prioridade.desc()
-        )
-        
-        # Debug: contar quantas regras passaram nos filtros
-        count_filtradas = query.count()
-        print(f"[QUERY] Regras após filtros: {count_filtradas}")
-        
-        if count_filtradas == 0:
-            print(f"[WARNING] ⚠️ Nenhuma regra passou nos filtros!")
-            print(f"[HINT] Verifique se existe regra com:")
-            print(f"   - Cliente ID: {cliente_id} (ou NULL para regra global)")
-            print(f"   - Regime: {regime_tributario_id}")
-            print(f"   - CFOP: {cfop_codigo} (ou NULL)")
-            print(f"   - NCM: {ncm_codigo} (ou NULL)")
-            print(f"   - UF Origem: {uf_origem} (ou NULL)")
-            print(f"   - UF Destino: {uf_destino} (ou NULL)")
-            print(f"   - Tipo: {tipo_item} (ou NULL)")
-        
-        regra_encontrada = query.first()
+            print(f"[SEARCH] NCM '{ncm_codigo}' -> IDs: {ncm_ids}")
+
+        opts = [
+            joinedload(RegraTributacao.regime_tributario),
+            joinedload(RegraTributacao.cfop),
+            joinedload(RegraTributacao.ncm),
+            joinedload(RegraTributacao.cst_icms_obj),
+            joinedload(RegraTributacao.csosn_icms_obj),
+            joinedload(RegraTributacao.motivo_desoneracao),
+        ]
+        order = [RegraTributacao.cliente_id.desc(), RegraTributacao.prioridade.desc()]
+
+        def _base_query():
+            q = db.query(RegraTributacao).options(*opts).filter(RegraTributacao.ativo == True)
+            if cliente_id:
+                q = q.filter(or_(RegraTributacao.cliente_id == cliente_id, RegraTributacao.cliente_id.is_(None)))
+            else:
+                q = q.filter(RegraTributacao.cliente_id.is_(None))
+            if regime_tributario_id:
+                q = q.filter(RegraTributacao.regime_tributario_id == regime_tributario_id)
+            if tipo_item:
+                q = q.filter(or_(RegraTributacao.tipo_item == tipo_item, RegraTributacao.tipo_item.is_(None)))
+            return q
+
+        def _aplicar_ncm_cfop_uf(q, usar_cfop, usar_ncm, usar_uf):
+            if usar_cfop and cfop_subquery is not None:
+                q = q.filter(or_(RegraTributacao.cfop_id.in_(cfop_subquery), RegraTributacao.cfop_id.is_(None)))
+            if usar_ncm and ncm_subquery is not None:
+                q = q.filter(or_(RegraTributacao.ncm_id.in_(ncm_subquery), RegraTributacao.ncm_id.is_(None)))
+            if usar_uf:
+                if uf_origem:
+                    q = q.filter(or_(RegraTributacao.uf_origem == uf_origem, RegraTributacao.uf_origem.is_(None)))
+                if uf_destino:
+                    q = q.filter(or_(RegraTributacao.uf_destino == uf_destino, RegraTributacao.uf_destino.is_(None)))
+            return q.order_by(*order)
+
+        # Busca em cascata: do mais específico ao mais genérico
+        niveis = [
+            ("NCM+CFOP+UF",  True,  True,  True),   # nível 1 – match completo
+            ("NCM+CFOP",     True,  True,  False),   # nível 2 – ignora UF
+            ("NCM",          False, True,  False),   # nível 3 – ignora CFOP e UF
+            ("genérico",     False, False, False),   # nível 4 – só cliente+regime
+        ]
+
+        regra_encontrada = None
+        nivel_usado = None
+        for descricao_nivel, usar_cfop, usar_ncm, usar_uf in niveis:
+            q = _aplicar_ncm_cfop_uf(_base_query(), usar_cfop, usar_ncm, usar_uf)
+            regra_encontrada = q.first()
+            if regra_encontrada:
+                nivel_usado = descricao_nivel
+                print(f"[OK] Regra encontrada no nível '{descricao_nivel}' (ID {regra_encontrada.regra_tributacao_id})")
+                break
+            print(f"[CASCATA] Nível '{descricao_nivel}' sem resultado, tentando mais genérico...")
+
         if regra_encontrada:
             regra_dict = regra_encontrada.to_dict()
-            print(f"[OK] Regra encontrada ID {regra_encontrada.regra_tributacao_id}:")
             print(f"   Descrição: {regra_dict.get('descricao_regra')}")
-            print(f"   ICMS: {regra_dict.get('aliquota_icms')}% | CSOSN: {regra_dict.get('csosn_icms')} | CST: {regra_dict.get('cst_icms')}")
-            print(f"   PIS: {regra_dict.get('aliquota_pis')}% | CST: {regra_dict.get('cst_pis')}")
-            print(f"   COFINS: {regra_dict.get('aliquota_cofins')}% | CST: {regra_dict.get('cst_cofins')}")
-            print(f"   IPI: {regra_dict.get('aliquota_ipi')}% | CST: {regra_dict.get('cst_ipi')}")
-            
-            # Normalizar campos None para valores padrão (evitar problemas no frontend)
-            if regra_dict.get('descricao_regra') is None:
-                regra_dict['descricao_regra'] = 'Regra tributária automática'
-            if regra_dict.get('aliquota_icms') is None:
-                regra_dict['aliquota_icms'] = 0.0
-            if regra_dict.get('aliquota_pis') is None:
-                regra_dict['aliquota_pis'] = 0.0
-            if regra_dict.get('aliquota_cofins') is None:
-                regra_dict['aliquota_cofins'] = 0.0
-            if regra_dict.get('aliquota_ipi') is None:
-                regra_dict['aliquota_ipi'] = 0.0
-            # CST pode ser None quando não aplicável (não forçamos valor)
-            
+
+            # Normalizar campos None
+            for campo, padrao in [('descricao_regra', 'Regra tributária automática'),
+                                   ('aliquota_icms', 0.0), ('aliquota_pis', 0.0),
+                                   ('aliquota_cofins', 0.0), ('aliquota_ipi', 0.0)]:
+                if regra_dict.get(campo) is None:
+                    regra_dict[campo] = padrao
+
+            regra_dict['nivel_match'] = nivel_usado
             return jsonify({'sucesso': True, 'regra': regra_dict}), 200
         else:
-            print(f"[!] Nenhuma regra encontrada para:")
-            print(f"   Cliente: {cliente_id}, Regime: {regime_tributario_id}")
-            print(f"   NCM: {ncm_codigo}, CFOP: {cfop_codigo}")
-            print(f"   UF Origem: {uf_origem}, UF Destino: {uf_destino}")
-            print(f"   Tipo: {tipo_item}")
-            
+            print(f"[!] Nenhuma regra encontrada em nenhum nível para cliente={cliente_id}, regime={regime_tributario_id}, NCM={ncm_codigo}, CFOP={cfop_codigo}")
             return jsonify({"sucesso": False, "message": "Nenhuma regra de tributação encontrada para os critérios fornecidos."}), 404
     
     except Exception as e:

@@ -4,6 +4,11 @@ import json
 ## Removido: função duplicada gerar_prompt_sugestao
 from fastapi import Body
 
+_LLM_FALLBACK_URL = os.getenv(
+    "LLM_FALLBACK_URL",
+    "http://localhost:1234/v1/chat/completions",
+)
+
 from fastapi import FastAPI, Request, Body
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -136,7 +141,7 @@ async def sugestao_tributaria(req: SugestaoTributariaRequest):
             resp = requests.post(llm_url, json=payload, headers=headers, timeout=15)
         else:
             # Fallback: LM Studio local
-            llm_url = "http://177.189.240.158:1234/v1/chat/completions"
+            llm_url = _LLM_FALLBACK_URL
             payload = {
                 "model": "codellama-7b-instruct",
                 "messages": [
@@ -510,8 +515,7 @@ async def validar_tributacao_ia(req: ValidacaoTributariaRequest):
             print(f"[DEBUG] GitHub Models resposta: {resp.status_code}")
         else:
             # Fallback: LM Studio local
-            print("[DEBUG] Usando LM Studio local (fallback)")
-            llm_url = "http://177.189.240.158:1234/v1/chat/completions"
+            llm_url = _LLM_FALLBACK_URL
             payload = {
                 "model": "codellama-7b-instruct",
                 "messages": [

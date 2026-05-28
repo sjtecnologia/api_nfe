@@ -95,14 +95,17 @@ def cadastrar_empresa():
         db.flush()  # Para obter o cliente_id
         
         # Criar usuário
-        from werkzeug.security import generate_password_hash
-        
+        from utils.password import hash_password
+        senha_input = data.get('senha')
+        if not senha_input:
+            return jsonify({'success': False, 'message': 'Senha obrigatória.'}), 400
+
         novo_user = User(
             username=data['email'],
             email=data['email'],
-            password_hash=generate_password_hash(data.get('senha', 'Trocar@123')),
+            password_hash=hash_password(senha_input),
             nome_completo=data['nome_responsavel'],
-            ativo=False,  # Ativo após pagamento
+            ativo=False,
             created_at=datetime.now()
         )
         

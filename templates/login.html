@@ -35,6 +35,7 @@
                     
                     <!-- ✅ FORMULÁRIO HTML SIMPLES -->
                     <form method="POST" id="loginForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         
                         <!-- Campo Email -->
                         <div class="form-group mb-3">

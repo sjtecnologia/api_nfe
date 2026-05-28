@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone, timedelta
 import uuid
 from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf
@@ -11,6 +12,9 @@ import tempfile
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
 
+logger = logging.getLogger(__name__)
+
+
 # OK: IMPORTAÇÕES XML TOTALMENTE CORRIGIDAS
 XML_PARSER = None
 etree = None
@@ -22,16 +26,16 @@ try:
     XML_PARSER = 'lxml'
     etree = lxml_etree
     ET = xml_ET
-    print("lxml carregado com sucesso")
+    logger.debug("lxml carregado com sucesso")
 except ImportError:
     try:
         import xml.etree.ElementTree as xml_etree
         XML_PARSER = 'etree'
         etree = xml_etree
         ET = xml_etree
-        print("AVISO: lxml nao disponivel, usando xml.etree.ElementTree")
+        logger.warning("lxml nao disponivel, usando xml.etree.ElementTree")
     except ImportError:
-        print("ERRO: Nenhum parser XML disponivel!")
+        logger.error("Nenhum parser XML disponivel!")
         raise ImportError("Instale lxml com: pip install lxml")
 
 # OK: IMPORTAÇÃO CONDICIONAL PARA NFELIB
@@ -40,9 +44,9 @@ NfeProc = None
 try:
     from nfelib.nfe.bindings.v4_0.proc_nfe_v4_00 import NfeProc
     NFELIB_DISPONIVEL = True
-    print("nfelib carregado com sucesso")
+    logger.debug("nfelib carregado com sucesso")
 except ImportError:
-    print("AVISO: nfelib nao disponivel - funcionalidades avancadas limitadas")
+    logger.warning("nfelib nao disponivel")
 
 # OK: IMPORTAÇÃO CONDICIONAL PARA SEFAZ
 SEFAZ_DISPONIVEL = False
@@ -50,9 +54,9 @@ SefazService = None
 try:
     from services.sefaz_service import SefazService
     SEFAZ_DISPONIVEL = True
-    print("SefazService carregado com sucesso")
+    logger.debug("SefazService carregado com sucesso")
 except ImportError:
-    print("AVISO: SefazService nao disponivel - usando apenas simulacao")
+    logger.warning("SefazService nao disponivel")
 
 
 # ========== VALIDAÇÃO TRIBUTÁRIA ==========
@@ -70,9 +74,9 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
     is_simples_nacional = (crt == "1")
     regime_nome = "Simples Nacional" if is_simples_nacional else "Regime Normal"
     
-    print(f"\n=== VALIDAÇÃO TRIBUTÁRIA ===")
-    print(f"Regime: {regime_nome} (CRT {crt})")
-    print(f"Total de itens: {len(itens)}")
+    logger.debug(f"\n=== VALIDAÇÃO TRIBUTÁRIA ===")
+    logger.debug(f"Regime: {regime_nome} (CRT {crt})")
+    logger.debug(f"Total de itens: {len(itens)}")
     
     for i, item in enumerate(itens, 1):
         cfop = str(item.get('cfop', ''))
@@ -150,18 +154,18 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
                     )
     
     if erros:
-        print(f"\n❌ {len(erros)} erro(s) de validação encontrado(s)")
+        logger.error(f"\n❌ {len(erros)} erro(s) de validação encontrado(s)")
         for erro in erros:
-            print(f"  • {erro}")
+            logger.error(f"  • {erro}")
     else:
-        print(f"✅ Validação tributária OK - {len(itens)} itens validados")
+        logger.debug(f"✅ Validação tributária OK - {len(itens)} itens validados")
     
     # ========== VALIDAÇÃO ADICIONAL COM IA (APENAS AVISOS) ==========
     # DESABILITADO: A IA está retornando falsos positivos que bloqueiam emissões válidas
     # Exemplo: CFOP 5101 + CSOSN 101 é válido mas a IA rejeita incorretamente
     if False:  # Desabilitado temporariamente
         try:
-            print("\n🤖 Executando validação adicional com IA...")
+            logger.debug("\n🤖 Executando validação adicional com IA...")
             import requests
             
             ia_response = requests.post(
@@ -174,7 +178,7 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
                 ia_result = ia_response.json()
                 
                 if not ia_result.get("valido", True):
-                    print("⚠️  IA detectou problemas adicionais:")
+                    logger.debug("⚠️  IA detectou problemas adicionais:")
                     erros_ia = ia_result.get("erros", [])
                     for erro_ia in erros_ia:
                         erro_texto = erro_ia.get('erro', 'Erro desconhecido')
@@ -182,26 +186,26 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
                         
                         # IGNORA erros que dizem "está correto" ou "nenhuma correção"
                         if "está correto" in erro_texto.lower() or "está correto" in sugestao_texto.lower():
-                            print(f"  ✓ Item {erro_ia.get('item', '?')}: {erro_texto} (OK)")
+                            logger.error(f"  ✓ Item {erro_ia.get('item', '?')}: {erro_texto} (OK)")
                             continue
                         if "nenhuma correção" in sugestao_texto.lower():
-                            print(f"  ✓ Item {erro_ia.get('item', '?')}: {erro_texto} (OK)")
+                            logger.error(f"  ✓ Item {erro_ia.get('item', '?')}: {erro_texto} (OK)")
                             continue
                         
                         # AVISO: Não adiciona mais aos erros, apenas imprime
-                        print(f"  ⚠️  Item {erro_ia.get('item', '?')}: {erro_texto}")
+                        logger.error(f"  ⚠️  Item {erro_ia.get('item', '?')}: {erro_texto}")
                 
                 alertas = ia_result.get("alertas", [])
                 if alertas:
-                    print("💡 Alertas da IA:")
+                    logger.debug("💡 Alertas da IA:")
                     for alerta in alertas:
-                        print(f"  • {alerta}")
+                        logger.debug(f"  • {alerta}")
             else:
-                print(f"⚠️  IA não disponível (HTTP {ia_response.status_code})")
+                logger.debug(f"⚠️  IA não disponível (HTTP {ia_response.status_code})")
         except requests.exceptions.Timeout:
-            print("⏱️  Timeout na validação com IA (continuando sem validação adicional)")
+            logger.debug("⏱️  Timeout na validação com IA (continuando sem validação adicional)")
         except Exception as e:
-            print(f"⚠️  Erro ao consultar IA: {e} (continuando sem validação adicional)")
+            logger.error(f"⚠️  Erro ao consultar IA: {e} (continuando sem validação adicional)")
     
     return (len(erros) == 0, erros)
 
@@ -212,7 +216,7 @@ def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
     Carrega NFe existente para edição
     """
     try:
-        print(f" Carregando NFe {nfe_id} para edição...")
+        logger.debug(f" Carregando NFe {nfe_id} para edição...")
         
         # Obter conexão de banco
         db = db_session if db_session else get_db_connection()
@@ -253,7 +257,7 @@ def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
                 nfe_data = {col: result[i] for i, col in enumerate(colunas)}
                 
         except Exception as e:
-            print(f"ERRO: Erro na conversão do resultado: {e}")
+            logger.error(f"ERRO: Erro na conversão do resultado: {e}")
             # Fallback manual mais seguro usando índices
             nfe_data = {
                 'nfe_emitida_id': result[0] if len(result) > 0 else None,
@@ -273,7 +277,7 @@ def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
                 'json_nfe': result[14] if len(result) > 14 else None
             }
         
-        print(f"OK: NFe {nfe_id} carregada: {nfe_data.get('status', 'N/A')}")
+        logger.debug(f"OK: NFe {nfe_id} carregada: {nfe_data.get('status', 'N/A')}")
         
         # OK: PROCESSAR JSON_NFE COM SEGURANÇA
         form_data = {}
@@ -287,14 +291,14 @@ def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
                 elif isinstance(json_nfe, dict):
                     json_data = json_nfe
                 else:
-                    print(f"AVISO: json_nfe em formato inesperado: {type(json_nfe)}")
+                    logger.warning(f"AVISO: json_nfe em formato inesperado: {type(json_nfe)}")
                     json_data = {}
                 
                 form_data = json_data.get('form_data', {})
                 items_data = json_data.get('items', [])
                 
             except (json.JSONDecodeError, TypeError) as e:
-                print(f"AVISO: Erro ao decodificar JSON: {e}")
+                logger.error(f"AVISO: Erro ao decodificar JSON: {e}")
                 # Tentar criar dados básicos a partir dos campos da tabela
                 data_emissao_value = nfe_data.get('data_emissao')
                 form_data = {
@@ -334,7 +338,7 @@ def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
                                           'codigo_municipio', 'uf']
                             cliente_data = {col: cliente_result[i] for i, col in enumerate(cliente_cols)}
                     except Exception as e:
-                        print(f"AVISO: Erro na conversão cliente: {e}")
+                        logger.error(f"AVISO: Erro na conversão cliente: {e}")
                         # Fallback manual
                         cliente_data = {
                             'cliente_id': cliente_result[0] if len(cliente_result) > 0 else None,
@@ -343,7 +347,7 @@ def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
                         }
                         
             except Exception as e:
-                print(f"AVISO: Erro ao buscar cliente: {e}")
+                logger.error(f"AVISO: Erro ao buscar cliente: {e}")
         
         return {
             'success': True,
@@ -354,7 +358,7 @@ def carregar_nfe_para_edicao(nfe_id: int, db_session=None) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"ERRO: Erro ao carregar NFe: {e}")
+        logger.error(f"ERRO: Erro ao carregar NFe: {e}")
         import traceback
         traceback.print_exc()
         return {'success': False, 'message': f'Erro ao carregar NFe: {str(e)}'}
@@ -389,11 +393,11 @@ def get_db_connection() -> Optional[Any]:
         except (ImportError, RuntimeError):
             pass
         
-        print("AVISO: Nenhuma conexão de banco disponível")
+        logger.warning("AVISO: Nenhuma conexão de banco disponível")
         return None
         
     except Exception as e:
-        print(f"AVISO: Erro ao conectar com banco: {e}")
+        logger.error(f"AVISO: Erro ao conectar com banco: {e}")
         return None
 
 # OK: DEFINIÇÃO DE TIPOS E INTERFACES
@@ -408,7 +412,7 @@ class BaseXMLSigner:
     
     def _sign_xml_fallback(self, xml_content: str, certificado: Dict[str, Any]) -> str:
         """Fallback para assinatura simulada"""
-        print("[SIGN] Usando assinatura simulada...")
+        logger.debug("[SIGN] Usando assinatura simulada...")
         
         assinatura_simulada = '''
     <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
@@ -420,7 +424,7 @@ class BaseXMLSigner:
     </Signature>'''
         
         xml_assinado = xml_content.replace('</NFe>', f'{assinatura_simulada}</NFe>')
-        print("OK: XML assinado (simulado)")
+        logger.debug("OK: XML assinado (simulado)")
         return xml_assinado
 
 # OK: IMPORTAÇÕES DE SERVIÇOS COM FALLBACKS
@@ -441,7 +445,7 @@ try:
                 try:
                     self._external_signer = ExternalXMLSigner()
                 except Exception as e:
-                    print(f"AVISO: Erro ao inicializar XMLSigner externo: {e}")
+                    logger.error(f"AVISO: Erro ao inicializar XMLSigner externo: {e}")
                     self._external_signer = None
             
             def assinar_xml(self, xml_content: str, certificado: Dict[str, Any]) -> str:
@@ -449,7 +453,7 @@ try:
                     try:
                         return self._external_signer.assinar_xml(xml_content, certificado)
                     except Exception as e:
-                        print(f"AVISO: Erro na assinatura externa, usando fallback: {e}")
+                        logger.error(f"AVISO: Erro na assinatura externa, usando fallback: {e}")
                         return self._sign_xml_fallback(xml_content, certificado)
                 else:
                     return self._sign_xml_fallback(xml_content, certificado)
@@ -457,14 +461,14 @@ try:
         xml_signer_instance = XMLSignerWrapper()
         
     except ImportError:
-        print("AVISO: XMLSigner externo não disponível, usando fallback")
+        logger.warning("AVISO: XMLSigner externo não disponível, usando fallback")
         xml_signer_instance = BaseXMLSigner()
     
     SERVICES_DISPONIVEL = True
-    print("OK: Serviços locais carregados com sucesso")
+    logger.debug("OK: Serviços locais carregados com sucesso")
     
 except ImportError as e:
-    print(f"AVISO: Serviços locais não disponíveis: {e}")
+    logger.warning(f"AVISO: Serviços locais não disponíveis: {e}")
     
     # OK: FALLBACK PARA CERTIFICADO
     def fallback_certificate_function(db, cliente_id):
@@ -499,9 +503,9 @@ class NFeService:
         Processar NFe (nova funcionalidade que atualiza NFe existente se nfe_id for fornecido)
         """
         try:
-            print(f" === PROCESSAMENTO NFE ===")
-            print(f" Cliente ID: {cliente_id}")
-            print(f"NOTA: NFe ID: {nfe_id if nfe_id else 'Nova NFe'}")
+            logger.debug(f" === PROCESSAMENTO NFE ===")
+            logger.debug(f" Cliente ID: {cliente_id}")
+            logger.debug(f"NOTA: NFe ID: {nfe_id if nfe_id else 'Nova NFe'}")
             
             # Garantir conexão de banco
             if not self.db:
@@ -539,7 +543,7 @@ class NFeService:
                                    'codigo_municipio', 'uf', 'regime_tributario_id']
                     emitente_data = {col: emitente_result[i] for i, col in enumerate(emitente_cols)}
             except Exception as e:
-                print(f"AVISO: Erro conversão emitente: {e}")
+                logger.error(f"AVISO: Erro conversão emitente: {e}")
                 emitente_data = {'razao_social': 'EMPRESA TESTE', 'cnpj': '12345678000100', 'uf': 'SP'}
             
             # Buscar destinatário
@@ -573,7 +577,7 @@ class NFeService:
                                'bairro', 'cep', 'nome_municipio', 'codigo_municipio', 'uf']
                     destinatario_data = {col: destinatario_result[i] for i, col in enumerate(dest_cols)}
             except Exception as e:
-                print(f"AVISO: Erro conversão destinatário: {e}")
+                logger.error(f"AVISO: Erro conversão destinatário: {e}")
                 destinatario_data = {'nome_razao_social': 'CLIENTE TESTE', 'cpf_cnpj': '12345678901'}
             
             # Processar emissão
@@ -591,7 +595,7 @@ class NFeService:
                 return resultado
                 
         except Exception as e:
-            print(f"ERRO: Erro no processamento NFe: {e}")
+            logger.error(f"ERRO: Erro no processamento NFe: {e}")
             import traceback
             traceback.print_exc()
             return {'success': False, 'message': f'Erro interno: {str(e)}'}
@@ -614,7 +618,7 @@ class NFeService:
                 totais = dados_nfe.get('totais', {})
                 if totais and totais.get('valor_total_nota'):
                     valor_total_nota = Decimal(str(totais['valor_total_nota']))
-                    print(f"[TOTAL] Usando valor_total_nota dos totais: R$ {valor_total_nota}")
+                    logger.debug(f"[TOTAL] Usando valor_total_nota dos totais: R$ {valor_total_nota}")
                 else:
                     # Calcular: produtos + IPI + ICMS ST + frete + seguro + outras - desconto
                     valor_produtos = Decimal('0')
@@ -642,7 +646,7 @@ class NFeService:
                     valor_desconto = Decimal(str(totais.get('valor_desconto', 0)))
                     
                     valor_total_nota = valor_produtos + valor_ipi + valor_icms_st + valor_frete + valor_seguro + valor_outras - valor_desconto
-                    print(f"[TOTAL] Calculado: Produtos={valor_produtos} + IPI={valor_ipi} + ST={valor_icms_st} + Frete={valor_frete} - Desc={valor_desconto} = R$ {valor_total_nota}")
+                    logger.debug(f"[TOTAL] Calculado: Produtos={valor_produtos} + IPI={valor_ipi} + ST={valor_icms_st} + Frete={valor_frete} - Desc={valor_desconto} = R$ {valor_total_nota}")
                 
                 # Atualizar com sucesso
                 update_query = text("""
@@ -711,18 +715,18 @@ class NFeService:
                 }
                 
         except Exception as e:
-            print(f"ERRO: Erro ao atualizar NFe: {e}")
+            logger.error(f"ERRO: Erro ao atualizar NFe: {e}")
             return {'success': False, 'message': f'Erro ao atualizar: {str(e)}'}
     
     def _criar_nova_nfe(self, resultado: Dict[str, Any], dados_nfe: Dict[str, Any], itens: list, cliente_id: int, emitente_data: Dict[str, Any], destinatario_data: Dict[str, Any]) -> Dict[str, Any]:
         """Cria nova NFe no banco"""
         try:
-            print(f"\n{'='*80}")
-            print(f"[NEW] CRIANDO NOVA NFe NO BANCO")
-            print(f"{'='*80}")
-            print(f"[DATA] dados_nfe recebidos: {dados_nfe}")
-            print(f"[INFO] Total de itens: {len(itens)}")
-            print(f"{'='*80}\n")
+            logger.debug(f"\n{'='*80}")
+            logger.debug(f"[NEW] CRIANDO NOVA NFe NO BANCO")
+            logger.debug(f"{'='*80}")
+            logger.debug(f"[DATA] dados_nfe recebidos: {dados_nfe}")
+            logger.debug(f"[INFO] Total de itens: {len(itens)}")
+            logger.debug(f"{'='*80}\n")
             
             if not self.db:
                 return {'success': False, 'message': 'Conexão de banco não disponível'}
@@ -734,11 +738,11 @@ class NFeService:
             modelo = '55'  # 55=NFe
             numero_nfe = int(dados_nfe.get('numero_nfe', 1))
             
-            print(f"[NUM] VALORES EXTRAÍDOS:")
-            print(f"   - Série: {serie}")
-            print(f"   - Modelo: {modelo}")
-            print(f"   - Número NFe: {numero_nfe}")
-            print(f"   - Data Emissão: {dados_nfe.get('dataEmissao')}")
+            logger.debug(f"[NUM] VALORES EXTRAÍDOS:")
+            logger.debug(f"   - Série: {serie}")
+            logger.debug(f"   - Modelo: {modelo}")
+            logger.debug(f"   - Número NFe: {numero_nfe}")
+            logger.debug(f"   - Data Emissão: {dados_nfe.get('dataEmissao')}")
             
             # Validar se o número já existe
             try:
@@ -760,11 +764,11 @@ class NFeService:
                         'message': f'Número {numero_nfe} da série {serie} já existe! Escolha outro número.'
                     }
             except Exception as e:
-                print(f"[WARN] Erro ao validar número existente: {e}")
+                logger.error(f"[WARN] Erro ao validar número existente: {e}")
             
             # Calcular valores
             valor_total = sum(float(item.get('valor_total', 0)) for item in itens)
-            print(f"[STATS] Dados para INSERT: numero={numero_nfe}, serie={serie}, valor_total={valor_total}")
+            logger.debug(f"[STATS] Dados para INSERT: numero={numero_nfe}, serie={serie}, valor_total={valor_total}")
             
             # Inserir nova NFe
             insert_query = text("""
@@ -793,8 +797,8 @@ class NFeService:
             else:
                 dt = datetime.now()
             
-            print(f"[DATE] Data emissão: {dt}")
-            print(f"[NUM] Número NFe: {numero_nfe}, Série: {serie}, Modelo: {modelo}")
+            logger.debug(f"[DATE] Data emissão: {dt}")
+            logger.debug(f"[NUM] Número NFe: {numero_nfe}, Série: {serie}, Modelo: {modelo}")
             
             json_nfe = {
                 'form_data': dados_nfe,
@@ -838,7 +842,7 @@ class NFeService:
             }
             
         except Exception as e:
-            print(f"ERRO: Erro ao criar NFe: {e}")
+            logger.error(f"ERRO: Erro ao criar NFe: {e}")
             return {'success': False, 'message': f'Erro ao salvar: {str(e)}'}
     
     def processar_emissao_completa(self, dados_form: Dict[str, Any], emitente_data: Dict[str, Any], destinatario_data: Dict[str, Any], items_data: list, cliente_id: int, ambiente: str = 'homologacao') -> Dict[str, Any]:
@@ -846,9 +850,9 @@ class NFeService:
         Processamento completo: Gera XML -> Assina -> Envia SEFAZ -> Salva
         """
         try:
-            print(f" === PROCESSAMENTO COMPLETO NFE ===")
-            print(f" Cliente ID: {cliente_id}")
-            print(f" Ambiente: {ambiente}")
+            logger.debug(f" === PROCESSAMENTO COMPLETO NFE ===")
+            logger.debug(f" Cliente ID: {cliente_id}")
+            logger.debug(f" Ambiente: {ambiente}")
             
             # 1. GERAR XML - tpAmb SEFAZ: 1=Produção, 2=Homologação
             tp_amb = 1 if ambiente == 'producao' else 2
@@ -857,21 +861,21 @@ class NFeService:
             if not xml_nfe:
                 return {'success': False, 'errors': ['Falha na geração do XML']}
             
-            print(f"OK: XML gerado: {len(xml_nfe)} caracteres")
+            logger.debug(f"OK: XML gerado: {len(xml_nfe)} caracteres")
             
             # DEBUG: Verificar estrutura ICMS
             if '<ICMSSN500>' in xml_nfe:
                 import re
                 icms_match = re.search(r'<ICMS>.*?</ICMS>', xml_nfe, re.DOTALL)
                 if icms_match:
-                    print(f"[DEBUG-XML] Estrutura ICMS completa: {icms_match.group()}")
+                    logger.debug(f"[DEBUG-XML] Estrutura ICMS completa: {icms_match.group()}")
             
             # 2. BUSCAR CERTIFICADO
             certificado = certificate_service_function(self.db, cliente_id) if certificate_service_function else None
             if not certificado:
                 return {'success': False, 'errors': ['Certificado não encontrado']}
             
-            print(f"OK: Certificado encontrado: {certificado.get('nome_arquivo_original', 'N/A')}")
+            logger.debug(f"OK: Certificado encontrado: {certificado.get('nome_arquivo_original', 'N/A')}")
             
             # Adicionar db_session e cliente_id para XMLSignatureService
             certificado['db_session'] = self.db
@@ -882,8 +886,8 @@ class NFeService:
             if not xml_assinado:
                 return {'success': False, 'errors': ['Falha na assinatura']}
             
-            print(f"OK: XML assinado: {len(xml_assinado)} caracteres")
-            print(f"[DEBUG] XML assinado tem <Signature>: {'<Signature' in xml_assinado}")
+            logger.debug(f"OK: XML assinado: {len(xml_assinado)} caracteres")
+            logger.debug(f"[DEBUG] XML assinado tem <Signature>: {'<Signature' in xml_assinado}")
             
             # 4. ENVIAR PARA SEFAZ
             resultado_sefaz = self._processar_envio_sefaz(xml_assinado, certificado, ambiente, cliente_id)
@@ -908,7 +912,7 @@ class NFeService:
             }
             
         except Exception as e:
-            print(f"ERRO: Erro no processamento completo: {e}")
+            logger.error(f"ERRO: Erro no processamento completo: {e}")
             import traceback
             traceback.print_exc()
             return {'success': False, 'errors': [f'Erro interno: {str(e)}']}
@@ -916,37 +920,37 @@ class NFeService:
     def _assinar_xml_real(self, xml_content: str, certificado: Dict[str, Any]) -> Optional[str]:
         """Assina XML com certificado real ou simulado"""
         try:
-            print("[SIGN] === ASSINANDO XML ===")
-            print(f"[SIGN] Certificado: {certificado.get('nome_arquivo_original', 'N/A')}")
-            print(f"[SIGN] Modo simulado: {certificado.get('modo_simulado', False)}")
-            print(f"[SIGN] XML entrada tem Signature: {'<Signature' in xml_content}")
+            logger.debug("[SIGN] === ASSINANDO XML ===")
+            logger.debug(f"[SIGN] Certificado: {certificado.get('nome_arquivo_original', 'N/A')}")
+            logger.debug(f"[SIGN] Modo simulado: {certificado.get('modo_simulado', False)}")
+            logger.debug(f"[SIGN] XML entrada tem Signature: {'<Signature' in xml_content}")
             
             if self.xml_signer:
-                print("[SIGN] Usando xml_signer...")
+                logger.debug("[SIGN] Usando xml_signer...")
                 resultado = self.xml_signer.assinar_xml(xml_content, certificado)
                 if resultado:
-                    print(f"[SIGN] [OK] XML assinado: {len(resultado)} caracteres")
-                    print(f"[SIGN] [OK] XML resultado tem Signature: {'<Signature' in resultado}")
+                    logger.debug(f"[SIGN] [OK] XML assinado: {len(resultado)} caracteres")
+                    logger.debug(f"[SIGN] [OK] XML resultado tem Signature: {'<Signature' in resultado}")
                     return resultado
                 else:
-                    print("[SIGN] [WARN] xml_signer retornou None, usando fallback")
+                    logger.debug("[SIGN] [WARN] xml_signer retornou None, usando fallback")
                     return sign_xml(xml_content, certificado)
             else:
-                print("[SIGN] === USANDO ASSINATURA SIMULADA DIRETA ===")
+                logger.debug("[SIGN] === USANDO ASSINATURA SIMULADA DIRETA ===")
                 return sign_xml(xml_content, certificado)
                 
         except Exception as e:
-            print(f"[SIGN] [ERROR] Erro na assinatura: {e}")
+            logger.error(f"[SIGN] [ERROR] Erro na assinatura: {e}")
             import traceback
             traceback.print_exc()
-            print("[SIGN] [FALLBACK] Usando assinatura simulada...")
+            logger.debug("[SIGN] [FALLBACK] Usando assinatura simulada...")
             return sign_xml(xml_content, certificado)
             return None
     
     def _processar_envio_sefaz(self, xml_assinado: str, certificado: Dict[str, Any], ambiente: str, cliente_id: int) -> Dict[str, Any]:
         """Processa envio para SEFAZ real ou simulado"""
         try:
-            print(f" === PROCESSANDO ENVIO SEFAZ ===")
+            logger.debug(f" === PROCESSANDO ENVIO SEFAZ ===")
             
             # Extrair chave de acesso
             chave_acesso = self._extrair_chave_acesso(xml_assinado)
@@ -957,14 +961,14 @@ class NFeService:
             usar_sefaz_real = self._deve_usar_sefaz_real(certificado, ambiente)
             
             if usar_sefaz_real and SEFAZ_DISPONIVEL:
-                print("✅ === ENVIANDO PARA SEFAZ REAL ===")
+                logger.debug("✅ === ENVIANDO PARA SEFAZ REAL ===")
                 return self._enviar_sefaz_real(xml_assinado, chave_acesso, ambiente, cliente_id)
             else:
-                print("⚠️  === USANDO SIMULAÇÃO LOCAL (SEM CERTIFICADO) ===")
+                logger.debug("⚠️  === USANDO SIMULAÇÃO LOCAL (SEM CERTIFICADO) ===")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente)
                 
         except Exception as e:
-            print(f"ERRO: Erro no envio SEFAZ: {e}")
+            logger.error(f"ERRO: Erro no envio SEFAZ: {e}")
             return {'success': False, 'message': f'Erro no envio: {str(e)}'}
     
     def _deve_usar_sefaz_real(self, certificado: Dict[str, Any], ambiente: str) -> bool:
@@ -972,7 +976,7 @@ class NFeService:
         
         # Verificar se SefazService está disponível
         if not SEFAZ_DISPONIVEL or SefazService is None:
-            print(" SefazService não disponível - módulo não carregado")
+            logger.debug(" SefazService não disponível - módulo não carregado")
             return False
         
         # IMPORTANTE: Não verificar mais FORCE_SEFAZ_SIMULATION
@@ -980,20 +984,20 @@ class NFeService:
         
         # Verificar se certificado é real e válido
         if certificado.get('modo_simulado', False):
-            print(" Certificado em modo simulado")
+            logger.debug(" Certificado em modo simulado")
             return False
         
         # Verificar se tem dados de certificado necessários
         if not certificado.get('cert_data'):
-            print(" Certificado sem dados (cert_data não encontrado)")
+            logger.debug(" Certificado sem dados (cert_data não encontrado)")
             return False
             
         if not certificado.get('password'):
-            print(" Certificado sem senha")
+            logger.debug(" Certificado sem senha")
             return False
         
-        print("✅ OK: Condições OK para usar SEFAZ REAL")
-        print(f"✅ Ambiente: {ambiente.upper()}")
+        logger.debug("✅ OK: Condições OK para usar SEFAZ REAL")
+        logger.debug(f"✅ Ambiente: {ambiente.upper()}")
         return True
     
     def _enviar_sefaz_real(self, xml_assinado: str, chave_acesso: str, ambiente: str, cliente_id: int) -> Dict[str, Any]:
@@ -1002,27 +1006,27 @@ class NFeService:
         key_path = None
         
         try:
-            print(f" Conectando com SEFAZ real - Ambiente: {ambiente}")
+            logger.debug(f" Conectando com SEFAZ real - Ambiente: {ambiente}")
             
             # Verificar se SefazService está disponível
             if not SEFAZ_DISPONIVEL or SefazService is None:
-                print("ERRO: SefazService não está disponível")
+                logger.error("ERRO: SefazService não está disponível")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
                                                  motivo="SefazService não disponível")
             
             # Obter certificado do cliente
-            print("[CERT] Carregando certificado digital para HTTPS...")
+            logger.debug("[CERT] Carregando certificado digital para HTTPS...")
             certificado = certificate_service_function(self.db, cliente_id) if certificate_service_function else None
             
             if not certificado:
-                print("[X] Certificado não encontrado")
+                logger.error("[X] Certificado não encontrado")
                 return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente,
                                                  motivo="Certificado não encontrado")
             
             # Extrair certificado e chave para arquivos temporários
             if certificado and certificado.get('cert_data') and certificado.get('password'):
                 try:
-                    print("[DEBUG] Iniciando extração do certificado PKCS#12...")
+                    logger.debug("[DEBUG] Iniciando extração do certificado PKCS#12...")
                     # Extrair certificado e chave para arquivos temporários
                     cert_data = certificado['cert_data']  # Dados binários do PKCS#12
                     password = certificado['password'].encode('utf-8')
@@ -1047,11 +1051,11 @@ class NFeService:
                         key_path = key_file.name
                         temp_key_file = key_file.name
                     
-                    print(f"[OK] Certificado extraído: {cert_path}")
-                    print(f"[OK] Chave privada extraída: {key_path}")
+                    logger.debug(f"[OK] Certificado extraído: {cert_path}")
+                    logger.debug(f"[OK] Chave privada extraída: {key_path}")
                     
                 except Exception as e:
-                    print(f"[X] Erro ao extrair certificado: {e}")
+                    logger.error(f"[X] Erro ao extrair certificado: {e}")
                     import traceback
                     traceback.print_exc()
                     # NÃO USA SIMULAÇÃO - retorna erro real para forçar correção
@@ -1062,7 +1066,7 @@ class NFeService:
                         'ambiente_real': False
                     }
             else:
-                print("[X] Certificado sem dados necessários (cert_data ou password)")
+                logger.error("[X] Certificado sem dados necessários (cert_data ou password)")
                 # NÃO USA SIMULAÇÃO - retorna erro real
                 return {
                     'success': False,
@@ -1075,7 +1079,7 @@ class NFeService:
             try:
                 sefaz = SefazService(ambiente=ambiente, cert_path=cert_path, key_path=key_path)
             except Exception as e:
-                print(f"ERRO: Erro ao inicializar SefazService: {e}")
+                logger.error(f"ERRO: Erro ao inicializar SefazService: {e}")
                 # NÃO USA SIMULAÇÃO - retorna erro real
                 return {
                     'success': False,
@@ -1088,11 +1092,11 @@ class NFeService:
             # O XML já tem assinatura digital, vamos enviar direto
             # status_servico = sefaz.consultar_status_servico()
             # if status_servico.get('status') != 'OK':
-            #     print(f"AVISO: SEFAZ indisponível: {status_servico.get('mensagem')}")
+            #     logger.warning(f"AVISO: SEFAZ indisponível: {status_servico.get('mensagem')}")
             #     return self._enviar_sefaz_simulado(xml_assinado, chave_acesso, ambiente, 
             #                                      motivo="SEFAZ indisponível")
             
-            print("OK: Enviando NFe para SEFAZ real...")
+            logger.debug("OK: Enviando NFe para SEFAZ real...")
             
             # Enviar NFe
             resultado = sefaz.enviar_nfe(xml_assinado, chave_acesso)
@@ -1110,12 +1114,12 @@ class NFeService:
                     'ambiente_real': True
                 }
             else:
-                print(f"❌ SEFAZ REJEITOU: {resultado.get('status', 'ERRO')}")
-                print(f"❌ Mensagem completa: {resultado.get('mensagem', 'Erro desconhecido')}")
-                print(f"❌ Código: {resultado.get('codigo', 'N/A')}")
-                print(f"❌ Motivo: {resultado.get('motivo', 'N/A')}")
+                logger.error(f"❌ SEFAZ REJEITOU: {resultado.get('status', 'ERRO')}")
+                logger.error(f"❌ Mensagem completa: {resultado.get('mensagem', 'Erro desconhecido')}")
+                logger.debug(f"❌ Código: {resultado.get('codigo', 'N/A')}")
+                logger.debug(f"❌ Motivo: {resultado.get('motivo', 'N/A')}")
                 if resultado.get('erros'):
-                    print(f"❌ Erros detalhados: {resultado.get('erros')}")
+                    logger.error(f"❌ Erros detalhados: {resultado.get('erros')}")
                 return {
                     'success': False,
                     'status': resultado.get('status', 'ERRO'),
@@ -1127,7 +1131,7 @@ class NFeService:
                 }
         
         except Exception as e:
-            print(f"ERRO: Erro SEFAZ real: {e}")
+            logger.error(f"ERRO: Erro SEFAZ real: {e}")
             import traceback
             traceback.print_exc()
             # NÃO USA SIMULAÇÃO - retorna erro real para forçar correção
@@ -1143,28 +1147,28 @@ class NFeService:
             if cert_path and os.path.exists(cert_path):
                 try:
                     os.unlink(cert_path)
-                    print(f"[OK] Arquivo temporário removido: {cert_path}")
+                    logger.debug(f"[OK] Arquivo temporário removido: {cert_path}")
                 except:
                     pass
             
             if key_path and os.path.exists(key_path):
                 try:
                     os.unlink(key_path)
-                    print(f"[OK] Arquivo temporário removido: {key_path}")
+                    logger.debug(f"[OK] Arquivo temporário removido: {key_path}")
                 except:
                     pass
     
     def _enviar_sefaz_simulado(self, xml_assinado: str, chave_acesso: str, ambiente: str, motivo: Optional[str] = None) -> Dict[str, Any]:
         """Envia para SEFAZ simulado - FALLBACK quando não há certificado válido"""
         try:
-            print("\n" + "="*80)
-            print("⚠️  ATENÇÃO: USANDO SIMULAÇÃO LOCAL (NÃO É SEFAZ REAL)")
+            logger.debug("\n" + "="*80)
+            logger.debug("⚠️  ATENÇÃO: USANDO SIMULAÇÃO LOCAL (NÃO É SEFAZ REAL)")
             if motivo:
-                print(f"⚠️  Motivo: {motivo}")
+                logger.debug(f"⚠️  Motivo: {motivo}")
             else:
-                print("⚠️  Motivo: Não especificado")
-            print("⚠️  Para usar SEFAZ real, configure um certificado digital válido")
-            print("="*80 + "\n")
+                logger.debug("⚠️  Motivo: Não especificado")
+            logger.debug("⚠️  Para usar SEFAZ real, configure um certificado digital válido")
+            logger.debug("="*80 + "\n")
             
             # Simular resposta
             protocolo = f"135{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -1191,7 +1195,7 @@ class NFeService:
             }
             
         except Exception as e:
-            print(f"ERRO: Erro na simulação: {e}")
+            logger.error(f"ERRO: Erro na simulação: {e}")
             return {'success': False, 'message': f'Erro na simulação: {str(e)}'}
     
     def consultar_nfe(self, chave_acesso: str, ambiente: int = 2) -> Dict[str, Any]:
@@ -1206,8 +1210,8 @@ class NFeService:
             Dict com resultado da consulta
         """
         try:
-            print(f"[CONSULTA] Consultando NFe: {chave_acesso}")
-            print(f"[CONSULTA] Ambiente: {ambiente} ({'Produção' if ambiente == 1 else 'Homologação'})")
+            logger.debug(f"[CONSULTA] Consultando NFe: {chave_acesso}")
+            logger.debug(f"[CONSULTA] Ambiente: {ambiente} ({'Produção' if ambiente == 1 else 'Homologação'})")
             
             # TODO: Implementar consulta real na SEFAZ quando disponível
             # Por enquanto, retorna simulação
@@ -1222,7 +1226,7 @@ class NFeService:
             }
             
         except Exception as e:
-            print(f"[ERRO] Erro na consulta: {e}")
+            logger.error(f"[ERRO] Erro na consulta: {e}")
             return {
                 'success': False,
                 'message': f'Erro ao consultar NFe: {str(e)}'
@@ -1245,11 +1249,11 @@ class NFeService:
                         id_value = nfe_proc.NFe.infNFe.Id
                         if id_value and id_value.startswith('NFe'):
                             chave = id_value[3:]  # Remover 'NFe' do início
-                            print(f"OK: Chave extraída via nfelib: {chave}")
+                            logger.debug(f"OK: Chave extraída via nfelib: {chave}")
                             return chave
                         
                 except Exception as e:
-                    print(f"AVISO: Falha ao extrair com nfelib: {str(e)}")
+                    logger.error(f"AVISO: Falha ao extrair com nfelib: {str(e)}")
                     # Continuar com os métodos regex
                     
             # Método regex caso o nfelib falhe
@@ -1257,14 +1261,14 @@ class NFeService:
             match = re.search(r'NFe(\d{44})', xml_content)
             if match:
                 chave = match.group(1)
-                print(f"OK: Chave extraída via regex: {chave}")
+                logger.debug(f"OK: Chave extraída via regex: {chave}")
                 return chave
             
             # Método 2: procurar pelo Id em qualquer formato
             match = re.search(r'Id=[\'"]\s*NFe(\d{44})\s*[\'"]', xml_content)
             if match:
                 chave = match.group(1)
-                print(f"OK: Chave extraída via regex alternativo: {chave}")
+                logger.debug(f"OK: Chave extraída via regex alternativo: {chave}")
                 return chave
                 
             # Método 3: remover espaços e tentar novamente
@@ -1272,16 +1276,16 @@ class NFeService:
             match = re.search(r'NFe(\d{44})', xml_sem_espacos)
             if match:
                 chave = match.group(1)
-                print(f"OK: Chave extraída via regex sem espaços: {chave}")
+                logger.debug(f"OK: Chave extraída via regex sem espaços: {chave}")
                 return chave
                     
             # Se nenhum método funcionou
-            print("ERRO: Chave de acesso não encontrada no XML!")
-            print(f" Primeiros 200 caracteres: {xml_content[:200]}")
+            logger.error("ERRO: Chave de acesso não encontrada no XML!")
+            logger.debug(f" Primeiros 200 caracteres: {xml_content[:200]}")
             
             return None
         except Exception as e:
-            print(f"ERRO: Erro ao extrair chave: {e}")
+            logger.error(f"ERRO: Erro ao extrair chave: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -1301,9 +1305,9 @@ class NFeService:
                 tp_amb_element = root.find('.//{http://www.portalfiscal.inf.br/nfe}tpAmb')
                 if tp_amb_element is not None and tp_amb_element.text:
                     tp_amb = tp_amb_element.text
-                    print(f"[PROTOCOLO] tpAmb extraído da NFe: {tp_amb} ({'Produção' if tp_amb == '1' else 'Homologação'})")
+                    logger.debug(f"[PROTOCOLO] tpAmb extraído da NFe: {tp_amb} ({'Produção' if tp_amb == '1' else 'Homologação'})")
             except:
-                print(f"[PROTOCOLO] Não foi possível extrair tpAmb, usando padrão: 2")
+                logger.debug(f"[PROTOCOLO] Não foi possível extrair tpAmb, usando padrão: 2")
             
             if nfe_element is not None:
                 nfe_xml = ET.tostring(nfe_element, encoding='unicode')
@@ -1340,7 +1344,7 @@ class NFeService:
             return xml_protocolo
             
         except Exception as e:
-            print(f"ERRO: Erro ao gerar protocolo: {e}")
+            logger.error(f"ERRO: Erro ao gerar protocolo: {e}")
             return xml_assinado
 
 # OK: FUNÇÕES AUXILIARES CORRIGIDAS
@@ -1355,9 +1359,9 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
     migramos para a biblioteca nfelib que gera XML validado pelo XSD e homologado pela SEFAZ.
     """
     try:
-        print(f"🚀 [NFELIB] Gerando XML NFe com biblioteca nfelib")
-        print(f"📋 Form data keys: {list(form_data.keys())}")
-        print(f"📦 Items: {len(items)} itens")
+        logger.debug(f"🚀 [NFELIB] Gerando XML NFe com biblioteca nfelib")
+        logger.debug(f"📋 Form data keys: {list(form_data.keys())}")
+        logger.debug(f"📦 Items: {len(items)} itens")
         
         # Importar função do novo serviço nfelib
         from services.nfe_nfelib_service import generate_nfe_xml_nfelib
@@ -1381,12 +1385,12 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
             include_resp_tec=include_resp_tec
         )
         
-        print(f"✅ [NFELIB] XML gerado com sucesso: {len(xml_nfe)} caracteres")
+        logger.debug(f"✅ [NFELIB] XML gerado com sucesso: {len(xml_nfe)} caracteres")
         
         return xml_nfe
         
     except Exception as e:
-        print(f"❌ [NFELIB] Erro ao gerar XML: {e}")
+        logger.error(f"❌ [NFELIB] Erro ao gerar XML: {e}")
         import traceback
         traceback.print_exc()
         raise Exception(f"Erro ao gerar XML da NFe com nfelib: {str(e)}")
@@ -1402,14 +1406,14 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
     NÃO USAR - Use generate_nfe_xml() que agora usa nfelib.
     """
     try:
-        print(f" === GERANDO XML NFE ===")
-        print(f" Form data keys: {list(form_data.keys())}")
-        print(f" Items: {len(items)} itens")
+        logger.debug(f" === GERANDO XML NFE ===")
+        logger.debug(f" Form data keys: {list(form_data.keys())}")
+        logger.debug(f" Items: {len(items)} itens")
         
         # OK: CORREÇÃO: Verificar e processar CFOP nos itens ANTES DA VALIDAÇÃO
         for i, item in enumerate(items, 1):
             cfop_original = item.get('cfop', '')
-            print(f" Item {i} - CFOP original: '{cfop_original}' (tipo: {type(cfop_original)})")
+            logger.debug(f" Item {i} - CFOP original: '{cfop_original}' (tipo: {type(cfop_original)})")
             
             # OK: CORREÇÃO: Garantir que CFOP seja string e tenha 4 dígitos
             if cfop_original:
@@ -1425,12 +1429,12 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 # Garantir que tenha 4 dígitos
                 if len(cfop_str) == 4 and cfop_str.isdigit():
                     item['cfop'] = cfop_str
-                    print(f"OK: Item {i} - CFOP corrigido: '{cfop_str}'")
+                    logger.debug(f"OK: Item {i} - CFOP corrigido: '{cfop_str}'")
                 else:
-                    print(f"AVISO: Item {i} - CFOP inválido: '{cfop_original}' -> usando padrão '5102'")
+                    logger.warning(f"AVISO: Item {i} - CFOP inválido: '{cfop_original}' -> usando padrão '5102'")
                     item['cfop'] = '5102'  # CFOP padrão para venda
             else:
-                print(f"AVISO: Item {i} - CFOP vazio -> usando padrão '5102'")
+                logger.warning(f"AVISO: Item {i} - CFOP vazio -> usando padrão '5102'")
                 item['cfop'] = '5102'
         
         # ========== VALIDAÇÃO TRIBUTÁRIA DESABILITADA DURANTE EMISSÃO ==========
@@ -1438,16 +1442,16 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         # 
         # if not validacao_ok:
         #     erro_msg = "❌ ERROS DE TRIBUTAÇÃO ENCONTRADOS:\n\n" + "\n\n".join(erros_validacao)
-        #     print(f"\n{erro_msg}")
+        #     logger.error(f"\n{erro_msg}")
         #     raise ValueError(erro_msg)
         
-        print(f"ℹ️  Validação IA desabilitada durante emissão (evitar falsos positivos)")
+        logger.debug(f"ℹ️  Validação IA desabilitada durante emissão (evitar falsos positivos)")
         
         # Debug: verificar tributação dos itens
-        print(f" [DEBUG] Verificando tributação dos itens:")
+        logger.debug(f" [DEBUG] Verificando tributação dos itens:")
         for idx, item in enumerate(items[:3], 1):  # Primeiros 3 itens
             icms = item.get('icms', {})
-            print(f"   Item {idx}: CST={icms.get('cst')}, CSOSN={icms.get('csosn')}")
+            logger.debug(f"   Item {idx}: CST={icms.get('cst')}, CSOSN={icms.get('csosn')}")
         
         # Importar bibliotecas necessárias (corrigido para fallback caso lxml não esteja instalado)
         try:
@@ -1467,7 +1471,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         # Obter número da NFe fornecido pelo usuário
         from sqlalchemy import text
         numero_nfe = int(form_data.get('numero_nfe', 1))
-        print(f" [[OK]] Número da NFe fornecido: {numero_nfe} (série {serie})")
+        logger.debug(f" [[OK]] Número da NFe fornecido: {numero_nfe} (série {serie})")
         # Nota: Validação de número duplicado é feita em _criar_nova_nfe()
         
         # Data de emissão
@@ -1495,7 +1499,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         data_emissao_brt = data_emissao.astimezone(brasilia_tz)
         dh_emi = data_emissao_brt.strftime('%Y-%m-%dT%H:%M:%S-03:00')
         
-        print(f"⏰ UTC: {data_emissao.strftime('%Y-%m-%d %H:%M:%S')} → BRT: {dh_emi}")
+        logger.debug(f"⏰ UTC: {data_emissao.strftime('%Y-%m-%d %H:%M:%S')} → BRT: {dh_emi}")
         
         # OK: GERAR CHAVE DE ACESSO
         uf_code = get_uf_ibge_code(emitente_data.get('uf', 'SP'))
@@ -1517,7 +1521,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         dv = calcular_dv_chave(chave_sem_dv)
         chave_acesso = chave_sem_dv + str(dv)
         
-        print(f" Chave de acesso: {chave_acesso}")
+        logger.debug(f" Chave de acesso: {chave_acesso}")
         
         # OK: PROCESSAR CNPJ/CPF DO DESTINATÁRIO
         dest_cpf_cnpj = destinatario_data.get('cpf_cnpj', '').replace('.', '').replace('/', '').replace('-', '').strip()
@@ -1560,7 +1564,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 total_icms += round(_bc * _aliq / 100, 2)
             base_icms = round(base_icms, 2)
             total_icms = round(total_icms, 2)
-            print(f" Usando totais do JSON (ICMS recalculado: vBC={base_icms:.2f} vICMS={total_icms:.2f})")
+            logger.debug(f" Usando totais do JSON (ICMS recalculado: vBC={base_icms:.2f} vICMS={total_icms:.2f})")
         else:
             # Calcular totais dos itens
             total_produtos = 0
@@ -1597,14 +1601,14 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                     total_pis += float(pis_item.get('valor', 0))
                     total_cofins += float(cofins_item.get('valor', 0))
                     
-                    print(f" Item: {item.get('descricao', 'N/A')[:30]} - Valor: R$ {valor_total_item:.2f} - CFOP: {item.get('cfop', 'N/A')}")
+                    logger.debug(f" Item: {item.get('descricao', 'N/A')[:30]} - Valor: R$ {valor_total_item:.2f} - CFOP: {item.get('cfop', 'N/A')}")
                 except (ValueError, TypeError) as e:
-                    print(f"AVISO: Erro ao processar valores do item: {e}")
+                    logger.error(f"AVISO: Erro ao processar valores do item: {e}")
                     continue
             
             total_nfe = total_produtos + total_ipi + total_icms_st + total_frete + total_seguro + total_outras - total_desconto
         
-        print(f" Totais - Produtos: R$ {total_produtos:.2f}, ICMS: R$ {total_icms:.2f}, NFe: R$ {total_nfe:.2f}")
+        logger.debug(f" Totais - Produtos: R$ {total_produtos:.2f}, ICMS: R$ {total_icms:.2f}, NFe: R$ {total_nfe:.2f}")
         
         # OK: CRIAR ESTRUTURA XML COM NAMESPACE CORRETO DESDE O INÍCIO
         # CRÍTICO: Namespace deve estar presente ANTES da assinatura
@@ -1690,11 +1694,11 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         )
         
         if has_cst_items:
-            print(f" [AUTO] Itens têm CST - forçando Regime Normal (CRT=3)")
+            logger.debug(f" [AUTO] Itens têm CST - forçando Regime Normal (CRT=3)")
             crt = "3"  # Regime Normal
         else:
             crt = "1" if regime_tributario_id == 1 else "3"
-            print(f" [INFO] Usando CRT={crt} baseado no emitente")
+            logger.debug(f" [INFO] Usando CRT={crt} baseado no emitente")
         etree.SubElement(emit, "CRT").text = crt
         
         # dest
@@ -1754,10 +1758,10 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             descricao = descricao.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
             # Remover completamente aspas se normalização falhar
             if '"' in descricao or '"' in descricao or '"' in descricao:
-                print(f"⚠️  Aspas curvas detectadas em '{descricao_original}' - removendo todas as aspas")
+                logger.debug(f"⚠️  Aspas curvas detectadas em '{descricao_original}' - removendo todas as aspas")
                 descricao = descricao.replace('"', '').replace('"', '').replace('"', '').replace("'", '').replace("'", '')
             etree.SubElement(prod, "xProd").text = descricao.strip()
-            print(f" xProd normalizado: '{descricao}'")
+            logger.debug(f" xProd normalizado: '{descricao}'")
             
             etree.SubElement(prod, "NCM").text = str(item.get('ncm', '99999999'))
             
@@ -1771,12 +1775,12 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 if cfop_item == '5401':
                     cfop_original = cfop_item
                     cfop_item = '5405'  # Mercadoria com ST - substituído
-                    print(f"⚠️  CFOP {cfop_original} ajustado para {cfop_item} (Simples Nacional com ST)")
+                    logger.debug(f"⚠️  CFOP {cfop_original} ajustado para {cfop_item} (Simples Nacional com ST)")
                 elif cfop_item == '6401':
                     cfop_item = '6405'  # Interestadual com ST
-                    print(f"⚠️  CFOP 6401 ajustado para 6405 (Simples Nacional com ST interestadual)")
+                    logger.debug(f"⚠️  CFOP 6401 ajustado para 6405 (Simples Nacional com ST interestadual)")
             
-            print(f" Item {i} - CFOP final no XML: '{cfop_item}'")
+            logger.debug(f" Item {i} - CFOP final no XML: '{cfop_item}'")
             etree.SubElement(prod, "CFOP").text = str(cfop_item)
             
             etree.SubElement(prod, "uCom").text = str(item.get('unidade_comercial') or item.get('unidade', 'UN'))
@@ -1812,24 +1816,24 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 # Validar que csosn não está vazio
                 if not csosn or csosn.strip() == '':
                     csosn = '102'  # Padrão: Tributada sem permissão de crédito
-                    print(f"⚠️  CSOSN não informado - usando padrão 102")
+                    logger.debug(f"⚠️  CSOSN não informado - usando padrão 102")
                 
                 # CORREÇÃO: Se CFOP for 5405/6405 (ST substituído), deve usar CSOSN 500
                 # CSOSN 500 = ICMS cobrado anteriormente por ST (substituído)
                 if cfop_item in ['5405', '6405'] and csosn != '500':
-                    print(f"⚠️  CSOSN {csosn} ajustado para 500 (CFOP {cfop_item} - ST substituído)")
+                    logger.debug(f"⚠️  CSOSN {csosn} ajustado para 500 (CFOP {cfop_item} - ST substituído)")
                     csosn = '500'
                 
                 icms_sn = etree.SubElement(icms, f"ICMSSN{csosn}")
                 etree.SubElement(icms_sn, "orig").text = str(icms_data.get('origem', '0'))
                 etree.SubElement(icms_sn, "CSOSN").text = csosn
                 
-                print(f"[DEBUG-ICMS] CSOSN {csosn} - Origem: {icms_data.get('origem', '0')}")
+                logger.debug(f"[DEBUG-ICMS] CSOSN {csosn} - Origem: {icms_data.get('origem', '0')}")
                 
                 # CSOSN 500: ICMS cobrado anteriormente por ST
                 # Deve ter APENAS orig e CSOSN (sem pCredSN nem vCredICMSSN)
                 if csosn == '500':
-                    print(f"[DEBUG-ICMS] CSOSN 500 - XML: <ICMSSN500><orig>{icms_data.get('origem', '0')}</orig><CSOSN>500</CSOSN></ICMSSN500>")
+                    logger.debug(f"[DEBUG-ICMS] CSOSN 500 - XML: <ICMSSN500><orig>{icms_data.get('origem', '0')}</orig><CSOSN>500</CSOSN></ICMSSN500>")
                     pass  # Não adiciona nenhum campo extra
                 # CSOSN 101, 201, 202, 203, 900: Incluir campos de crédito SOMENTE se houver alíquota
                 elif csosn in ['101', '201', '202', '203', '900']:
@@ -1840,9 +1844,9 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                     if aliq_icms > 0:
                         etree.SubElement(icms_sn, "pCredSN").text = f"{aliq_icms:.2f}"
                         etree.SubElement(icms_sn, "vCredICMSSN").text = f"{valor_icms:.2f}"
-                        print(f"[DEBUG-ICMS] CSOSN {csosn} - pCredSN: {aliq_icms:.2f}, vCredICMSSN: {valor_icms:.2f}")
+                        logger.debug(f"[DEBUG-ICMS] CSOSN {csosn} - pCredSN: {aliq_icms:.2f}, vCredICMSSN: {valor_icms:.2f}")
                     else:
-                        print(f"[DEBUG-ICMS] CSOSN {csosn} - SEM crédito (alíquota zero, campos omitidos)")
+                        logger.debug(f"[DEBUG-ICMS] CSOSN {csosn} - SEM crédito (alíquota zero, campos omitidos)")
             else:
                 # REGIME NORMAL - Usar CST
                 cst_icms = icms_data.get('cst', '00')
@@ -1862,13 +1866,13 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                     icms_tag = cst_to_tag[cst_icms]
                 else:
                     # CST não reconhecido - usar ICMS40 como padrão (não tributado)
-                    print(f"⚠️  CST ICMS '{cst_icms}' não reconhecido - usando ICMS40 (não tributado)")
+                    logger.debug(f"⚠️  CST ICMS '{cst_icms}' não reconhecido - usando ICMS40 (não tributado)")
                     icms_tag = 'ICMS40'
                     cst_icms = '41'  # Ajustar para não tributado
                 
                 # Validação extra: garantir que icms_tag não está vazio
                 if not icms_tag or not icms_tag.strip():
-                    print(f"⚠️ CRÍTICO: icms_tag vazio! Usando ICMS40 como fallback")
+                    logger.debug(f"⚠️ CRÍTICO: icms_tag vazio! Usando ICMS40 como fallback")
                     icms_tag = 'ICMS40'
                 
                 icms_tributado = etree.SubElement(icms, icms_tag)
@@ -2162,7 +2166,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 
                 # Se for 17 (PIX), usar 99 (Outros) para compatibilidade
                 if meio_pag == '17':
-                    print(f"⚠️  tPag 17 (PIX) alterado para 99 (Outros) - compatibilidade SEFAZ")
+                    logger.debug(f"⚠️  tPag 17 (PIX) alterado para 99 (Outros) - compatibilidade SEFAZ")
                     meio_pag = '99'
                 
                 valor_pag = float(pag_data.get('valor', total_nfe))
@@ -2194,7 +2198,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             # Se for 17 (PIX), usar 99 (Outros) para compatibilidade
             # Alguns estados ainda não aceitam código 17
             if meio_pag == '17':
-                print(f"⚠️  tPag 17 (PIX) alterado para 99 (Outros) - compatibilidade SEFAZ")
+                logger.debug(f"⚠️  tPag 17 (PIX) alterado para 99 (Outros) - compatibilidade SEFAZ")
                 meio_pag = '99'
             
             etree.SubElement(det_pag, "tPag").text = meio_pag
@@ -2255,7 +2259,7 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             xml_bytes = etree.tostring(root, method='c14n', encoding='UTF-8')  # type: ignore[call-arg]
             # Adicionar declaração XML manualmente (c14n não inclui)
             xml_string = '<?xml version="1.0" encoding="UTF-8"?>' + xml_bytes.decode('utf-8')
-            print("✅ XML gerado com método c14n (canonicalizado - sem quebras)")
+            logger.debug("✅ XML gerado com método c14n (canonicalizado - sem quebras)")
         except (TypeError, ValueError):
             # Fallback para método tradicional
             xml_bytes = etree.tostring(root, encoding='utf-8')
@@ -2264,26 +2268,26 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                 xml_string = '<?xml version="1.0" encoding="UTF-8"?>' + xml_string
             # Remover quebras manualmente se c14n não disponível
             xml_string = xml_string.replace('\n', '').replace('\r', '').replace('\t', '')
-            print("✅ XML gerado sem pretty_print + quebras removidas")
+            logger.debug("✅ XML gerado sem pretty_print + quebras removidas")
         
         # Debug: verificar se tem xmlns na tag NFe
         has_xmlns = 'xmlns=' in xml_string[:200]
-        print(f"OK: XML gerado com sucesso: {len(xml_string)} caracteres")
-        print(f"🔍 Tag NFe tem xmlns: {has_xmlns}")
-        print(f" XML preview (primeiros 500 chars): {xml_string[:500]}...")
+        logger.debug(f"OK: XML gerado com sucesso: {len(xml_string)} caracteres")
+        logger.debug(f"🔍 Tag NFe tem xmlns: {has_xmlns}")
+        logger.debug(f" XML preview (primeiros 500 chars): {xml_string[:500]}...")
         
         # OK: VERIFICAR SE CFOP ESTÁ NO XML FINAL
         if 'CFOP' in xml_string:
             import re
             cfops_encontrados = re.findall(r'<CFOP>(\d{4})</CFOP>', xml_string)
-            print(f"OK: CFOPs encontrados no XML: {cfops_encontrados}")
+            logger.debug(f"OK: CFOPs encontrados no XML: {cfops_encontrados}")
         else:
-            print(f"ERRO: CFOP não encontrado no XML final!")
+            logger.error(f"ERRO: CFOP não encontrado no XML final!")
         
         return xml_string
         
     except Exception as e:
-        print(f"ERRO: Erro ao gerar XML: {e}")
+        logger.error(f"ERRO: Erro ao gerar XML: {e}")
         import traceback
         traceback.print_exc()
         raise Exception(f"Erro na geração do XML: {str(e)}")
@@ -2307,17 +2311,17 @@ def gerar_chave_nfe(emitente_data: Dict[str, Any], form_data: Dict[str, Any]) ->
         
         chave_completa = chave_sem_dv + str(dv)
         
-        print(f" Chave gerada: {chave_completa}")
+        logger.debug(f" Chave gerada: {chave_completa}")
         return chave_completa
         
     except Exception as e:
-        print(f"ERRO: Erro ao gerar chave: {e}")
+        logger.error(f"ERRO: Erro ao gerar chave: {e}")
         # Chave de fallback
         return "35" + datetime.now().strftime('%y%m') + "12345678000100" + "55" + "001" + "000000001" + "12345678" + "1"
 
 def sign_xml(xml_content: str, certificado_data: Dict[str, Any]) -> str:
     """Assina o XML da NFe (simulado)"""
-    print("️ Simulando assinatura do XML...")
+    logger.debug("️ Simulando assinatura do XML...")
     
     assinatura_simulada = '''
     <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
@@ -2330,12 +2334,12 @@ def sign_xml(xml_content: str, certificado_data: Dict[str, Any]) -> str:
     
     xml_assinado = xml_content.replace('</NFe>', f'{assinatura_simulada}</NFe>')
     
-    print("OK: XML assinado (simulado)")
+    logger.debug("OK: XML assinado (simulado)")
     return xml_assinado
 
 def send_to_sefaz(xml_assinado: str, certificado_data: Dict[str, Any], cnpj_emitente: str, tp_amb: int = 2) -> Dict[str, Any]:
     """Envia XML para SEFAZ (simulado)"""
-    print(" Simulando envio para SEFAZ...")
+    logger.debug(" Simulando envio para SEFAZ...")
     
     resultado = {
         'status': '100',
@@ -2346,7 +2350,7 @@ def send_to_sefaz(xml_assinado: str, certificado_data: Dict[str, Any], cnpj_emit
         'xml_protocolo': xml_assinado
     }
     
-    print(f"OK: Resposta SEFAZ simulada: {resultado['status']} - {resultado['mensagem']}")
+    logger.debug(f"OK: Resposta SEFAZ simulada: {resultado['status']} - {resultado['mensagem']}")
     return resultado
 
 # OK: FUNÇÃO AUXILIAR PARA COMPATIBILIDADE

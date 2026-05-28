@@ -14,7 +14,14 @@ if not _secret_key:
 SECRET_KEY = _secret_key
 
 # Configurações do Banco de Dados
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:Mo2505@localhost:5432/sjtnfe")
+_database_url = os.getenv("DATABASE_URL")
+if not _database_url:
+    raise RuntimeError(
+        "DATABASE_URL não configurada. "
+        "Defina essa variável de ambiente antes de iniciar o servidor. "
+        "Exemplo: postgresql://usuario:senha@host:5432/banco"
+    )
+SQLALCHEMY_DATABASE_URL = _database_url
 
 # Configurações da Sefaz
 SEFAZ_AMBIENTE_HOMOLOGACAO = True  # True = Homologação, False = Produção

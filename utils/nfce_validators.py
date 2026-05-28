@@ -5,6 +5,7 @@ Validadores específicos para NFC-e (Nota Fiscal de Consumidor Eletrônica)
 from typing import Dict, List, Any
 import re
 from utils.helpers import limpar_cnpj_cpf
+from config.settings import HABILITAR_IBS_CBS
 
 
 def validar_dados_nfce(dados: Dict[str, Any]) -> List[str]:
@@ -65,6 +66,13 @@ def validar_dados_nfce(dados: Dict[str, Any]) -> List[str]:
             erros.append(f'Produto {idx}: Desconto não pode ser maior que o valor total')
         
         valor_total += valor_produto
+
+        if HABILITAR_IBS_CBS and dados.get('emitente_crt') == 3:
+            classificacao = produto.get('classificacao_ibs_cbs')
+            if not classificacao:
+                classificacao_obj = getattr(produto.get('produto'), 'classificacao_ibs_cbs', None)
+                if classificacao_obj is None:
+                    erros.append(f'Produto {idx}: Classificação IBS/CBS obrigatória para CRT=3')
     
     # 3. Validar Valor Total (limite NFC-e pode variar por estado)
     # Padrão: verificar se não é negativo
@@ -143,7 +151,7 @@ def validar_dados_nfce(dados: Dict[str, Any]) -> List[str]:
     info_adicionais = dados.get('informacoes_adicionais', '')
     if len(info_adicionais) > 5000:
         erros.append('Informações adicionais excedem 5000 caracteres')
-    
+
     return erros
 
 

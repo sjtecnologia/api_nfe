@@ -6,6 +6,25 @@ import base64
 import tempfile
 from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
 
+
+def _resolve_ca_bundle():
+    """Resolve o bundle CA mais adequado para a comunicação com a SEFAZ."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_bundle = os.getenv('SEFAZ_CA_BUNDLE') or os.getenv('REQUESTS_CA_BUNDLE') or os.getenv('SSL_CERT_FILE')
+    ca_candidates = [
+        env_bundle,
+        os.path.join(project_root, 'ca-bundle-icpbrasil.pem'),
+        '/home/ubuntu/api_nfe/ca-bundle-icpbrasil.pem',
+        '/etc/ssl/certs/ca-certificates.crt',
+        '/etc/pki/tls/certs/ca-bundle.crt',
+    ]
+
+    for ca_path in ca_candidates:
+        if ca_path and os.path.exists(ca_path):
+            return ca_path
+
+    return True
+
 class SefazService:
     """Serviço para comunicação com SEFAZ real"""
     
@@ -38,19 +57,7 @@ class SefazService:
             self._modo_contingencia = False
         self.cert_path = cert_path
         self.key_path = key_path
-        
-        # Usar bundle de certificados que inclui ICP-Brasil
-        # Prioridade: bundle customizado > bundle do sistema (Linux) > certifi
-        _CA_CANDIDATES = [
-            '/home/ubuntu/api_nfe/ca-bundle-icpbrasil.pem',  # bundle customizado no servidor
-            '/etc/ssl/certs/ca-certificates.crt',             # Debian/Ubuntu - inclui ICP-Brasil quando instalado
-            '/etc/pki/tls/certs/ca-bundle.crt',               # RHEL/CentOS
-        ]
-        self.ca_bundle = True  # fallback: certifi (padrão requests)
-        for _ca in _CA_CANDIDATES:
-            if os.path.exists(_ca):
-                self.ca_bundle = _ca
-                break
+        self.ca_bundle = _resolve_ca_bundle()
             
         modo_str = 'CONTINGÊNCIA' if self._modo_contingencia else 'NORMAL'
         print(f"[?] SefazService inicializado - Ambiente: {ambiente} - Modo: {modo_str}")

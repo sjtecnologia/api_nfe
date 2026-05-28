@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Dict, Any, List, Generator
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, current_app
 
@@ -26,6 +27,9 @@ from auth.decorators import (
 # Inicializa get_db na primeira chamada
 from database.connection import get_db
 
+logger = logging.getLogger(__name__)
+
+
 # -------------------------------------------------------------------
 # PRODUTOS (CADASTRO, EDIÇÃO, LISTAGEM)
 # -------------------------------------------------------------------
@@ -53,7 +57,7 @@ def editar_produto(produto_id):
                     elif convert_to == float:
                         return float(val)
                     return val
-                except:
+                except (ValueError, TypeError):
                     return None
             
             data = {
@@ -91,11 +95,11 @@ def editar_produto(produto_id):
             # Exibe form de edição
             row = db.execute(text("SELECT * FROM produtos WHERE produto_id = :pid"), {'pid': produto_id}).fetchone()
             produto = dict(row._mapping) if row else None
-            print(f"[SEARCH] Produto encontrado: {produto is not None}")
+            logger.debug(f"[SEARCH] Produto encontrado: {produto is not None}")
             if produto:
-                print(f"[SEARCH] Produto ID: {produto.get('produto_id')}, Descrição: {produto.get('descricao')}")
+                logger.debug(f"[SEARCH] Produto ID: {produto.get('produto_id')}, Descrição: {produto.get('descricao')}")
                 for key, value in produto.items():
-                    print(f"[SEARCH] {key}: {value}")
+                    logger.debug(f"[SEARCH] {key}: {value}")
             if produto and 'cliente_id' in produto and produto['cliente_id']:
                 cliente_id = produto['cliente_id']
             else:
@@ -104,27 +108,27 @@ def editar_produto(produto_id):
                 cliente_id = int(cliente_id) if cliente_id is not None else None
             except (TypeError, ValueError):
                 cliente_id = None
-            print("[SEARCH] Buscando NCMs...")
+            logger.debug("[SEARCH] Buscando NCMs...")
             ncm_list = db.execute(text("SELECT ncm_id, codigo, descricao FROM ncms ORDER BY codigo")).fetchall()
-            print(f"[SEARCH] NCMs encontrados: {len(ncm_list)}")
+            logger.debug(f"[SEARCH] NCMs encontrados: {len(ncm_list)}")
             
-            print("[SEARCH] Buscando CFOPs...")
+            logger.debug("[SEARCH] Buscando CFOPs...")
             cfop_list = db.execute(text("SELECT cfop_id, cfop, descricao FROM cfops ORDER BY cfop")).fetchall()
-            print(f"[SEARCH] CFOPs encontrados: {len(cfop_list)}")
+            logger.debug(f"[SEARCH] CFOPs encontrados: {len(cfop_list)}")
             
-            print("[SEARCH] Buscando CSTs...")
+            logger.debug("[SEARCH] Buscando CSTs...")
             cst_list = db.execute(text("SELECT cst_id, codigo, descricao FROM cst_icms ORDER BY codigo")).fetchall()
-            print(f"[SEARCH] CSTs encontrados: {len(cst_list)}")
+            logger.debug(f"[SEARCH] CSTs encontrados: {len(cst_list)}")
             
-            print("[SEARCH] Buscando CSOSNs...")
+            logger.debug("[SEARCH] Buscando CSOSNs...")
             csosn_list = db.execute(text("SELECT csosn_id, codigo, descricao FROM csosn_icms ORDER BY codigo")).fetchall()
-            print(f"[SEARCH] CSOSNs encontrados: {len(csosn_list)}")
+            logger.debug(f"[SEARCH] CSOSNs encontrados: {len(csosn_list)}")
             
-            print("[SEARCH] Buscando Origens de Mercadoria...")
+            logger.debug("[SEARCH] Buscando Origens de Mercadoria...")
             origens_list = db.execute(text("SELECT origem_id, codigo, descricao FROM origens_mercadoria ORDER BY codigo")).fetchall()
-            print(f"[SEARCH] Origens encontradas: {len(origens_list)}")
+            logger.debug(f"[SEARCH] Origens encontradas: {len(origens_list)}")
             
-            print("[SEARCH] Tentando renderizar template...")
+            logger.debug("[SEARCH] Tentando renderizar template...")
             try:
                 return render_template(
                     'admin/produtos/form.html',
@@ -137,12 +141,12 @@ def editar_produto(produto_id):
                     origens_mercadoria=[dict(o._mapping) for o in origens_list]
                 )
             except Exception as template_error:
-                print(f"[X] Erro ao renderizar template: {template_error}")
+                logger.error(f"[X] Erro ao renderizar template: {template_error}")
                 raise template_error
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro na função editar_produto: {e}")
-        print(f"[X] Tipo do erro: {type(e)}")
+        logger.error(f"[X] Erro na função editar_produto: {e}")
+        logger.error(f"[X] Tipo do erro: {type(e)}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao editar produto: {e}', 'danger')
@@ -158,15 +162,20 @@ def _get_db():
 @login_required
 def upload_ncm_csv():
     if request.method == 'POST':
+        from utils.file_validator import validate_upload, FileValidationError
         file = request.files.get('file')
-        filename = file.filename if file and hasattr(file, 'filename') else None
-        if not file or not filename or not isinstance(filename, str) or not filename.lower().endswith('.csv'):
+        if not file:
             flash('Selecione um arquivo CSV válido.', 'danger')
             return redirect(request.url)
-        safe_filename = secure_filename(filename)
+        try:
+            safe_filename = validate_upload(file, 'csv')
+        except FileValidationError as fve:
+            flash(str(fve), 'danger')
+            return redirect(request.url)
         upload_folder = current_app.config.get('UPLOAD_FOLDER', '/tmp')
         os.makedirs(upload_folder, exist_ok=True)
         upload_path = os.path.join(upload_folder, safe_filename)
+        file.seek(0)
         file.save(upload_path)
         # Enviar para microserviço IA (ajuste a URL conforme necessário)
         ia_url = current_app.config.get('IA_NCM_UPLOAD_URL', 'http://localhost:8000/ncm/dados')
@@ -268,7 +277,7 @@ def duplicar_produto(produto_id: int):
             return redirect(request.referrer or url_for('admin.list_produtos'))
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro ao duplicar produto: {e}")
+        logger.error(f"[X] Erro ao duplicar produto: {e}")
         flash('Erro ao duplicar produto', 'error')
         return redirect(request.referrer or url_for('admin.list_produtos'))
     finally:
@@ -301,7 +310,7 @@ def _locate_get_db():
         if hasattr(root_db, 'get_db'):
             return root_db.get_db
     except ImportError as e:
-        print(f"[X] Não conseguiu importar db do diretório raiz: {e}")
+        logger.error(f"[X] Não conseguiu importar db do diretório raiz: {e}")
         pass
     
     # Tenta outros módulos candidatos
@@ -309,7 +318,7 @@ def _locate_get_db():
         try:
             mod = importlib.import_module(mod_name)
             if hasattr(mod, 'get_db'):
-                print(f"[OK] Encontrou get_db em {mod_name}")
+                logger.debug(f"[OK] Encontrou get_db em {mod_name}")
                 return getattr(mod, 'get_db')
         except ImportError:
             continue
@@ -326,10 +335,10 @@ def _locate_get_db():
     def _fallback():
         engine = current_app.config.get('SQLALCHEMY_ENGINE')
         if engine is None:
-            print("[X] SQLALCHEMY_ENGINE não encontrado em current_app.config")
-            print("[X] Estrutura de diretórios:")
-            print(f"   BASE_DIR: {BASE_DIR}")
-            print(f"   sys.path inclui: {BASE_DIR in sys.path}")
+            logger.error("[X] SQLALCHEMY_ENGINE não encontrado em current_app.config")
+            logger.error("[X] Estrutura de diretórios:")
+            logger.debug(f"   BASE_DIR: {BASE_DIR}")
+            logger.debug(f"   sys.path inclui: {BASE_DIR in sys.path}")
             raise RuntimeError("get_db não encontrado. Ajuste caminhos ou verifique se módulo db.py existe.")
         conn = engine.connect()
         try:
@@ -703,7 +712,7 @@ def delete_ncm(ncm_id):
             
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_ncm: {e}")
+        logger.error(f"[X] Erro delete_ncm: {e}")
         flash(f'Erro ao excluir NCM: {str(e)}', 'error')
     finally:
         db.close()
@@ -736,7 +745,7 @@ def list_cst():
         csts = [dict(row._mapping) for row in rows]
         return render_template('admin/cst/list.html', csts=csts)
     except Exception as e:
-        print(f"[X] Erro list_cst: {e}")
+        logger.error(f"[X] Erro list_cst: {e}")
         flash('Erro ao carregar CSTs', 'error')
         return render_template('admin/cst/list.html', csts=[])
     finally:
@@ -792,7 +801,7 @@ def delete_cst(cst_id):
         flash('CST excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_cst: {e}")
+        logger.error(f"[X] Erro delete_cst: {e}")
         flash('Erro ao excluir CST', 'error')
     finally:
         db.close()
@@ -872,7 +881,7 @@ def save_cfop():
         return redirect(url_for('admin.list_cfops'))
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro save_cfop: {e}")
+        logger.error(f"[X] Erro save_cfop: {e}")
         flash('Erro ao salvar CFOP', 'error')
         return redirect(url_for('admin.list_cfops'))
     finally:
@@ -893,7 +902,7 @@ def edit_cfop(cfop_id):
         ])
         return render_template('admin/cfops/form.html', cfop=cfop)
     except Exception as e:
-        print(f"[X] Erro edit_cfop: {e}")
+        logger.error(f"[X] Erro edit_cfop: {e}")
         flash('Erro ao carregar CFOP', 'error')
         return redirect(url_for('admin.list_cfops'))
     finally:
@@ -909,7 +918,7 @@ def delete_cfop(cfop_id):
         flash('CFOP excluído', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_cfop: {e}")
+        logger.error(f"[X] Erro delete_cfop: {e}")
         flash('Erro ao excluir CFOP', 'error')
     finally:
         db.close()
@@ -985,7 +994,7 @@ def list_usuarios():
         usuarios.append(usuario)
     return render_template('admin/usuarios/list.html', usuarios=usuarios)
 
-from werkzeug.security import generate_password_hash
+from utils.password import hash_password
 
 @admin_bp.route('/usuarios/novo', methods=['GET', 'POST'])
 @login_required
@@ -1013,7 +1022,7 @@ def create_usuario():
         selected_roles = request.form.getlist('roles')
         selected_clientes = request.form.getlist('clientes')
         try:
-            password_hash = generate_password_hash(password) if password else None
+            password_hash = hash_password(password) if password else None
             result = db.execute(text("""
                 INSERT INTO users (username, email, password_hash, _is_active)
                 VALUES (:username, :email, :password_hash, :is_active)
@@ -1109,7 +1118,7 @@ def edit_usuario(usuario_id):
                     usuario_clientes = [c[0] for c in db.execute(text("SELECT client_id FROM user_clients WHERE user_id = :user_id"), {'user_id': usuario_id}).fetchall()]
                     return render_template('admin/usuarios/form.html', usuario=usuario, roles=roles, clientes=clientes, usuario_roles=usuario_roles, usuario_clientes=usuario_clientes)
                 
-                password_hash = generate_password_hash(password)
+                password_hash = hash_password(password)
                 db.execute(text("""
                     UPDATE users SET
                         username = :username,
@@ -1189,7 +1198,7 @@ def delete_usuario(usuario_id):
         flash('Usuário excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_usuario: {e}")
+        logger.error(f"[X] Erro delete_usuario: {e}")
         flash('Erro ao excluir usuário', 'error')
     finally:
         db.close()
@@ -1245,7 +1254,7 @@ def visualizar_cliente(cliente_id: int):
             destinatarios=destinatarios
         )
     except Exception as e:
-        print(f"[X] Erro visualizar_cliente: {e}")
+        logger.error(f"[X] Erro visualizar_cliente: {e}")
         flash('Erro ao carregar detalhes do cliente', 'error')
         return redirect(url_for('admin.list_clientes'))
     finally:
@@ -1327,7 +1336,7 @@ def delete_csosn(csosn_id):
         flash('CSOSN excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_csosn: {e}")
+        logger.error(f"[X] Erro delete_csosn: {e}")
         flash('Erro ao excluir CSOSN', 'error')
     finally:
         db.close()
@@ -1351,7 +1360,7 @@ def list_regimes_tributarios():
         ]) for r in rows]
         return render_template('admin/regimes_tributarios/list.html', regimes=regimes)
     except Exception as e:
-        print(f"[X] Erro list_regimes_tributarios: {e}")
+        logger.error(f"[X] Erro list_regimes_tributarios: {e}")
         flash('Erro ao carregar regimes tributários', 'error')
         return render_template('admin/regimes_tributarios/list.html', regimes=[])
     finally:
@@ -1422,7 +1431,7 @@ def delete_regime_tributario(regime_tributario_id: int):
         flash('Regime tributário excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_regime_tributario: {e}")
+        logger.error(f"[X] Erro delete_regime_tributario: {e}")
         flash('Erro ao excluir regime tributário', 'error')
     finally:
         db.close()
@@ -1527,7 +1536,7 @@ def delete_role(role_id):
         flash('Role excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_role: {e}")
+        logger.error(f"[X] Erro delete_role: {e}")
         flash('Erro ao excluir role', 'error')
     finally:
         db.close()
@@ -1601,7 +1610,7 @@ def delete_permission(permission_id):
         flash('Permissão excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_permission: {e}")
+        logger.error(f"[X] Erro delete_permission: {e}")
         flash('Erro ao excluir permissão', 'error')
     finally:
         db.close()
@@ -1924,7 +1933,7 @@ def dashboard():
         return render_template('admin/dashboard.html', kpis=kpis)
         
     except Exception as e:
-        print(f"[ERRO] Erro dashboard: {e}")
+        logger.error(f"[ERRO] Erro dashboard: {e}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
@@ -2057,7 +2066,7 @@ def relatorio_certificados_vencimento():
                              data_relatorio=datetime.now().strftime('%d/%m/%Y %H:%M'))
         
     except Exception as e:
-        print(f"[X] Erro relatório certificados: {e}")
+        logger.error(f"[X] Erro relatório certificados: {e}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar relatório de certificados: {str(e)}', 'danger')
@@ -2071,9 +2080,9 @@ def dashboard_api_data():
     """
     db = None
     try:
-        print("[DEBUG] Iniciando dashboard_api_data...")
+        logger.error("[DEBUG] Iniciando dashboard_api_data...")
         db = _get_db()
-        print("[DEBUG] Conexão DB obtida")
+        logger.error("[DEBUG] Conexão DB obtida")
         
         from datetime import datetime, timedelta
         from calendar import month_name
@@ -2086,7 +2095,7 @@ def dashboard_api_data():
         from utils.date_utils import parse_date_range
         data_inicio, data_fim = parse_date_range(data_inicio_str, data_fim_str, periodo)
         
-        print(f"[DEBUG] Datas calculadas: {data_inicio} até {data_fim}")
+        logger.error(f"[DEBUG] Datas calculadas: {data_inicio} até {data_fim}")
         
         # Inicializar data com estrutura padrão vazia
         data = {
@@ -2105,7 +2114,7 @@ def dashboard_api_data():
             where_and = "AND data_criacao BETWEEN :data_inicio AND :data_fim"
             params = {'data_inicio': data_inicio, 'data_fim': data_fim}
         
-        print("[DEBUG] Buscando NFes por mês...")
+        logger.error("[DEBUG] Buscando NFes por mês...")
         # Gráfico 1: NFes por mês (filtrado pelo período)
         try:
             if data_inicio and data_fim:
@@ -2150,14 +2159,14 @@ def dashboard_api_data():
                 'totais': [int(row[1]) for row in nfes_por_mes],
                 'valores': [float(row[2]) for row in nfes_por_mes]
             }
-            print(f"[DEBUG] NFes por mês: {len(nfes_por_mes)} registros")
+            logger.error(f"[DEBUG] NFes por mês: {len(nfes_por_mes)} registros")
         except Exception as e:
-            print(f"[ERROR] Erro ao buscar NFes por mês: {e}")
+            logger.error(f"[ERROR] Erro ao buscar NFes por mês: {e}")
             import traceback
             traceback.print_exc()
             db.rollback()  # Rollback para não quebrar próximas queries
         
-        print("[DEBUG] Buscando top produtos...")
+        logger.error("[DEBUG] Buscando top produtos...")
         # Gráfico 2: Top 5 produtos mais emitidos em NFes (filtrado pelo período)
         try:
             if data_inicio and data_fim:
@@ -2191,7 +2200,7 @@ def dashboard_api_data():
                     LIMIT 5
                 """)).fetchall()
         except Exception as e:
-            print(f"[WARN] Erro ao buscar top produtos: {e}")
+            logger.error(f"[WARN] Erro ao buscar top produtos: {e}")
             db.rollback()  # Rollback para não quebrar próximas queries
             top_produtos = []
         
@@ -2199,10 +2208,10 @@ def dashboard_api_data():
             'labels': [row[0][:30] if row[0] else 'Sem descrição' for row in top_produtos] if top_produtos else [],
             'valores': [int(row[1]) for row in top_produtos] if top_produtos else []
         }
-        print(f"[DEBUG] Top produtos: {len(top_produtos) if top_produtos else 0} registros")
-        print(f"[DEBUG] Top produtos data: {data['top_produtos']}")
+        logger.error(f"[DEBUG] Top produtos: {len(top_produtos) if top_produtos else 0} registros")
+        logger.error(f"[DEBUG] Top produtos data: {data['top_produtos']}")
         
-        print("[DEBUG] Buscando status NFes...")
+        logger.error("[DEBUG] Buscando status NFes...")
         # Gráfico 3: Status das NFes (filtrado pelo período, usando UPPER para agrupar)
         try:
             if data_inicio and data_fim:
@@ -2229,15 +2238,15 @@ def dashboard_api_data():
                 'labels': [row[0] for row in status_nfes],
                 'valores': [int(row[1]) for row in status_nfes]
             }
-            print(f"[DEBUG] Status NFes: {len(status_nfes)} registros")
-            print(f"[DEBUG] Status NFes data: {data['status_nfes']}")
+            logger.error(f"[DEBUG] Status NFes: {len(status_nfes)} registros")
+            logger.error(f"[DEBUG] Status NFes data: {data['status_nfes']}")
         except Exception as e:
-            print(f"[ERROR] Erro ao buscar status NFes: {e}")
+            logger.error(f"[ERROR] Erro ao buscar status NFes: {e}")
             import traceback
             traceback.print_exc()
             db.rollback()  # Rollback para não quebrar próximas queries
         
-        print("[DEBUG] Buscando top clientes...")
+        logger.error("[DEBUG] Buscando top clientes...")
         # Gráfico 4: Clientes mais ativos (top 5, filtrado pelo período)
         try:
             if data_inicio and data_fim:
@@ -2272,20 +2281,20 @@ def dashboard_api_data():
                 'labels': [row[0][:30] for row in top_clientes],
                 'valores': [int(row[1]) for row in top_clientes]
             }
-            print(f"[DEBUG] Top clientes: {len(top_clientes)} registros")
-            print(f"[DEBUG] Top clientes data: {data['top_clientes']}")
+            logger.error(f"[DEBUG] Top clientes: {len(top_clientes)} registros")
+            logger.error(f"[DEBUG] Top clientes data: {data['top_clientes']}")
         except Exception as e:
-            print(f"[ERROR] Erro ao buscar top clientes: {e}")
+            logger.error(f"[ERROR] Erro ao buscar top clientes: {e}")
             import traceback
             traceback.print_exc()
             db.rollback()  # Rollback para não quebrar próximas queries
         
-        print(f"[DEBUG] Retornando JSON com {len(data)} chaves")
-        print(f"[DEBUG] Data keys: {list(data.keys())}")
+        logger.error(f"[DEBUG] Retornando JSON com {len(data)} chaves")
+        logger.error(f"[DEBUG] Data keys: {list(data.keys())}")
         return jsonify(data)
         
     except Exception as e:
-        print(f"[X] Erro dashboard API: {e}")
+        logger.error(f"[X] Erro dashboard API: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -2307,7 +2316,7 @@ def list_motivos_desoneracao():
         motivos = [dict(row._mapping) for row in rows]
         return render_template('admin/motivos_desoneracao/list.html', motivos=motivos)
     except Exception as e:
-        print(f"[X] Erro list_motivos_desoneracao: {e}")
+        logger.error(f"[X] Erro list_motivos_desoneracao: {e}")
         flash('Erro ao carregar motivos de desoneração', 'error')
         return render_template('admin/motivos_desoneracao/list.html', motivos=[])
     finally:
@@ -2376,7 +2385,7 @@ def delete_motivo_desoneracao(motivo_id: int):
         flash('Motivo de desoneração excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_motivo_desoneracao: {e}")
+        logger.error(f"[X] Erro delete_motivo_desoneracao: {e}")
         flash('Erro ao excluir motivo de desoneração', 'error')
     finally:
         db.close()
@@ -2463,7 +2472,7 @@ def delete_origem_mercadoria(origem_id):
         flash('Origem de Mercadoria excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_origem_mercadoria: {e}")
+        logger.error(f"[X] Erro delete_origem_mercadoria: {e}")
         flash('Erro ao excluir Origem de Mercadoria', 'error')
     finally:
         db.close()
@@ -2536,7 +2545,7 @@ def list_clientes():
         
         return render_template('admin/clientes/list.html', clientes=clientes)
     except Exception as e:
-        print(f"[X] Erro list_clientes: {e}")
+        logger.error(f"[X] Erro list_clientes: {e}")
         flash('Erro ao carregar clientes', 'error')
         return render_template('admin/clientes/list.html', clientes=[])
     finally:
@@ -2578,24 +2587,19 @@ def create_cliente():
             logo_path = None
             logo_file = request.files.get('logo_file')
             if logo_file and logo_file.filename:
-                from werkzeug.utils import secure_filename
+                from utils.file_validator import validate_upload, FileValidationError
                 import os
-                
-                # Gerar nome seguro e único
-                filename = secure_filename(logo_file.filename)
-                ext = os.path.splitext(filename)[1].lower()
-                if ext not in ['.png', '.jpg', '.jpeg', '.gif']:
-                    flash('Formato de logo inválido. Use PNG, JPG ou GIF.', 'warning')
-                else:
-                    # Criar diretório se não existir
+                try:
+                    unique_name = validate_upload(logo_file, 'logo')
+                    logo_file.seek(0)
                     logos_dir = os.path.join('static', 'logos')
                     os.makedirs(logos_dir, exist_ok=True)
-                    
-                    # Nome único: cliente_{timestamp}{ext}
+                    ext = os.path.splitext(unique_name)[1].lower()
                     unique_filename = f"cliente_{int(datetime.now().timestamp())}{ext}"
-                    logo_full_path = os.path.join(logos_dir, unique_filename)
-                    logo_file.save(logo_full_path)
-                    logo_path = f"logos/{unique_filename}"  # Caminho relativo
+                    logo_file.save(os.path.join(logos_dir, unique_filename))
+                    logo_path = f"logos/{unique_filename}"
+                except FileValidationError as fve:
+                    flash(str(fve), 'warning')
             
             # Dados do cliente
             _is_rural = request.form.get('produtor_rural') == 'on'
@@ -2660,9 +2664,16 @@ def create_cliente():
                 cert_file = request.files.get('conteudo_certificado_file')
                 cert_senha = request.form.get('cert_senha_certificado')
                 cert_ativo = request.form.get('cert_ativo') == 'on'
-                cert_nome_arquivo = request.form.get('cert_nome_arquivo_original', 'Upload Inicial')
 
                 if cert_file and cert_file.filename:
+                    from utils.file_validator import validate_upload, FileValidationError
+                    try:
+                        validate_upload(cert_file, 'certificado')
+                        cert_file.seek(0)
+                    except FileValidationError as fve:
+                        db.rollback()
+                        flash(str(fve), 'danger')
+                        return redirect(request.url)
                     conteudo_certificado = cert_file.read()
                     senha_criptografada = _encrypt_password(cert_senha) if cert_senha else None
                     nome_arquivo_original = cert_file.filename
@@ -2684,7 +2695,7 @@ def create_cliente():
                         validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
                         validade_fim = getattr(cert_obj, "not_valid_before_utc", None)
                     except Exception as e:
-                        print(f"[X] Erro ao extrair dados do certificado: {e}")
+                        logger.error(f"[X] Erro ao extrair dados do certificado: {e}")
                         fingerprint = None
                         validade_inicio = None
                         validade_fim = None
@@ -2717,7 +2728,7 @@ def create_cliente():
                 return redirect(url_for('admin.list_clientes'))
             except Exception as e:
                 db.rollback()
-                print(f"[X] Erro ao salvar cliente/certificado: {e}")
+                logger.error(f"[X] Erro ao salvar cliente/certificado: {e}")
                 flash('Erro ao salvar cliente ou certificado', 'danger')
                 form_data = data
                 return render_template(
@@ -2755,7 +2766,7 @@ def create_cliente():
             regimes_tributarios=regimes_tributarios
         )
     except Exception as e:
-        print(f"[X] Erro create_cliente: {e}")
+        logger.error(f"[X] Erro create_cliente: {e}")
         flash('Erro ao carregar formulário de cliente', 'error')
         return redirect(url_for('admin.list_clientes'))
     finally:
@@ -2824,33 +2835,26 @@ def edit_cliente(cliente_id: int):
                 logo_path = cliente.get('logo_path')  # Manter logo existente
                 logo_file = request.files.get('logo_file')
                 if logo_file and logo_file.filename:
-                    from werkzeug.utils import secure_filename
+                    from utils.file_validator import validate_upload, FileValidationError
                     import os
-                    
-                    # Gerar nome seguro e único
-                    filename = secure_filename(logo_file.filename)
-                    ext = os.path.splitext(filename)[1].lower()
-                    if ext not in ['.png', '.jpg', '.jpeg', '.gif']:
-                        flash('Formato de logo inválido. Use PNG, JPG ou GIF.', 'warning')
-                    else:
-                        # Remover logo antiga se existir
+                    try:
+                        unique_name = validate_upload(logo_file, 'logo')
+                        logo_file.seek(0)
+                        ext = os.path.splitext(unique_name)[1].lower()
                         if logo_path:
                             old_logo_full = os.path.join('static', logo_path)
                             if os.path.exists(old_logo_full):
                                 try:
                                     os.remove(old_logo_full)
-                                except:
+                                except OSError:
                                     pass
-                        
-                        # Criar diretório se não existir
                         logos_dir = os.path.join('static', 'logos')
                         os.makedirs(logos_dir, exist_ok=True)
-                        
-                        # Nome único: cliente_{cliente_id}_{timestamp}{ext}
                         unique_filename = f"cliente_{cliente_id}_{int(datetime.now().timestamp())}{ext}"
-                        logo_full_path = os.path.join(logos_dir, unique_filename)
-                        logo_file.save(logo_full_path)
-                        logo_path = f"logos/{unique_filename}"  # Caminho relativo
+                        logo_file.save(os.path.join(logos_dir, unique_filename))
+                        logo_path = f"logos/{unique_filename}"
+                    except FileValidationError as fve:
+                        flash(str(fve), 'warning')
                 
                 _is_rural = request.form.get('produtor_rural') == 'on'
                 # Mutualmente exclusivo: produtor rural usa CPF (sem CNPJ); empresa usa CNPJ (sem CPF)
@@ -2915,7 +2919,7 @@ def edit_cliente(cliente_id: int):
                 return redirect(url_for('admin.list_clientes'))
             except Exception as e:
                 db.rollback()
-                print(f"[X] Erro ao atualizar cliente: {e}")
+                logger.error(f"[X] Erro ao atualizar cliente: {e}")
                 flash('Erro ao atualizar cliente', 'danger')
                 # Continua para renderizar o formulário com os dados atuais
 
@@ -2981,7 +2985,7 @@ def edit_cliente(cliente_id: int):
         )
     except Exception as e:
         import traceback
-        print(f"[X] Erro edit_cliente: {e}")
+        logger.error(f"[X] Erro edit_cliente: {e}")
         traceback.print_exc()
         flash('Erro ao carregar cliente', 'error')
         return redirect(url_for('admin.list_clientes'))
@@ -2999,7 +3003,7 @@ def delete_cliente(cliente_id: int):
         flash('Cliente excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_cliente: {e}")
+        logger.error(f"[X] Erro delete_cliente: {e}")
         flash('Erro ao excluir cliente', 'error')
     finally:
         db.close()
@@ -3051,7 +3055,7 @@ def edit_certificado(certificado_digital_id: int, cliente_id: int):
             form_data=certificado
         )
     except Exception as e:
-        print(f"[X] Erro edit_certificado: {e}")
+        logger.error(f"[X] Erro edit_certificado: {e}")
         flash('Erro ao carregar certificado', 'error')
         return redirect(url_for('admin.list_certificados'))
     finally:
@@ -3076,7 +3080,7 @@ def delete_certificado(certificado_digital_id: int):
         flash('Certificado excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_certificado: {e}")
+        logger.error(f"[X] Erro delete_certificado: {e}")
         flash('Erro ao excluir certificado', 'error')
     finally:
         db.close()
@@ -3168,7 +3172,7 @@ def edit_regra_tributacao(regra_tributacao_id: int):
                              cfops=cfops, 
                              ncms=ncms)
     except Exception as e:
-        print(f"[X] Erro edit_regra_tributacao: {e}")
+        logger.error(f"[X] Erro edit_regra_tributacao: {e}")
         flash('Erro ao carregar regra', 'error')
         return redirect(url_for('admin.list_regras_tributacao'))
     finally:
@@ -3186,7 +3190,7 @@ def delete_regra_tributacao(regra_tributacao_id: int):
         flash('Regra excluída com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_regra_tributacao: {e}")
+        logger.error(f"[X] Erro delete_regra_tributacao: {e}")
         flash('Erro ao excluir regra', 'error')
     finally:
         db.close()
@@ -3229,7 +3233,7 @@ def admin_destinatarios_nfe_add(cliente_id: int):
                     'SE': '28', 'TO': '17'
                 }
                 codigo_uf = uf_map.get(uf, '99')
-                print(f"[!] codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
+                logger.debug(f"[!] codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
             
             data = {
                 'cliente_id': cliente_id,
@@ -3269,7 +3273,7 @@ def admin_destinatarios_nfe_add(cliente_id: int):
             return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         except Exception as e:
             db.rollback()
-            print(f"[X] Erro admin_destinatarios_nfe_add: {e}")
+            logger.error(f"[X] Erro admin_destinatarios_nfe_add: {e}")
             flash('Erro ao adicionar destinatário/tomador', 'error')
             return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
         finally:
@@ -3298,7 +3302,7 @@ def delete_destinatario(destinatario_id: int):
         flash('Destinatário/Tomador excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"ERRO: Erro delete_destinatario: {e}")
+        logger.error(f"ERRO: Erro delete_destinatario: {e}")
         flash('Erro ao excluir destinatário/tomador', 'error')
     finally:
         db.close()
@@ -3406,7 +3410,7 @@ def list_produtos():
                 """), {'cliente_id': cliente_id, 'ids': ids_pagina, 'codigos': codigos_pagina}).fetchall()
                 produtos_usados = {r[0] for r in usados_rows if r[0]}
             except Exception as ex:
-                print(f'[WARN] Erro ao verificar produtos usados: {ex}')
+                logger.error(f'[WARN] Erro ao verificar produtos usados: {ex}')
                 pass  # fallback: nenhum marcado como usado
 
         for p in produtos:
@@ -3424,7 +3428,7 @@ def list_produtos():
         return render_template('admin/produtos/list.html', produtos=produtos,
                                cliente_id=cliente_id, pagination=pagination)
     except Exception as e:
-        print(f"[X] Erro list_produtos: {e}")
+        logger.error(f"[X] Erro list_produtos: {e}")
         flash('Erro ao carregar produtos', 'error')
         return render_template('admin/produtos/list.html', produtos=[])
     finally:
@@ -3579,7 +3583,7 @@ def importar_produtos():
         
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro importar_produtos: {e}")
+        logger.error(f"[X] Erro importar_produtos: {e}")
         flash(f'Erro ao importar produtos: {str(e)}', 'error')
         return redirect(url_for('admin.importar_produtos'))
     finally:
@@ -3677,7 +3681,7 @@ def create_produto():
             cliente_id=cliente_id
         )
     except Exception as e:
-        print(f"[X] Erro create_produto: {e}")
+        logger.error(f"[X] Erro create_produto: {e}")
         flash('Erro ao carregar formulário de produto', 'error')
         return redirect(url_for('admin.list_produtos'))
     finally:
@@ -3700,7 +3704,7 @@ def store_produto():
                 elif convert_to == float:
                     return float(val)
                 return val
-            except:
+            except (ValueError, TypeError):
                 return None
         
         # Busca o cliente_id do form ou da sessão
@@ -3739,7 +3743,7 @@ def store_produto():
         return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id) + '#produtos')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro store_produto: {e}")
+        logger.error(f"[X] Erro store_produto: {e}")
         flash('Erro ao criar produto', 'error')
         return redirect(url_for('admin.create_produto'))
     finally:
@@ -3761,7 +3765,7 @@ def alterar_status_produto():
         return jsonify({'success': True})
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro alterar_status_produto: {e}")
+        logger.error(f"[X] Erro alterar_status_produto: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -3792,7 +3796,7 @@ def delete_produto(produto_id: int):
         flash('Produto excluído com sucesso', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro delete_produto: {e}")
+        logger.error(f"[X] Erro delete_produto: {e}")
         flash('Erro ao excluir produto', 'error')
     finally:
         db.close()
@@ -3822,7 +3826,7 @@ def list_destinatarios(cliente_id: int):
         cliente_nome = cliente_row[0] if cliente_row else f"ID {cliente_id}"
         return render_template('admin/destinatarios/list.html', destinatarios=destinatarios, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
-        print(f"[X] Erro list_destinatarios: {e}")
+        logger.error(f"[X] Erro list_destinatarios: {e}")
         flash('Erro ao carregar Destinatários/Tomadores', 'error')
         # Buscar nome do cliente para erro também
         cliente_row = db.execute(text("SELECT razao_social FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
@@ -3870,7 +3874,7 @@ def salvar_destinatario():
                 'SE': '28', 'TO': '17'
             }
             codigo_uf = uf_map.get(uf, '99')
-            print(f"[!] codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
+            logger.debug(f"[!] codigo_uf não fornecido, usando mapeamento: {uf} = {codigo_uf}")
         
         data = {
             'cliente_id': request.form.get('cliente_id'),
@@ -3914,7 +3918,7 @@ def salvar_destinatario():
         return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro salvar_destinatario: {e}")
+        logger.error(f"[X] Erro salvar_destinatario: {e}")
         flash('Erro ao salvar destinatário/tomador', 'error')
         cliente_id = request.form.get('cliente_id')
         return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
@@ -4022,7 +4026,7 @@ def edit_destinatario(destinatario_id: int):
         except Exception as e:
             db.rollback()
             import traceback
-            print(f"ERRO: Erro ao atualizar destinatário/tomador: {e}")
+            logger.error(f"ERRO: Erro ao atualizar destinatário/tomador: {e}")
             traceback.print_exc()
             flash('Erro ao atualizar destinatário/tomador', 'error')
             # Tentar obter cliente_id mesmo com erro
@@ -4032,7 +4036,7 @@ def edit_destinatario(destinatario_id: int):
                 cliente_id = row[0] if row else None
                 if cliente_id:
                     return redirect(url_for('admin.list_destinatarios', cliente_id=cliente_id))
-            except:
+            except Exception:
                 pass
             return redirect(url_for('admin.list_clientes'))
         finally:
@@ -4072,7 +4076,7 @@ def edit_destinatario(destinatario_id: int):
                              cliente_id=cliente_id)
     except Exception as e:
         import traceback
-        print(f"ERRO: Erro edit_destinatario: {e}")
+        logger.error(f"ERRO: Erro edit_destinatario: {e}")
         traceback.print_exc()  # Log completo do erro
         flash('Erro ao carregar destinatário/tomador', 'error')
         cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
@@ -4114,7 +4118,7 @@ def list_certificados():
         ]) for r in rows]
         return render_template('admin/certificados/list.html', certificados=certificados, cliente_id=cliente_id, cliente_nome=cliente_nome)
     except Exception as e:
-        print(f"[X] Erro list_certificados: {e}")
+        logger.error(f"[X] Erro list_certificados: {e}")
         flash('Erro ao carregar certificados', 'error')
         return render_template('admin/certificados/list.html', certificados=[], cliente_id=cliente_id, cliente_nome=cliente_nome)
     finally:
@@ -4130,9 +4134,9 @@ def salvar_certificado():
     
     try:
         # Debug: imprimir todos os dados recebidos
-        print(f"[DEBUG] Form data: {dict(request.form)}")
-        print(f"[DEBUG] Files: {dict(request.files)}")
-        print(f"[DEBUG] Referrer: {request.referrer}")
+        logger.error(f"[DEBUG] Form data: {dict(request.form)}")
+        logger.error(f"[DEBUG] Files: {dict(request.files)}")
+        logger.error(f"[DEBUG] Referrer: {request.referrer}")
         
         # Obter cliente_id do form, args ou referrer
         cliente_id = request.form.get('cliente_id')
@@ -4143,7 +4147,7 @@ def salvar_certificado():
                 match = re.search(r'/clientes/(\d+)/', request.referrer)
                 if match:
                     cliente_id = match.group(1)
-                    print(f"[DEBUG] Cliente ID extraído do referrer: {cliente_id}")
+                    logger.error(f"[DEBUG] Cliente ID extraído do referrer: {cliente_id}")
         
         if not cliente_id or cliente_id == '':
             raise Exception(f"Cliente ID não fornecido. Form keys: {list(request.form.keys())}, Referrer: {request.referrer}")
@@ -4167,7 +4171,7 @@ def salvar_certificado():
         # Se for edição, campos de arquivo e senha são opcionais
         if is_update:
             certificado_id = int(certificado_id)
-            print(f"[DEBUG] Modo EDIÇÃO - Certificado ID: {certificado_id}")
+            logger.error(f"[DEBUG] Modo EDIÇÃO - Certificado ID: {certificado_id}")
             
             # Verificar se certificado existe
             cert_existente = db.execute(text("""
@@ -4179,7 +4183,7 @@ def salvar_certificado():
             
             # Se não forneceu arquivo novo, manter o atual
             if not cert_file or not cert_file.filename:
-                print(f"[DEBUG] Sem arquivo novo - mantendo certificado atual")
+                logger.error(f"[DEBUG] Sem arquivo novo - mantendo certificado atual")
                 conteudo_certificado_b64 = cert_existente.conteudo_certificado
                 nome_arquivo_original = cert_existente.nome_arquivo_original
                 fingerprint = cert_existente.fingerprint
@@ -4187,7 +4191,12 @@ def salvar_certificado():
                 validade_fim = cert_existente.validade_fim
             else:
                 # Processar novo arquivo
-                print(f"[DEBUG] Novo arquivo fornecido: {cert_file.filename}")
+                from utils.file_validator import validate_upload, FileValidationError
+                try:
+                    validate_upload(cert_file, 'certificado')
+                    cert_file.seek(0)
+                except FileValidationError as fve:
+                    raise Exception(str(fve))
                 conteudo_certificado = cert_file.read()
                 nome_arquivo_original = cert_file.filename
                 
@@ -4199,7 +4208,7 @@ def salvar_certificado():
                     from cryptography.hazmat.primitives.serialization import pkcs12
                     from cryptography.hazmat.primitives import hashes
                     
-                    print(f"[VALIDATION] Validando certificado antes de salvar...")
+                    logger.debug(f"[VALIDATION] Validando certificado antes de salvar...")
                     password_bytes = cert_senha.encode('utf-8')
                     private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
                         conteudo_certificado,
@@ -4225,14 +4234,14 @@ def salvar_certificado():
                     if validade_fim and validade_fim < now:
                         raise Exception(f"Certificado VENCIDO! Válido até {validade_fim.strftime('%d/%m/%Y')}. Não é possível cadastrar certificado vencido.")
                     
-                    print(f"[OK] Certificado validado com sucesso!")
-                    print(f"[OK] Fingerprint: {fingerprint[:20]}...")
-                    print(f"[OK] Válido de {validade_inicio} até {validade_fim}")
+                    logger.debug(f"[OK] Certificado validado com sucesso!")
+                    logger.debug(f"[OK] Fingerprint: {fingerprint[:20]}...")
+                    logger.debug(f"[OK] Válido de {validade_inicio} até {validade_fim}")
                     
                 except Exception as e:
                     # NÃO PERMITE SALVAR SE VALIDAÇÃO FALHAR
                     error_msg = f"Erro na validação do certificado: {str(e)}"
-                    print(f"[X] {error_msg}")
+                    logger.error(f"[X] {error_msg}")
                     raise Exception(error_msg)
                 
                 # Converter para base64
@@ -4241,10 +4250,10 @@ def salvar_certificado():
             
             # Se não forneceu senha nova, manter a atual
             if not cert_senha or cert_senha.strip() == '':
-                print(f"[DEBUG] Sem senha nova - mantendo senha atual")
+                logger.error(f"[DEBUG] Sem senha nova - mantendo senha atual")
                 senha_criptografada = cert_existente.senha_certificado
             else:
-                print(f"[DEBUG] Nova senha fornecida")
+                logger.error(f"[DEBUG] Nova senha fornecida")
                 senha_criptografada = _encrypt_password(cert_senha)
             
             # Fazer UPDATE
@@ -4274,9 +4283,9 @@ def salvar_certificado():
             
         else:
             # Modo INSERT (novo certificado)
-            print(f"[DEBUG] Modo CADASTRO - Novo certificado")
+            logger.error(f"[DEBUG] Modo CADASTRO - Novo certificado")
             # Modo INSERT (novo certificado)
-            print(f"[DEBUG] Modo CADASTRO - Novo certificado")
+            logger.error(f"[DEBUG] Modo CADASTRO - Novo certificado")
         
             if not cert_file or not cert_file.filename:
                 raise Exception("Arquivo de certificado não fornecido")
@@ -4293,7 +4302,7 @@ def salvar_certificado():
                 from cryptography.hazmat.primitives.serialization import pkcs12
                 from cryptography.hazmat.primitives import hashes
             
-                print(f"[VALIDATION] Validando certificado antes de salvar...")
+                logger.debug(f"[VALIDATION] Validando certificado antes de salvar...")
                 password_bytes = cert_senha.encode('utf-8')
                 private_key, cert_x509_obj, additional_certificates = pkcs12.load_key_and_certificates(
                     conteudo_certificado,
@@ -4319,14 +4328,14 @@ def salvar_certificado():
                 if validade_fim and validade_fim < now:
                     raise Exception(f"Certificado VENCIDO! Válido até {validade_fim.strftime('%d/%m/%Y')}. Não é possível cadastrar certificado vencido.")
                 
-                print(f"[OK] Certificado validado com sucesso!")
-                print(f"[OK] Fingerprint: {fingerprint[:20]}...")
-                print(f"[OK] Válido de {validade_inicio} até {validade_fim}")
+                logger.debug(f"[OK] Certificado validado com sucesso!")
+                logger.debug(f"[OK] Fingerprint: {fingerprint[:20]}...")
+                logger.debug(f"[OK] Válido de {validade_inicio} até {validade_fim}")
                 
             except Exception as e:
                 # NÃO PERMITE SALVAR SE VALIDAÇÃO FALHAR
                 error_msg = f"Erro na validação do certificado: {str(e)}"
-                print(f"[X] {error_msg}")
+                logger.error(f"[X] {error_msg}")
                 raise Exception(error_msg)
             
             # Se validação passou, criptografar senha
@@ -4375,7 +4384,7 @@ def salvar_certificado():
         
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro salvar_certificado: {e}")
+        logger.error(f"[X] Erro salvar_certificado: {e}")
         import traceback
         traceback.print_exc()
         
@@ -4415,7 +4424,7 @@ def toggle_certificado_status(certificado_id: int):
         return jsonify({'success': True, 'ativo': not ativo_atual})
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro toggle_certificado_status: {e}")
+        logger.error(f"[X] Erro toggle_certificado_status: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         db.close()
@@ -4489,9 +4498,9 @@ def list_regras_tributacao():
         regras = [dict(r._mapping) for r in rows]
         return render_template('admin/regras_tributacao/list.html', regras=regras, cliente_id=cliente_id)
     except Exception as e:
-        print(f"[X] Erro list_regras_tributacao: {e}")
+        logger.error(f"[X] Erro list_regras_tributacao: {e}")
         flash('Erro ao carregar regras', 'error')
-        return render_template('admin/regras_tributacao/list.html', regras=[])
+        return render_template('admin/regras_tributacao/list.html', regras=[], cliente_id=cliente_id)
     finally:
         db.close()
 
@@ -4554,7 +4563,7 @@ def salvar_regra_tributacao():
                 elif convert_to == str:
                     return str(val)
                 return str(val)
-            except:
+            except (ValueError, TypeError):
                 return None
         
         # Montar dados
@@ -4660,8 +4669,8 @@ def salvar_regra_tributacao():
         db.rollback()
         import traceback
         erro_completo = traceback.format_exc()
-        print(f"[X] Erro salvar_regra_tributacao: {e}")
-        print(f"[X] Traceback completo:\n{erro_completo}")
+        logger.error(f"[X] Erro salvar_regra_tributacao: {e}")
+        logger.error(f"[X] Traceback completo:\n{erro_completo}")
         flash(f'Erro ao salvar regra de tributação: {str(e)}', 'error')
         return redirect(url_for('admin.nova_regra_tributacao'))
     finally:
@@ -4679,7 +4688,7 @@ def excluir_regra_tributacao(regra_id: int):
         flash('Regra excluída', 'success')
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro excluir_regra_tributacao: {e}")
+        logger.error(f"[X] Erro excluir_regra_tributacao: {e}")
         flash('Erro ao excluir regra', 'error')
     finally:
         db.close()
@@ -4723,7 +4732,7 @@ def perfil():
             usuario_clientes=usuario_clientes
         )
     except Exception as e:
-        print(f"[X] Erro perfil: {e}")
+        logger.error(f"[X] Erro perfil: {e}")
         flash('Erro ao carregar perfil', 'error')
         return render_template('admin/perfil.html', usuario=None, usuario_roles=[], usuario_clientes=[])
     finally:
@@ -4751,8 +4760,8 @@ def buscar_cep(cep: str):
             }), 400
         
         # Consulta API ViaCEP
-        print(f"[SEARCH] Buscando CEP: {cep_limpo}")
-        print(f"[?] Tentando conectar em: https://viacep.com.br/ws/{cep_limpo}/json/")
+        logger.debug(f"[SEARCH] Buscando CEP: {cep_limpo}")
+        logger.debug(f"[?] Tentando conectar em: https://viacep.com.br/ws/{cep_limpo}/json/")
         
         try:
             response = requests.get(
@@ -4761,7 +4770,7 @@ def buscar_cep(cep: str):
                 headers={'User-Agent': 'Mozilla/5.0'}  # Alguns servidores exigem User-Agent
             )
         except requests.exceptions.ConnectionError as e:
-            print(f"[X] Erro de conexão específico: {e}")
+            logger.error(f"[X] Erro de conexão específico: {e}")
             
             # Modo fallback: tentar usar CEPs de teste
             try:
@@ -4769,7 +4778,7 @@ def buscar_cep(cep: str):
                 dados_teste = get_cep_teste(cep_limpo)
                 
                 if dados_teste:
-                    print(f"[!] MODO OFFLINE: Usando CEP de teste para {cep_limpo}")
+                    logger.debug(f"[!] MODO OFFLINE: Usando CEP de teste para {cep_limpo}")
                     # Continua o fluxo normal com dados de teste
                     dados = dados_teste
                 else:
@@ -4787,7 +4796,7 @@ def buscar_cep(cep: str):
         else:
             # Conexão bem-sucedida com ViaCEP
             if response.status_code != 200:
-                print(f"[!] Status HTTP: {response.status_code}")
+                logger.debug(f"[!] Status HTTP: {response.status_code}")
                 return jsonify({
                     'success': False,
                     'error': f'Erro ao consultar CEP (HTTP {response.status_code}). Tente novamente.'
@@ -4843,7 +4852,7 @@ def buscar_cep(cep: str):
                     # Se não encontrar, usar dados do ViaCEP mesmo
                     codigo_municipio = dados.get('ibge', '')
                     nome_municipio = dados.get('localidade', '')
-                    print(f"[!] Município não encontrado no BD: {nome_municipio}/{dados.get('uf')}")
+                    logger.debug(f"[!] Município não encontrado no BD: {nome_municipio}/{dados.get('uf')}")
             
             # Buscar código UF
             codigo_uf = None
@@ -4853,7 +4862,7 @@ def buscar_cep(cep: str):
                 if uf_row:
                     codigo_uf = uf_row[0]
             except Exception as e_uf:
-                print(f"[!] Erro ao buscar código UF no BD: {e_uf}")
+                logger.error(f"[!] Erro ao buscar código UF no BD: {e_uf}")
             
             # Fallback: Mapeamento manual de UF para código IBGE
             if not codigo_uf:
@@ -4867,10 +4876,10 @@ def buscar_cep(cep: str):
                 }
                 codigo_uf = uf_map.get(dados.get('uf', ''))
                 if codigo_uf:
-                    print(f"ℹ️ Usando código UF do mapeamento: {dados.get('uf')} = {codigo_uf}")
+                    logger.debug(f"ℹ️ Usando código UF do mapeamento: {dados.get('uf')} = {codigo_uf}")
             
         except Exception as e:
-            print(f"[!] Erro ao buscar município no BD: {e}")
+            logger.error(f"[!] Erro ao buscar município no BD: {e}")
             codigo_municipio = dados.get('ibge', '')
             nome_municipio = dados.get('localidade', '')
             # Fallback final para código UF
@@ -4886,11 +4895,11 @@ def buscar_cep(cep: str):
         finally:
             db.close()
         
-        print(f"[OK] CEP encontrado: {dados.get('logradouro')}, {nome_municipio}/{dados.get('uf')}")
+        logger.debug(f"[OK] CEP encontrado: {dados.get('logradouro')}, {nome_municipio}/{dados.get('uf')}")
         
         # Garantir que codigo_uf não seja None (campo obrigatório no banco)
         if not codigo_uf:
-            print(f"[!] AVISO: codigo_uf não encontrado para UF={dados.get('uf')}. Usando código padrão '99'")
+            logger.warning(f"[!] AVISO: codigo_uf não encontrado para UF={dados.get('uf')}. Usando código padrão '99'")
             codigo_uf = '99'  # Código genérico de fallback
         
         # Retornar dados formatados
@@ -4908,7 +4917,7 @@ def buscar_cep(cep: str):
         }), 200
         
     except requests.Timeout:
-        print(f"⏱️ Timeout ao buscar CEP: {cep}")
+        logger.debug(f"⏱️ Timeout ao buscar CEP: {cep}")
         return jsonify({
             'success': False,
             'error': 'Tempo esgotado ao consultar CEP (10 segundos). O serviço pode estar lento.',
@@ -4916,8 +4925,8 @@ def buscar_cep(cep: str):
         }), 504
         
     except requests.RequestException as e:
-        print(f"[X] Erro de conexão ao buscar CEP: {e}")
-        print(f"[X] Tipo de erro: {type(e).__name__}")
+        logger.error(f"[X] Erro de conexão ao buscar CEP: {e}")
+        logger.error(f"[X] Tipo de erro: {type(e).__name__}")
         
         # Mensagem detalhada baseada no tipo de erro
         error_msg = 'Erro de conexão com o serviço de CEP.'
@@ -4937,7 +4946,7 @@ def buscar_cep(cep: str):
         }), 503
         
     except Exception as e:
-        print(f"[X] Erro inesperado ao buscar CEP: {e}")
+        logger.error(f"[X] Erro inesperado ao buscar CEP: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -4970,7 +4979,7 @@ def api_sugestao_tributaria():
     )
 
     dados = request.get_json() or {}
-    print(f"[IA] [?] Nova solicitação de sugestão: {dados.get('descricao', 'N/A')}")
+    logger.debug(f"[IA] [?] Nova solicitação de sugestão: {dados.get('descricao', 'N/A')}")
 
     if not dados.get('descricao'):
         return jsonify({'erro': 'Descrição do produto é obrigatória'}), 400
@@ -4997,7 +5006,7 @@ def api_sugestao_tributaria():
         return jsonify({'erro': str(e)}), 500
 
     except Exception as e:
-        print(f"[IA] [X] Erro inesperado: {e}")
+        logger.error(f"[IA] [X] Erro inesperado: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'erro': f'Erro no processamento: {str(e)}'}), 500
@@ -5018,6 +5027,7 @@ def api_cliente_info(cliente_id):
 # Rota de teste para preenchimento automático
 @admin_bp.route('/teste-preenchimento-ia')
 @login_required
+@admin_required()
 def teste_preenchimento_ia():
     """Página de teste para verificar preenchimento automático dos campos"""
     return render_template('teste_preenchimento_ia.html')
@@ -5025,6 +5035,7 @@ def teste_preenchimento_ia():
 # Rota de teste para Select NCM
 @admin_bp.route('/teste-select-ncm')
 @login_required
+@admin_required()
 def teste_select_ncm():
     """Página de teste para verificar funcionamento do Select2 de NCMs"""
     return render_template('teste_select_ncm.html')
@@ -5120,7 +5131,7 @@ def list_auditoria():
                              })
     
     except Exception as e:
-        print(f"[X] Erro ao listar auditoria: {e}")
+        logger.error(f"[X] Erro ao listar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao carregar logs de auditoria', 'danger')
@@ -5143,7 +5154,7 @@ def estatisticas_auditoria():
                              dias=dias)
     
     except Exception as e:
-        print(f"[X] Erro ao obter estatísticas: {e}")
+        logger.error(f"[X] Erro ao obter estatísticas: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao carregar estatísticas', 'danger')
@@ -5289,7 +5300,7 @@ def export_auditoria():
             return redirect(url_for('admin.list_auditoria'))
     
     except Exception as e:
-        print(f"[X] Erro ao exportar auditoria: {e}")
+        logger.error(f"[X] Erro ao exportar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao exportar logs', 'danger')
@@ -5346,7 +5357,7 @@ def view_auditoria(auditoria_id):
         return render_template('admin/auditoria/view.html', log=log)
     
     except Exception as e:
-        print(f"[X] Erro ao visualizar auditoria: {e}")
+        logger.error(f"[X] Erro ao visualizar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao carregar detalhes do log', 'danger')
@@ -5384,7 +5395,7 @@ def limpar_auditoria():
         return redirect(url_for('admin.list_auditoria'))
     
     except Exception as e:
-        print(f"[X] Erro ao limpar auditoria: {e}")
+        logger.error(f"[X] Erro ao limpar auditoria: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao limpar logs antigos', 'danger')
@@ -5416,7 +5427,7 @@ def list_faturamento():
     
     db = _get_db()
     try:
-        print("[INFO] Iniciando consulta de faturamento...")
+        logger.debug("[INFO] Iniciando consulta de faturamento...")
         
         # Busca clientes com suas assinaturas ativas
         rows = db.execute(text("""
@@ -5452,7 +5463,7 @@ def list_faturamento():
             ORDER BY c.razao_social
         """)).fetchall()
         
-        print(f"[INFO] Encontrados {len(rows)} clientes")
+        logger.debug(f"[INFO] Encontrados {len(rows)} clientes")
         
         clientes = []
         for row in rows:
@@ -5473,11 +5484,11 @@ def list_faturamento():
             
             clientes.append(cliente)
         
-        print(f"[INFO] Processados {len(clientes)} clientes para exibição")
+        logger.debug(f"[INFO] Processados {len(clientes)} clientes para exibição")
         return render_template('admin/faturamento/list.html', clientes=clientes)
     
     except Exception as e:
-        print(f"[X] Erro ao listar faturamento: {e}")
+        logger.error(f"[X] Erro ao listar faturamento: {e}")
         import traceback
         traceback.print_exc()
         flash(f'Erro ao carregar configurações de faturamento: {str(e)}', 'danger')
@@ -5594,7 +5605,7 @@ def edit_faturamento_cliente(cliente_id):
     
     except Exception as e:
         db.rollback()
-        print(f"[X] Erro ao editar faturamento: {e}")
+        logger.error(f"[X] Erro ao editar faturamento: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao processar configuração de faturamento', 'danger')
@@ -5889,7 +5900,7 @@ def relatorio_gerencial():
                              distribuicao_pagamento=pagamentos)
     
     except Exception as e:
-        print(f"[X] Erro no relatório gerencial: {e}")
+        logger.error(f"[X] Erro no relatório gerencial: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao gerar relatório gerencial', 'danger')
@@ -6050,7 +6061,7 @@ def gerar_extrato_cliente(cliente_id):
                              data_hoje=data_hoje)
     
     except Exception as e:
-        print(f"[X] Erro ao gerar extrato: {e}")
+        logger.error(f"[X] Erro ao gerar extrato: {e}")
         import traceback
         traceback.print_exc()
         flash('Erro ao gerar extrato do cliente', 'danger')
@@ -6085,8 +6096,10 @@ def api_regime_tributario_cliente(cliente_id):
 # -------------------------------------------------------------------
 
 @admin_bp.route('/test-email-debug', methods=['GET', 'POST'])
+@login_required
+@admin_required()
 def test_email_debug():
-    """Endpoint público para testar envio de emails (sem autenticação - apenas para debug)"""
+    """Endpoint para testar envio de emails - restrito a administradores"""
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -6202,12 +6215,12 @@ def test_email_debug():
             resultados.append(traceback.format_exc())
         
         # Log detalhado no console do servidor
-        print('\n' + '='*80)
-        print('TESTE DE EMAIL - RESULTADO')
-        print('='*80)
+        logger.debug('\n' + '='*80)
+        logger.debug('TESTE DE EMAIL - RESULTADO')
+        logger.debug('='*80)
         for linha in resultados:
-            print(linha)
-        print('='*80 + '\n')
+            logger.debug(linha)
+        logger.debug('='*80 + '\n')
         
         return render_template('admin/test_email_debug.html', 
                              resultados=resultados, 
@@ -6338,12 +6351,12 @@ def test_email():
             resultados.append(traceback.format_exc())
         
         # Log detalhado no console do servidor
-        print('\n' + '='*80)
-        print('TESTE DE EMAIL - RESULTADO')
-        print('='*80)
+        logger.debug('\n' + '='*80)
+        logger.debug('TESTE DE EMAIL - RESULTADO')
+        logger.debug('='*80)
         for linha in resultados:
-            print(linha)
-        print('='*80 + '\n')
+            logger.debug(linha)
+        logger.debug('='*80 + '\n')
         
         return render_template('admin/test_email.html', 
                              resultados=resultados, 

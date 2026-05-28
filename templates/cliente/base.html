@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <script src="https://unpkg.com/imask"></script>
+    <script src="https://cdn.jsdelivr.net/npm/imask/dist/imask.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}EmiteMax - Sistema de Emissão de Notas Fiscais{% endblock %}</title>
@@ -780,7 +780,7 @@
                                         <i class="fas fa-gavel"></i> Regras Tributárias
                                     </a>
                                     <div class="dropdown-menu">
-                                        <a class="dropdown-item" href="{{ url_for('admin.list_regras_tributacao') }}">
+                                        <a class="dropdown-item" href="{{ url_for('admin.list_regras_tributacao', cliente_id=session.get('current_client_id') or session.get('active_cliente_id')) }}">
                                             <i class="fas fa-file-invoice"></i> Regras NFe
                                         </a>
                                         <a class="dropdown-item" href="{{ url_for('regras_servicos.list_regras_servicos') }}">
@@ -1113,10 +1113,28 @@
     });
     </script>
     <!-- jQuery (necessário para Select2) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <!-- Select2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     {% block extra_js %}{% endblock %}
-    
+
+    <!-- Injeção automática do CSRF token em todos os formulários POST -->
+    <script>
+    (function() {
+        var csrfToken = '{{ csrf_token() }}';
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfToken;
+                    form.prepend(input);
+                }
+            });
+        });
+    })();
+    </script>
+
 </body>
 </html>

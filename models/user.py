@@ -1,7 +1,10 @@
+import logging
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash
 from database.connection import get_db
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 class User(UserMixin):
     def __init__(self, id, username, email, _is_active, roles=None, clients=None):
@@ -38,7 +41,7 @@ class User(UserMixin):
                 """))
                 return [dict(row._mapping) for row in result]
             except Exception as e:
-                print(f"Erro ao buscar clientes: {e}")
+                logger.warning("user.py: erro ao buscar clientes user_id=%s: %s", self.id, e)
                 return []
             finally:
                 if db is not None:
@@ -55,9 +58,11 @@ class User(UserMixin):
         return any(client.get('cliente_id') == cliente_id for client in self.clients)
 
     def has_permission(self, permission_name):
-        """Verifica se o usuário tem uma permissão específica"""
-        # Por enquanto, todos têm todas as permissões
-        return True
+        """Verifica se o usuário tem uma permissão específica via roles."""
+        if self.is_super_admin():
+            return True
+        from auth.permissions import has_permission as _check
+        return _check(permission_name)
 
     @staticmethod
     def get(user_id):
@@ -99,7 +104,7 @@ class User(UserMixin):
                 clients=clients
             )
         except Exception as e:
-            print(f"[X] Erro ao carregar usuário {user_id}: {e}")
+            logger.error("user.py: erro ao carregar usuário user_id=%s: %s", user_id, e, exc_info=True)
             return None
         finally:
             if db is not None:
@@ -117,7 +122,7 @@ class User(UserMixin):
                 WHERE u.username = :username AND u._is_active = true
             """), {"username": username}).first()
             if user_data and check_password_hash(user_data.password_hash, password):
-                print(f"[OK] Usuário autenticado: {username}")
+                logger.debug("user.py: autenticação OK username=%s", username)
 
                 # Buscar roles do usuário
                 roles_data = db.execute(text("""
@@ -146,10 +151,10 @@ class User(UserMixin):
                     clients=clients
                 )
             else:
-                print(f"[X] Falha na autenticação: {username}")
+                logger.warning("user.py: falha na autenticação username=%s", username)
                 return None
         except Exception as e:
-            print(f"[X] Erro na autenticação: {e}")
+            logger.error("user.py: erro na autenticação username=%s: %s", username, e, exc_info=True)
             return None
         finally:
             if db is not None:

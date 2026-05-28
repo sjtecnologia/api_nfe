@@ -15,7 +15,7 @@ classificacao_ibs_cbs_bp = Blueprint('classificacao_ibs_cbs', __name__, url_pref
 
 @classificacao_ibs_cbs_bp.route('/', methods=['GET'])
 @login_required
-@permission_required(['admin', 'super_admin'])
+@permission_required('admin.view')
 def listar():
     """Listar todas as classificações IBS/CBS"""
     db = next(get_db())
@@ -52,7 +52,7 @@ def listar():
 
 @classificacao_ibs_cbs_bp.route('/nova', methods=['GET', 'POST'])
 @login_required
-@permission_required(['admin', 'super_admin'])
+@permission_required('admin.view')
 def criar():
     """Criar nova classificação IBS/CBS"""
     if request.method == 'GET':
@@ -93,7 +93,7 @@ def criar():
 
 @classificacao_ibs_cbs_bp.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
-@permission_required(['admin', 'super_admin'])
+@permission_required('admin.view')
 def editar(id):
     """Editar classificação IBS/CBS existente"""
     db = next(get_db())
@@ -136,7 +136,7 @@ def editar(id):
 
 @classificacao_ibs_cbs_bp.route('/deletar/<int:id>', methods=['POST'])
 @login_required
-@permission_required(['admin', 'super_admin'])
+@permission_required('admin.view')
 def deletar(id):
     """Deletar classificação IBS/CBS"""
     db = next(get_db())
@@ -162,7 +162,7 @@ def deletar(id):
 
 @classificacao_ibs_cbs_bp.route('/toggle-status/<int:id>', methods=['POST'])
 @login_required
-@permission_required(['admin', 'super_admin'])
+@permission_required('admin.view')
 def toggle_status(id):
     """Ativar/desativar classificação"""
     db = next(get_db())

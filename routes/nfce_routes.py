@@ -144,6 +144,7 @@ def emitir_nfce():
                 # Capturar dados do formulário
                 dados_nfce = {
                     'emitente_id': emitente_cliente_id,
+                    'emitente_crt': emitente_data.regime_tributario.crt if emitente_data.regime_tributario else None,
                     'produtos': [],
                     'forma_pagamento': request.form.get('forma_pagamento', '01'),  # 01=Dinheiro
                     'valor_pago': float(request.form.get('valor_pago', 0)),
@@ -212,6 +213,7 @@ def emitir_nfce():
                 itens = []
                 for prod in dados_nfce['produtos']:
                     produto_obj = prod['produto']
+                    classificacao = produto_obj.classificacao_ibs_cbs
                     itens.append({
                         'codigo': produto_obj.codigo_interno or str(produto_obj.produto_id),
                         'descricao': produto_obj.descricao,
@@ -222,7 +224,15 @@ def emitir_nfce():
                         'valor_unitario': prod['valor_unitario'],
                         'valor_total': prod['quantidade'] * prod['valor_unitario'] - prod.get('desconto', 0),
                         'csosn': '102',  # TODO: pegar da regra tributária do produto
-                        'origem': '0'  # TODO: pegar do produto
+                        'origem': '0',  # TODO: pegar do produto
+                        'classificacao_ibs_cbs_id': produto_obj.classificacao_ibs_cbs_id,
+                        'classificacao_ibs_cbs': {
+                            'classificacao_id': classificacao.classificacao_id,
+                            'codigo': classificacao.codigo,
+                            'aliquota_ibs_uf': float(classificacao.aliquota_ibs_uf),
+                            'aliquota_ibs_mun': float(classificacao.aliquota_ibs_mun),
+                            'aliquota_cbs': float(classificacao.aliquota_cbs),
+                        } if classificacao else None
                     })
                 
                 # Calcular totais
@@ -300,6 +310,7 @@ def emitir_nfce():
                             'valor_desconto': valor_desconto,
                             'valor_total': valor_total
                         },
+                        'emitente_crt': dados_nfce.get('emitente_crt'),
                         # Dados da emissão
                         'numero': resultado['numero'],
                         'serie': resultado.get('serie', 1),

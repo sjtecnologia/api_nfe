@@ -1,62 +1,78 @@
-from flask import Blueprint, render_template, redirect, url_for, session, request, flash
+import logging
+from flask import Blueprint, render_template, redirect, url_for, session, request, flash, current_app
 from flask_login import login_user, logout_user, login_required, current_user
-from werkzeug.security import check_password_hash
 from database.connection import get_db
 from database.models import User
+from utils.password import verify_password, hash_password, needs_rehash
 from sqlalchemy import text
 
+logger = logging.getLogger(__name__)
+
 auth_bp = Blueprint('auth', __name__)
+
+
+def _get_limiter():
+    return current_app.extensions.get('limiter')
+
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Login do usuário - ACEITA EMAIL OU USERNAME"""
+    limiter = _get_limiter()
+    if limiter:
+        limiter.limit('10/minute')(lambda: None)()
+
     if request.method == 'POST':
-        print("\n" + "="*80)
-        print("[AUTH] LOGIN: Iniciando processo de autenticação")
-        print("="*80)
-        
-        email = request.form['username']  # Campo "username" no form, mas aceita email
-        password = request.form['password']
-        print(f"[USER] Email/Username: {email}")
-        
+        logger.info("LOGIN: Iniciando autenticação")
+
+        email = (request.form.get('username') or request.form.get('email') or '').strip()
+        password = request.form.get('password', '')
+
+        if not email or not password:
+            logger.warning("LOGIN: campos obrigatórios ausentes")
+            flash('Email ou senha inválidos.', 'danger')
+            return render_template('login.html')
+
         db = None
         try:
-            print("[DATA] Conectando ao banco de dados...")
             db = next(get_db())
-            print("[OK] Conexão estabelecida")
-            
-            print("[SEARCH] Buscando usuário no banco por EMAIL ou USERNAME...")
-            # Aceita email ou username, sem distinção de maiúsculas/minúsculas
+
             result = db.execute(text("""
                 SELECT id, username, email, password_hash, _is_active
                 FROM users
                 WHERE (LOWER(email) = LOWER(:login) OR LOWER(username) = LOWER(:login))
                   AND _is_active = true
             """), {"login": email})
-            
+
             user_data = result.first()
-            print(f"[LOG] Resultado da query: {'Usuário encontrado' if user_data else 'Usuário não encontrado'}")
             
             if not user_data:
-                print("[X] Usuário não encontrado no banco")
+                logger.warning("LOGIN: usuário não encontrado para login='%s'", email)
                 flash('Email ou senha inválidos.', 'danger')
                 return render_template('login.html')
-            
-            # Usuário encontrado, verificar senha
-            print("[KEY] Verificando senha...")
-            senha_valida = check_password_hash(user_data.password_hash, password)
-            print(f"[UNLOCK] Senha válida: {senha_valida}")
-            
+
+            senha_valida = verify_password(user_data.password_hash, password)
+
             if not senha_valida:
-                print("[X] Senha incorreta")
+                logger.warning("LOGIN: senha incorreta para user_id=%s", user_data.id)
                 flash('Email ou senha inválidos.', 'danger')
                 return render_template('login.html')
             
-            # Autenticação bem-sucedida!
-            print("[OK] Autenticação bem-sucedida!")
+            # Rehash transparente: migra senhas legadas werkzeug para Argon2id
+            if needs_rehash(user_data.password_hash):
+                try:
+                    new_hash = hash_password(password)
+                    db.execute(text(
+                        "UPDATE users SET password_hash = :h WHERE id = :uid"
+                    ), {"h": new_hash, "uid": user_data.id})
+                    db.commit()
+                    logger.info("LOGIN: senha rehashed para user_id=%s", user_data.id)
+                except Exception as rehash_err:
+                    logger.warning("LOGIN: falha no rehash para user_id=%s: %s", user_data.id, rehash_err)
+
+            logger.info("LOGIN: autenticação bem-sucedida user_id=%s", user_data.id)
             
             # Buscar roles do usuário no banco de dados
-            print("[DB] Buscando roles do usuário...")
             user_roles_query = db.execute(text("""
                 SELECT r.id, r.name, r.description
                 FROM roles r
@@ -64,13 +80,10 @@ def login():
                 WHERE ur.user_id = :user_id
             """), {'user_id': user_data.id})
             
-            user_roles = [{'id': row.id, 'name': row.name, 'description': row.description} 
+            user_roles = [{'id': row.id, 'name': row.name, 'description': row.description}
                          for row in user_roles_query]
-            
-            print(f"[ROLES] Roles encontradas: {[r['name'] for r in user_roles]}")
-            
+
             # Buscar clientes vinculados ao usuário
-            print("[DB] Buscando clientes do usuário...")
             user_clients_query = db.execute(text("""
                 SELECT c.cliente_id, c.razao_social, c.nome_fantasia, c.cnpj
                 FROM clientes c
@@ -81,10 +94,7 @@ def login():
             user_clients = [{'cliente_id': row.cliente_id, 'razao_social': row.razao_social,
                            'nome_fantasia': row.nome_fantasia, 'cnpj': row.cnpj}
                           for row in user_clients_query]
-            
-            print(f"[CLIENTS] Clientes vinculados: {len(user_clients)}")
-            
-            print("[BUILD] Criando objeto User...")
+
             user = User(
                 user_data.id,
                 user_data.username or user_data.email,
@@ -93,47 +103,26 @@ def login():
                 user_roles,
                 user_clients
             )
-            
-            print("[AUTH] Fazendo login do usuário...")
-            # Verificar se o checkbox 'remember_me' foi marcado
+
             remember = request.form.get('remember_me') == 'on'
-            print(f"[REMEMBER] Lembrar de mim por 30 dias: {remember}")
             login_user(user, remember=remember)
-            
-            print(f"[OK] LOGIN: Usuario {user_data.email} (ID: {user_data.id}) logado com roles {[r['name'] for r in user_roles]}")
-            
-            # Determinar redirecionamento baseado nas roles
-            print("[START] Determinando redirecionamento...")
+
+            logger.info("LOGIN: user_id=%s roles=%s clientes=%d",
+                        user_data.id, [r['name'] for r in user_roles], len(user_clients))
             
             if user.is_super_admin():
-                # Apenas Super_Admin vai direto para dashboard administrativo
-                print("--> Super_Admin detectado, redirecionando para admin.dashboard")
                 return redirect(url_for('admin.dashboard'))
             else:
-                # Todos os outros (incluindo Admin comum) vão para home que gerencia a seleção de clientes
-                print("--> Redirecionando para home (seleção de cliente)")
-                print("="*80 + "\n")
                 return redirect(url_for('home.home'))
-                
+
         except Exception as e:
-            print("\n" + "="*80)
-            print("[X] ERRO NO LOGIN")
-            print("="*80)
-            print(f"Tipo do erro: {type(e).__name__}")
-            print(f"Mensagem: {str(e)}")
-            print("\nTraceback completo:")
-            import traceback
-            traceback.print_exc()
-            print("="*80 + "\n")
+            logger.error("ERRO no login: %s", e, exc_info=True)
             flash('Erro interno do servidor.', 'danger')
             return render_template('login.html')
         finally:
             if db is not None:
-                print("[?] Fechando conexão com banco de dados")
                 db.close()
-    
-    # GET request - mostrar formulário de login
-    print("[?] GET /login - Mostrando formulário de login")
+
     return render_template('login.html')
 
 @auth_bp.route('/logout')
@@ -141,25 +130,13 @@ def login():
 def logout():
     """Logout do usuário"""
     try:
-        print(f"[?] LOGOUT: Fazendo logout do usuário {current_user.username}")
-        
-        # Limpar TODA a sessão
+        logger.info("LOGOUT: user_id=%s", current_user.id)
         session.clear()
-        
-        # Fazer logout do Flask-Login
         logout_user()
-        
-        print("[OK] LOGOUT: Sessão limpa e usuário deslogado")
-        
-        # Flash message para confirmar logout
         flash('Você foi desconectado com sucesso.', 'info')
-        
-        # Redirecionar para login
         return redirect(url_for('auth.login'))
-        
     except Exception as e:
-        print(f"[X] ERRO no logout: {e}")
-        # Mesmo com erro, limpar sessão e redirecionar
+        logger.error("ERRO no logout: %s", e, exc_info=True)
         session.clear()
         logout_user()
         return redirect(url_for('auth.login'))
@@ -220,16 +197,14 @@ def forgot_password():
                     )
                     
                     if resultado and resultado.get('success'):
-                        print(f"[✓] Email de recuperação enviado para {email}")
+                        logger.info("Recuperação de senha: email enviado para %s", email)
                         flash('Email de recuperação enviado! Verifique sua caixa de entrada e spam.', 'success')
                     else:
                         erro_msg = resultado.get('message', 'Erro desconhecido') if resultado else 'Sem resposta do servidor'
-                        print(f"[X] Falha ao enviar email: {erro_msg}")
+                        logger.error("Falha ao enviar email de recuperação: %s", erro_msg)
                         flash(f'Erro ao enviar email: {erro_msg}', 'danger')
                 except Exception as email_error:
-                    print(f"[X] Exceção ao enviar email: {email_error}")
-                    import traceback
-                    traceback.print_exc()
+                    logger.error("Exceção ao enviar email de recuperação: %s", email_error, exc_info=True)
                     flash('Erro ao enviar email. Entre em contato com o suporte.', 'danger')
             else:
                 # Por segurança, mostrar mesma mensagem mesmo se email não existir
@@ -238,9 +213,7 @@ def forgot_password():
             return redirect(url_for('auth.login'))
             
         except Exception as e:
-            print(f"[X] Erro ao processar recuperação de senha: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("Erro ao processar recuperação de senha: %s", e, exc_info=True)
             flash('Erro ao processar solicitação. Tente novamente.', 'danger')
             return render_template('forgot_password.html')
         finally:
@@ -298,10 +271,8 @@ def reset_password(token):
                 flash('A senha deve ter no mínimo 6 caracteres.', 'danger')
                 return render_template('reset_password.html')
             
-            # Atualizar senha do usuário
-            from werkzeug.security import generate_password_hash
-            
-            password_hash = generate_password_hash(password)
+            # Atualizar senha do usuário com Argon2id
+            password_hash = hash_password(password)
             
             db.execute(text("""
                 UPDATE users

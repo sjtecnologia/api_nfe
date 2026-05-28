@@ -31,3 +31,31 @@ backups/
 # Banco de dados local
 database/sjtnfedb
 database/*.sql
+
+# Arquivos de distribuição / compactados
+*.tar.gz
+*.zip
+
+# Diretórios de dados externos
+datasets/
+examples/
+
+# XMLs de teste gerados
+nfe_*.xml
+last_*.xml
+test_nfse_*.xml
+leiaute_nfe_*.txt
+
+# Scripts de diagnóstico/correção avulsos (não são parte do sistema)
+check_*.py
+fix_*.py
+corrigir_*.py
+debug_*.py
+comparar_*.py
+diagnostico_*.py
+analise_*.py
+criar_*.py
+force_*.py
+enviar_email_teste*.py
+add_cancelamento_columns.py
+executar_migrations_*.py

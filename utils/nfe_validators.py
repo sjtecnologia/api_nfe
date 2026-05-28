@@ -206,6 +206,10 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
             
             if item.get('origem') is None or item.get('origem') == '':
                 erros.append(f"{item_prefix}Origem da mercadoria é obrigatória")
+
+            if form_data.get('regime_tributario_id') == 3:
+                if not item.get('classificacao_ibs_cbs_id'):
+                    erros.append(f"{item_prefix}Classificação IBS/CBS é obrigatória para CRT=3")
     
     # [OK] VALIDAÇÃO DO PAGAMENTO
     if not form_data.get('formaPagamento'):

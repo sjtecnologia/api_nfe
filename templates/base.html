@@ -3,9 +3,10 @@
 <head>
     <!-- Anti-flash: aplica tema antes do render -->
     <script>(function(){var t=localStorage.getItem('emitemax_theme')||'light';document.documentElement.setAttribute('data-theme',t);})()</script>
-    <script src="https://unpkg.com/imask"></script>
+    <script src="https://cdn.jsdelivr.net/npm/imask/dist/imask.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}EmiteMax - Sistema de Emissão de Notas Fiscais{% endblock %}</title>
     
     
@@ -1018,7 +1019,7 @@
                                         <i class="fas fa-gavel"></i> Regras Tributárias
                                     </a>
                                     <div class="dropdown-menu">
-                                        <a class="dropdown-item" href="{{ url_for('admin.list_regras_tributacao') }}">
+                                        <a class="dropdown-item" href="{{ url_for('admin.list_regras_tributacao', cliente_id=session.get('current_client_id') or session.get('active_cliente_id')) }}">
                                             <i class="fas fa-file-invoice"></i> Regras NFe
                                         </a>
                                         <a class="dropdown-item" href="{{ url_for('regras_servicos.list_regras_servicos') }}">
@@ -1354,7 +1355,7 @@
     });
     </script>
     <!-- jQuery (necessário para Select2) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <!-- Select2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     {% block extra_js %}{% endblock %}
@@ -1389,5 +1390,62 @@
     <script src="{{ url_for('static', filename='js/error_utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/services/api-service.js') }}"></script>
     <script src="{{ url_for('static', filename='js/domain/nfe-calculator.js') }}"></script>
+
+    <!-- Injeção automática do CSRF token em todos os formulários POST -->
+    <script>
+    (function() {
+        var csrfToken = '{{ csrf_token() }}';
+
+        function shouldAttachCsrf(url, method) {
+            var normalizedMethod = (method || 'GET').toUpperCase();
+            if (['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(normalizedMethod)) {
+                return false;
+            }
+
+            if (!url) {
+                return true;
+            }
+
+            try {
+                var parsedUrl = new URL(url, window.location.origin);
+                return parsedUrl.origin === window.location.origin;
+            } catch (error) {
+                return true;
+            }
+        }
+
+        if (typeof window.fetch === 'function' && !window.__csrfFetchWrapped) {
+            var originalFetch = window.fetch.bind(window);
+            window.fetch = function(input, init) {
+                var requestUrl = typeof input === 'string' ? input : (input && input.url);
+                var options = init ? Object.assign({}, init) : {};
+                var method = options.method || (typeof input !== 'string' && input && input.method) || 'GET';
+
+                if (csrfToken && shouldAttachCsrf(requestUrl, method)) {
+                    var headers = new Headers(options.headers || (typeof input !== 'string' && input && input.headers) || {});
+                    if (!headers.has('X-CSRFToken') && !headers.has('X-CSRF-Token')) {
+                        headers.set('X-CSRFToken', csrfToken);
+                    }
+                    options.headers = headers;
+                }
+
+                return originalFetch(input, options);
+            };
+            window.__csrfFetchWrapped = true;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfToken;
+                    form.prepend(input);
+                }
+            });
+        });
+    })();
+    </script>
 </body>
 </html>

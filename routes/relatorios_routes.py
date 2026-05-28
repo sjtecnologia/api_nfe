@@ -386,7 +386,7 @@ def gerar_excel_notas_emitidas(dados):
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except (TypeError, AttributeError):
                 pass
         adjusted_width = min(max_length + 2, 50)
         ws.column_dimensions[column].width = adjusted_width
@@ -427,7 +427,7 @@ def gerar_excel_faturamento(dados):
         moeda_style = NamedStyle(name='moeda_brasileira', number_format='R$ #,##0.00')
         if 'moeda_brasileira' not in wb.named_styles:
             wb.add_named_style(moeda_style)
-    except:
+    except (ValueError, AttributeError):
         pass
     
     # Cabeçalhos
@@ -463,7 +463,7 @@ def gerar_excel_faturamento(dados):
         for col in ['C', 'D', 'E', 'F', 'G', 'H']:
             try:
                 ws[f'{col}{row_num}'].style = 'moeda_brasileira'
-            except:
+            except (KeyError, AttributeError):
                 pass
     
     # Ajustar largura das colunas
@@ -474,7 +474,7 @@ def gerar_excel_faturamento(dados):
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except (TypeError, AttributeError):
                 pass
         adjusted_width = min(max_length + 2, 50)
         ws.column_dimensions[column].width = adjusted_width
@@ -601,7 +601,7 @@ def gerar_excel_impostos(dados):
         moeda_style = NamedStyle(name='moeda_brasileira', number_format='R$ #,##0.00')
         if 'moeda_brasileira' not in wb.named_styles:
             wb.add_named_style(moeda_style)
-    except:
+    except (ValueError, AttributeError):
         pass
     
     # Estilo de porcentagem
@@ -609,7 +609,7 @@ def gerar_excel_impostos(dados):
         percentual_style = NamedStyle(name='percentual', number_format='0.00"%"')
         if 'percentual' not in wb.named_styles:
             wb.add_named_style(percentual_style)
-    except:
+    except (ValueError, AttributeError):
         pass
     
     # ===== ABA 1: DETALHAMENTO POR IMPOSTO =====

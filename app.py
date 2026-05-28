@@ -1,5 +1,11 @@
-from flask import Flask, render_template, jsonify, redirect, url_for, request
+import os
+import uuid
+from flask import Flask, render_template, jsonify, redirect, url_for, request, g
 from flask_cors import CORS
+from flask_wtf.csrf import CSRFProtect, generate_csrf
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_caching import Cache
 from datetime import datetime
 from config.settings import SECRET_KEY, DEBUG, HOST, PORT
 from config.logging_config import configure_logging
@@ -8,6 +14,7 @@ from auth.login_manager import init_login_manager
 from auth.permissions import has_permission
 from flask_login import current_user, login_required
 from models.user import User
+from werkzeug.exceptions import HTTPException
 
 configure_logging()
 
@@ -41,12 +48,6 @@ from routes.classificacao_ibs_cbs_routes import classificacao_ibs_cbs_bp
 from routes.nfse_api_routes import nfse_api_bp
 from routes.admin_api_routes import admin_api_bp
 
-# Configurar Flask-Login
-from auth.login_manager import init_login_manager
-
-
-
-
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
@@ -59,7 +60,8 @@ WerkzeugRequest.max_form_parts = 10000                    # 10.000 campos (padr�
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024       # 50MB
 
 # Configurações de sessão para compatibilidade com iOS/Safari
-app.config['SESSION_COOKIE_SECURE'] = True  # Apenas HTTPS
+_is_production = os.getenv('FLASK_ENV', 'production') == 'production'
+app.config['SESSION_COOKIE_SECURE'] = _is_production   # HTTPS apenas em produção
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Proteção contra XSS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Compatível com iOS
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hora
@@ -67,17 +69,47 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hora
 # Configurações do Flask-Login "Remember Me"
 from datetime import timedelta
 app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)  # 30 dias
-app.config['REMEMBER_COOKIE_SECURE'] = True  # Apenas HTTPS
+app.config['REMEMBER_COOKIE_SECURE'] = _is_production         # HTTPS apenas em produção
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Proteção contra XSS
 app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'  # Compatível com iOS
 
-# Configurar CORS - Permitir acesso de qualquer origem
-CORS(app, 
-     resources={r"/*": {"origins": "*"}},
-     supports_credentials=True,
-     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-API-Key"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-     expose_headers=["Content-Type", "X-Total-Count"])
+# CSRF — protege todos os formulários HTML (exceto APIs autenticadas via API Key)
+csrf = CSRFProtect(app)
+# Isentar blueprints de API pura (autenticados via API Key no header)
+csrf.exempt(api_v2_bp)
+csrf.exempt(api_bp)
+csrf.exempt(llm_api_bp)
+csrf.exempt(nfse_api_bp)
+
+# CORS — origens explícitas via variável de ambiente
+_raw_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5000')
+_allowed_origins = [o.strip() for o in _raw_origins.split(',') if o.strip()]
+CORS(
+    app,
+    resources={r"/api/*": {"origins": _allowed_origins}},
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-API-Key"],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    expose_headers=["Content-Type", "X-Total-Count", "X-Request-ID"],
+)
+
+# Rate Limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=[],  # sem limite global; aplicar por rota
+    storage_uri=os.getenv('RATELIMIT_STORAGE_URI', 'memory://'),
+)
+
+# Cache
+cache = Cache(app, config={
+    'CACHE_TYPE': os.getenv('CACHE_TYPE', 'SimpleCache'),
+    'CACHE_DEFAULT_TIMEOUT': 3600,
+})
+
+# Expor cache e limiter para uso nos blueprints
+app.extensions['cache'] = cache
+app.extensions['limiter'] = limiter
 
 # Inicializar Flask-Login
 login_manager = init_login_manager(app)
@@ -168,6 +200,7 @@ def inject_permissions():
     from utils.id_encoder import encode_id
     
     return dict(
+        csrf_token=generate_csrf,
         has_permission=has_permission, 
         is_super_admin=is_super_admin,
         can_edit=can_edit,
@@ -176,15 +209,35 @@ def inject_permissions():
         encode_id=encode_id
     )
 
+@app.before_request
+def inject_request_id():
+    """Gera um ID único por requisição para rastreabilidade nos logs."""
+    g.request_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())
+    if current_user.is_authenticated:
+        g.user_id = current_user.id
+
+
 @app.after_request
 def add_security_headers(response):
-    """Adiciona headers de segurança HTTP em todas as respostas"""
+    """Adiciona headers de segurança HTTP em todas as respostas."""
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self';"
+    )
+    # Propaga request_id na resposta
+    if hasattr(g, 'request_id'):
+        response.headers['X-Request-ID'] = g.request_id
     return response
 
 
@@ -279,6 +332,8 @@ def internal_error(error):
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Handler para TODAS as exceções não tratadas"""
+    if isinstance(e, HTTPException):
+        return e
     logger.error("Exceção não tratada — %s: %s", type(e).__name__, str(e), exc_info=True)
     return internal_error(e)
 

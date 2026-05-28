@@ -414,6 +414,13 @@ input[readonly] {
                             <h5>💰 Total da NFe: R$ <span id="totalGeral">0,00</span></h5>
                         </div>
                     </div>
+
+                {% if emitente_data and emitente_data.regime_tributario_id == 3 %}
+                <div class="alert alert-warning mb-3" role="alert">
+                    <i class="fas fa-balance-scale"></i>
+                    <strong>IBS/CBS obrigatório:</strong> este emitente está em CRT 3 e cada item precisa de uma classificação de Reforma Tributária.
+                </div>
+                {% endif %}
                 </div>
             </div>
         </div>
@@ -973,6 +980,7 @@ console.log('🔍 Verificando se jQuery está disponível...');
 let itemCounter = 0;
 let totalGeral = 0;
 let currentNcmItemId = null;
+const IBS_CBS_OBRIGATORIO = {{ 1 if emitente_data and emitente_data.regime_tributario_id == 3 else 0 }};
 
 // 🤖 Assistente IA - Variáveis globais
 let empresaCRT = {% if emitente_data and emitente_data.crt %}{{ emitente_data.crt }}{% else %}1{% endif %};
@@ -1118,18 +1126,24 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('✅ jQuery encontrado:', $.fn.jquery);
             clearInterval(checkJQuery);
             
-            // Carregar Select2 via script
-            const select2Script = document.createElement('script');
-            select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
-            select2Script.onload = function() {
-                console.log('✅ Select2 carregado');
+            if ($.fn.select2) {
+                // Select2 já carregado pelo base.html — usar diretamente
+                console.log('✅ Select2 já disponível (base.html)');
                 initSelect2();
-            };
-            select2Script.onerror = function() {
-                console.error('❌ Erro ao carregar Select2');
-                alert('Erro: Não foi possível carregar Select2. Verifique sua conexão.');
-            };
-            document.head.appendChild(select2Script);
+            } else {
+                // Carregar Select2 via script como fallback
+                const select2Script = document.createElement('script');
+                select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
+                select2Script.onload = function() {
+                    console.log('✅ Select2 carregado dinamicamente');
+                    initSelect2();
+                };
+                select2Script.onerror = function() {
+                    console.error('❌ Erro ao carregar Select2');
+                    alert('Erro: Não foi possível carregar Select2. Verifique sua conexão.');
+                };
+                document.head.appendChild(select2Script);
+            }
         } else {
             console.log('⏳ Aguardando jQuery...');
         }
@@ -1325,7 +1339,7 @@ function adicionarItem() {
                     <div class="form-group">
                         <label>Quantidade *</label>
                         <input type="number" step="0.0001" name="quantidade_${itemCounter}" 
-                               class="form-control" min="0.0001" oninput="calcularTotal(${itemCounter})" onchange="calcularTotal(${itemCounter})" required>
+                               class="form-control" min="0.0001" value="1" oninput="calcularTotal(${itemCounter})" onchange="calcularTotal(${itemCounter})" required>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -1416,7 +1430,10 @@ function adicionarItem() {
                 </div>
                 {% endif %}
             </div>
-            
+
+            <!-- Alerta de regra tributária (preenchido via JS) -->
+            <div id="regra_alerta_${itemCounter}"></div>
+
             <!-- Impostos ICMS -->
             <div class="row">
                 <div class="col-md-3">
@@ -1553,7 +1570,7 @@ function adicionarItem() {
                 </div>
             </div>
             
-            <!-- IBS/CBS - Reforma Tributária (apenas para CRT=3) -->
+            <!-- IBS/CBS - Reforma Tributária (obrigatório para CRT=3) -->
             <div class="row item-ibs-cbs" style="display: none;">
                 <div class="col-md-12">
                     <div class="alert alert-info">
@@ -1562,15 +1579,19 @@ function adicionarItem() {
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label>Classificação IBS/CBS</label>
-                        <select name="classificacao_ibs_cbs_id_${itemCounter}" class="form-control js-select2-classificacao-ibs">
+                        <label>Classificação IBS/CBS <span class="text-danger">*</span></label>
+                        <select name="classificacao_ibs_cbs_id_${itemCounter}" class="form-control js-select2-classificacao-ibs" {% if emitente_data and emitente_data.regime_tributario_id == 3 %}required{% endif %}>
                             <option value="">Nenhuma (opcional)</option>
                             {% for clf in classificacoes_ibs_cbs %}
                             <option value="{{ clf.classificacao_id }}" {% if clf.codigo == '00-00001' %}selected{% endif %}>{{ clf.codigo }} - {{ clf.descricao }}</option>
                             {% endfor %}
                         </select>
                         <small class="form-text text-muted">
+                            {% if emitente_data and emitente_data.regime_tributario_id == 3 %}
+                            Obrigatório para CRT 3 - Lucro Real/Presumido.
+                            {% else %}
                             Selecione a classificação IBS/CBS para Reforma Tributária (CRT 3 - Lucro Real/Presumido)
+                            {% endif %}
                         </small>
                     </div>
                 </div>
@@ -1630,7 +1651,8 @@ function initSelect2ForItem(itemId) {
                 dataType: 'json',
                 delay: 300,
                 data: function(params) {
-                    return { q: params.term, page: params.page || 1 };
+                    var cid = (typeof _clienteId !== 'undefined') ? _clienteId : null;
+                    return { q: params.term, page: params.page || 1, cliente_id: cid };
                 },
                 processResults: function(data) {
                     return data;
@@ -1797,6 +1819,12 @@ function carregarProduto(itemId) {
     const valorInput = document.querySelector(`input[name="valor_unitario_${itemId}"]`);
     if (valorInput) valorInput.value = prod.preco != null ? prod.preco : '0.00';
 
+    // Garantir quantidade mínima de 1 para que calcularTotal() resulte em valor > 0
+    const quantidadeInput = document.querySelector(`input[name="quantidade_${itemId}"]`);
+    if (quantidadeInput && (!quantidadeInput.value || parseFloat(quantidadeInput.value) === 0)) {
+        quantidadeInput.value = '1';
+    }
+
     const unidadeInput = document.querySelector(`input[name="unidade_${itemId}"]`);
     if (unidadeInput) unidadeInput.value = prod.unidade || 'UN';
 
@@ -1839,6 +1867,12 @@ function carregarProduto(itemId) {
     } else if (cstSelect.length && prod.cst) {
         cstSelect.val(prod.cst).trigger('change');
     }
+
+    // Recalcular total do item e do pagamento após preencher preço/quantidade
+    calcularTotal(itemId);
+
+    // Forçar recálculo do total geral (segurança caso calcularTotal tenha encontrado erro)
+    calcularTotalGeral();
 
     // Regra tributária automática
     aplicarRegraTributaria(itemId, prod.id);
@@ -1948,25 +1982,30 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         if (response.status === 404 || !result.sucesso) {
             console.log('⚠️ Nenhuma regra tributária encontrada');
             console.log('   Motivo:', result.message || 'Desconhecido');
-            console.log('   Payload enviado:', payload);
-            
-            // Mostrar alerta amarelo
-            const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-warning alert-dismissible fade show';
-            alertDiv.innerHTML = `
-                <strong>⚠️ Nenhuma regra tributária encontrada</strong><br>
-                <small>Preencha manualmente os campos tributários para este produto.</small>
-                <button type="button" class="close" data-dismiss="alert">&times;</button>
-            `;
-            const container = document.getElementById('itensContainer');
-            if (container && container.parentElement) {
-                container.parentElement.insertBefore(alertDiv, container);
+
+            // Mostrar alerta dentro do card do item
+            const alertPlaceholder = document.getElementById(`regra_alerta_${itemId}`);
+            if (alertPlaceholder) {
+                alertPlaceholder.innerHTML = `
+                    <div class="alert alert-warning alert-dismissible fade show mb-2">
+                        <strong>⚠️ Nenhuma regra tributária encontrada</strong> &mdash;
+                        preencha os campos abaixo manualmente.
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                    </div>`;
+                // Rolar até os campos tributários
+                alertPlaceholder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Focar no primeiro campo tributário disponível
+                const primeiroCampo = alertPlaceholder.nextElementSibling?.querySelector('select,input');
+                if (primeiroCampo) primeiroCampo.focus();
             }
-            setTimeout(() => alertDiv.remove(), 5000);
             return; // Sair da função
         }
         
         if (result.sucesso && result.regra) {
+            // Limpar alerta de "sem regra" se existir
+            const alertPlaceholder = document.getElementById(`regra_alerta_${itemId}`);
+            if (alertPlaceholder) alertPlaceholder.innerHTML = '';
+
             console.log('✅ Regra tributária encontrada:', result.regra);
             console.log('📋 Descrição:', result.regra.descricao_regra);
             console.log('💰 Alíquotas - ICMS:', result.regra.aliquota_icms, '% | PIS:', result.regra.aliquota_pis, '% | COFINS:', result.regra.aliquota_cofins, '%');
@@ -2136,8 +2175,11 @@ function calcularTotal(itemId) {
     totalInput.value = total.toFixed(2);
     
     // Calcular ICMS - APENAS se houver alíquota diferente de zero
-    const aliquotaIcms = parseFloat(document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value) || 0;
+    const aliquotaIcms = parseFloat(document.querySelector(`input[name="aliquota_icms_${itemId}"]`)?.value) || 0;
     
+    const bcIcmsInput = document.querySelector(`input[name="bc_icms_${itemId}"]`);
+    const valorIcmsInput = document.querySelector(`input[name="valor_icms_${itemId}"]`);
+
     if (aliquotaIcms > 0) {
         // Há tributação - calcular base de cálculo e valor do ICMS
         // Considerar redução de base de cálculo se informada
@@ -2151,12 +2193,12 @@ function calcularTotal(itemId) {
         }
         
         const valorIcms = bcIcms * (aliquotaIcms / 100);
-        document.querySelector(`input[name="bc_icms_${itemId}"]`).value = bcIcms.toFixed(2);
-        document.querySelector(`input[name="valor_icms_${itemId}"]`).value = valorIcms.toFixed(2);
+        if (bcIcmsInput) bcIcmsInput.value = bcIcms.toFixed(2);
+        if (valorIcmsInput) valorIcmsInput.value = valorIcms.toFixed(2);
     } else {
         // Sem tributação - zerar base de cálculo e valor do ICMS
-        document.querySelector(`input[name="bc_icms_${itemId}"]`).value = '0.00';
-        document.querySelector(`input[name="valor_icms_${itemId}"]`).value = '0.00';
+        if (bcIcmsInput) bcIcmsInput.value = '0.00';
+        if (valorIcmsInput) valorIcmsInput.value = '0.00';
     }
     
     // Atualizar JSON do item
@@ -2328,8 +2370,8 @@ function aplicarMascaraMoeda(inputId) {
 
 // Recalcular totais da NFe com frete, seguro e desconto
 function recalcularTotais() {
-    // Nao atualizar durante carregamento de itens (modo edicao) para evitar valor parcial
-    if (window._nfeRestaurandoRascunho) return;
+    // Guard removido: estava bloqueando atualização do pagamento quando rascunho estava
+    // pendente (flag ficava true desde o page load até o usuário clicar no toast)
     const totalProdutos = totalGeral || 0;
     const vFrete = parseValorMonetario(document.getElementById('vFrete')?.value || 0);
     const vSeg = parseValorMonetario(document.getElementById('vSeg')?.value || 0);
@@ -2549,6 +2591,12 @@ function validarFormularioCompleto(acao) {
         const cstIcmsEl = itemDiv.querySelector(`select[name="cst_icms_${itemId}"]`);
         if (!(csosnEl?.value) && !(cstIcmsEl?.value)) {
             erros.push({ secao: `Item ${nItem}`, campo: 'CST/CSOSN', msg: 'Tributação ICMS (CST ou CSOSN) não selecionada.' });
+        }
+
+        const classificacaoIbsEl = itemDiv.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`);
+        if (IBS_CBS_OBRIGATORIO === 1 && !classificacaoIbsEl?.value) {
+            erros.push({ secao: `Item ${nItem}`, campo: 'IBS/CBS', msg: 'Classificação IBS/CBS é obrigatória para CRT 3.' });
+            _marcarInvalido(classificacaoIbsEl, camposInvalidos);
         }
     });
 
@@ -3508,7 +3556,7 @@ async function verificarRegimeTributario() {
         const data = await response.json();
         
         if (data.success) {
-            const requerIBS = data.requer_ibs_cbs;
+            const requerIBS = IBS_CBS_OBRIGATORIO === 1 || data.requer_ibs_cbs;
             console.log(`🔍 Regime Tributário: ${data.regime_nome} (CRT=${data.crt})`);
             console.log(`📋 Requer IBS/CBS: ${requerIBS ? 'SIM ✅' : 'NÃO ❌'}`);
             
@@ -4291,9 +4339,9 @@ $(document).ready(function() {
 
                 // Recalcular total geral uma vez final para garantir valor correto
                 // (não restauramos valorPagamento do rascunho pois é sempre derivado dos itens)
+                window._nfeRestaurandoRascunho = false; // liberar ANTES de recalcular
                 if (typeof calcularTotalGeral === 'function') try { calcularTotalGeral(); } catch(e) {}
 
-                window._nfeRestaurandoRascunho = false;
                 console.log('[Rascunho] ' + dados.items.length + ' item(ns) restaurado(s).');
             }, 500);
 

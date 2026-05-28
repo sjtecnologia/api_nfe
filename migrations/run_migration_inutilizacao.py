@@ -13,7 +13,9 @@ DB_HOST = os.getenv("DB_HOST", "nfe-database.cenw06664z53.us-east-1.rds.amazonaw
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "sjtnfe")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "gMGM!#)NW$nH1w(wrVIdcmn5")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+if not DB_PASSWORD:
+    raise RuntimeError("Variável de ambiente DB_PASSWORD obrigatória. Não use senhas hardcoded.")
 
 def main():
     print("=" * 80)

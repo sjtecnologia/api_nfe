@@ -14,6 +14,8 @@ from decimal import Decimal
 from typing import Dict, Any, Optional
 import xml.etree.ElementTree as ET
 
+from config.settings import HABILITAR_IBS_CBS
+
 def gerar_chave_acesso_nfce(
     uf_codigo: str,
     ano_mes: str,  # AAMM
@@ -131,6 +133,93 @@ def gerar_qrcode_nfce(
     }
 
 
+def _to_decimal(valor: Any) -> Decimal:
+    try:
+        if valor is None:
+            return Decimal('0')
+        return Decimal(str(valor).replace(',', '.'))
+    except Exception:
+        return Decimal('0')
+
+
+def _montar_ibs_cbs_item(item: Dict[str, Any]) -> Optional[Dict[str, Decimal]]:
+    classificacao = item.get('classificacao_ibs_cbs') or {}
+    if not classificacao:
+        return None
+
+    v_bc = _to_decimal(item.get('valor_total', 0))
+    p_ibs_uf = _to_decimal(classificacao.get('aliquota_ibs_uf', 0))
+    p_ibs_mun = _to_decimal(classificacao.get('aliquota_ibs_mun', 0))
+    p_cbs = _to_decimal(classificacao.get('aliquota_cbs', 0))
+
+    v_ibs_uf = (v_bc * p_ibs_uf / Decimal('100')).quantize(Decimal('0.01'))
+    v_ibs_mun = (v_bc * p_ibs_mun / Decimal('100')).quantize(Decimal('0.01'))
+    v_ibs = (v_ibs_uf + v_ibs_mun).quantize(Decimal('0.01'))
+    v_cbs = (v_bc * p_cbs / Decimal('100')).quantize(Decimal('0.01'))
+
+    return {
+        'cClassTrib': str(classificacao.get('codigo', '')).replace('-', '')[-6:].zfill(6),
+        'vBC': v_bc.quantize(Decimal('0.01')),
+        'pIBSUF': p_ibs_uf.quantize(Decimal('0.01')),
+        'vIBSUF': v_ibs_uf,
+        'pIBSMun': p_ibs_mun.quantize(Decimal('0.01')),
+        'vIBSMun': v_ibs_mun,
+        'vIBS': v_ibs,
+        'pCBS': p_cbs.quantize(Decimal('0.01')),
+        'vCBS': v_cbs,
+    }
+
+
+def _adicionar_bloco_ibscbs(imposto: ET.Element, ibs_cbs_data: Dict[str, Decimal]) -> None:
+    ibscbs = ET.SubElement(imposto, 'IBSCBS')
+    ET.SubElement(ibscbs, 'CST').text = '000'
+    ET.SubElement(ibscbs, 'cClassTrib').text = ibs_cbs_data['cClassTrib']
+
+    g_ibscbs = ET.SubElement(ibscbs, 'gIBSCBS')
+    ET.SubElement(g_ibscbs, 'vBC').text = f"{ibs_cbs_data['vBC']:.2f}"
+
+    g_ibs_uf = ET.SubElement(g_ibscbs, 'gIBSUF')
+    ET.SubElement(g_ibs_uf, 'pIBSUF').text = f"{ibs_cbs_data['pIBSUF']:.2f}"
+    ET.SubElement(g_ibs_uf, 'vIBSUF').text = f"{ibs_cbs_data['vIBSUF']:.2f}"
+
+    g_ibs_mun = ET.SubElement(g_ibscbs, 'gIBSMun')
+    ET.SubElement(g_ibs_mun, 'pIBSMun').text = f"{ibs_cbs_data['pIBSMun']:.2f}"
+    ET.SubElement(g_ibs_mun, 'vIBSMun').text = f"{ibs_cbs_data['vIBSMun']:.2f}"
+
+    ET.SubElement(g_ibscbs, 'vIBS').text = f"{ibs_cbs_data['vIBS']:.2f}"
+
+    g_cbs = ET.SubElement(g_ibscbs, 'gCBS')
+    ET.SubElement(g_cbs, 'pCBS').text = f"{ibs_cbs_data['pCBS']:.2f}"
+    ET.SubElement(g_cbs, 'vCBS').text = f"{ibs_cbs_data['vCBS']:.2f}"
+
+
+def _adicionar_bloco_ibscbstot(total: ET.Element, totais_ibs: Dict[str, Decimal], totais_cbs: Dict[str, Decimal]) -> None:
+    ibscbs_tot = ET.SubElement(total, 'IBSCBSTot')
+    ET.SubElement(ibscbs_tot, 'vBCIBSCBS').text = f"{totais_ibs['vBCTotal']:.2f}"
+
+    g_ibs = ET.SubElement(ibscbs_tot, 'gIBS')
+    g_ibs_uf = ET.SubElement(g_ibs, 'gIBSUF')
+    ET.SubElement(g_ibs_uf, 'vDif').text = '0.00'
+    ET.SubElement(g_ibs_uf, 'vDevTrib').text = '0.00'
+    ET.SubElement(g_ibs_uf, 'vIBSUF').text = f"{totais_ibs['vIBSUF']:.2f}"
+
+    g_ibs_mun = ET.SubElement(g_ibs, 'gIBSMun')
+    ET.SubElement(g_ibs_mun, 'vDif').text = '0.00'
+    ET.SubElement(g_ibs_mun, 'vDevTrib').text = '0.00'
+    ET.SubElement(g_ibs_mun, 'vIBSMun').text = f"{totais_ibs['vIBSMun']:.2f}"
+
+    ET.SubElement(g_ibs, 'vIBS').text = f"{totais_ibs['vIBS']:.2f}"
+    ET.SubElement(g_ibs, 'vCredPres').text = '0.00'
+    ET.SubElement(g_ibs, 'vCredPresCondSus').text = '0.00'
+
+    g_cbs = ET.SubElement(ibscbs_tot, 'gCBS')
+    ET.SubElement(g_cbs, 'vDif').text = '0.00'
+    ET.SubElement(g_cbs, 'vDevTrib').text = '0.00'
+    ET.SubElement(g_cbs, 'vCBS').text = f"{totais_cbs['vCBS']:.2f}"
+    ET.SubElement(g_cbs, 'vCredPres').text = '0.00'
+    ET.SubElement(g_cbs, 'vCredPresCondSus').text = '0.00'
+
+
 def gerar_xml_nfce(dados: Dict[str, Any]) -> str:
     """
     Gera XML da NFC-e (Modelo 65)
@@ -236,6 +325,13 @@ def gerar_xml_nfce(dados: Dict[str, Any]) -> str:
         ET.SubElement(dest, 'indIEDest').text = '9'  # 9=Não contribuinte
     
     # ===== DET - Itens =====
+    itens_ibs_cbs = []
+    v_bc_ibs_cbs_total = Decimal('0')
+    v_ibs_uf_total = Decimal('0')
+    v_ibs_mun_total = Decimal('0')
+    v_ibs_total = Decimal('0')
+    v_cbs_total = Decimal('0')
+
     for idx, item in enumerate(dados['itens'], start=1):
         det = ET.SubElement(inf_nfe, 'det', nItem=str(idx))
         
@@ -280,6 +376,17 @@ def gerar_xml_nfce(dados: Dict[str, Any]) -> str:
         cofins = ET.SubElement(imposto, 'COFINS')
         cofins_nt = ET.SubElement(cofins, 'COFINSNT')
         ET.SubElement(cofins_nt, 'CST').text = '07'  # Operação isenta
+
+        if HABILITAR_IBS_CBS:
+            ibs_cbs_data = _montar_ibs_cbs_item(item)
+            if ibs_cbs_data:
+                _adicionar_bloco_ibscbs(imposto, ibs_cbs_data)
+                itens_ibs_cbs.append(ibs_cbs_data)
+                v_bc_ibs_cbs_total += ibs_cbs_data['vBC']
+                v_ibs_uf_total += ibs_cbs_data['vIBSUF']
+                v_ibs_mun_total += ibs_cbs_data['vIBSMun']
+                v_ibs_total += ibs_cbs_data['vIBS']
+                v_cbs_total += ibs_cbs_data['vCBS']
     
     # ===== TOTAL - Totais =====
     total = ET.SubElement(inf_nfe, 'total')
@@ -305,6 +412,18 @@ def gerar_xml_nfce(dados: Dict[str, Any]) -> str:
     ET.SubElement(icms_tot, 'vCOFINS').text = '0.00'
     ET.SubElement(icms_tot, 'vOutro').text = '0.00'
     ET.SubElement(icms_tot, 'vNF').text = f"{float(totais['valor_total']):.2f}"
+
+    if HABILITAR_IBS_CBS and itens_ibs_cbs:
+        totais_ibs = {
+            'vBCTotal': v_bc_ibs_cbs_total,
+            'vIBSUF': v_ibs_uf_total,
+            'vIBSMun': v_ibs_mun_total,
+            'vIBS': v_ibs_total,
+        }
+        totais_cbs = {
+            'vCBS': v_cbs_total,
+        }
+        _adicionar_bloco_ibscbstot(total, totais_ibs, totais_cbs)
     
     # ===== TRANSP - Transporte =====
     transp = ET.SubElement(inf_nfe, 'transp')
@@ -357,5 +476,16 @@ def validar_nfce(dados: Dict[str, Any]) -> tuple[bool, list]:
     # Validar totais
     if not dados.get('totais'):
         erros.append("Totais não informados")
+
+    if HABILITAR_IBS_CBS and dados.get('emitente_crt') == 3:
+        for idx, item in enumerate(dados.get('itens', []), start=1):
+            classificacao = item.get('classificacao_ibs_cbs')
+            if classificacao:
+                continue
+            produto = item.get('produto')
+            classificacao_obj = getattr(produto, 'classificacao_ibs_cbs', None) if produto else None
+            if classificacao_obj:
+                continue
+            erros.append(f"Item {idx}: Classificação IBS/CBS obrigatória para CRT=3")
     
     return (len(erros) == 0, erros)
