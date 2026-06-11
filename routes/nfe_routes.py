@@ -36,12 +36,16 @@ nfe_bp = Blueprint('nfe', __name__)
 def api_produtos():
     """Endpoint AJAX para busca de produtos via Select2"""
     db = next(get_db())
+    started_at = time.perf_counter()
     try:
         cliente_id = request.args.get('cliente_id', type=int) or session.get('current_client_id')
         if not cliente_id:
             return jsonify({'results': [], 'pagination': {'more': False}})
 
         q = request.args.get('q', '').strip()
+        if len(q) < 2:
+            return jsonify({'results': [], 'pagination': {'more': False}})
+
         page = request.args.get('page', 1, type=int)
         PER_PAGE = 30
         offset = (page - 1) * PER_PAGE
@@ -98,9 +102,21 @@ def api_produtos():
                 'classificacao_ibs_cbs_id': d.get('classificacao_ibs_cbs_id') or '',
             })
 
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        if elapsed_ms > 400:
+            logger.warning(
+                "api_produtos lenta: cliente_id=%s q='%s' page=%s tempo_ms=%s resultados=%s",
+                cliente_id,
+                q,
+                page,
+                elapsed_ms,
+                len(results),
+            )
+
         return jsonify({'results': results, 'pagination': {'more': has_more}})
     except Exception as e:
-        logger.error(f"[X] Erro api_produtos: {e}")
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        logger.error(f"[X] Erro api_produtos: {e} (tempo_ms={elapsed_ms})")
         return jsonify({'results': [], 'pagination': {'more': False}})
     finally:
         db.close()

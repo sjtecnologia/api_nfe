@@ -8,17 +8,22 @@ if "postgresql" in SQLALCHEMY_DATABASE_URL:
     os.environ['DB_TYPE'] = 'postgresql'
 
 # Configurar timezone para America/Sao_Paulo em todas as conexões PostgreSQL
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    echo=False,
-    # Pool de conexões otimizado
-    pool_size=10,
-    max_overflow=20,
-    pool_timeout=30,
-    pool_pre_ping=True,          # Valida conexão antes de usar (detecta quedas)
-    pool_recycle=1800,           # Recicla conexões a cada 30 min
-    connect_args={'options': '-c timezone=America/Sao_Paulo'} if "postgresql" in SQLALCHEMY_DATABASE_URL else {}
-)
+_engine_kwargs = {
+    'echo': False,
+}
+
+if "postgresql" in SQLALCHEMY_DATABASE_URL:
+    _engine_kwargs.update({
+        # Pool de conexões otimizado (apenas PostgreSQL)
+        'pool_size': 10,
+        'max_overflow': 20,
+        'pool_timeout': 30,
+        'pool_pre_ping': True,   # Valida conexão antes de usar (detecta quedas)
+        'pool_recycle': 1800,    # Recicla conexões a cada 30 min
+        'connect_args': {'options': '-c timezone=America/Sao_Paulo'},
+    })
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **_engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

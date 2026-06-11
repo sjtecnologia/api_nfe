@@ -685,8 +685,14 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str], clie
                 if check_column:
                     result = db.execute(text("SELECT logo_path FROM clientes WHERE cliente_id = :cid"), {'cid': cliente_id}).fetchone()
                     if result and result[0]:
-                        # result[0] já contém caminho relativo como 'logos/cliente_123.png'
-                        cliente_logo = os.path.join('static', result[0])
+                        # Suporta logos antigas em static e novas em armazenamento privado.
+                        logo_value = str(result[0])
+                        if logo_value.startswith('private:logos/'):
+                            private_base = os.getenv('PRIVATE_UPLOAD_FOLDER') or os.path.join('instance', 'private_uploads')
+                            private_name = os.path.basename(logo_value.replace('private:logos/', ''))
+                            cliente_logo = os.path.join(private_base, 'logos', private_name)
+                        else:
+                            cliente_logo = os.path.join('static', logo_value)
                         # Converter para caminho absoluto
                         cliente_logo_abs = os.path.abspath(cliente_logo)
                         logger.info(f"[SEARCH] Verificando logo: relativo={cliente_logo}, absoluto={cliente_logo_abs}")

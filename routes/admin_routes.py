@@ -157,6 +157,70 @@ def editar_produto(produto_id):
 def _get_db():
     return next(get_db())
 
+
+def _private_logo_dir() -> str:
+    base_dir = current_app.config.get(
+        'PRIVATE_UPLOAD_FOLDER',
+        os.path.join(current_app.instance_path, 'private_uploads'),
+    )
+    logos_dir = os.path.join(base_dir, 'logos')
+    os.makedirs(logos_dir, exist_ok=True)
+    return logos_dir
+
+
+def _store_private_logo(logo_file, name_prefix: str) -> str:
+    from utils.file_validator import validate_upload
+
+    unique_name = validate_upload(logo_file, 'logo')
+    logo_file.seek(0)
+    ext = os.path.splitext(unique_name)[1].lower()
+    random_token = os.urandom(8).hex()
+    unique_filename = f"{name_prefix}_{int(datetime.now().timestamp())}_{random_token}{ext}"
+    logo_file.save(os.path.join(_private_logo_dir(), unique_filename))
+    return f"private:logos/{unique_filename}"
+
+
+def _delete_logo_file(logo_path: Optional[str]) -> None:
+    if not logo_path:
+        return
+
+    try:
+        if logo_path.startswith('private:logos/'):
+            filename = secure_filename(os.path.basename(logo_path.replace('private:logos/', '')))
+            if not filename:
+                return
+            old_logo_full = os.path.join(_private_logo_dir(), filename)
+        else:
+            old_logo_full = os.path.join('static', logo_path)
+
+        if os.path.exists(old_logo_full):
+            os.remove(old_logo_full)
+    except OSError:
+        logger.warning("Falha ao remover logo antigo: %s", logo_path)
+
+
+@admin_bp.route('/media/logos/<path:filename>', methods=['GET'])
+@login_required
+def get_private_logo(filename: str):
+    from flask import abort, send_file
+
+    secure_name = secure_filename(os.path.basename(filename))
+    if not secure_name:
+        abort(404)
+
+    logo_file = os.path.join(_private_logo_dir(), secure_name)
+    if not os.path.isfile(logo_file):
+        abort(404)
+
+    ext = os.path.splitext(secure_name)[1].lower()
+    mime = 'application/octet-stream'
+    if ext == '.png':
+        mime = 'image/png'
+    elif ext in {'.jpg', '.jpeg'}:
+        mime = 'image/jpeg'
+
+    return send_file(logo_file, mimetype=mime)
+
 # Rota para upload de NCM CSV e envio para IA
 @admin_bp.route('/ncms/upload-csv', methods=['GET', 'POST'])
 @login_required
@@ -557,17 +621,17 @@ def upload_siscomex_json():
     Upload manual de arquivo JSON baixado do Siscomex após resolver captcha
     """
     if request.method == 'POST':
+        from utils.file_validator import validate_upload, FileValidationError
         file = request.files.get('siscomex_file')
         
         if not file or not file.filename:
             flash('Por favor, selecione um arquivo JSON do Siscomex.', 'warning')
             return redirect(request.url)
         
-        if not file.filename.lower().endswith(('.json', '.txt')):
-            flash('Arquivo deve ser JSON baixado do Siscomex (.json ou .txt).', 'warning')
-            return redirect(request.url)
-        
         try:
+            validate_upload(file, 'json')
+            file.seek(0)
+
             # Lê o conteúdo do arquivo
             content = file.read().decode('utf-8').strip()
             
@@ -575,9 +639,10 @@ def upload_siscomex_json():
                 flash('Arquivo parece estar vazio.', 'warning')
                 return redirect(request.url)
             
-            # Verifica se é JSON válido básico
-            if not (content.startswith('{') or content.startswith('[')):
-                flash('Arquivo não parece ser um JSON válido. Deve começar com { ou [', 'warning')
+            # Verifica se e JSON válido
+            parsed = json.loads(content)
+            if not isinstance(parsed, (dict, list)):
+                flash('Arquivo JSON inválido para processamento.', 'warning')
                 return redirect(request.url)
             
             # Processa o JSON do Siscomex
@@ -589,8 +654,19 @@ def upload_siscomex_json():
             else:
                 flash(f"[!] {result['message']}", 'warning')
                 
+        except FileValidationError as fve:
+            logger.warning(
+                "Upload Siscomex bloqueado: user_id=%s path=%s filename=%s motivo=%s",
+                getattr(current_user, 'id', None),
+                request.path,
+                getattr(file, 'filename', None),
+                str(fve),
+            )
+            flash(str(fve), 'warning')
         except UnicodeDecodeError:
             flash('Erro de codificação do arquivo. Certifique-se que está em UTF-8.', 'error')
+        except json.JSONDecodeError:
+            flash('Arquivo não contém JSON válido.', 'warning')
         except Exception as e:
             flash(f'Erro ao processar arquivo: {str(e)}', 'error')
         
@@ -2587,18 +2663,17 @@ def create_cliente():
             logo_path = None
             logo_file = request.files.get('logo_file')
             if logo_file and logo_file.filename:
-                from utils.file_validator import validate_upload, FileValidationError
-                import os
+                from utils.file_validator import FileValidationError
                 try:
-                    unique_name = validate_upload(logo_file, 'logo')
-                    logo_file.seek(0)
-                    logos_dir = os.path.join('static', 'logos')
-                    os.makedirs(logos_dir, exist_ok=True)
-                    ext = os.path.splitext(unique_name)[1].lower()
-                    unique_filename = f"cliente_{int(datetime.now().timestamp())}{ext}"
-                    logo_file.save(os.path.join(logos_dir, unique_filename))
-                    logo_path = f"logos/{unique_filename}"
+                    logo_path = _store_private_logo(logo_file, 'cliente')
                 except FileValidationError as fve:
+                    logger.warning(
+                        "Upload logo bloqueado (create_cliente): user_id=%s path=%s filename=%s motivo=%s",
+                        getattr(current_user, 'id', None),
+                        request.path,
+                        getattr(logo_file, 'filename', None),
+                        str(fve),
+                    )
                     flash(str(fve), 'warning')
             
             # Dados do cliente
@@ -2835,25 +2910,19 @@ def edit_cliente(cliente_id: int):
                 logo_path = cliente.get('logo_path')  # Manter logo existente
                 logo_file = request.files.get('logo_file')
                 if logo_file and logo_file.filename:
-                    from utils.file_validator import validate_upload, FileValidationError
-                    import os
+                    from utils.file_validator import FileValidationError
                     try:
-                        unique_name = validate_upload(logo_file, 'logo')
-                        logo_file.seek(0)
-                        ext = os.path.splitext(unique_name)[1].lower()
-                        if logo_path:
-                            old_logo_full = os.path.join('static', logo_path)
-                            if os.path.exists(old_logo_full):
-                                try:
-                                    os.remove(old_logo_full)
-                                except OSError:
-                                    pass
-                        logos_dir = os.path.join('static', 'logos')
-                        os.makedirs(logos_dir, exist_ok=True)
-                        unique_filename = f"cliente_{cliente_id}_{int(datetime.now().timestamp())}{ext}"
-                        logo_file.save(os.path.join(logos_dir, unique_filename))
-                        logo_path = f"logos/{unique_filename}"
+                        old_logo_path = logo_path
+                        logo_path = _store_private_logo(logo_file, f'cliente_{cliente_id}')
+                        _delete_logo_file(old_logo_path)
                     except FileValidationError as fve:
+                        logger.warning(
+                            "Upload logo bloqueado (edit_cliente): user_id=%s path=%s filename=%s motivo=%s",
+                            getattr(current_user, 'id', None),
+                            request.path,
+                            getattr(logo_file, 'filename', None),
+                            str(fve),
+                        )
                         flash(str(fve), 'warning')
                 
                 _is_rural = request.form.get('produtor_rural') == 'on'
@@ -3444,10 +3513,10 @@ def importar_produtos():
     POST: Processa arquivo CSV/XLSX e importa produtos
     """
     from flask import session, request
-    from werkzeug.utils import secure_filename
     import os
     import pandas as pd
     from datetime import datetime
+    from utils.file_validator import validate_upload, FileValidationError
     
     cliente_id = session.get('current_client_id')
     if not cliente_id:
@@ -3469,17 +3538,21 @@ def importar_produtos():
             flash('Nenhum arquivo selecionado', 'error')
             return redirect(url_for('admin.importar_produtos'))
         
-        # Validar extensão
-        if not arquivo.filename:
-            flash('Nome do arquivo inválido', 'error')
+        try:
+            filename = validate_upload(arquivo, 'planilha')
+            arquivo.seek(0)
+        except FileValidationError as fve:
+            logger.warning(
+                "Upload planilha bloqueado: user_id=%s path=%s filename=%s motivo=%s",
+                getattr(current_user, 'id', None),
+                request.path,
+                getattr(arquivo, 'filename', None),
+                str(fve),
+            )
+            flash(str(fve), 'error')
             return redirect(url_for('admin.importar_produtos'))
-        
-        filename = secure_filename(arquivo.filename)
+
         extensao = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-        
-        if extensao not in ['csv', 'xlsx', 'xls']:
-            flash('Formato inválido. Use CSV ou XLSX', 'error')
-            return redirect(url_for('admin.importar_produtos'))
         
         # Ler arquivo com pandas
         try:
@@ -4196,9 +4269,16 @@ def salvar_certificado():
                     validate_upload(cert_file, 'certificado')
                     cert_file.seek(0)
                 except FileValidationError as fve:
+                    logger.warning(
+                        "Upload certificado bloqueado (update): user_id=%s path=%s filename=%s motivo=%s",
+                        getattr(current_user, 'id', None),
+                        request.path,
+                        getattr(cert_file, 'filename', None),
+                        str(fve),
+                    )
                     raise Exception(str(fve))
                 conteudo_certificado = cert_file.read()
-                nome_arquivo_original = cert_file.filename
+                nome_arquivo_original = secure_filename(cert_file.filename) or cert_file.filename
                 
                 # VALIDAÇÃO OBRIGATÓRIA - Não permite salvar se falhar
                 if not cert_senha or cert_senha.strip() == '':
@@ -4289,13 +4369,27 @@ def salvar_certificado():
         
             if not cert_file or not cert_file.filename:
                 raise Exception("Arquivo de certificado não fornecido")
+
+            from utils.file_validator import validate_upload, FileValidationError
+            try:
+                validate_upload(cert_file, 'certificado')
+                cert_file.seek(0)
+            except FileValidationError as fve:
+                logger.warning(
+                    "Upload certificado bloqueado (insert): user_id=%s path=%s filename=%s motivo=%s",
+                    getattr(current_user, 'id', None),
+                    request.path,
+                    getattr(cert_file, 'filename', None),
+                    str(fve),
+                )
+                raise Exception(str(fve))
             
             if not cert_senha or cert_senha.strip() == '':
                 raise Exception("Senha do certificado não fornecida")
         
             # Ler conteúdo do arquivo
             conteudo_certificado = cert_file.read()
-            nome_arquivo_original = cert_file.filename
+            nome_arquivo_original = secure_filename(cert_file.filename) or cert_file.filename
         
             # VALIDAÇÃO OBRIGATÓRIA - Não permite salvar se falhar
             try:

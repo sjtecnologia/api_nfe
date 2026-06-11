@@ -13,6 +13,60 @@
  */
 class APIService {
 
+    constructor() {
+        this.activeControllers = new Set();
+    }
+
+    createCancelableRequest() {
+        const controller = createRequestController();
+        this.activeControllers.add(controller);
+        return {
+            signal: controller.signal,
+            cancel: () => {
+                controller.abort();
+                this.activeControllers.delete(controller);
+            }
+        };
+    }
+
+    cancelAllRequests() {
+        this.activeControllers.forEach(c => c.abort());
+        this.activeControllers.clear();
+    }
+
+    async fetchBootstrapData(clienteId) {
+        const requests = [
+            {
+                url: `/admin/api/regime-tributario/${clienteId}`,
+                uiOptions: {
+                    errorMsg: 'Erro ao carregar regime tributario',
+                    retries: 2,
+                    cacheTtlMs: 3 * 60 * 1000,
+                }
+            },
+            {
+                url: '/admin/api/classificacoes-ibs-cbs',
+                uiOptions: {
+                    errorMsg: 'Erro ao carregar classificacoes IBS/CBS',
+                    retries: 2,
+                    cacheTtlMs: 10 * 60 * 1000,
+                }
+            }
+        ];
+
+        const [regime, classificacoes] = await apiFetchParallel(requests);
+        return { regime, classificacoes };
+    }
+
+    startNFePolling(fetcher, opts = {}) {
+        return startSmartPolling(fetcher, {
+            intervalMs: opts.intervalMs || 15000,
+            hiddenIntervalMs: opts.hiddenIntervalMs || 60000,
+            shouldPoll: opts.shouldPoll || (() => true),
+            onError: opts.onError || ((err) => console.warn('Polling error:', err.message)),
+        });
+    }
+
     // ── Assistente IA ──────────────────────────────────────────────────────
 
     /**
@@ -26,7 +80,13 @@ class APIService {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pergunta, contexto }),
-        }, { errorMsg: 'Erro ao contactar assistente IA', showErrorToast: false });
+        }, {
+            errorMsg: 'Erro ao contactar assistente IA',
+            showErrorToast: false,
+            retries: 2,
+            retryBaseDelayMs: 400,
+            trimPayload: true,
+        });
     }
 
     /**
@@ -39,7 +99,12 @@ class APIService {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(nfeData),
-        }, { errorMsg: 'Erro ao validar NFe com IA' });
+        }, {
+            errorMsg: 'Erro ao validar NFe com IA',
+            retries: 2,
+            retryBaseDelayMs: 350,
+            trimPayload: true,
+        });
     }
 
     // ── NFe ────────────────────────────────────────────────────────────────
@@ -55,6 +120,8 @@ class APIService {
         const params = new URLSearchParams({ cliente_id: clienteId, modelo, serie });
         return apiFetch(`/admin/nfe/api/proximo-numero?${params}`, {}, {
             errorMsg: 'Erro ao buscar próximo número da NFe',
+            retries: 2,
+            retryBaseDelayMs: 250,
         });
     }
 
@@ -70,7 +137,35 @@ class APIService {
         return apiFetch('/admin/api/classificar-produto-ia', {
             method: 'POST',
             body: formData,
-        }, { btnEl, loadingText: 'Classificando...', errorMsg: 'Erro ao classificar produto' });
+        }, {
+            btnEl,
+            loadingText: 'Classificando...',
+            errorMsg: 'Erro ao classificar produto',
+            retries: 2,
+            retryBaseDelayMs: 300,
+        });
+    }
+
+    async updateItemOptimistic(updatePayload, options = {}) {
+        const {
+            optimisticUpdate = () => null,
+            rollbackUpdate = () => null,
+            commitUpdate = () => null,
+        } = options;
+
+        return apiFetch('/admin/api/nfe/item/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatePayload),
+        }, {
+            errorMsg: 'Erro ao atualizar item',
+            retries: 2,
+            retryBaseDelayMs: 300,
+            trimPayload: true,
+            optimisticUpdate,
+            rollbackUpdate,
+            commitUpdate,
+        });
     }
 
     // ── Tributação ─────────────────────────────────────────────────────────
@@ -83,6 +178,8 @@ class APIService {
     async fetchRegimeTributario(clienteId) {
         return apiFetch(`/admin/api/regime-tributario/${clienteId}`, {}, {
             errorMsg: 'Erro ao buscar regime tributário',
+            retries: 2,
+            cacheTtlMs: 3 * 60 * 1000,
         });
     }
 
@@ -93,6 +190,8 @@ class APIService {
     async fetchClassificacoesIBS() {
         return apiFetch('/admin/api/classificacoes-ibs-cbs', {}, {
             errorMsg: 'Erro ao carregar classificações IBS/CBS',
+            retries: 2,
+            cacheTtlMs: 10 * 60 * 1000,
         });
     }
 
@@ -112,6 +211,8 @@ class APIService {
         return apiFetch(`/admin/regras-servicos/api/buscar-regra?${params}`, {}, {
             errorMsg: 'Erro ao buscar regra tributária',
             showErrorToast: false,
+            retries: 2,
+            cacheTtlMs: 2 * 60 * 1000,
         });
     }
 
@@ -128,6 +229,7 @@ class APIService {
         const params = new URLSearchParams({ cliente_id: clienteId, q: term, page });
         return apiFetch(`/admin/nfe/api/produtos?${params}`, {}, {
             errorMsg: 'Erro ao buscar produtos',
+            retries: 2,
         });
     }
 }

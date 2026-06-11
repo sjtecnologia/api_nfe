@@ -160,15 +160,19 @@
                             <legend>Logo do Cliente</legend>
                             <div class="row">
                                 <div class="col-md-12 mb-3">
-                                    <label for="logo_file" class="form-label">Arquivo de Logo (PNG, JPG ou GIF)</label>
-                                    <input class="form-control" type="file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/jpg,image/gif">
+                                    <label for="logo_file" class="form-label">Arquivo de Logo (PNG ou JPG)</label>
+                                    <input class="form-control" type="file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/jpg">
                                     <small class="form-text text-muted">
                                         <i class="fas fa-info-circle"></i> A logo será exibida no DANFE (PDF da NFe). Tamanho recomendado: 300x100 pixels.
                                     </small>
                                     {% if form_data.logo_path %}
                                     <div class="mt-2">
                                         <p class="mb-1"><strong>Logo atual:</strong></p>
+                                        {% if form_data.logo_path.startswith('private:logos/') %}
+                                        <img src="{{ url_for('admin.get_private_logo', filename=form_data.logo_path.replace('private:logos/', '')) }}" alt="Logo" style="max-width: 200px; max-height: 80px;" class="border p-2">
+                                        {% else %}
                                         <img src="{{ url_for('static', filename=form_data.logo_path) }}" alt="Logo" style="max-width: 200px; max-height: 80px;" class="border p-2">
+                                        {% endif %}
                                         <p class="text-muted mt-1"><small>Selecione um novo arquivo acima para substituir</small></p>
                                     </div>
                                     {% endif %}

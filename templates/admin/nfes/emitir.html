@@ -46,6 +46,26 @@ input[readonly] {
     background-color: #f8f9fa;
 }
 
+.rascunho-loading-overlay {
+    display: none;
+    position: sticky;
+    top: 0;
+    z-index: 1200;
+    margin-bottom: 12px;
+    border: 1px solid #bee5eb;
+    background: #e9f7fb;
+    color: #0c5460;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.rascunho-loading-overlay .spinner-border {
+    width: 1rem;
+    height: 1rem;
+    margin-right: 8px;
+    vertical-align: text-bottom;
+}
+
 /* 🤖 Assistente IA EmiteMax */
 .btn-assistente-ia {
     position: fixed;
@@ -250,11 +270,6 @@ input[readonly] {
                 <div class="page-subtitle">
                     <strong>Emitente:</strong> {{ emitente_data.razao_social }} - CNPJ: {{ emitente_data.cnpj }}
                 </div>
-                <div class="mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparRascunhoAgora()">
-                        Limpar rascunho
-                    </button>
-                </div>
             </div>
         </div>
     </div>
@@ -265,6 +280,11 @@ input[readonly] {
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparRascunhoAgora()">
                 Limpar rascunho
             </button>
+        </div>
+
+        <div id="rascunhoLoadingOverlay" class="rascunho-loading-overlay" role="status" aria-live="polite">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            <strong id="rascunhoLoadingTexto">Restaurando rascunho...</strong>
         </div>
 
         <!-- ✅ IDENTIFICAÇÃO DA NFE -->
@@ -998,6 +1018,31 @@ const RASCUNHO_STORAGE_KEY = `nfe_rascunho_cliente_{% if emitente_data and emite
 let _rascunhoSaveTimer = null;
 let _rascunhoRestoreExecutado = false;
 let _desabilitarRascunhoNestaCarga = false;
+let _salvandoRascunhoAgora = false;
+let _restaurandoRascunhoAgora = false;
+const CLIENTE_ID_NFE = {% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}null{% endif %};
+
+function _atualizarLoadingRestauracao(mensagem, mostrar = true) {
+    const overlay = document.getElementById('rascunhoLoadingOverlay');
+    const texto = document.getElementById('rascunhoLoadingTexto');
+    const itensContainer = document.getElementById('itensContainer');
+    if (!overlay || !texto) return;
+
+    if (mostrar) {
+        texto.textContent = mensagem || 'Restaurando rascunho...';
+        overlay.style.display = 'block';
+        if (itensContainer) {
+            itensContainer.style.opacity = '0.45';
+            itensContainer.style.pointerEvents = 'none';
+        }
+    } else {
+        overlay.style.display = 'none';
+        if (itensContainer) {
+            itensContainer.style.opacity = '1';
+            itensContainer.style.pointerEvents = 'auto';
+        }
+    }
+}
 
 function _coletarCamposFormularioRascunho() {
     const form = document.getElementById('nfeForm');
@@ -1075,6 +1120,24 @@ function _obterIdsItensNoRascunho(campos) {
 function _aplicarItensRascunho(itens) {
     if (!Array.isArray(itens) || !itens.length) return;
 
+    const setSelect2ValueComOpcao = (selector, value, text) => {
+        const el = document.querySelector(selector);
+        if (!el || value === undefined || value === null || String(value).trim() === '') return;
+        const valor = String(value);
+        const texto = (text || valor).toString();
+
+        let option = Array.from(el.options || []).find(o => String(o.value) === valor);
+        if (!option) {
+            option = new Option(texto, valor, true, true);
+            el.add(option);
+        }
+        el.value = valor;
+
+        if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
+            $(el).val(valor).trigger('change');
+        }
+    };
+
     itens.forEach((item, idx) => {
         const itemId = idx + 1;
 
@@ -1108,12 +1171,31 @@ function _aplicarItensRascunho(itens) {
         setValue(`input[name="quantidade_${itemId}"]`, item.quantidade);
         setValue(`input[name="valor_unitario_${itemId}"]`, item.valor_unitario);
         setValue(`input[name="valor_total_${itemId}"]`, item.valor_total);
-        setValue(`select[name="ncm_${itemId}"]`, item.ncm);
+        setSelect2ValueComOpcao(
+            `select[name="ncm_${itemId}"]`,
+            item.ncm,
+            item.ncm ? `${item.ncm}` : ''
+        );
         setValue(`select[name="cfop_${itemId}"]`, item.cfop);
         setValue(`select[name="origem_${itemId}"]`, item.origem);
+        setValue(`input[name="aliquota_icms_${itemId}"]`, item.aliquota_icms);
+        setValue(`input[name="reducao_base_icms_${itemId}"]`, item.reducao_base_icms);
+        setValue(`select[name="modalidade_bc_icms_${itemId}"]`, item.modalidade_bc_icms);
+        setValue(`select[name="motivo_desoneracao_icms_${itemId}"]`, item.motivo_desoneracao_icms);
+        setValue(`input[name="cbenef_${itemId}"]`, item.cbenef);
+        setValue(`input[name="bc_icms_${itemId}"]`, item.bc_icms);
+        setValue(`input[name="valor_icms_${itemId}"]`, item.valor_icms);
+        setValue(`select[name="cst_pis_${itemId}"]`, item.cst_pis);
+        setValue(`input[name="aliquota_pis_${itemId}"]`, item.aliquota_pis);
+        setValue(`select[name="cst_cofins_${itemId}"]`, item.cst_cofins);
+        setValue(`input[name="aliquota_cofins_${itemId}"]`, item.aliquota_cofins);
+        setValue(`input[name="cst_ipi_${itemId}"]`, item.cst_ipi);
+        setValue(`input[name="aliquota_ipi_${itemId}"]`, item.aliquota_ipi);
         setValue(`select[name="csosn_${itemId}"]`, item.csosn_icms);
         setValue(`select[name="cst_icms_${itemId}"]`, item.cst_icms);
         setValue(`select[name="classificacao_ibs_cbs_id_${itemId}"]`, item.classificacao_ibs_cbs_id);
+
+        calcularTotal(itemId);
     });
 }
 
@@ -1138,8 +1220,15 @@ function atualizarStatusRascunho(texto, tipo = 'info') {
 }
 
 function limparRascunhoAgora() {
-    limparRascunhoNfe();
-    window.location.reload();
+    try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('clear_rascunho', '1');
+        window.location.href = url.toString();
+    } catch (e) {
+        // Fallback para navegadores sem suporte completo a URL
+        limparRascunhoNfe();
+        window.location.reload();
+    }
 }
 
 function limparCamposEmissaoNova() {
@@ -1179,12 +1268,15 @@ function limparRascunhoNfe() {
 function _coletarItensParaRascunho() {
     const itemTemDados = (item) => {
         if (!item || typeof item !== 'object') return false;
+        const descricao = String(item.descricao || '').trim().toLowerCase();
+        const descricaoPlaceholder = descricao.startsWith('selecione um produto');
         return Boolean(
             String(item.produto_id || '').trim() ||
             String(item.codigo_produto || '').trim() ||
-            String(item.descricao || '').trim() ||
+            (!descricaoPlaceholder && descricao) ||
             String(item.ncm || '').trim() ||
             String(item.cfop || '').trim() ||
+            String(item.classificacao_ibs_cbs_id || '').trim() ||
             (parseFloat(item.quantidade || 0) > 0)
         );
     };
@@ -1203,6 +1295,19 @@ function _coletarItensParaRascunho() {
             ncm: document.querySelector(`select[name="ncm_${itemId}"]`)?.value || '',
             cfop: document.querySelector(`select[name="cfop_${itemId}"]`)?.value || '',
             origem: document.querySelector(`select[name="origem_${itemId}"]`)?.value || '',
+            aliquota_icms: document.querySelector(`input[name="aliquota_icms_${itemId}"]`)?.value || '0.00',
+            reducao_base_icms: document.querySelector(`input[name="reducao_base_icms_${itemId}"]`)?.value || '0.00',
+            modalidade_bc_icms: document.querySelector(`select[name="modalidade_bc_icms_${itemId}"]`)?.value || '',
+            motivo_desoneracao_icms: document.querySelector(`select[name="motivo_desoneracao_icms_${itemId}"]`)?.value || '',
+            cbenef: document.querySelector(`input[name="cbenef_${itemId}"]`)?.value || '',
+            bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`)?.value || '0.00',
+            valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00',
+            cst_pis: document.querySelector(`select[name="cst_pis_${itemId}"]`)?.value || '',
+            aliquota_pis: document.querySelector(`input[name="aliquota_pis_${itemId}"]`)?.value || '0.00',
+            cst_cofins: document.querySelector(`select[name="cst_cofins_${itemId}"]`)?.value || '',
+            aliquota_cofins: document.querySelector(`input[name="aliquota_cofins_${itemId}"]`)?.value || '0.00',
+            cst_ipi: document.querySelector(`input[name="cst_ipi_${itemId}"]`)?.value || '',
+            aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00',
             cst_icms: document.querySelector(`select[name="cst_icms_${itemId}"]`)?.value || '',
             csosn_icms: document.querySelector(`select[name="csosn_${itemId}"]`)?.value || '',
             classificacao_ibs_cbs_id: document.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`)?.value || ''
@@ -1213,12 +1318,6 @@ function _coletarItensParaRascunho() {
     document.querySelectorAll('[id^="item-"]').forEach(card => {
         const itemId = card.id.split('-')[1];
         if (!itemId) return;
-
-        try {
-            atualizarItemJSON(itemId);
-        } catch (_e) {
-            // segue com o que existir no hidden
-        }
 
         const hidden = document.getElementById(`item_json_${itemId}`);
         if (!hidden || !hidden.value) {
@@ -1274,14 +1373,19 @@ function _coletarCabecalhoParaRascunho() {
 function salvarRascunhoNfeAgora() {
     if (IS_EDIT_MODE) return;
     if (_desabilitarRascunhoNestaCarga) return;
+    if (_salvandoRascunhoAgora) return;
+    if (_restaurandoRascunhoAgora) return;
 
+    _salvandoRascunhoAgora = true;
     try {
         const itensRascunho = _coletarItensParaRascunho();
 
         // Não manter rascunho parcial sem itens: evita abrir emissão nova com cabeçalho "sujo"
         if (!itensRascunho.length) {
             localStorage.removeItem(RASCUNHO_STORAGE_KEY);
-            atualizarStatusRascunho('Rascunho ignorado (sem itens)', 'info');
+            if (!_restaurandoRascunhoAgora) {
+                atualizarStatusRascunho('Rascunho ignorado (sem itens)', 'info');
+            }
             return;
         }
 
@@ -1300,16 +1404,19 @@ function salvarRascunhoNfeAgora() {
     } catch (e) {
         console.warn('⚠️ Falha ao salvar rascunho:', e);
         atualizarStatusRascunho('Falha ao salvar rascunho', 'erro');
+    } finally {
+        _salvandoRascunhoAgora = false;
     }
 }
 
 function agendarSalvarRascunhoNfe() {
     if (IS_EDIT_MODE) return;
     if (_desabilitarRascunhoNestaCarga) return;
+    if (_salvandoRascunhoAgora) return;
     if (_rascunhoSaveTimer) clearTimeout(_rascunhoSaveTimer);
     _rascunhoSaveTimer = setTimeout(() => {
         salvarRascunhoNfeAgora();
-    }, 700);
+    }, 1200);
 }
 
 function restaurarRascunhoNfe() {
@@ -1326,12 +1433,15 @@ function restaurarRascunhoNfe() {
 
         const payload = JSON.parse(raw);
         const itens = (Array.isArray(payload?.itens) ? payload.itens : []).filter(item => {
+            const descricao = String(item?.descricao || '').trim().toLowerCase();
+            const descricaoPlaceholder = descricao.startsWith('selecione um produto');
             return item && (
                 String(item.produto_id || '').trim() ||
                 String(item.codigo_produto || '').trim() ||
-                String(item.descricao || '').trim() ||
+                (!descricaoPlaceholder && descricao) ||
                 String(item.ncm || '').trim() ||
                 String(item.cfop || '').trim() ||
+                String(item.classificacao_ibs_cbs_id || '').trim() ||
                 (parseFloat(item.quantidade || 0) > 0)
             );
         });
@@ -1356,6 +1466,7 @@ function restaurarRascunhoNfe() {
         }
 
         _rascunhoRestoreExecutado = true;
+        _restaurandoRascunhoAgora = true;
 
         Object.entries(cabecalho).forEach(([name, value]) => {
             const el = document.querySelector(`[name="${name}"]`);
@@ -1370,29 +1481,42 @@ function restaurarRascunhoNfe() {
         if (container) container.innerHTML = '';
         itemCounter = 0;
 
-        const quantidadeItens = idsItens.length || itens.length || itemCounterSalvo;
+        const quantidadeItens = itens.length || itemCounterSalvo;
+        _atualizarLoadingRestauracao(`Restaurando rascunho (${Math.min(1, quantidadeItens)}/${quantidadeItens})...`, true);
+        atualizarStatusRascunho(`Restaurando rascunho (${quantidadeItens} item/ns)...`, 'info');
+
         for (let i = 0; i < quantidadeItens; i++) {
-            adicionarItem();
+            adicionarItem({ salvarRascunho: false });
+            _atualizarLoadingRestauracao(`Montando itens (${i + 1}/${quantidadeItens})...`, true);
+            atualizarStatusRascunho(`Restaurando rascunho: montando itens ${i + 1}/${quantidadeItens}`, 'info');
         }
 
         // Reaplica todos os campos persistidos após os itens existirem e o Select2 inicializar
         setTimeout(() => {
+            _atualizarLoadingRestauracao(`Aplicando dados (${quantidadeItens}/${quantidadeItens})...`, true);
+            atualizarStatusRascunho(`Restaurando rascunho: aplicando dados 1/2`, 'info');
             normalizarSequenciaItens();
             _aplicarCamposFormularioRascunho(camposFormulario);
             _aplicarItensRascunho(itens);
             setTimeout(() => {
+                atualizarStatusRascunho(`Restaurando rascunho: aplicando dados 2/2`, 'info');
                 normalizarSequenciaItens();
                 _aplicarCamposFormularioRascunho(camposFormulario);
                 _aplicarItensRascunho(itens);
                 calcularTotalGeral();
                 validarCamposObrigatorios();
+                _restaurandoRascunhoAgora = false;
+                _atualizarLoadingRestauracao('', false);
+                const labelItens = quantidadeItens === 1 ? 'item' : 'itens';
+                atualizarStatusRascunho(`Rascunho restaurado: ${quantidadeItens} ${labelItens}`, 'ok');
             }, 250);
         }, 150);
 
         console.log(`♻️ Rascunho restaurado: ${quantidadeItens} item(ns)`);
-        atualizarStatusRascunho(`Rascunho restaurado (${quantidadeItens} item/ns)`, 'ok');
         return true;
     } catch (e) {
+        _restaurandoRascunhoAgora = false;
+        _atualizarLoadingRestauracao('', false);
         console.warn('⚠️ Falha ao restaurar rascunho:', e);
         atualizarStatusRascunho('Falha ao restaurar rascunho', 'erro');
         return false;
@@ -1659,12 +1783,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Atualizar número quando modelo mudar
     document.getElementById('modelo').addEventListener('change', buscarProximoNumero);
 
-    // Autosave de rascunho para alterações no formulário
-    const formNfe = document.getElementById('nfeForm');
-    if (formNfe) {
-        formNfe.addEventListener('input', agendarSalvarRascunhoNfe);
-        formNfe.addEventListener('change', agendarSalvarRascunhoNfe);
-    }
+    // Autosave por digitação desativado para evitar degradação com muitos itens.
+    // O rascunho será salvo em eventos de item (inserção/remoção).
 
     // Última gravação ao sair da página
     window.addEventListener('beforeunload', salvarRascunhoNfeAgora);
@@ -1776,7 +1896,8 @@ function atualizarDestinatarioInfo() {
 }
 
 // Adicionar item à NFe
-function adicionarItem() {
+function adicionarItem(options = {}) {
+    const salvarRascunho = options.salvarRascunho !== false;
     itemCounter++;
     const container = document.getElementById('itensContainer');
     
@@ -1848,10 +1969,7 @@ function adicionarItem() {
                     <div class="form-group">
                         <label>NCM *</label>
                         <select name="ncm_${itemCounter}" class="form-control js-select2-ncm" required onchange="atualizarItemJSON(${itemCounter})">
-                            <option value="">Selecione o NCM...</option>
-                            {% for ncm in all_ncms %}
-                            <option value="{{ ncm.codigo }}">{{ ncm.codigo }} - {{ ncm.descricao }}</option>
-                            {% endfor %}
+                            <option value="">Digite para buscar NCM...</option>
                         </select>
                     </div>
                 </div>
@@ -2118,7 +2236,11 @@ function adicionarItem() {
     // Inicializar Select2 para os novos elementos do item
     setTimeout(() => {
         initSelect2ForItem(itemCounter);
-        agendarSalvarRascunhoNfe();
+        if (salvarRascunho && !_restaurandoRascunhoAgora) {
+            // Não bloqueia a interação do usuário ao adicionar item;
+            // agenda persistência para após a UI ficar responsiva.
+            agendarSalvarRascunhoNfe();
+        }
     }, 100);
 }
 
@@ -2130,13 +2252,17 @@ function initSelect2ForItem(itemId) {
             width: '100%',
             allowClear: true,
             placeholder: 'Digite para buscar produto...',
-            minimumInputLength: 1,
+            minimumInputLength: 2,
             ajax: {
                 url: '/admin/nfe/api/produtos',
                 dataType: 'json',
                 delay: 300,
                 data: function(params) {
-                    return { q: params.term, page: params.page || 1 };
+                    return {
+                        q: params.term,
+                        page: params.page || 1,
+                        cliente_id: CLIENTE_ID_NFE
+                    };
                 },
                 processResults: function(data) {
                     return data;
@@ -2146,7 +2272,7 @@ function initSelect2ForItem(itemId) {
             language: {
                 noResults: () => "Nenhum produto encontrado",
                 searching: () => "Pesquisando...",
-                inputTooShort: () => "Digite ao menos 1 caractere"
+                inputTooShort: () => "Digite ao menos 2 caracteres"
             }
         }).on('select2:select', function() {
             carregarProduto(itemId);
@@ -2189,9 +2315,26 @@ function initSelect2ForItem(itemId) {
             width: '100%',
             allowClear: true,
             placeholder: 'Digite para buscar NCM...',
+            minimumInputLength: 2,
+            ajax: {
+                url: '/admin/nfe/api/ncms',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) {
+                    return {
+                        q: params.term,
+                        page: params.page || 1
+                    };
+                },
+                processResults: function(data) {
+                    return data;
+                },
+                cache: true
+            },
             language: {
                 noResults: () => "Nenhum NCM encontrado",
-                searching: () => "Pesquisando..."
+                searching: () => "Pesquisando...",
+                inputTooShort: () => "Digite ao menos 2 caracteres"
             }
         });
         console.log(`✅ Select2 inicializado para item ${itemId}`);
@@ -2321,7 +2464,17 @@ function carregarProduto(itemId) {
         document.querySelector(`input[name="unidade_${itemId}"]`).value = unidade;
 
         // Dados tributários
-        if (ncm)  $(`select[name="ncm_${itemId}"]`).val(ncm).trigger('change');
+        if (ncm) {
+            const ncmSelect = document.querySelector(`select[name="ncm_${itemId}"]`);
+            if (ncmSelect) {
+                let ncmOption = Array.from(ncmSelect.options).find(o => String(o.value) === String(ncm));
+                if (!ncmOption) {
+                    ncmOption = new Option(String(ncm), String(ncm), true, true);
+                    ncmSelect.add(ncmOption);
+                }
+                $(ncmSelect).val(String(ncm)).trigger('change');
+            }
+        }
         if (cfop) {
             if (cfop !== String(cfopBase || '').replace(/[.\-\s]/g, '')) {
                 console.log(`🔄 CFOP ajustado automaticamente por UF: ${cfopBase} -> ${cfop} (${ufOrigem}→${ufDestino})`);
@@ -2661,7 +2814,10 @@ function calcularTotal(itemId) {
 }
 
 // Atualizar JSON do item
-function atualizarItemJSON(itemId) {
+function atualizarItemJSON(itemId, options = {}) {
+    const agendarRascunho = options.agendarRascunho === true;
+    const silencioso = !!options.silencioso;
+
     // Capturar descrição do produto selecionado
     const produtoSelect = document.querySelector(`select[name="produto_${itemId}"]`);
     const produtoOption = produtoSelect?.options[produtoSelect.selectedIndex];
@@ -2693,7 +2849,7 @@ function atualizarItemJSON(itemId) {
         cst_cofins: document.querySelector(`select[name="cst_cofins_${itemId}"]`)?.value || '',
         aliquota_cofins: document.querySelector(`input[name="aliquota_cofins_${itemId}"]`)?.value || '0.00',
         // IPI
-        cst_ipi: document.querySelector(`select[name="cst_ipi_${itemId}"]`)?.value || '',
+        cst_ipi: document.querySelector(`input[name="cst_ipi_${itemId}"]`)?.value || '',
         aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00',
         // IBS/CBS (Reforma Tributária - CRT=3)
         classificacao_ibs_cbs_id: document.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`)?.value || ''
@@ -2706,17 +2862,19 @@ function atualizarItemJSON(itemId) {
     
     if (csosnSelect && csosnSelect.value) {
         itemData.csosn_icms = csosnSelect.value;  // Campo usado no XML
-        console.log(`✅ Item ${itemId} - CSOSN capturado da tela: ${csosnSelect.value}`);
+        if (!silencioso) console.log(`✅ Item ${itemId} - CSOSN capturado da tela: ${csosnSelect.value}`);
     }
     
     if (cstSelect && cstSelect.value) {
         itemData.cst_icms = cstSelect.value;  // Campo usado no XML
-        console.log(`✅ Item ${itemId} - CST capturado da tela: ${cstSelect.value}`);
+        if (!silencioso) console.log(`✅ Item ${itemId} - CST capturado da tela: ${cstSelect.value}`);
     }
     
-    console.log(`📝 Item ${itemId} - JSON atualizado:`, itemData);
+    if (!silencioso) console.log(`📝 Item ${itemId} - JSON atualizado:`, itemData);
     document.getElementById(`item_json_${itemId}`).value = JSON.stringify(itemData);
-    agendarSalvarRascunhoNfe();
+    if (agendarRascunho && !_salvandoRascunhoAgora) {
+        agendarSalvarRascunhoNfe();
+    }
 
     // Auto-ajustar finNFe com base no CFOP selecionado
     const cfopSelecionado = (itemData.cfop || '').toString().trim();
@@ -2726,7 +2884,7 @@ function atualizarItemJSON(itemId) {
         const cfopDevol = /^[56](20[1-4]|21[0-2]|41[0-3]|553)$/.test(cfopSelecionado);
         if (cfopDevol && finNFeSelect.value !== '4') {
             finNFeSelect.value = '4';
-            console.log(`🔄 finNFe auto-ajustado para 4 (devolução) pelo CFOP ${cfopSelecionado}`);
+            if (!silencioso) console.log(`🔄 finNFe auto-ajustado para 4 (devolução) pelo CFOP ${cfopSelecionado}`);
         }
         // Não resetar para 1 automaticamente — usuário pode ter escolhido 4 manualmente
         toggleNfeRefContainer(finNFeSelect.value);
@@ -2986,7 +3144,7 @@ function validarCamposObrigatorios() {
         btnEmitir.title = 'Preencha: ' + faltam.join(', ');
     }
     
-    console.log(`🔒 Validação: natOp=${!!natOp}, valorPagamento=${valorPagamento}, itens=${itens.length}, habilitado=${!btnEmitir.disabled}`);
+    // Evita log em toda digitação para não degradar performance com muitos itens.
 }
 
 // Detectar mudança de modelo e redirecionar

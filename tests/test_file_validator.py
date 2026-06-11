@@ -98,3 +98,28 @@ class TestValidateUpload:
         f = _make_file(b"%PDF content", "doc.pdf")
         with pytest.raises(FileValidationError):
             validate_upload(f, "default", allowed_extensions={"csv"})
+
+    def test_blocked_double_extension(self):
+        f = _make_file(b"fake image", "logo.php.png")
+        with pytest.raises(FileValidationError):
+            validate_upload(f, "logo")
+
+    def test_valid_xlsx_planilha(self):
+        xlsx_magic = b'PK\x03\x04' + b'\x00' * 100
+        f = _make_file(xlsx_magic, "produtos.xlsx")
+        result = validate_upload(f, "planilha")
+        assert result == "produtos.xlsx"
+
+    def test_invalid_json_content(self):
+        f = _make_file(b'{"invalido":', "siscomex.json")
+        with pytest.raises(FileValidationError):
+            validate_upload(f, "json")
+
+    def test_blocked_mimetype(self):
+        f = FileStorage(
+            stream=io.BytesIO(b"MZ..."),
+            filename="arquivo.csv",
+            content_type="application/x-msdownload",
+        )
+        with pytest.raises(FileValidationError):
+            validate_upload(f, "csv")

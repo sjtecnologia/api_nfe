@@ -51,6 +51,16 @@ from routes.admin_api_routes import admin_api_bp
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
+os.makedirs(app.instance_path, exist_ok=True)
+
+default_upload_dir = os.getenv('UPLOAD_FOLDER', os.path.join(app.instance_path, 'uploads'))
+private_upload_dir = os.getenv('PRIVATE_UPLOAD_FOLDER', os.path.join(app.instance_path, 'private_uploads'))
+os.makedirs(default_upload_dir, exist_ok=True)
+os.makedirs(private_upload_dir, exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = default_upload_dir
+app.config['PRIVATE_UPLOAD_FOLDER'] = private_upload_dir
+
 # Werkzeug 3.x define max_form_memory_size=500KB e max_form_parts=1000 como atributos de classe.
 # Flask 2.3.x não repassa app.config para esses atributos — é preciso fazer monkey-patch direto.
 # NFes com muitos itens excedem esses limites e geram erro 413.

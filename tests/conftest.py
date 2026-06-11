@@ -7,6 +7,10 @@ configuração ausente.
 """
 import os
 import pytest
+import werkzeug
+
+if not hasattr(werkzeug, '__version__'):
+    werkzeug.__version__ = '3'
 
 # Variáveis de ambiente mínimas necessárias antes de qualquer import do app
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
