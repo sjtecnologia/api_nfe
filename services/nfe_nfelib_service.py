@@ -394,7 +394,23 @@ def generate_nfe_xml_nfelib(
         id_dest = "1"
     
     print(f"📋 [DEBUG] idDest: {id_dest} (CFOP: {cfop_primeiro_item}, UF Emit: {uf_emitente}, UF Dest: {uf_destinatario})")
-    
+
+    # Auto-corrigir finNFe: se qualquer item usar CFOP de devolução, finNFe deve ser 4
+    import re as _re
+    _cfop_devol_pattern = _re.compile(r'^[56](20[1-4]|21[0-2]|41[0-3]|553)$')
+    _tem_cfop_devol = any(
+        _cfop_devol_pattern.match((item.get('cfop') or '').strip())
+        for item in items
+    )
+    fin_nfe_raw = str(form_data.get('finNFe', '1'))
+    if _tem_cfop_devol and fin_nfe_raw != '4':
+        fin_nfe_raw = '4'
+        print(f"⚠️  [NFELIB] finNFe auto-corrigido para 4 (devolução) pelo CFOP dos itens")
+    elif not _tem_cfop_devol and fin_nfe_raw == '4':
+        # finNFe=4 sem CFOP de devolução também seria rejeitado
+        fin_nfe_raw = '1'
+        print(f"⚠️  [NFELIB] finNFe auto-corrigido para 1 — nenhum CFOP de devolução encontrado")
+
     # Extrair cDV (dígito verificador) da chave de acesso
     cdv = chave_acesso[-1]  # Último dígito da chave
     
@@ -413,14 +429,23 @@ def generate_nfe_xml_nfelib(
         tpEmis="1",
         cDV=cdv,  # Dígito verificador da chave de acesso
         tpAmb=str(form_data.get('tpAmb', 2)),
-        finNFe=str(form_data.get('finNFe', '1')),
+        finNFe=fin_nfe_raw,
         indFinal="1",
         indPres=form_data.get('indPres', "1"),
         indIntermed="0",
         procEmi="0",  # MANTIDO 0=Aplicação do contribuinte (correto para aplicação própria)
         verProc="EmiteMax_1.0"
     )
-    
+
+    # NFref: obrigatório para NF-e de devolução (finNFe=4)
+    if fin_nfe_raw == '4':
+        chave_ref = (form_data.get('chave_nfe_ref') or '').strip().replace(' ', '')
+        if chave_ref and len(chave_ref) == 44 and chave_ref.isdigit():
+            ide.NFref.append(Nfe.InfNfe.Ide.Nfref(refNFe=chave_ref))
+            print(f"✅ [NFELIB] NFref adicionado: {chave_ref}")
+        else:
+            print(f"⚠️  [NFELIB] finNFe=4 (devolução) mas chave_nfe_ref ausente ou inválida: '{chave_ref}'")
+
     print("✅ [NFELIB] IDE criado")
     
     # 5. Criar enderEmit
@@ -557,12 +582,14 @@ def generate_nfe_xml_nfelib(
     else:
         ie_dest_norm = ''
 
+    # Validação básica de tamanho: apenas logar, NÃO descartar IE que veio do cadastro.
+    # A SEFAZ valida o conteúdo; nossa função de tamanho pode ter falsos negativos.
     if ie_dest_norm not in {'', 'ISENTO'} and not ie_valida_basica_por_uf(ie_dest_norm, uf_destinatario):
         print(
-            f"⚠️  [NFELIB] IE do destinatario inválida para UF {uf_destinatario}: "
-            f"'{ie_dest_norm}'. Tratando como isento para evitar rejeição."
+            f"⚠️  [NFELIB] IE do destinatario com tamanho inesperado para UF {uf_destinatario}: "
+            f"'{ie_dest_norm}'. Mantendo no XML — a SEFAZ fará a validação final."
         )
-        ie_dest_norm = 'ISENTO'
+        # NÃO descarta: mantém ie_dest_norm para que indIEDest=1 seja gerado
 
     if len(dest_cpf_cnpj) == 11:  # CPF = pessoa física = não contribuinte
         ind_ie_dest = "9"
@@ -572,14 +599,12 @@ def generate_nfe_xml_nfelib(
         ie_dest_norm = ''
         print(f"⚠️  [NFELIB] CNPJ com ie_indicador=N → indIEDest=9 (não contribuinte)")
     elif ie_dest_norm and ie_dest_norm != 'ISENTO':
-        ind_ie_dest = "1"  # Contribuinte ICMS
-    elif ie_dest_norm == 'ISENTO' or ie_indicador_nfe == 'E':
-        ind_ie_dest = "2"  # Contribuinte isento
-        ie_dest_norm = 'ISENTO'
+        ind_ie_dest = "1"  # Contribuinte ICMS com IE válida
     else:
-        # CNPJ sem IE informada: usar indIEDest=2 + <IE>ISENTO</IE>
-        ind_ie_dest = "2"
-        ie_dest_norm = 'ISENTO'
+        # IE ausente ou "ISENTO": não contribuinte (9), sem tag <IE>
+        ind_ie_dest = "9"
+        ie_dest_norm = ''
+        print(f"⚠️  [NFELIB] IE='{ie_dest_norm}' / indicador='{ie_indicador_nfe}' → indIEDest=9 (não contribuinte)")
     
     print(f"✅ [NFELIB] Nome Destinatário: {nome_dest}, indIEDest: {ind_ie_dest}")
     
@@ -713,6 +738,21 @@ def generate_nfe_xml_nfelib(
             
             print(f"  [NFELIB] Item {idx} - CFOP {cfop} → CSOSN {csosn_item}")
             
+            # Buscar dados de ICMS para Simples Nacional
+            sn_origem = str(item.get('origem', '0'))
+            sn_aliq = Decimal(str(item.get('aliquota_icms', '0')))
+            sn_bc_raw = item.get('bc_icms', valor_total)
+            try:
+                sn_bc = Decimal(str(sn_bc_raw))
+            except Exception:
+                sn_bc = valor_total
+            if sn_bc <= 0 and csosn_item not in ('500',):
+                sn_bc = valor_total
+            sn_vICMS = (sn_bc * sn_aliq / Decimal('100')).quantize(Decimal('0.01')) if sn_aliq > 0 else Decimal('0')
+            sn_modal_bc = str(item.get('modalidade_bc_icms') or '3').strip() or '3'
+            if sn_modal_bc not in {'0', '1', '2', '3'}:
+                sn_modal_bc = '3'
+
             # Criar ICMS com CSOSN
             if csosn_item == '500':
                 # Pegar campos ICMS ST do formulário
@@ -722,7 +762,7 @@ def generate_nfe_xml_nfelib(
                 v_icms_st_ret = Decimal(str(item.get('vICMSSTRet', '0')))
                 
                 icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
-                    orig="0",
+                    orig=sn_origem,
                     CSOSN="500",
                     vBCSTRet=f"{v_bc_st_ret:.2f}",
                     pST=f"{p_st:.2f}",
@@ -730,16 +770,42 @@ def generate_nfe_xml_nfelib(
                     vICMSSTRet=f"{v_icms_st_ret:.2f}"
                 )
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN500=icms_sn)
+            elif csosn_item == '900':
+                # CSOSN 900 = Outros — usado em devolução SN com ICMS a recuperar
+                # Suporta modBC/vBC/pICMS/vICMS + pCredSN/vCredICMSSN
+                sn900_params = {
+                    'orig': sn_origem,
+                    'CSOSN': '900',
+                    'modBC': sn_modal_bc,
+                    'vBC': f"{sn_bc:.2f}",
+                    'pICMS': f"{sn_aliq:.2f}",
+                    'vICMS': f"{sn_vICMS:.2f}",
+                }
+                if sn_aliq > 0:
+                    sn900_params['pCredSN'] = f"{sn_aliq:.2f}"
+                    sn900_params['vCredICMSSN'] = f"{sn_vICMS:.2f}"
+                icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn900(**sn900_params)
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN900=icms_sn)
+                v_bc_icms_total += sn_bc
+                v_icms_total += sn_vICMS
+                print(f"  [NFELIB] CSOSN 900 vBC={sn_bc:.2f} pICMS={sn_aliq:.2f} vICMS={sn_vICMS:.2f}")
             elif csosn_item == '103':
                 icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
-                    orig="0",
+                    orig=sn_origem,
                     CSOSN="103"
                 )
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
-            else:  # 102 ou outros
+            elif csosn_item == '101':
+                sn101_params = {'orig': sn_origem, 'CSOSN': '101'}
+                if sn_aliq > 0:
+                    sn101_params['pCredSN'] = f"{sn_aliq:.2f}"
+                    sn101_params['vCredICMSSN'] = f"{sn_vICMS:.2f}"
+                icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn101(**sn101_params)
+                icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN101=icms_sn)
+            else:  # 102, 400, outros sem valor de ICMS
                 icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn102(
-                    orig="0",
-                    CSOSN="102"
+                    orig=sn_origem,
+                    CSOSN=csosn_item if csosn_item in ('102', '103', '300', '400') else '102'
                 )
                 icms = Nfe.InfNfe.Det.Imposto.Icms(ICMSSN102=icms_sn)
             
@@ -1196,11 +1262,20 @@ def generate_nfe_xml_nfelib(
     print("✅ [NFELIB] TRANSP criado com dados do formulário")
     
     # 12. Criar PAG
-    det_pag = Nfe.InfNfe.Pag.DetPag(
-        indPag="0",  # 0=Pagamento à vista, 1=Pagamento a prazo
-        tPag="01",  # 01=Dinheiro
-        vPag=f"{v_nf_total:.2f}"
-    )
+    forma_pag = str(form_data.get('formaPagamento') or '01').strip().zfill(2)
+    # Para finNFe=4 (devolução) ou forma "Sem Pagamento", usar tPag=90 e vPag=0.00
+    if fin_nfe_raw == '4' or forma_pag == '90':
+        det_pag = Nfe.InfNfe.Pag.DetPag(
+            indPag="0",
+            tPag="90",
+            vPag="0.00"
+        )
+    else:
+        det_pag = Nfe.InfNfe.Pag.DetPag(
+            indPag="0",
+            tPag=forma_pag,
+            vPag=f"{v_nf_total:.2f}"
+        )
     
     pag = Nfe.InfNfe.Pag(detPag=[det_pag])
     

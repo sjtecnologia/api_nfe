@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 import base64
 import tempfile
+from xml.sax.saxutils import escape
 from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
 
 
@@ -636,6 +637,291 @@ class SefazService:
                 'success': False,
                 'status': 'ERRO_PROCESSAMENTO',
                 'message': f'Erro ao processar resposta de cancelamento: {e}',
+                'resposta_completa': resposta_xml
+            }
+
+    def carta_correcao_nfe(self, chave_nfe, texto_correcao, cnpj_emitente, sequencia_evento=1,
+                           certificado_pem=None, certificado_pfx=None, senha_certificado=None):
+        """Envia evento de Carta de Correção Eletrônica (110110) para a SEFAZ."""
+        cert_temp_path = None
+        key_temp_path = None
+        pfx_temp_path = None
+        try:
+            if not chave_nfe or len(chave_nfe) != 44:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'message': 'Chave de acesso inválida para CC-e'
+                }
+
+            x_correcao = (texto_correcao or '').strip()
+            if len(x_correcao) < 15 or len(x_correcao) > 1000:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'message': 'Texto da CC-e deve ter entre 15 e 1000 caracteres'
+                }
+            x_correcao = escape(x_correcao)
+
+            seq = int(sequencia_evento or 1)
+            if seq < 1 or seq > 20:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'message': 'Sequência do evento deve estar entre 1 e 20'
+                }
+
+            cert_path = self.cert_path
+            key_path = self.key_path
+
+            if (not cert_path or not key_path) and certificado_pfx and not senha_certificado:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Senha do certificado do cliente não informada para CC-e'
+                }
+
+            if (not cert_path or not key_path) and certificado_pfx and senha_certificado:
+                cert_bytes = certificado_pfx
+                if isinstance(cert_bytes, str):
+                    cert_bytes = base64.b64decode(cert_bytes)
+
+                private_key, certificate, _additional = pkcs12.load_key_and_certificates(
+                    cert_bytes,
+                    senha_certificado.encode('utf-8')
+                )
+
+                if not private_key or not certificate:
+                    return {
+                        'success': False,
+                        'status': 'ERRO_CERTIFICADO',
+                        'message': 'Não foi possível extrair certificado/chave do arquivo PFX'
+                    }
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
+                    cert_file.write(certificate.public_bytes(Encoding.PEM))
+                    cert_temp_path = cert_file.name
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
+                    key_file.write(private_key.private_bytes(
+                        encoding=Encoding.PEM,
+                        format=PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=NoEncryption()
+                    ))
+                    key_temp_path = key_file.name
+
+                cert_path = cert_temp_path
+                key_path = key_temp_path
+
+            if not cert_path and certificado_pem:
+                pem_bytes = certificado_pem
+                if isinstance(pem_bytes, str):
+                    if 'BEGIN' in pem_bytes:
+                        pem_bytes = pem_bytes.encode('utf-8')
+                    else:
+                        pem_bytes = base64.b64decode(pem_bytes)
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as pem_file:
+                    pem_file.write(pem_bytes)
+                    cert_temp_path = pem_file.name
+
+                cert_path = cert_temp_path
+
+            if not cert_path:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Certificado do cliente não configurado para comunicação com a SEFAZ'
+                }
+
+            cert_request = (cert_path, key_path) if key_path else cert_path
+
+            endpoint = self.urls.get('recepcao_evento')
+            if not endpoint:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CONFIG',
+                    'message': 'Endpoint de recepção de evento não configurado'
+                }
+
+            c_uf = chave_nfe[0:2]
+            tp_amb = '1' if self.ambiente == 'producao' else '2'
+            id_lote = datetime.now().strftime('%Y%m%d%H%M%S')
+            id_evento = 'ID110110' + chave_nfe + str(seq).zfill(2)
+            dh_evento = datetime.now().astimezone().isoformat(timespec='seconds')
+
+            x_cond_uso = (
+                'A Carta de Correcao e disciplinada pelo paragrafo 1o-A do art. 7o do Convenio S/N, '
+                'de 15 de dezembro de 1970 e pode ser utilizada para regularizacao de erro ocorrido '
+                'na emissao de documento fiscal, desde que o erro nao esteja relacionado com: I - as '
+                'variaveis que determinam o valor do imposto tais como: base de calculo, aliquota, '
+                'diferenca de preco, quantidade, valor da operacao ou da prestacao; II - a correcao de '
+                'dados cadastrais que implique mudanca do remetente ou do destinatario; III - a data de '
+                'emissao ou de saida.'
+            )
+
+            NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
+            evento_xml = (
+                '<envEvento xmlns="' + NFE_NS + '" versao="1.00">'
+                + '<idLote>' + id_lote + '</idLote>'
+                + '<evento versao="1.00">'
+                + '<infEvento Id="' + id_evento + '">'
+                + '<cOrgao>' + c_uf + '</cOrgao>'
+                + '<tpAmb>' + tp_amb + '</tpAmb>'
+                + '<CNPJ>' + cnpj_emitente + '</CNPJ>'
+                + '<chNFe>' + chave_nfe + '</chNFe>'
+                + '<dhEvento>' + dh_evento + '</dhEvento>'
+                + '<tpEvento>110110</tpEvento>'
+                + '<nSeqEvento>' + str(seq) + '</nSeqEvento>'
+                + '<verEvento>1.00</verEvento>'
+                + '<detEvento versao="1.00">'
+                + '<descEvento>Carta de Correcao</descEvento>'
+                + '<xCorrecao>' + x_correcao + '</xCorrecao>'
+                + '<xCondUso>' + x_cond_uso + '</xCondUso>'
+                + '</detEvento>'
+                + '</infEvento>'
+                + '</evento>'
+                + '</envEvento>'
+            )
+
+            from pynfe.processamento.assinatura import AssinaturaA1
+            from lxml import etree as _etree
+
+            if not certificado_pfx:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Certificado PFX é obrigatório para assinatura da CC-e'
+                }
+
+            pfx_bytes = certificado_pfx
+            if isinstance(pfx_bytes, str):
+                pfx_bytes = base64.b64decode(pfx_bytes)
+
+            with tempfile.NamedTemporaryFile(suffix='.pfx', delete=False) as _pfx_f:
+                _pfx_f.write(pfx_bytes)
+                pfx_temp_path = _pfx_f.name
+
+            assinador = AssinaturaA1(pfx_temp_path, senha_certificado)
+            _xml_envelope = _etree.fromstring(evento_xml.encode('utf-8'))
+            _evento_el = _xml_envelope.find(f'{{{NFE_NS}}}evento')
+            _evento_assinado = assinador.assinar(_evento_el, retorna_string=False)
+            _xml_envelope.remove(_xml_envelope.find(f'{{{NFE_NS}}}evento'))
+            _xml_envelope.append(_evento_assinado)
+            evento_xml_assinado = _etree.tostring(_xml_envelope, encoding='unicode')
+
+            envelope = (
+                '<?xml version="1.0" encoding="utf-8"?>'
+                '<soap12:Envelope'
+                ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+                ' xmlns:xsd="http://www.w3.org/2001/XMLSchema"'
+                ' xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">'
+                '<soap12:Header>'
+                '<nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">'
+                + '<cUF>' + c_uf + '</cUF>'
+                + '<versaoDados>1.00</versaoDados>'
+                + '</nfeCabecMsg>'
+                + '</soap12:Header>'
+                + '<soap12:Body>'
+                + '<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">'
+                + evento_xml_assinado
+                + '</nfeDadosMsg>'
+                + '</soap12:Body>'
+                + '</soap12:Envelope>'
+            )
+
+            headers = {
+                'Content-Type': (
+                    'application/soap+xml; charset=utf-8;'
+                    ' action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEventoNF"'
+                ),
+            }
+
+            response = requests.post(
+                endpoint,
+                data=envelope.encode('utf-8'),
+                headers=headers,
+                timeout=30,
+                verify=self.ca_bundle,
+                cert=cert_request
+            )
+
+            if response.status_code != 200:
+                return {
+                    'success': False,
+                    'status': 'ERRO_HTTP',
+                    'codigo': response.status_code,
+                    'message': f'Erro HTTP {response.status_code} na CC-e',
+                    'resposta_completa': response.text
+                }
+
+            return self._processar_resposta_carta_correcao(response.text, seq)
+
+        except Exception as e:
+            print(f"[X] Erro ao enviar CC-e: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'status': 'ERRO_CCE',
+                'message': f'Erro ao enviar CC-e: {e}'
+            }
+        finally:
+            if cert_temp_path and os.path.exists(cert_temp_path):
+                try:
+                    os.unlink(cert_temp_path)
+                except Exception:
+                    pass
+            if key_temp_path and os.path.exists(key_temp_path):
+                try:
+                    os.unlink(key_temp_path)
+                except Exception:
+                    pass
+            if pfx_temp_path and os.path.exists(pfx_temp_path):
+                try:
+                    os.unlink(pfx_temp_path)
+                except Exception:
+                    pass
+
+    def _processar_resposta_carta_correcao(self, resposta_xml, sequencia_evento):
+        """Processa resposta da SEFAZ para evento de Carta de Correção."""
+        try:
+            root = ET.fromstring(resposta_xml)
+            namespaces = {
+                'nfe': 'http://www.portalfiscal.inf.br/nfe'
+            }
+
+            cstat_lote = root.find('.//nfe:retEnvEvento//nfe:cStat', namespaces)
+            xmotivo_lote = root.find('.//nfe:retEnvEvento//nfe:xMotivo', namespaces)
+
+            cstat_evento = root.find('.//nfe:retEvento//nfe:infEvento//nfe:cStat', namespaces)
+            xmotivo_evento = root.find('.//nfe:retEvento//nfe:infEvento//nfe:xMotivo', namespaces)
+            protocolo_evento = root.find('.//nfe:retEvento//nfe:infEvento//nfe:nProt', namespaces)
+
+            codigo = cstat_evento.text if cstat_evento is not None else (
+                cstat_lote.text if cstat_lote is not None else None
+            )
+            motivo = xmotivo_evento.text if xmotivo_evento is not None else (
+                xmotivo_lote.text if xmotivo_lote is not None else 'Sem motivo retornado pela SEFAZ'
+            )
+            protocolo = protocolo_evento.text if protocolo_evento is not None else None
+
+            sucesso = codigo in ['135', '136', '155']
+            return {
+                'success': sucesso,
+                'status': 'AUTORIZADA' if sucesso else 'REJEITADA',
+                'codigo': codigo,
+                'message': motivo,
+                'protocolo': protocolo,
+                'sequencia_evento': int(sequencia_evento),
+                'data_evento': datetime.now().isoformat(),
+                'resposta_completa': resposta_xml
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'status': 'ERRO_PROCESSAMENTO',
+                'message': f'Erro ao processar resposta da CC-e: {e}',
                 'resposta_completa': resposta_xml
             }
 

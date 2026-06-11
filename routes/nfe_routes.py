@@ -303,12 +303,59 @@ def emitir_nfe():
         
         # Buscar regime tributário
         regime_tributario_nome = 'Regime Normal'
+        regime_tributario_crt = None
         if emitente_data.regime_tributario_id is not None:
             regime_trib = db.query(RegimeTributario).filter_by(
                 regime_tributario_id=emitente_data.regime_tributario_id
             ).first()
             if regime_trib:
                 regime_tributario_nome = regime_trib.nome
+                regime_tributario_crt = int(regime_trib.crt) if regime_trib.crt is not None else None
+
+        # Auto-preenchimento "anti erro humano": aplica classificação IBS/CBS padrão para CRT=3
+        _classificacao_ibs_cbs_padrao_id = None
+        def _autopreencher_ibs_cbs_padrao_itens(itens_nfe: list) -> int:
+            nonlocal _classificacao_ibs_cbs_padrao_id
+
+            if regime_tributario_crt != 3:
+                return 0
+
+            try:
+                if _classificacao_ibs_cbs_padrao_id is None:
+                    row = db.execute(text("""
+                        SELECT classificacao_id
+                        FROM classificacoes_ibs_cbs
+                        WHERE ativo = true
+                        ORDER BY CASE
+                                     WHEN COALESCE(NULLIF(LTRIM(REGEXP_REPLACE(codigo, '[^0-9]', '', 'g'), '0'), ''), '0') = '1'
+                                     THEN 0
+                                     ELSE 1
+                                 END,
+                                 codigo ASC,
+                                 classificacao_id ASC
+                        LIMIT 1
+                    """)).fetchone()
+                    if row and row[0]:
+                        _classificacao_ibs_cbs_padrao_id = str(row[0])
+                    else:
+                        return 0
+
+                preenchidos = 0
+                for item in itens_nfe:
+                    valor_atual = (item or {}).get('classificacao_ibs_cbs_id')
+                    if valor_atual is None or str(valor_atual).strip() == '':
+                        item['classificacao_ibs_cbs_id'] = _classificacao_ibs_cbs_padrao_id
+                        preenchidos += 1
+
+                if preenchidos > 0:
+                    logger.debug(
+                        f"[AUTO-IBS/CBS] Preenchidos {preenchidos} item(ns) com classificação padrão "
+                        f"{_classificacao_ibs_cbs_padrao_id} (CRT=3)"
+                    )
+                return preenchidos
+            except Exception as e:
+                logger.warning(f"[AUTO-IBS/CBS] Falha no autopreenchimento: {e}")
+                return 0
         
         # CONVERTER EMITENTE PARA DICIONÁRIO
         emitente_data_for_template = {
@@ -337,6 +384,8 @@ def emitir_nfe():
             form_data_initial = {
                 'tpNF': request.form.get('tpNF', '1'),
                 'finNFe': request.form.get('finNFe', '1'),
+                'chave_nfe_ref': request.form.get('chave_nfe_ref', '').strip().replace(' ', ''),
+
                 'dataEmissao': request.form.get('dataEmissao'),
                 'serie': request.form.get('serie', '1'),
                 'numero_nfe': request.form.get('numero_nfe', '1'),  # [*] Capturar número da NFe da tela
@@ -373,6 +422,8 @@ def emitir_nfe():
             logger.debug(f" Form data: {form_data_initial}")
             logger.debug(f" Dados transporte - Modalidade: {form_data_initial['modFrete']}, Transportadora: {form_data_initial['transportadoraNome']}")
             
+            logger.warning(f"🔑 [DEBUG] finNFe={form_data_initial.get('finNFe')} | chave_nfe_ref='{form_data_initial.get('chave_nfe_ref')}'")
+
             # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
             action = request.form.get('action')
             preview_only = request.form.get('preview_only') == 'true'
@@ -430,6 +481,8 @@ def emitir_nfe():
                     
                     if not nfe_items:
                         return jsonify({'success': False, 'message': 'Adicione pelo menos um item'}), 400
+
+                    _autopreencher_ibs_cbs_padrao_itens(nfe_items)
                     
                     # GERAR XML (sem assinatura) - tpAmb já vem correto do banco
                     xml_nfe = generate_nfe_xml(
@@ -501,6 +554,8 @@ def emitir_nfe():
                     
                     if not nfe_items:
                         return jsonify({'success': False, 'message': 'Adicione pelo menos um item'}), 400
+
+                    _autopreencher_ibs_cbs_padrao_itens(nfe_items)
                     
                     # GERAR XML (sem assinatura)
                     xml_nfe = generate_nfe_xml(
@@ -637,6 +692,8 @@ def emitir_nfe():
                         logger.error("ERRO: Nenhum item encontrado")
                         flash('Adicione pelo menos um item à NFe', 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
+
+                    _autopreencher_ibs_cbs_padrao_itens(nfe_items)
                     
                     logger.debug(f" Processando {len(nfe_items)} itens")
                     
@@ -1199,6 +1256,8 @@ def emitir_nfe():
                 'destinatario_id': dest.destinatario_id,
                 'nome_razao_social': dest.nome_razao_social,
                 'cpf_cnpj': dest.cpf_cnpj,
+                'ie': dest.ie or '',
+                'ie_indicador_nfe': dest.ie_indicador_nfe or 'C',
                 'logradouro': dest.logradouro,
                 'numero': dest.numero,
                 'bairro': dest.bairro,
@@ -1211,9 +1270,23 @@ def emitir_nfe():
         # PRODUTOS: carregados via AJAX (/nfe/api/produtos) — sem query aqui
         produtos_data = []
         
-        # CFOPs e NCMs carregados via AJAX (/nfe/api/cfops e /nfe/api/ncms)
-        cfops_data = []
-        ncms_data = []
+        # CFOPs
+        try:
+            all_cfops = db.query(Cfop).order_by(Cfop.cfop).all()
+            cfops_data = [{'cfop': c.cfop, 'descricao': c.descricao} for c in all_cfops]
+            logger.debug(f" CFOPs carregados: {len(cfops_data)} registros")
+        except Exception as e:
+            logger.error(f"AVISO: Erro ao carregar CFOPs: {e}")
+            cfops_data = []
+
+        # NCMs
+        try:
+            all_ncms = db.query(Ncm).order_by(Ncm.codigo).all()
+            ncms_data = [{'codigo': n.codigo, 'descricao': n.descricao} for n in all_ncms]
+            logger.debug(f" NCMs carregados: {len(ncms_data)} registros")
+        except Exception as e:
+            logger.error(f"AVISO: Erro ao carregar NCMs: {e}")
+            ncms_data = []
 
         # OK: BUSCAR CSTs E CSOSNs
         try:
@@ -1270,6 +1343,23 @@ def emitir_nfe():
             classificacoes_ibs_cbs = []
         
         logger.debug(f" Renderizando template com {len(destinatarios_data)} Destinatários/Tomadores e {len(produtos_data)} produtos para cliente {emitente_cliente_id}")
+
+        # Série padrão da tela: última série efetivamente usada na emissão (ignora apenas rascunho)
+        ultima_serie = 1
+        try:
+            ultima_serie_row = db.execute(text("""
+                SELECT serie
+                FROM nfe_emitidas
+                WHERE cliente_id = :cliente_id
+                  AND modelo = '55'
+                  AND status <> 'RASCUNHO'
+                ORDER BY nfe_emitida_id DESC
+                LIMIT 1
+            """), {'cliente_id': emitente_cliente_id}).fetchone()
+            if ultima_serie_row and ultima_serie_row[0] is not None:
+                ultima_serie = int(ultima_serie_row[0])
+        except Exception as e:
+            logger.warning(f"AVISO: Não foi possível obter última série do cliente {emitente_cliente_id}: {e}")
         
         return render_template('admin/nfes/emitir.html',
                              emitente_data=emitente_data_for_template,
@@ -1281,6 +1371,7 @@ def emitir_nfe():
                              all_ncms=ncms_data,
                              classificacoes_ibs_cbs=classificacoes_ibs_cbs,
                              regime_tributario=regime_tributario_nome,
+                             ultima_serie=ultima_serie,
                              initial_nfe_items=[])
         
     except Exception as e:
@@ -2130,7 +2221,25 @@ def edit(nfe_id):
                             json_data = {}
                         
                         form_data = json_data.get('form_data', {})
+
+                        # Recuperar itens com fallback para formatos antigos/alternativos
                         items_data = json_data.get('items', [])
+                        if not items_data and json_data.get('items_data'):
+                            items_data = json_data.get('items_data', [])
+                        if not items_data and isinstance(form_data.get('items'), list):
+                            items_data = form_data.get('items', [])
+                        if not items_data and isinstance(form_data, dict):
+                            idx_item = 0
+                            while f'items[{idx_item}][json]' in form_data:
+                                item_json_raw = form_data.get(f'items[{idx_item}][json]')
+                                if item_json_raw:
+                                    try:
+                                        item_obj = json.loads(item_json_raw) if isinstance(item_json_raw, str) else item_json_raw
+                                        if isinstance(item_obj, dict):
+                                            items_data.append(item_obj)
+                                    except Exception:
+                                        logger.warning(f"AVISO: item inválido em form_data['items[{idx_item}][json]']")
+                                idx_item += 1
                         
                         # Adicionar dados do destinatário ao form_data (necessário para preencher select)
                         if nfe_data.get('destinatario_cnpj_cpf'):
@@ -2519,6 +2628,8 @@ def edit(nfe_id):
                         'ncm': request.form.get(f'ncm_{idx}'),
                         'cfop': cfop_item,  # OK: CFOP garantido
                         'origem': request.form.get(f'origem_{idx}', '0'),
+                        # IBS/CBS (Reforma Tributária)
+                        'classificacao_ibs_cbs_id': request.form.get(f'classificacao_ibs_cbs_id_{idx}') or '',
                         # ICMS
                         'cst_icms': request.form.get(f'cst_icms_{idx}', '00'),
                         'csosn_icms': request.form.get(f'csosn_{idx}'),
@@ -2966,15 +3077,13 @@ def reenviar_nfe(nfe_id):
         # Enviar para SEFAZ
         resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente, nfe_data['cliente_id'])
 
-        # cStat=656: Consumo Indevido - aguardar e retentar (ate 2x, com backoff exponencial)
-        for _t656 in range(2):
-            if str(resultado_sefaz.get('codigo', '')) != '656':
-                break
-            _wait = 15
-            logger.debug(f'[REENVIO] cStat=656 (Consumo Indevido) - tentativa {_t656 + 1}/2, aguardando {_wait}s...')
-            time.sleep(_wait)
-            resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado, certificado, ambiente, nfe_data['cliente_id'])
-            logger.debug(f'  [REENVIO-656] Apos espera: cStat={resultado_sefaz.get("codigo")} - {resultado_sefaz.get("message")}')
+        # cStat=656: Consumo Indevido - NÃO retentar com a mesma chave (causa loop infinito).
+        # Informar o usuário para aguardar e usar o botão "Editar e Corrigir" para gerar nova chave.
+        if str(resultado_sefaz.get('codigo', '')) == '656':
+            return jsonify({
+                'success': False,
+                'message': 'Rejeição: Consumo Indevido (656) — A SEFAZ recusou envios repetidos com a mesma chave. Use "Editar e Corrigir" para gerar uma nova NF-e com novo número.'
+            })
 
         # cStat=225: Falha no Schema XML - regenerar sem infRespTec e retentar
         # IBS/CBS e obrigatorio - nao zerar classificacao_ibs_cbs_id
@@ -2992,19 +3101,13 @@ def reenviar_nfe(nfe_id):
                     include_resp_tec=False
                 )
                 xml_assinado_retry = xml_signature_service.sign_nfe_xml(xml_retry_225, db, nfe_data['cliente_id'])
-                logger.debug('[REENVIO-225] Aguardando 15s antes de reenviar (evitar 656)...')
-                time.sleep(15)
                 resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado_retry, certificado, ambiente, nfe_data['cliente_id'])
                 logger.debug(f'  [REENVIO-225] Resultado sem infRespTec: cStat={resultado_sefaz.get("codigo")} - {resultado_sefaz.get("message")}')
-                # Se ainda retornar 656, aguardar e retentar
-                for _t656_225 in range(2):
-                    if str(resultado_sefaz.get('codigo', '')) != '656':
-                        break
-                    _wait_656 = 15
-                    logger.debug(f'  [REENVIO-225-656] cStat=656 - tentativa {_t656_225+1}/2, aguardando {_wait_656}s...')
-                    time.sleep(_wait_656)
-                    resultado_sefaz = nfe_service._processar_envio_sefaz(xml_assinado_retry, certificado, ambiente, nfe_data['cliente_id'])
-                    logger.debug(f'  [REENVIO-225-656] Apos espera: cStat={resultado_sefaz.get("codigo")} - {resultado_sefaz.get("message")}')
+                if str(resultado_sefaz.get('codigo', '')) == '656':
+                    return jsonify({
+                        'success': False,
+                        'message': 'Rejeição: Consumo Indevido (656) — Use "Editar e Corrigir" para gerar nova NF-e com novo número.'
+                    })
                 if resultado_sefaz.get('success'):
                     xml_assinado = xml_assinado_retry
             except Exception as e_225:
@@ -3945,6 +4048,200 @@ def cancelar_nfe(nfe_id):
         return jsonify({
             'success': False,
             'message': f'Erro ao cancelar: {str(e)}'
+        }), 500
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/carta-correcao/<int:nfe_id>', methods=['POST'])
+@login_required
+@editor_or_admin_required()
+def carta_correcao_nfe(nfe_id):
+    """Envia Carta de Correção Eletrônica (CC-e) para uma NFe autorizada."""
+    db = next(get_db())
+    try:
+        query = text("""
+            SELECT n.*, c.cnpj as emitente_cnpj
+            FROM nfe_emitidas n
+            JOIN clientes c ON n.cliente_id = c.cliente_id
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        nfe = db.execute(query, {'nfe_id': nfe_id}).first()
+
+        if not nfe:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+
+        nfe_data = dict(nfe._mapping)
+        status_atual = (nfe_data.get('status') or '').upper()
+        if status_atual != 'AUTORIZADA':
+            return jsonify({'success': False, 'message': 'Apenas NFes autorizadas podem receber CC-e'}), 400
+
+        chave_acesso = nfe_data.get('chave_acesso')
+        if not chave_acesso or len(chave_acesso) != 44:
+            return jsonify({'success': False, 'message': 'Chave de acesso inválida'}), 400
+
+        data = request.get_json(silent=True) or {}
+        texto_correcao = (data.get('correcao') or '').strip()
+
+        if len(texto_correcao) < 15 or len(texto_correcao) > 1000:
+            return jsonify({'success': False, 'message': 'Texto da correção deve ter entre 15 e 1000 caracteres'}), 400
+
+        # Prazo legal de emissão da CC-e: até 30 dias da autorização.
+        data_autorizacao = nfe_data.get('data_autorizacao')
+        if data_autorizacao:
+            if isinstance(data_autorizacao, str):
+                data_autorizacao = datetime.fromisoformat(data_autorizacao.replace('Z', '+00:00'))
+            if datetime.now() - data_autorizacao > timedelta(days=30):
+                return jsonify({'success': False, 'message': 'Prazo para emissão de CC-e expirado (30 dias)'}), 400
+
+        json_nfe = nfe_data.get('json_nfe') or {}
+        if isinstance(json_nfe, str):
+            try:
+                json_nfe = json.loads(json_nfe)
+            except Exception:
+                json_nfe = {}
+
+        eventos_cce = json_nfe.get('eventos_cce')
+        if not isinstance(eventos_cce, list):
+            eventos_cce = []
+
+        sequencia_evento = len(eventos_cce) + 1
+        if sequencia_evento > 20:
+            return jsonify({'success': False, 'message': 'Limite de 20 cartas de correção por NFe atingido'}), 400
+
+        ambiente = 'producao'
+        xml_content = json_nfe.get('xml_content', '') if isinstance(json_nfe, dict) else ''
+        if '<tpAmb>2</tpAmb>' in xml_content:
+            ambiente = 'homologacao'
+
+        certificado = get_active_certificate_for_client(db, nfe_data['cliente_id'])
+        if not certificado:
+            return jsonify({'success': False, 'message': 'Certificado não encontrado'}), 400
+
+        cert_data = certificado.get('cert_data') or certificado.get('arquivo_certificado')
+        cert_senha = certificado.get('password') or certificado.get('senha_certificado')
+
+        if not cert_data:
+            return jsonify({'success': False, 'message': 'Certificado do cliente não configurado para CC-e'}), 400
+        if not cert_senha:
+            return jsonify({'success': False, 'message': 'Senha do certificado do cliente não configurada para CC-e'}), 400
+
+        from services.sefaz_service import SefazService
+
+        sefaz = SefazService(ambiente=ambiente)
+        resultado = sefaz.carta_correcao_nfe(
+            chave_nfe=chave_acesso,
+            texto_correcao=texto_correcao,
+            cnpj_emitente=(nfe_data.get('emitente_cnpj') or '').replace('.', '').replace('/', '').replace('-', ''),
+            sequencia_evento=sequencia_evento,
+            certificado_pfx=cert_data,
+            senha_certificado=cert_senha
+        )
+
+        if resultado.get('success'):
+            evento = {
+                'sequencia_evento': sequencia_evento,
+                'correcao': texto_correcao,
+                'protocolo': resultado.get('protocolo'),
+                'codigo': resultado.get('codigo'),
+                'mensagem': resultado.get('message'),
+                'data_evento': resultado.get('data_evento') or datetime.now().isoformat()
+            }
+            eventos_cce.append(evento)
+            json_nfe['eventos_cce'] = eventos_cce
+
+            update_query = text("""
+                UPDATE nfe_emitidas
+                SET json_nfe = :json_nfe,
+                    mensagem_sefaz = :mensagem
+                WHERE nfe_emitida_id = :nfe_id
+            """)
+            db.execute(update_query, {
+                'json_nfe': json.dumps(json_nfe),
+                'mensagem': f"CC-e {sequencia_evento} registrada: {resultado.get('message', 'Evento autorizado')}",
+                'nfe_id': nfe_id
+            })
+            db.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Carta de Correção registrada com sucesso na SEFAZ',
+                'sequencia_evento': sequencia_evento,
+                'protocolo': resultado.get('protocolo'),
+                'codigo': resultado.get('codigo')
+            })
+
+        return jsonify({
+            'success': False,
+            'message': resultado.get('message', 'Erro ao registrar Carta de Correção na SEFAZ'),
+            'codigo': resultado.get('codigo')
+        }), 400
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[ERRO] Erro ao registrar CC-e: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao registrar CC-e: {str(e)}'
+        }), 500
+    finally:
+        db.close()
+
+
+@nfe_bp.route('/carta-correcao/<int:nfe_id>/historico', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def historico_carta_correcao_nfe(nfe_id):
+    """Retorna o histórico de CC-e registrado no JSON da NFe."""
+    db = next(get_db())
+    try:
+        query = text("""
+            SELECT n.nfe_emitida_id, n.cliente_id, n.status, n.json_nfe
+            FROM nfe_emitidas n
+            WHERE n.nfe_emitida_id = :nfe_id
+        """)
+        row = db.execute(query, {'nfe_id': nfe_id}).first()
+
+        if not row:
+            return jsonify({'success': False, 'message': 'NFe não encontrada'}), 404
+
+        nfe_data = dict(row._mapping)
+        accessible_clients = get_accessible_client_ids(db)
+        if nfe_data.get('cliente_id') not in accessible_clients:
+            return jsonify({'success': False, 'message': 'Sem permissão para acessar esta NFe'}), 403
+
+        json_nfe = nfe_data.get('json_nfe') or {}
+        if isinstance(json_nfe, str):
+            try:
+                json_nfe = json.loads(json_nfe)
+            except Exception:
+                json_nfe = {}
+
+        eventos_cce = json_nfe.get('eventos_cce')
+        if not isinstance(eventos_cce, list):
+            eventos_cce = []
+
+        eventos_ordenados = sorted(
+            eventos_cce,
+            key=lambda e: int((e or {}).get('sequencia_evento') or 0)
+        )
+
+        return jsonify({
+            'success': True,
+            'nfe_id': nfe_id,
+            'status': nfe_data.get('status'),
+            'total_eventos': len(eventos_ordenados),
+            'eventos': eventos_ordenados
+        })
+    except Exception as e:
+        logger.error(f"[ERRO] Erro ao consultar histórico de CC-e: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao consultar histórico de CC-e: {str(e)}'
         }), 500
     finally:
         db.close()

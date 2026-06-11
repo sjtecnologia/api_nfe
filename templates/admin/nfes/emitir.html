@@ -250,11 +250,23 @@ input[readonly] {
                 <div class="page-subtitle">
                     <strong>Emitente:</strong> {{ emitente_data.razao_social }} - CNPJ: {{ emitente_data.cnpj }}
                 </div>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparRascunhoAgora()">
+                        Limpar rascunho
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <form method="POST" id="nfeForm" action="{{ url_for('nfe.create') }}" novalidate>
+    <form method="POST" id="nfeForm" action="{{ url_for('nfe.create') }}" novalidate autocomplete="off">
+        <div id="rascunhoStatusInline" class="alert alert-secondary d-flex justify-content-between align-items-center" role="status" style="display:block;">
+            <span>Status do rascunho: inicializando...</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparRascunhoAgora()">
+                Limpar rascunho
+            </button>
+        </div>
+
         <!-- ✅ IDENTIFICAÇÃO DA NFE -->
         <div class="card">
             <div class="card-header">
@@ -275,7 +287,7 @@ input[readonly] {
                         <div class="form-group">
                             <label for="serie">Série *</label>
                             <input type="number" class="form-control" name="serie" id="serie" 
-                                   value="1" min="1" max="999" required onchange="buscarProximoNumero()">
+                                   value="{{ ultima_serie | default(1) }}" min="1" max="999" required onchange="buscarProximoNumero()">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -298,7 +310,7 @@ input[readonly] {
                     <div class="col-md-3">
                         <div class="form-group">
                             <label for="finNFe">Finalidade da Emissão *</label>
-                            <select class="form-control" name="finNFe" id="finNFe" required>
+                            <select class="form-control" name="finNFe" id="finNFe" required onchange="toggleNfeRefContainer(this.value)">
                                 <option value="1" selected>1 - Normal</option>
                                 <option value="2">2 - Complementar</option>
                                 <option value="3">3 - Ajuste</option>
@@ -320,12 +332,24 @@ input[readonly] {
                         </div>
                     </div>
                 </div>
+
+                <div class="row" id="nfeRefContainer" style="display:none;">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label for="chave_nfe_ref">Chave de Acesso da NF-e Original (devolução) *</label>
+                            <input type="text" class="form-control" id="chave_nfe_ref" name="chave_nfe_ref"
+                                   maxlength="44" placeholder="44 dígitos da chave de acesso da NF-e de compra"
+                                   pattern="[0-9]{44}" title="Informe os 44 dígitos da chave de acesso da NF-e original">
+                            <small class="form-text text-muted">Informe a chave de acesso (44 dígitos) da NF-e original que está sendo devolvida.</small>
+                        </div>
+                    </div>
+                </div>
                 
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
                             <label for="natOp">Natureza da Operação *</label>
-                            <input type="text" class="form-control" name="natOp" id="natOp" 
+                            <input type="text" class="form-control" name="natOp" id="natOp" autocomplete="off"
                                    value="{% if edit_mode and form_data.natOp %}{{ form_data.natOp }}{% endif %}"
                                    placeholder="Ex: Venda de mercadoria" maxlength="60" required>
                         </div>
@@ -362,13 +386,14 @@ input[readonly] {
                     <div class="col-md-12">
                         <div class="form-group">
                             <label for="destinatario">Selecionar Destinatário *</label>
-                            <select class="form-control js-select2" name="destinatario" id="destinatario" required>
+                            <select class="form-control js-select2" name="destinatario" id="destinatario" required autocomplete="off">
                                 <option value="">Selecione um destinatário...</option>
                                 {% for dest in destinatarios %}
                                 <option value="{{ dest.destinatario_id }}" 
                                         data-nome="{{ dest.nome_razao_social }}"
                                         data-documento="{{ dest.cpf_cnpj }}"
                                         data-ie="{{ dest.ie or '' }}"
+                                        data-ind-ie-dest="{{ dest.ie_indicador_nfe or 'C' }}"
                                         data-endereco="{{ dest.logradouro }}, {{ dest.numero }} - {{ dest.bairro }}"
                                         data-cidade="{{ dest.nome_municipio }}/{{ dest.uf }}"
                                         data-cep="{{ dest.cep }}"
@@ -390,43 +415,27 @@ input[readonly] {
                         <span id="destEndereco"></span><br>
                         <span id="destCidade"></span> - CEP: <span id="destCep"></span>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ✅ ITENS DA NFE -->
-        <div class="card mt-3" id="cardItensNfe">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5>📦 Itens da NFe</h5>
-                <button type="button" class="btn btn-primary btn-sm" onclick="adicionarItem()">
-                    <i class="fas fa-plus"></i> Adicionar Item
-                </button>
-            </div>
-            <div class="card-body">
-                <div id="itensContainer">
-                    <!-- Itens serão adicionados aqui via JavaScript -->
-                </div>
-                
-                <!-- Total Geral -->
-                <div class="row mt-3">
-                    <div class="col-md-12">
-                        <div class="alert alert-success">
-                            <h5>💰 Total da NFe: R$ <span id="totalGeral">0,00</span></h5>
+                    <!-- Campo IE manual: aparece quando destinatário não tem IE cadastrada -->
+                    <div id="destIeManualContainer" style="display:none;" class="mt-2">
+                        <div class="alert alert-warning py-2">
+                            <strong>⚠️ Inscrição Estadual não cadastrada.</strong>
+                            Informe a IE do destinatário para emitir NF-e com ICMS (ex.: devolução).
+                            <div class="input-group mt-1" style="max-width:400px">
+                                <input type="text" id="destIeManual" name="destinatario_ie_manual"
+                                       class="form-control form-control-sm"
+                                       placeholder="IE do destinatário (somente números, ou ISENTO)">
+                                <div class="input-group-append">
+                                    <span class="input-group-text text-muted" style="font-size:0.8em">opcional</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-
-                {% if emitente_data and emitente_data.regime_tributario_id == 3 %}
-                <div class="alert alert-warning mb-3" role="alert">
-                    <i class="fas fa-balance-scale"></i>
-                    <strong>IBS/CBS obrigatório:</strong> este emitente está em CRT 3 e cada item precisa de uma classificação de Reforma Tributária.
-                </div>
-                {% endif %}
                 </div>
             </div>
         </div>
 
         <!-- ✅ INFORMAÇÕES DE PAGAMENTO -->
-        <div class="card mt-3" id="cardPagamentoNfe">
+        <div class="card mt-3">
             <div class="card-header">
                 <h5>💳 Informações de Pagamento *</h5>
             </div>
@@ -460,6 +469,30 @@ input[readonly] {
                             <label for="valorPagamento">Valor do Pagamento *</label>
                             <input type="text" class="form-control" name="valorPagamento" 
                                    id="valorPagamento" placeholder="0,00" data-valor-real="0.00" required>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ ITENS DA NFE -->
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5>📦 Itens da NFe</h5>
+                <button type="button" class="btn btn-primary btn-sm" onclick="adicionarItem()">
+                    <i class="fas fa-plus"></i> Adicionar Item
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="itensContainer">
+                    <!-- Itens serão adicionados aqui via JavaScript -->
+                </div>
+                
+                <!-- Total Geral -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="alert alert-success">
+                            <h5>💰 Total da NFe: R$ <span id="totalGeral">0,00</span></h5>
                         </div>
                     </div>
                 </div>
@@ -747,7 +780,7 @@ input[readonly] {
             <div class="card-body">
                 <div class="form-group">
                     <label for="infCpl">Informações Complementares</label>
-                    <textarea class="form-control" name="infCpl" id="infCpl" rows="3" 
+                    <textarea class="form-control" name="infCpl" id="infCpl" rows="3" autocomplete="off"
                               maxlength="5000" placeholder="Informações adicionais sobre a NFe..."></textarea>
                     <small class="form-text text-muted">Máximo 5000 caracteres</small>
                 </div>
@@ -772,16 +805,16 @@ input[readonly] {
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-12 text-center">
-                        <button type="button" class="btn btn-primary" onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar();validarComIA()" id="btnValidarIA">
+                        <button type="button" class="btn btn-primary" onclick="validarComIA()" id="btnValidarIA">
                             <i class="fas fa-robot"></i> Validar com IA
                         </button>
-                        <button type="button" class="btn btn-info" onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar();previewXML()">
+                        <button type="button" class="btn btn-info" onclick="previewXML()">
                             <i class="fas fa-eye"></i> Visualizar XML
                         </button>
-                        <button type="button" class="btn btn-secondary" onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar();previewDANFE()">
+                        <button type="button" class="btn btn-secondary" onclick="previewDANFE()">
                             <i class="fas fa-file-pdf"></i> Preview DANFE
                         </button>
-                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled onclick="if(typeof window._rascunhoSalvar==='function')window._rascunhoSalvar()">
+                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled>
                             <i class="fas fa-paper-plane"></i> Emitir NFe
                         </button>
                         <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary">
@@ -849,26 +882,6 @@ input[readonly] {
     </div>
 </div>
 
-<!-- ✅ MODAL DE PRÉ-VALIDAÇÃO (erros de campos antes de IA/XML/DANFE) -->
-<div class="modal fade" id="modalPreValidacao" tabindex="-1" aria-labelledby="modalPreValidacaoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="modalPreValidacaoLabel">
-                    <i class="fas fa-exclamation-triangle"></i> Corrija os erros antes de continuar
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body" id="modalPreValidacaoBody">
-                <!-- Preenchido via JS -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar e corrigir</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Modal de Ações Pós-DANFE -->
 <div class="modal fade" id="modalAcoesDanfe" tabindex="-1" role="dialog" aria-labelledby="modalAcoesDanfeLabel" aria-hidden="true" data-backdrop="static" data-keyboard="false">
     <div class="modal-dialog modal-dialog-centered" role="document">
@@ -892,7 +905,7 @@ input[readonly] {
                         </button>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <button type="button" class="btn btn-info btn-lg btn-block shadow-sm" onclick="enviarEmailDanfe(this)" style="height: 120px;">
+                        <button type="button" class="btn btn-info btn-lg btn-block shadow-sm" onclick="enviarEmailDanfe()" style="height: 120px;">
                             <i class="fas fa-envelope fa-3x mb-2"></i>
                             <br>
                             <strong>Enviar por Email</strong>
@@ -980,7 +993,411 @@ console.log('🔍 Verificando se jQuery está disponível...');
 let itemCounter = 0;
 let totalGeral = 0;
 let currentNcmItemId = null;
-const IBS_CBS_OBRIGATORIO = {{ 1 if emitente_data and emitente_data.regime_tributario_id == 3 else 0 }};
+const IS_EDIT_MODE = {{ 'true' if edit_mode|default(false) else 'false' }};
+const RASCUNHO_STORAGE_KEY = `nfe_rascunho_cliente_{% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}anon{% endif %}`;
+let _rascunhoSaveTimer = null;
+let _rascunhoRestoreExecutado = false;
+let _desabilitarRascunhoNestaCarga = false;
+
+function _coletarCamposFormularioRascunho() {
+    const form = document.getElementById('nfeForm');
+    if (!form) return [];
+
+    const campos = [];
+    const contagemPorNome = {};
+
+    Array.from(form.elements).forEach(el => {
+        if (!el || !el.name || el.disabled || el.type === 'file') return;
+
+        const ordem = contagemPorNome[el.name] || 0;
+        contagemPorNome[el.name] = ordem + 1;
+
+        campos.push({
+            name: el.name,
+            ordem,
+            type: el.type || el.tagName?.toLowerCase() || 'text',
+            value: el.value,
+            checked: !!el.checked
+        });
+    });
+
+    return campos;
+}
+
+function _obterCampoPorNomeEOrdem(form, name, ordem) {
+    if (!form || !name) return null;
+    const named = form.elements.namedItem(name);
+    if (!named) return null;
+
+    if (typeof named.length === 'number' && !named.tagName) {
+        return named[ordem] || null;
+    }
+
+    return ordem === 0 ? named : null;
+}
+
+function _aplicarCamposFormularioRascunho(campos) {
+    const form = document.getElementById('nfeForm');
+    if (!form || !Array.isArray(campos)) return;
+
+    campos.forEach(campo => {
+        const el = _obterCampoPorNomeEOrdem(form, campo.name, campo.ordem || 0);
+        if (!el) return;
+
+        if (campo.type === 'checkbox' || campo.type === 'radio') {
+            el.checked = !!campo.checked;
+            if (campo.checked && campo.value != null) {
+                el.value = campo.value;
+            }
+        } else {
+            el.value = campo.value ?? '';
+        }
+
+        if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
+            $(el).val(el.value).trigger('change');
+        }
+    });
+}
+
+function _obterIdsItensNoRascunho(campos) {
+    const ids = new Set();
+    if (!Array.isArray(campos)) return [];
+
+    campos.forEach(campo => {
+        const nome = (campo?.name || '').toString();
+        const match = nome.match(/_(\d+)$/);
+        if (match) ids.add(parseInt(match[1], 10));
+    });
+
+    return Array.from(ids).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
+}
+
+function _aplicarItensRascunho(itens) {
+    if (!Array.isArray(itens) || !itens.length) return;
+
+    itens.forEach((item, idx) => {
+        const itemId = idx + 1;
+
+        const setValue = (selector, value) => {
+            const el = document.querySelector(selector);
+            if (!el || value === undefined || value === null) return;
+            el.value = String(value);
+            if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
+                $(el).val(String(value)).trigger('change');
+            }
+        };
+
+        // Produto via Select2 AJAX: cria option selecionada para exibir descrição corretamente
+        const produtoSelect = document.querySelector(`select[name="produto_${itemId}"]`);
+        const produtoId = (item.produto_id || '').toString().trim();
+        if (produtoSelect && produtoId) {
+            let option = Array.from(produtoSelect.options).find(o => String(o.value) === produtoId);
+            if (!option) {
+                const texto = (item.descricao || item.codigo_produto || `Produto ${produtoId}`).toString();
+                option = new Option(texto, produtoId, true, true);
+                produtoSelect.add(option);
+            }
+            produtoSelect.value = produtoId;
+            if (typeof $ !== 'undefined' && $(produtoSelect).hasClass('select2-hidden-accessible')) {
+                $(produtoSelect).val(produtoId).trigger('change');
+            }
+        }
+
+        setValue(`input[name="codigo_produto_${itemId}"]`, item.codigo_produto);
+        setValue(`input[name="unidade_${itemId}"]`, item.unidade);
+        setValue(`input[name="quantidade_${itemId}"]`, item.quantidade);
+        setValue(`input[name="valor_unitario_${itemId}"]`, item.valor_unitario);
+        setValue(`input[name="valor_total_${itemId}"]`, item.valor_total);
+        setValue(`select[name="ncm_${itemId}"]`, item.ncm);
+        setValue(`select[name="cfop_${itemId}"]`, item.cfop);
+        setValue(`select[name="origem_${itemId}"]`, item.origem);
+        setValue(`select[name="csosn_${itemId}"]`, item.csosn_icms);
+        setValue(`select[name="cst_icms_${itemId}"]`, item.cst_icms);
+        setValue(`select[name="classificacao_ibs_cbs_id_${itemId}"]`, item.classificacao_ibs_cbs_id);
+    });
+}
+
+function atualizarStatusRascunho(texto, tipo = 'info') {
+    let el = document.getElementById('rascunhoStatusInline');
+    if (!el) return;
+    const statusSpan = el.querySelector('span');
+    if (!statusSpan) {
+        el.innerHTML = `
+            <span>Status do rascunho: ${texto}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparRascunhoAgora()">
+                Limpar rascunho
+            </button>
+        `;
+    } else {
+        statusSpan.textContent = `Status do rascunho: ${texto}`;
+    }
+    el.style.display = 'block';
+    el.className = tipo === 'ok'
+        ? 'alert alert-success d-flex justify-content-between align-items-center'
+        : (tipo === 'erro' ? 'alert alert-danger d-flex justify-content-between align-items-center' : 'alert alert-secondary d-flex justify-content-between align-items-center');
+}
+
+function limparRascunhoAgora() {
+    limparRascunhoNfe();
+    window.location.reload();
+}
+
+function limparCamposEmissaoNova() {
+    const limparValor = (selector, valor = '') => {
+        const el = document.querySelector(selector);
+        if (!el) return;
+        el.value = valor;
+        if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
+            $(el).val(valor).trigger('change');
+        }
+    };
+
+    limparValor('#destinatario', '');
+    limparValor('#natOp', '');
+    limparValor('#infCpl', '');
+
+    const infoDest = document.getElementById('destinatarioInfo');
+    if (infoDest) infoDest.style.display = 'none';
+    const ieManual = document.getElementById('destIeManualContainer');
+    if (ieManual) ieManual.style.display = 'none';
+}
+
+function limparRascunhoNfe() {
+    try {
+        localStorage.removeItem(RASCUNHO_STORAGE_KEY);
+        Object.keys(localStorage || {})
+            .filter(k => String(k).startsWith('nfe_rascunho_cliente_'))
+            .forEach(k => localStorage.removeItem(k));
+        console.log('🧹 Rascunho NFe removido do localStorage');
+        atualizarStatusRascunho('Rascunho limpo', 'info');
+    } catch (e) {
+        console.warn('⚠️ Falha ao remover rascunho:', e);
+        atualizarStatusRascunho('Falha ao limpar rascunho', 'erro');
+    }
+}
+
+function _coletarItensParaRascunho() {
+    const itemTemDados = (item) => {
+        if (!item || typeof item !== 'object') return false;
+        return Boolean(
+            String(item.produto_id || '').trim() ||
+            String(item.codigo_produto || '').trim() ||
+            String(item.descricao || '').trim() ||
+            String(item.ncm || '').trim() ||
+            String(item.cfop || '').trim() ||
+            (parseFloat(item.quantidade || 0) > 0)
+        );
+    };
+
+    const coletarItemFallback = (itemId) => {
+        const produtoSelect = document.querySelector(`select[name="produto_${itemId}"]`);
+        const produtoOption = produtoSelect?.options?.[produtoSelect.selectedIndex];
+        return {
+            produto_id: produtoSelect?.value || '',
+            codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`)?.value || '',
+            descricao: (produtoOption?.text || '').trim(),
+            unidade: document.querySelector(`input[name="unidade_${itemId}"]`)?.value || '',
+            quantidade: document.querySelector(`input[name="quantidade_${itemId}"]`)?.value || '',
+            valor_unitario: document.querySelector(`input[name="valor_unitario_${itemId}"]`)?.value || '',
+            valor_total: document.querySelector(`input[name="valor_total_${itemId}"]`)?.value || '',
+            ncm: document.querySelector(`select[name="ncm_${itemId}"]`)?.value || '',
+            cfop: document.querySelector(`select[name="cfop_${itemId}"]`)?.value || '',
+            origem: document.querySelector(`select[name="origem_${itemId}"]`)?.value || '',
+            cst_icms: document.querySelector(`select[name="cst_icms_${itemId}"]`)?.value || '',
+            csosn_icms: document.querySelector(`select[name="csosn_${itemId}"]`)?.value || '',
+            classificacao_ibs_cbs_id: document.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`)?.value || ''
+        };
+    };
+
+    const itens = [];
+    document.querySelectorAll('[id^="item-"]').forEach(card => {
+        const itemId = card.id.split('-')[1];
+        if (!itemId) return;
+
+        try {
+            atualizarItemJSON(itemId);
+        } catch (_e) {
+            // segue com o que existir no hidden
+        }
+
+        const hidden = document.getElementById(`item_json_${itemId}`);
+        if (!hidden || !hidden.value) {
+            const fallbackItem = coletarItemFallback(itemId);
+            if (itemTemDados(fallbackItem)) {
+                itens.push(fallbackItem);
+            }
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(hidden.value);
+            if (parsed && typeof parsed === 'object' && itemTemDados(parsed)) {
+                itens.push(parsed);
+            } else {
+                const fallbackItem = coletarItemFallback(itemId);
+                if (itemTemDados(fallbackItem)) {
+                    itens.push(fallbackItem);
+                }
+            }
+        } catch (e) {
+            console.warn(`⚠️ Item ${itemId} com JSON inválido no rascunho:`, e);
+            const fallbackItem = coletarItemFallback(itemId);
+            if (itemTemDados(fallbackItem)) {
+                itens.push(fallbackItem);
+            }
+        }
+    });
+
+    return itens;
+}
+
+function _coletarCabecalhoParaRascunho() {
+    const campos = [
+        'destinatario', 'numero_nfe', 'serie', 'tpNF', 'finNFe', 'natOp',
+        'dataEmissao', 'formaPagamento', 'valorPagamento', 'modFrete', 'infCpl',
+        'chave_nfe_ref', 'transportadoraNome', 'transportadoraCnpjCpf',
+        'transportadoraIE', 'transportadoraEndereco', 'transportadoraMunicipio',
+        'transportadoraUF', 'veiculoPlaca', 'veiculoUF', 'transportadoraANTT',
+        'volumeQuantidade', 'volumeEspecie', 'volumeMarca', 'volumeNumeracao',
+        'volumePesoBruto', 'volumePesoLiquido', 'vFrete', 'vSeg', 'vDesc'
+    ];
+
+    const data = {};
+    campos.forEach(name => {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el) data[name] = el.value;
+    });
+
+    return data;
+}
+
+function salvarRascunhoNfeAgora() {
+    if (IS_EDIT_MODE) return;
+    if (_desabilitarRascunhoNestaCarga) return;
+
+    try {
+        const itensRascunho = _coletarItensParaRascunho();
+
+        // Não manter rascunho parcial sem itens: evita abrir emissão nova com cabeçalho "sujo"
+        if (!itensRascunho.length) {
+            localStorage.removeItem(RASCUNHO_STORAGE_KEY);
+            atualizarStatusRascunho('Rascunho ignorado (sem itens)', 'info');
+            return;
+        }
+
+        const payload = {
+            versao: 1,
+            atualizado_em: new Date().toISOString(),
+            cabecalho: _coletarCabecalhoParaRascunho(),
+            campos_formulario: _coletarCamposFormularioRascunho(),
+            itens: itensRascunho,
+            item_counter: itemCounter
+        };
+
+        localStorage.setItem(RASCUNHO_STORAGE_KEY, JSON.stringify(payload));
+        console.log(`💾 Rascunho salvo: ${payload.itens.length} item(ns)`);
+        atualizarStatusRascunho(`Rascunho salvo (${payload.itens.length} item/ns)`, 'ok');
+    } catch (e) {
+        console.warn('⚠️ Falha ao salvar rascunho:', e);
+        atualizarStatusRascunho('Falha ao salvar rascunho', 'erro');
+    }
+}
+
+function agendarSalvarRascunhoNfe() {
+    if (IS_EDIT_MODE) return;
+    if (_desabilitarRascunhoNestaCarga) return;
+    if (_rascunhoSaveTimer) clearTimeout(_rascunhoSaveTimer);
+    _rascunhoSaveTimer = setTimeout(() => {
+        salvarRascunhoNfeAgora();
+    }, 700);
+}
+
+function restaurarRascunhoNfe() {
+    if (IS_EDIT_MODE) return false;
+    if (_desabilitarRascunhoNestaCarga) return false;
+    if (_rascunhoRestoreExecutado) return true;
+
+    try {
+        const raw = localStorage.getItem(RASCUNHO_STORAGE_KEY);
+        if (!raw) {
+            atualizarStatusRascunho('Sem rascunho salvo', 'info');
+            return false;
+        }
+
+        const payload = JSON.parse(raw);
+        const itens = (Array.isArray(payload?.itens) ? payload.itens : []).filter(item => {
+            return item && (
+                String(item.produto_id || '').trim() ||
+                String(item.codigo_produto || '').trim() ||
+                String(item.descricao || '').trim() ||
+                String(item.ncm || '').trim() ||
+                String(item.cfop || '').trim() ||
+                (parseFloat(item.quantidade || 0) > 0)
+            );
+        });
+        const cabecalho = payload?.cabecalho || {};
+        const camposFormulario = Array.isArray(payload?.campos_formulario) ? payload.campos_formulario : [];
+        const itemCounterSalvo = parseInt(payload?.item_counter || 0, 10) || 0;
+        const idsItens = _obterIdsItensNoRascunho(camposFormulario);
+        const temCabecalhoUtil = Boolean(
+            (cabecalho.destinatario || '').toString().trim() ||
+            (cabecalho.natOp || '').toString().trim() ||
+            (cabecalho.infCpl || '').toString().trim()
+        );
+
+        if (!itens.length && !temCabecalhoUtil) return false;
+
+        // Se rascunho ficou apenas com cabeçalho, descarta e abre emissão limpa
+        if (!itens.length) {
+            localStorage.removeItem(RASCUNHO_STORAGE_KEY);
+            limparCamposEmissaoNova();
+            atualizarStatusRascunho('Rascunho descartado (sem itens)', 'info');
+            return false;
+        }
+
+        _rascunhoRestoreExecutado = true;
+
+        Object.entries(cabecalho).forEach(([name, value]) => {
+            const el = document.querySelector(`[name="${name}"]`);
+            if (!el) return;
+            el.value = value ?? '';
+            if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
+                $(el).val(value ?? '').trigger('change');
+            }
+        });
+
+        const container = document.getElementById('itensContainer');
+        if (container) container.innerHTML = '';
+        itemCounter = 0;
+
+        const quantidadeItens = idsItens.length || itens.length || itemCounterSalvo;
+        for (let i = 0; i < quantidadeItens; i++) {
+            adicionarItem();
+        }
+
+        // Reaplica todos os campos persistidos após os itens existirem e o Select2 inicializar
+        setTimeout(() => {
+            normalizarSequenciaItens();
+            _aplicarCamposFormularioRascunho(camposFormulario);
+            _aplicarItensRascunho(itens);
+            setTimeout(() => {
+                normalizarSequenciaItens();
+                _aplicarCamposFormularioRascunho(camposFormulario);
+                _aplicarItensRascunho(itens);
+                calcularTotalGeral();
+                validarCamposObrigatorios();
+            }, 250);
+        }, 150);
+
+        console.log(`♻️ Rascunho restaurado: ${quantidadeItens} item(ns)`);
+        atualizarStatusRascunho(`Rascunho restaurado (${quantidadeItens} item/ns)`, 'ok');
+        return true;
+    } catch (e) {
+        console.warn('⚠️ Falha ao restaurar rascunho:', e);
+        atualizarStatusRascunho('Falha ao restaurar rascunho', 'erro');
+        return false;
+    }
+}
 
 // 🤖 Assistente IA - Variáveis globais
 let empresaCRT = {% if emitente_data and emitente_data.crt %}{{ emitente_data.crt }}{% else %}1{% endif %};
@@ -1120,30 +1537,54 @@ const ncmDatabase = [
 
 // Aguardar o DOM carregar
 document.addEventListener('DOMContentLoaded', function() {
+    atualizarStatusRascunho('inicializando...', 'info');
+
+    {% if not edit_mode %}
+    // Emissão nova: limpar qualquer preenchimento automático do navegador antes de qualquer restore
+    setTimeout(() => {
+        limparCamposEmissaoNova();
+    }, 0);
+    {% endif %}
+
+    // Atalho: limpar rascunho via URL (?clear_rascunho=1)
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        if (params.get('clear_rascunho') === '1') {
+            _desabilitarRascunhoNestaCarga = true;
+            Object.keys(localStorage || {})
+                .filter(k => String(k).startsWith('nfe_rascunho_cliente_'))
+                .forEach(k => localStorage.removeItem(k));
+
+            atualizarStatusRascunho('Rascunho limpo via URL', 'ok');
+            limparCamposEmissaoNova();
+
+            params.delete('clear_rascunho');
+            const novaQuery = params.toString();
+            const novaUrl = `${window.location.pathname}${novaQuery ? '?' + novaQuery : ''}`;
+            window.history.replaceState({}, '', novaUrl);
+        }
+    } catch (e) {
+        console.warn('⚠️ Falha ao processar clear_rascunho via URL:', e);
+    }
+
     // Verificar se jQuery do base.html foi carregado
     let checkJQuery = setInterval(function() {
         if (typeof jQuery !== 'undefined') {
             console.log('✅ jQuery encontrado:', $.fn.jquery);
             clearInterval(checkJQuery);
             
-            if ($.fn.select2) {
-                // Select2 já carregado pelo base.html — usar diretamente
-                console.log('✅ Select2 já disponível (base.html)');
+            // Carregar Select2 via script
+            const select2Script = document.createElement('script');
+            select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
+            select2Script.onload = function() {
+                console.log('✅ Select2 carregado');
                 initSelect2();
-            } else {
-                // Carregar Select2 via script como fallback
-                const select2Script = document.createElement('script');
-                select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
-                select2Script.onload = function() {
-                    console.log('✅ Select2 carregado dinamicamente');
-                    initSelect2();
-                };
-                select2Script.onerror = function() {
-                    console.error('❌ Erro ao carregar Select2');
-                    alert('Erro: Não foi possível carregar Select2. Verifique sua conexão.');
-                };
-                document.head.appendChild(select2Script);
-            }
+            };
+            select2Script.onerror = function() {
+                console.error('❌ Erro ao carregar Select2');
+                alert('Erro: Não foi possível carregar Select2. Verifique sua conexão.');
+            };
+            document.head.appendChild(select2Script);
         } else {
             console.log('⏳ Aguardando jQuery...');
         }
@@ -1183,7 +1624,7 @@ document.addEventListener('DOMContentLoaded', function() {
     aplicarMascaraMoeda('vFrete');
     aplicarMascaraMoeda('vSeg');
     aplicarMascaraMoeda('vDesc');
-    aplicarMascaraMoeda('valorPagamento');
+    // valorPagamento é preenchido automaticamente por recalcularTotais — não aplicar máscara
     console.log('💰 Máscaras monetárias aplicadas');
     
     // Validar campos obrigatórios inicialmente
@@ -1203,10 +1644,35 @@ document.addEventListener('DOMContentLoaded', function() {
         valorPagamento.addEventListener('change', validarCamposObrigatorios);
     }
     
+    // Listener para mostrar/ocultar campo de chave NF-e referenciada
+    const finNFeSelect = document.getElementById('finNFe');
+    if (finNFeSelect) {
+        finNFeSelect.addEventListener('change', function() {
+            toggleNfeRefContainer(this.value);
+        });
+        // Inicializar estado atual
+        toggleNfeRefContainer(finNFeSelect.value);
+    }
+    
     console.log('✅ Validação de campos obrigatórios ativada');
     
     // Atualizar número quando modelo mudar
     document.getElementById('modelo').addEventListener('change', buscarProximoNumero);
+
+    // Autosave de rascunho para alterações no formulário
+    const formNfe = document.getElementById('nfeForm');
+    if (formNfe) {
+        formNfe.addEventListener('input', agendarSalvarRascunhoNfe);
+        formNfe.addEventListener('change', agendarSalvarRascunhoNfe);
+    }
+
+    // Última gravação ao sair da página
+    window.addEventListener('beforeunload', salvarRascunhoNfeAgora);
+
+    // Tentar restaurar cedo, sem depender de Select2/CDN
+    setTimeout(() => {
+        restaurarRascunhoNfe();
+    }, 300);
 });
 
 function initSelect2() {
@@ -1249,14 +1715,36 @@ function initSelect2() {
             });
             
             console.log('🎉 Select2 inicialização concluída!');
+
+            {% if not edit_mode %}
+            // Reforço de limpeza após init do Select2 (neutraliza autofill/back-forward cache)
+            limparCamposEmissaoNova();
+            {% endif %}
+
+            // Restaurar rascunho salvo, quando existir
+            const restaurado = restaurarRascunhoNfe();
             
             // Adicionar primeiro item automaticamente (não em modo edição)
             {% if not edit_mode %}
-            adicionarItem();
+            if (!restaurado) {
+                limparCamposEmissaoNova();
+                adicionarItem();
+            }
             {% endif %}
         }
     }, 100);
 }
+
+window.addEventListener('pageshow', function(_event) {
+    {% if not edit_mode %}
+    // Proteção extra contra restauração automática de campos pelo navegador
+    setTimeout(() => {
+        if (!_rascunhoRestoreExecutado) {
+            limparCamposEmissaoNova();
+        }
+    }, 0);
+    {% endif %}
+});
 
 // Atualizar informações do destinatário
 function atualizarDestinatarioInfo() {
@@ -1271,28 +1759,24 @@ function atualizarDestinatarioInfo() {
         document.getElementById('destCidade').textContent = option.dataset.cidade;
         document.getElementById('destCep').textContent = option.dataset.cep;
         infoDiv.style.display = 'block';
+
+        // Mostrar campo de IE manual quando destinatário (CNPJ) não tem IE cadastrada
+        const ie = (option.dataset.ie || '').trim();
+        const isCnpj = (option.dataset.documento || '').replace(/\D/g,'').length === 14;
+        const ieManualContainer = document.getElementById('destIeManualContainer');
+        if (ieManualContainer) {
+            ieManualContainer.style.display = (isCnpj && !ie) ? 'block' : 'none';
+            if (ie) document.getElementById('destIeManual').value = '';
+        }
     } else {
         infoDiv.style.display = 'none';
+        const ieManualContainer = document.getElementById('destIeManualContainer');
+        if (ieManualContainer) ieManualContainer.style.display = 'none';
     }
 }
 
 // Adicionar item à NFe
 function adicionarItem() {
-    // Impedir adição de item vazio se já existe item sem produto selecionado
-    // (bypass durante restauração de rascunho)
-    if (!window._nfeRestaurandoRascunho) {
-        const itensExistentes = document.querySelectorAll('#itensContainer [id^="item-"]');
-        for (const itemDiv of itensExistentes) {
-            const itemId = itemDiv.id.split('-')[1];
-            const produtoSelect = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
-            if (produtoSelect && !produtoSelect.value) {
-                alert('Preencha o produto do item atual antes de adicionar um novo item.');
-                produtoSelect.focus();
-                return;
-            }
-        }
-    }
-
     itemCounter++;
     const container = document.getElementById('itensContainer');
     
@@ -1339,14 +1823,14 @@ function adicionarItem() {
                     <div class="form-group">
                         <label>Quantidade *</label>
                         <input type="number" step="0.0001" name="quantidade_${itemCounter}" 
-                               class="form-control" min="0.0001" value="1" oninput="calcularTotal(${itemCounter})" onchange="calcularTotal(${itemCounter})" required>
+                               class="form-control" min="0.0001" onchange="calcularTotal(${itemCounter})" oninput="calcularTotal(${itemCounter})" required>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Valor Unitário *</label>
                         <input type="number" step="0.01" name="valor_unitario_${itemCounter}" 
-                               class="form-control" min="0.01" oninput="calcularTotal(${itemCounter})" onchange="calcularTotal(${itemCounter})" required>
+                               class="form-control" min="0.01" onchange="calcularTotal(${itemCounter})" oninput="calcularTotal(${itemCounter})" required>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -1365,6 +1849,9 @@ function adicionarItem() {
                         <label>NCM *</label>
                         <select name="ncm_${itemCounter}" class="form-control js-select2-ncm" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o NCM...</option>
+                            {% for ncm in all_ncms %}
+                            <option value="{{ ncm.codigo }}">{{ ncm.codigo }} - {{ ncm.descricao }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -1373,6 +1860,9 @@ function adicionarItem() {
                         <label>CFOP *</label>
                         <select name="cfop_${itemCounter}" class="form-control js-select2-cfop" required onchange="atualizarItemJSON(${itemCounter})">
                             <option value="">Selecione o CFOP...</option>
+                            {% for cfop in all_cfops %}
+                            <option value="{{ cfop.cfop }}">{{ cfop.cfop }} - {{ cfop.descricao }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -1430,10 +1920,7 @@ function adicionarItem() {
                 </div>
                 {% endif %}
             </div>
-
-            <!-- Alerta de regra tributária (preenchido via JS) -->
-            <div id="regra_alerta_${itemCounter}"></div>
-
+            
             <!-- Impostos ICMS -->
             <div class="row">
                 <div class="col-md-3">
@@ -1570,7 +2057,7 @@ function adicionarItem() {
                 </div>
             </div>
             
-            <!-- IBS/CBS - Reforma Tributária (obrigatório para CRT=3) -->
+            <!-- IBS/CBS - Reforma Tributária (apenas para CRT=3) -->
             <div class="row item-ibs-cbs" style="display: none;">
                 <div class="col-md-12">
                     <div class="alert alert-info">
@@ -1579,19 +2066,15 @@ function adicionarItem() {
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label>Classificação IBS/CBS <span class="text-danger">*</span></label>
-                        <select name="classificacao_ibs_cbs_id_${itemCounter}" class="form-control js-select2-classificacao-ibs" {% if emitente_data and emitente_data.regime_tributario_id == 3 %}required{% endif %}>
+                        <label>Classificação IBS/CBS</label>
+                        <select name="classificacao_ibs_cbs_id_${itemCounter}" class="form-control js-select2-classificacao-ibs">
                             <option value="">Nenhuma (opcional)</option>
                             {% for clf in classificacoes_ibs_cbs %}
-                            <option value="{{ clf.classificacao_id }}" {% if clf.codigo == '00-00001' %}selected{% endif %}>{{ clf.codigo }} - {{ clf.descricao }}</option>
+                            <option value="{{ clf.classificacao_id }}">{{ clf.codigo }} - {{ clf.descricao }}</option>
                             {% endfor %}
                         </select>
                         <small class="form-text text-muted">
-                            {% if emitente_data and emitente_data.regime_tributario_id == 3 %}
-                            Obrigatório para CRT 3 - Lucro Real/Presumido.
-                            {% else %}
                             Selecione a classificação IBS/CBS para Reforma Tributária (CRT 3 - Lucro Real/Presumido)
-                            {% endif %}
                         </small>
                     </div>
                 </div>
@@ -1604,6 +2087,7 @@ function adicionarItem() {
     
     // ✅ ALTERAÇÃO: Inserir novo item NO TOPO da lista (primeiro filho)
     container.insertBefore(itemDiv, container.firstChild);
+    normalizarSequenciaItens();
     
     // Atualizar visibilidade dos campos IBS/CBS para o novo item
     const itemIbsCbs = itemDiv.querySelector('.item-ibs-cbs');
@@ -1634,6 +2118,7 @@ function adicionarItem() {
     // Inicializar Select2 para os novos elementos do item
     setTimeout(() => {
         initSelect2ForItem(itemCounter);
+        agendarSalvarRascunhoNfe();
     }, 100);
 }
 
@@ -1651,8 +2136,7 @@ function initSelect2ForItem(itemId) {
                 dataType: 'json',
                 delay: 300,
                 data: function(params) {
-                    var cid = (typeof _clienteId !== 'undefined') ? _clienteId : null;
-                    return { q: params.term, page: params.page || 1, cliente_id: cid };
+                    return { q: params.term, page: params.page || 1 };
                 },
                 processResults: function(data) {
                     return data;
@@ -1668,24 +2152,14 @@ function initSelect2ForItem(itemId) {
             carregarProduto(itemId);
         });
         
-        // CFOP (AJAX)
+        // CFOP
         $(`select[name="cfop_${itemId}"]`).select2({
             width: '100%',
             allowClear: true,
             placeholder: 'Digite para buscar CFOP...',
-            minimumInputLength: 1,
-            ajax: {
-                url: '/admin/nfe/api/cfops',
-                dataType: 'json',
-                delay: 250,
-                data: params => ({ q: params.term }),
-                processResults: data => data,
-                cache: true
-            },
             language: {
                 noResults: () => "Nenhum CFOP encontrado",
-                searching: () => "Pesquisando...",
-                inputTooShort: () => "Digite ao menos 1 caractere"
+                searching: () => "Pesquisando..."
             }
         });
         
@@ -1710,24 +2184,14 @@ function initSelect2ForItem(itemId) {
                 searching: () => "Pesquisando..."
             }
         });
-        // NCM (AJAX)
+        // NCM
         $(`select[name="ncm_${itemId}"]`).select2({
             width: '100%',
             allowClear: true,
             placeholder: 'Digite para buscar NCM...',
-            minimumInputLength: 2,
-            ajax: {
-                url: '/admin/nfe/api/ncms',
-                dataType: 'json',
-                delay: 300,
-                data: params => ({ q: params.term, page: params.page || 1 }),
-                processResults: data => data,
-                cache: true
-            },
             language: {
                 noResults: () => "Nenhum NCM encontrado",
-                searching: () => "Pesquisando...",
-                inputTooShort: () => "Digite ao menos 2 caracteres"
+                searching: () => "Pesquisando..."
             }
         });
         console.log(`✅ Select2 inicializado para item ${itemId}`);
@@ -1800,96 +2264,93 @@ function selecionarNCM(codigo, descricao) {
     }
 }
 
+function ajustarCfopPorUf(cfopCodigo, ufOrigem, ufDestino) {
+    const cfop = String(cfopCodigo || '').replace(/[.\-\s]/g, '').trim();
+    const origem = String(ufOrigem || '').trim().toUpperCase();
+    const destino = String(ufDestino || '').trim().toUpperCase();
+
+    if (!cfop || cfop.length !== 4 || !/^\d{4}$/.test(cfop)) return cfop;
+    if (!origem || !destino) return cfop;
+
+    if (origem !== destino && cfop.startsWith('5')) {
+        return `6${cfop.slice(1)}`;
+    }
+    if (origem === destino && cfop.startsWith('6')) {
+        return `5${cfop.slice(1)}`;
+    }
+
+    return cfop;
+}
+
 // Carregar dados do produto selecionado
 function carregarProduto(itemId) {
-    const selectEl = document.querySelector(`select[name="produto_${itemId}"]`);
-    const $select = $(`select[name="produto_${itemId}"]`);
-    const selected = $select.select2('data');
-    const prod = selected && selected.length > 0 ? selected[0] : null;
+    const select = document.querySelector(`select[name="produto_${itemId}"]`);
 
-    if (!prod || !prod.id) return;
+    // Select2 AJAX: dados ficam no objeto select2, não em option.dataset
+    const s2data = $(select).select2('data');
+    const prod = (s2data && s2data.length > 0) ? s2data[0] : null;
 
-    // Dados básicos
-    const codigoInput = document.querySelector(`input[name="codigo_produto_${itemId}"]`);
-    if (codigoInput) {
-        codigoInput.value = prod.codigo || '';
-        codigoInput.setAttribute('data-descricao', prod.text || '');
-    }
+    // Fallback para option.dataset (caso select2 não esteja ativo)
+    const option = select.options[select.selectedIndex];
+    const prodId = (prod && prod.id) ? prod.id : option.value;
 
-    const valorInput = document.querySelector(`input[name="valor_unitario_${itemId}"]`);
-    if (valorInput) valorInput.value = prod.preco != null ? prod.preco : '0.00';
+    if (prodId) {
+        const codigo  = (prod && prod.codigo)  || option.dataset.codigo  || '';
+        const preco   = (prod && prod.preco  != null) ? prod.preco  : (option.dataset.preco  || '0.00');
+        const unidade = (prod && prod.unidade) || option.dataset.unidade || 'UN';
+        const ncm     = (prod && prod.ncm)     || option.dataset.ncm     || '';
+        const cfopBase = (prod && prod.cfop) || option.dataset.cfop || '';
+        const cst     = (prod && prod.cst)     || option.dataset.cst     || '';
+        const csosn   = (prod && prod.csosn)   || option.dataset.csosn   || '';
+        const origem  = (prod && prod.origem  != null) ? prod.origem  : (option.dataset.origem  ?? 0);
+        const descricao = (prod && prod.text) ? prod.text.trim() : option.text.trim();
 
-    // Garantir quantidade mínima de 1 para que calcularTotal() resulte em valor > 0
-    const quantidadeInput = document.querySelector(`input[name="quantidade_${itemId}"]`);
-    if (quantidadeInput && (!quantidadeInput.value || parseFloat(quantidadeInput.value) === 0)) {
-        quantidadeInput.value = '1';
-    }
-
-    const unidadeInput = document.querySelector(`input[name="unidade_${itemId}"]`);
-    if (unidadeInput) unidadeInput.value = prod.unidade || 'UN';
-
-    // Tributação via Select2
-    if (prod.ncm) {
-        const $ncm = $(`select[name="ncm_${itemId}"]`);
-        if ($ncm.find(`option[value="${prod.ncm}"]`).length === 0) {
-            $ncm.append(new Option(prod.ncm, prod.ncm, true, true));
-        }
-        $ncm.val(prod.ncm).trigger('change');
-    }
-    if (prod.cfop) {
-        const $cfop = $(`select[name="cfop_${itemId}"]`);
-        // Ajustar prefixo do CFOP conforme UF origem/destino
         const ufOrigem = '{% if emitente_data and emitente_data.uf %}{{ emitente_data.uf }}{% else %}SP{% endif %}';
-        const destinatarioSelectEl = document.getElementById('destinatario');
-        const ufDestino = destinatarioSelectEl?.options[destinatarioSelectEl.selectedIndex]?.dataset?.uf || ufOrigem;
-        let cfopAjustado = String(prod.cfop);
-        if (ufOrigem !== ufDestino && cfopAjustado.startsWith('5')) {
-            cfopAjustado = '6' + cfopAjustado.slice(1);
-            console.log(`🔄 CFOP ajustado para interestadual: ${prod.cfop} → ${cfopAjustado}`);
-        } else if (ufOrigem === ufDestino && cfopAjustado.startsWith('6')) {
-            cfopAjustado = '5' + cfopAjustado.slice(1);
-            console.log(`🔄 CFOP ajustado para intraestadual: ${prod.cfop} → ${cfopAjustado}`);
+        const destinatarioSelect = document.getElementById('destinatario');
+        const destinatarioOption = destinatarioSelect?.options[destinatarioSelect.selectedIndex];
+        const ufDestino = destinatarioOption?.dataset.uf || ufOrigem;
+        const cfop = ajustarCfopPorUf(cfopBase, ufOrigem, ufDestino);
+
+        // Dados básicos
+        const codigoProdutoInput = document.querySelector(`input[name="codigo_produto_${itemId}"]`);
+        if (codigoProdutoInput) {
+            codigoProdutoInput.value = codigo;
+            codigoProdutoInput.setAttribute('data-descricao', descricao);
         }
-        if ($cfop.find(`option[value="${cfopAjustado}"]`).length === 0) {
-            $cfop.append(new Option(cfopAjustado, cfopAjustado, true, true));
+        document.querySelector(`input[name="valor_unitario_${itemId}"]`).value = parseFloat(preco).toFixed(2);
+        document.querySelector(`input[name="unidade_${itemId}"]`).value = unidade;
+
+        // Dados tributários
+        if (ncm)  $(`select[name="ncm_${itemId}"]`).val(ncm).trigger('change');
+        if (cfop) {
+            if (cfop !== String(cfopBase || '').replace(/[.\-\s]/g, '')) {
+                console.log(`🔄 CFOP ajustado automaticamente por UF: ${cfopBase} -> ${cfop} (${ufOrigem}→${ufDestino})`);
+            }
+            $(`select[name="cfop_${itemId}"]`).val(cfop).trigger('change');
         }
-        $cfop.val(cfopAjustado).trigger('change');
-    }
-    if (prod.origem !== undefined && prod.origem !== null) {
+
         const origemSelect = document.querySelector(`select[name="origem_${itemId}"]`);
-        if (origemSelect) origemSelect.value = prod.origem;
+        if (origemSelect) origemSelect.value = origem;
+
+        const csosnSelect = $(`select[name="csosn_${itemId}"]`);
+        const cstSelect   = $(`select[name="cst_icms_${itemId}"]`);
+        if (csosnSelect.length && csosn) csosnSelect.val(csosn).trigger('change');
+        else if (cstSelect.length && cst) cstSelect.val(cst).trigger('change');
+
+        // ✅ BUSCAR REGRA TRIBUTÁRIA AUTOMATICAMENTE
+        aplicarRegraTributaria(itemId, prodId);
+
+        // Auto-preencher classificação IBS/CBS padrão imediatamente na seleção do produto
+        preencherClassificacaoIbsCbsPadrao();
+
+        // Atualizar JSON do item
+        atualizarItemJSON(itemId);
     }
-
-    const csosnSelect = $(`select[name="csosn_${itemId}"]`);
-    const cstSelect = $(`select[name="cst_icms_${itemId}"]`);
-    if (csosnSelect.length && prod.csosn) {
-        csosnSelect.val(prod.csosn).trigger('change');
-    } else if (cstSelect.length && prod.cst) {
-        cstSelect.val(prod.cst).trigger('change');
-    }
-
-    // Recalcular total do item e do pagamento após preencher preço/quantidade
-    calcularTotal(itemId);
-
-    // Forçar recálculo do total geral (segurança caso calcularTotal tenha encontrado erro)
-    calcularTotalGeral();
-
-    // Regra tributária automática
-    aplicarRegraTributaria(itemId, prod.id);
-
-    atualizarItemJSON(itemId);
 }
 
 // ✅ FUNÇÃO PARA APLICAR REGRA TRIBUTÁRIA AUTOMATICAMENTE
 async function aplicarRegraTributaria(itemId, produtoId) {
     try {
-        const normalizarCodigoTributario = (valor, tamanho) => {
-            if (valor === null || valor === undefined || valor === '') {
-                return '';
-            }
-            return String(valor).trim().padStart(tamanho, '0');
-        };
-
         // Buscar informações do cliente e produto
         const clienteId = {% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}null{% endif %};
         
@@ -1898,25 +2359,41 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             return;
         }
         
-        // Obter dados do produto selecionado
+        // Obter dados do produto selecionado (Select2 AJAX ou dataset)
         const select = document.querySelector(`select[name="produto_${itemId}"]`);
-        const produtoSelecionado = $(`select[name="produto_${itemId}"]`).select2('data');
-        const produtoData = produtoSelecionado && produtoSelecionado.length > 0 ? produtoSelecionado[0] : null;
+        const s2data = $(select).select2('data');
+        const prod = (s2data && s2data.length > 0) ? s2data[0] : null;
+        const option = select.options[select.selectedIndex];
 
-        const ncmCodigo = produtoData?.ncm || document.querySelector(`select[name="ncm_${itemId}"]`)?.value || select?.options?.[select.selectedIndex]?.dataset?.ncm;
-        // Usar o CFOP já ajustado no campo (pode ter sido corrigido p/ interestadual)
-        const cfopCodigo = document.querySelector(`select[name="cfop_${itemId}"]`)?.value || produtoData?.cfop || select?.options?.[select.selectedIndex]?.dataset?.cfop;
+        const ncmCodigo  = (prod && prod.ncm)  || option.dataset.ncm  || '';
+        const cfopBase   = (prod && prod.cfop) || option.dataset.cfop || '';
         
-        if (!ncmCodigo || !cfopCodigo) {
+        if (!ncmCodigo || !cfopBase) {
             console.log('ℹ️ Produto sem NCM/CFOP definidos, pulando busca de regra');
-            console.log('   NCM:', ncmCodigo, '| CFOP:', cfopCodigo);
+            console.log('   NCM:', ncmCodigo, '| CFOP:', cfopBase);
             return;
         }
         
         console.log('🔍 Buscando regra tributária para:');
         console.log('   Produto ID:', produtoId);
         console.log('   NCM:', ncmCodigo);
-        console.log('   CFOP:', cfopCodigo, '(formatado sem pontos)');
+
+        // Obter UF do emitente (origem) e do destinatário (destino)
+        const ufOrigem = '{% if emitente_data and emitente_data.uf %}{{ emitente_data.uf }}{% else %}SP{% endif %}';
+        const destinatarioSelect = document.getElementById('destinatario');
+        const destinatarioOption = destinatarioSelect?.options[destinatarioSelect.selectedIndex];
+        const ufDestino = destinatarioOption?.dataset.uf || ufOrigem;
+
+        const cfopCodigo = ajustarCfopPorUf(cfopBase, ufOrigem, ufDestino);
+        if (cfopCodigo && cfopCodigo !== String(cfopBase).replace(/[.\-\s]/g, '')) {
+            const campoCfop = document.querySelector(`select[name="cfop_${itemId}"]`);
+            if (campoCfop) {
+                campoCfop.value = cfopCodigo;
+                $(campoCfop).trigger('change');
+            }
+        }
+
+        console.log('   CFOP:', cfopCodigo, '(ajustado por UF quando necessário)');
         
         // Obter regime tributário do emitente
         const regimeTributario = '{{ regime_tributario }}';
@@ -1928,14 +2405,6 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             console.error('   Isso impedirá a busca da regra tributária.');
             console.error('   Verifique se emitente_data.regime_tributario_id está preenchido.');
         }
-        
-        // Obter UF do emitente (origem)
-        const ufOrigem = '{% if emitente_data and emitente_data.uf %}{{ emitente_data.uf }}{% else %}SP{% endif %}';
-        
-        // Obter UF do destinatário (destino)
-        const destinatarioSelect = document.getElementById('destinatario');
-        const destinatarioOption = destinatarioSelect?.options[destinatarioSelect.selectedIndex];
-        const ufDestino = destinatarioOption?.dataset.uf || ufOrigem;
         
         console.log('   Regime:', regimeTributario, '(ID:', regimeId, ')');
         console.log('   UF Origem:', ufOrigem, '| UF Destino:', ufDestino);
@@ -1982,30 +2451,25 @@ async function aplicarRegraTributaria(itemId, produtoId) {
         if (response.status === 404 || !result.sucesso) {
             console.log('⚠️ Nenhuma regra tributária encontrada');
             console.log('   Motivo:', result.message || 'Desconhecido');
-
-            // Mostrar alerta dentro do card do item
-            const alertPlaceholder = document.getElementById(`regra_alerta_${itemId}`);
-            if (alertPlaceholder) {
-                alertPlaceholder.innerHTML = `
-                    <div class="alert alert-warning alert-dismissible fade show mb-2">
-                        <strong>⚠️ Nenhuma regra tributária encontrada</strong> &mdash;
-                        preencha os campos abaixo manualmente.
-                        <button type="button" class="close" data-dismiss="alert">&times;</button>
-                    </div>`;
-                // Rolar até os campos tributários
-                alertPlaceholder.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                // Focar no primeiro campo tributário disponível
-                const primeiroCampo = alertPlaceholder.nextElementSibling?.querySelector('select,input');
-                if (primeiroCampo) primeiroCampo.focus();
+            console.log('   Payload enviado:', payload);
+            
+            // Mostrar alerta amarelo
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-warning alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <strong>⚠️ Nenhuma regra tributária encontrada</strong><br>
+                <small>Preencha manualmente os campos tributários para este produto.</small>
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            `;
+            const container = document.getElementById('itensContainer');
+            if (container && container.parentElement) {
+                container.parentElement.insertBefore(alertDiv, container);
             }
+            setTimeout(() => alertDiv.remove(), 5000);
             return; // Sair da função
         }
         
         if (result.sucesso && result.regra) {
-            // Limpar alerta de "sem regra" se existir
-            const alertPlaceholder = document.getElementById(`regra_alerta_${itemId}`);
-            if (alertPlaceholder) alertPlaceholder.innerHTML = '';
-
             console.log('✅ Regra tributária encontrada:', result.regra);
             console.log('📋 Descrição:', result.regra.descricao_regra);
             console.log('💰 Alíquotas - ICMS:', result.regra.aliquota_icms, '% | PIS:', result.regra.aliquota_pis, '% | COFINS:', result.regra.aliquota_cofins, '%');
@@ -2020,11 +2484,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             const aliquotaIcmsInput = document.querySelector(`input[name="aliquota_icms_${itemId}"]`);
             
             // PIS
-            const cstPisSelect = $(`select[name="cst_pis_${itemId}"]`);
+            const cstPisInput = document.querySelector(`select[name="cst_pis_${itemId}"]`);
             const aliquotaPisInput = document.querySelector(`input[name="aliquota_pis_${itemId}"]`);
             
             // COFINS
-            const cstCofinsSelect = $(`select[name="cst_cofins_${itemId}"]`);
+            const cstCofinsInput = document.querySelector(`select[name="cst_cofins_${itemId}"]`);
             const aliquotaCofinsInput = document.querySelector(`input[name="aliquota_cofins_${itemId}"]`);
             
             // IPI
@@ -2043,11 +2507,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             if (aliquotaIcmsInput) aliquotaIcmsInput.value = '0.00';
             
             // Limpar PIS
-            if (cstPisSelect.length) cstPisSelect.val('').trigger('change');
+            if (cstPisInput) { cstPisInput.value = ''; $(cstPisInput).trigger('change'); }
             if (aliquotaPisInput) aliquotaPisInput.value = '0.00';
             
             // Limpar COFINS
-            if (cstCofinsSelect.length) cstCofinsSelect.val('').trigger('change');
+            if (cstCofinsInput) { cstCofinsInput.value = ''; $(cstCofinsInput).trigger('change'); }
             if (aliquotaCofinsInput) aliquotaCofinsInput.value = '0.00';
             
             // Limpar IPI
@@ -2060,13 +2524,11 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             
             // ICMS - Aplicar CSOSN ou CST
             if (result.regra.csosn_icms && csosnSelect.length) {
-                const csosnIcms = normalizarCodigoTributario(result.regra.csosn_icms, 3);
-                console.log('Aplicando CSOSN:', csosnIcms);
-                csosnSelect.val(csosnIcms).trigger('change');
+                console.log('Aplicando CSOSN:', result.regra.csosn_icms);
+                csosnSelect.val(result.regra.csosn_icms).trigger('change');
             } else if (result.regra.cst_icms && cstIcmsSelect.length) {
-                const cstIcms = normalizarCodigoTributario(result.regra.cst_icms, 2);
-                console.log('Aplicando CST ICMS:', cstIcms);
-                cstIcmsSelect.val(cstIcms).trigger('change');
+                console.log('Aplicando CST ICMS:', result.regra.cst_icms);
+                cstIcmsSelect.val(result.regra.cst_icms).trigger('change');
             }
             
             // ICMS - Aplicar alíquota
@@ -2097,23 +2559,23 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             }
             
             // PIS - Aplicar CST e alíquota
-            if (result.regra.cst_pis !== null && result.regra.cst_pis !== undefined && result.regra.cst_pis !== '' && cstPisSelect.length) {
-                const cstPis = normalizarCodigoTributario(result.regra.cst_pis, 2);
-                console.log('Aplicando CST PIS:', cstPis);
-                cstPisSelect.val(cstPis).trigger('change');
+            if (result.regra.cst_pis && cstPisInput) {
+                console.log('Aplicando CST PIS:', result.regra.cst_pis);
+                cstPisInput.value = result.regra.cst_pis;
+                $(cstPisInput).trigger('change');
             }
-            if (result.regra.aliquota_pis !== null && result.regra.aliquota_pis !== undefined && result.regra.aliquota_pis !== '' && aliquotaPisInput) {
+            if (result.regra.aliquota_pis && aliquotaPisInput) {
                 console.log('Aplicando alíquota PIS:', result.regra.aliquota_pis);
                 aliquotaPisInput.value = result.regra.aliquota_pis;
             }
             
             // COFINS - Aplicar CST e alíquota
-            if (result.regra.cst_cofins !== null && result.regra.cst_cofins !== undefined && result.regra.cst_cofins !== '' && cstCofinsSelect.length) {
-                const cstCofins = normalizarCodigoTributario(result.regra.cst_cofins, 2);
-                console.log('Aplicando CST COFINS:', cstCofins);
-                cstCofinsSelect.val(cstCofins).trigger('change');
+            if (result.regra.cst_cofins && cstCofinsInput) {
+                console.log('Aplicando CST COFINS:', result.regra.cst_cofins);
+                cstCofinsInput.value = result.regra.cst_cofins;
+                $(cstCofinsInput).trigger('change');
             }
-            if (result.regra.aliquota_cofins !== null && result.regra.aliquota_cofins !== undefined && result.regra.aliquota_cofins !== '' && aliquotaCofinsInput) {
+            if (result.regra.aliquota_cofins && aliquotaCofinsInput) {
                 console.log('Aplicando alíquota COFINS:', result.regra.aliquota_cofins);
                 aliquotaCofinsInput.value = result.regra.aliquota_cofins;
             }
@@ -2136,7 +2598,6 @@ async function aplicarRegraTributaria(itemId, produtoId) {
             
             // Recalcular totais
             calcularTotal(itemId);
-            atualizarItemJSON(itemId);
         }
         
     } catch (error) {
@@ -2162,24 +2623,15 @@ async function aplicarRegraTributaria(itemId, produtoId) {
 
 // Calcular total do item
 function calcularTotal(itemId) {
-    const quantidadeInput = document.querySelector(`input[name="quantidade_${itemId}"]`);
-    const valorUnitarioInput = document.querySelector(`input[name="valor_unitario_${itemId}"]`);
-    const totalInput = document.querySelector(`input[name="valor_total_${itemId}"]`);
-
-    if (!quantidadeInput || !valorUnitarioInput || !totalInput) return;
-
-    const quantidade = parseFloat(quantidadeInput.value) || 0;
-    const valorUnitario = parseFloat(valorUnitarioInput.value) || 0;
+    const quantidade = parseFloat(document.querySelector(`input[name="quantidade_${itemId}"]`).value) || 0;
+    const valorUnitario = parseFloat(document.querySelector(`input[name="valor_unitario_${itemId}"]`).value) || 0;
     const total = quantidade * valorUnitario;
     
-    totalInput.value = total.toFixed(2);
+    document.querySelector(`input[name="valor_total_${itemId}"]`).value = total.toFixed(2);
     
     // Calcular ICMS - APENAS se houver alíquota diferente de zero
-    const aliquotaIcms = parseFloat(document.querySelector(`input[name="aliquota_icms_${itemId}"]`)?.value) || 0;
+    const aliquotaIcms = parseFloat(document.querySelector(`input[name="aliquota_icms_${itemId}"]`).value) || 0;
     
-    const bcIcmsInput = document.querySelector(`input[name="bc_icms_${itemId}"]`);
-    const valorIcmsInput = document.querySelector(`input[name="valor_icms_${itemId}"]`);
-
     if (aliquotaIcms > 0) {
         // Há tributação - calcular base de cálculo e valor do ICMS
         // Considerar redução de base de cálculo se informada
@@ -2193,12 +2645,12 @@ function calcularTotal(itemId) {
         }
         
         const valorIcms = bcIcms * (aliquotaIcms / 100);
-        if (bcIcmsInput) bcIcmsInput.value = bcIcms.toFixed(2);
-        if (valorIcmsInput) valorIcmsInput.value = valorIcms.toFixed(2);
+        document.querySelector(`input[name="bc_icms_${itemId}"]`).value = bcIcms.toFixed(2);
+        document.querySelector(`input[name="valor_icms_${itemId}"]`).value = valorIcms.toFixed(2);
     } else {
         // Sem tributação - zerar base de cálculo e valor do ICMS
-        if (bcIcmsInput) bcIcmsInput.value = '0.00';
-        if (valorIcmsInput) valorIcmsInput.value = '0.00';
+        document.querySelector(`input[name="bc_icms_${itemId}"]`).value = '0.00';
+        document.querySelector(`input[name="valor_icms_${itemId}"]`).value = '0.00';
     }
     
     // Atualizar JSON do item
@@ -2216,6 +2668,7 @@ function atualizarItemJSON(itemId) {
     const descricao = produtoOption?.text.trim() || '';
     
     const itemData = {
+        produto_id: produtoSelect?.value || '',
         codigo_produto: document.querySelector(`input[name="codigo_produto_${itemId}"]`)?.value || '',
         descricao: descricao,
         unidade: document.querySelector(`input[name="unidade_${itemId}"]`)?.value || '',
@@ -2240,7 +2693,7 @@ function atualizarItemJSON(itemId) {
         cst_cofins: document.querySelector(`select[name="cst_cofins_${itemId}"]`)?.value || '',
         aliquota_cofins: document.querySelector(`input[name="aliquota_cofins_${itemId}"]`)?.value || '0.00',
         // IPI
-        cst_ipi: document.querySelector(`input[name="cst_ipi_${itemId}"]`)?.value || '',
+        cst_ipi: document.querySelector(`select[name="cst_ipi_${itemId}"]`)?.value || '',
         aliquota_ipi: document.querySelector(`input[name="aliquota_ipi_${itemId}"]`)?.value || '0.00',
         // IBS/CBS (Reforma Tributária - CRT=3)
         classificacao_ibs_cbs_id: document.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`)?.value || ''
@@ -2263,17 +2716,59 @@ function atualizarItemJSON(itemId) {
     
     console.log(`📝 Item ${itemId} - JSON atualizado:`, itemData);
     document.getElementById(`item_json_${itemId}`).value = JSON.stringify(itemData);
+    agendarSalvarRascunhoNfe();
+
+    // Auto-ajustar finNFe com base no CFOP selecionado
+    const cfopSelecionado = (itemData.cfop || '').toString().trim();
+    const finNFeSelect = document.getElementById('finNFe');
+    if (finNFeSelect) {
+        // CFOPs de devolução: 5201-5204, 5210-5212, 5410-5413, 5553, 6201-6204, 6210-6212, 6410-6413, 6553
+        const cfopDevol = /^[56](20[1-4]|21[0-2]|41[0-3]|553)$/.test(cfopSelecionado);
+        if (cfopDevol && finNFeSelect.value !== '4') {
+            finNFeSelect.value = '4';
+            console.log(`🔄 finNFe auto-ajustado para 4 (devolução) pelo CFOP ${cfopSelecionado}`);
+        }
+        // Não resetar para 1 automaticamente — usuário pode ter escolhido 4 manualmente
+        toggleNfeRefContainer(finNFeSelect.value);
+    }
 }
 
-// Reordenar visualmente os itens após remoção e corrigir names dos hidden inputs
-function reordenarItens() {
-    const itens = document.querySelectorAll('#itensContainer [id^="item-"]');
-    itens.forEach((itemDiv, index) => {
-        const h6 = itemDiv.querySelector('.card-header h6');
-        if (h6) h6.textContent = `Item ${index + 1}`;
-        const hiddenJson = itemDiv.querySelector('input[type="hidden"][name*="[json]"]');
-        if (hiddenJson) hiddenJson.name = `items[${index}][json]`;
+function normalizarSequenciaItens() {
+    const itens = Array.from(document.querySelectorAll('#itensContainer > [id^="item-"]'));
+
+    itens.forEach((itemEl, index) => {
+        const numeroVisual = index + 1;
+
+        const titulo = itemEl.querySelector('.card-header h6');
+        if (titulo) {
+            titulo.textContent = `Item ${numeroVisual}`;
+        }
+
+        const hiddenJson = itemEl.querySelector('input[type="hidden"][id^="item_json_"]');
+        if (hiddenJson) {
+            hiddenJson.name = `items[${index}][json]`;
+        }
     });
+}
+
+function toggleNfeRefContainer(finNFeValue) {
+    const container = document.getElementById('nfeRefContainer');
+    const chaveInput = document.getElementById('chave_nfe_ref');
+    if (!container) { console.warn('⚠️ nfeRefContainer não encontrado'); return; }
+    const formaPagSelect = document.getElementById('formaPagamento');
+    const valorPagInput  = document.getElementById('valorPagamento');
+    if (String(finNFeValue) === '4') {
+        container.style.display = 'block';
+        if (chaveInput) chaveInput.required = true;
+        // SEFAZ exige "Sem Pagamento" para devolução
+        if (formaPagSelect) formaPagSelect.value = '90';
+        if (valorPagInput)  { valorPagInput.value = '0.00'; valorPagInput.dataset.valorReal = '0.00'; }
+        console.log('✅ Campo chave NF-e referenciada visível | Forma de pagamento → 90 Sem Pagamento');
+    } else {
+        container.style.display = 'none';
+        if (chaveInput) chaveInput.required = false;
+        // NÃO limpar o valor — o servidor ignora se finNFe != 4
+    }
 }
 
 // Remover item
@@ -2281,9 +2776,10 @@ function removerItem(itemId) {
     const itemDiv = document.getElementById(`item-${itemId}`);
     if (itemDiv) {
         itemDiv.remove();
-        reordenarItens();
+        normalizarSequenciaItens();
         calcularTotalGeral();
         validarCamposObrigatorios();
+        agendarSalvarRascunhoNfe();
     }
 }
 
@@ -2299,10 +2795,11 @@ function calcularTotalGeral() {
     });
     
     document.getElementById('totalGeral').textContent = total.toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        style: 'currency',
+        currency: 'BRL'
     });
     
+    // IMPORTANTE: Atualizar variável global ANTES de chamar recalcularTotais()
     totalGeral = total;
     
     // Calcular total da NFe considerando frete, seguro e desconto
@@ -2314,39 +2811,10 @@ function calcularTotalGeral() {
 
 // Funções de formatação monetária
 function formatarValorInput(input) {
-    let valor = (input.value || '').replace(/\D/g, ''); // Remove tudo que não é dígito
-    if (!valor) {
-        input.value = '0,00';
-        input.setAttribute('data-valor-real', '0.00');
-        return;
-    }
-
-    const valorReal = (parseInt(valor, 10) / 100).toFixed(2);
-    input.value = Number(valorReal).toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-    input.setAttribute('data-valor-real', valorReal);
-}
-
-function parseValorMonetario(valor) {
-    if (valor === null || valor === undefined) return 0;
-
-    const valorStr = String(valor).trim();
-    if (!valorStr) return 0;
-
-    // Aceita tanto formato brasileiro (1.234,56) quanto decimal simples (1234.56).
-    if (/^-?\d+(\.\d+)?$/.test(valorStr)) {
-        const numeroDireto = parseFloat(valorStr);
-        return Number.isFinite(numeroDireto) ? numeroDireto : 0;
-    }
-
-    const normalizado = valorStr
-        .replace(/\./g, '')
-        .replace(',', '.');
-
-    const numero = parseFloat(normalizado);
-    return Number.isFinite(numero) ? numero : 0;
+    let valor = input.value.replace(/\D/g, ''); // Remove tudo que não é dígito
+    valor = (parseInt(valor) / 100).toFixed(2); // Divide por 100 e formata
+    input.value = valor;
+    input.setAttribute('data-valor-real', valor);
 }
 
 function aplicarMascaraMoeda(inputId) {
@@ -2358,35 +2826,25 @@ function aplicarMascaraMoeda(inputId) {
     });
     
     input.addEventListener('blur', function() {
-        const valor = parseValorMonetario(this.value);
-        const valorReal = valor.toFixed(2);
-        this.value = Number(valorReal).toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
-        this.setAttribute('data-valor-real', valorReal);
+        const valor = parseFloat(this.value || 0);
+        this.value = valor.toFixed(2);
     });
 }
 
 // Recalcular totais da NFe com frete, seguro e desconto
 function recalcularTotais() {
-    // Guard removido: estava bloqueando atualização do pagamento quando rascunho estava
-    // pendente (flag ficava true desde o page load até o usuário clicar no toast)
     const totalProdutos = totalGeral || 0;
-    const vFrete = parseValorMonetario(document.getElementById('vFrete')?.value || 0);
-    const vSeg = parseValorMonetario(document.getElementById('vSeg')?.value || 0);
-    const vDesc = parseValorMonetario(document.getElementById('vDesc')?.value || 0);
+    const vFrete = parseFloat(document.getElementById('vFrete')?.value || 0);
+    const vSeg = parseFloat(document.getElementById('vSeg')?.value || 0);
+    const vDesc = parseFloat(document.getElementById('vDesc')?.value || 0);
     
     const totalNFe = totalProdutos + vFrete + vSeg - vDesc;
     
-    // Atualizar valor do pagamento com o total final
+    // Atualizar valor do pagamento com o total final - SEMPRE, mesmo que seja 0
     const campoPagamento = document.getElementById('valorPagamento');
-    if (campoPagamento && totalNFe > 0) {
+    if (campoPagamento) {
         const valorFormatado = totalNFe.toFixed(2);
-        campoPagamento.value = Number(valorFormatado).toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
+        campoPagamento.value = valorFormatado;
         campoPagamento.setAttribute('data-valor-real', valorFormatado);
         
         console.log(`💳 Valor do Pagamento atualizado: R$ ${valorFormatado}`);
@@ -2410,25 +2868,30 @@ function buscarProximoNumero() {
     
     console.log('🔍 Buscando próximo número:', { clienteId, modelo, serie });
     
-    fetch(`/admin/nfe/api/proximo-numero?cliente_id=${clienteId}&modelo=${modelo}&serie=${serie}`)
+    fetch(`/api/nfe/proximo-numero?cliente_id=${clienteId}&modelo=${modelo}&serie=${serie}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                if (data.serie !== undefined && data.serie !== null) {
+                    const serieServidor = String(data.serie);
+                    const campoSerie = document.getElementById('serie');
+                    if (campoSerie && campoSerie.value !== serieServidor) {
+                        campoSerie.value = serieServidor;
+                        console.log('✅ Série ajustada para última usada:', serieServidor);
+                    }
+                }
                 numeroSugerido = data.proximo_numero;
                 document.getElementById('numero_nfe').value = numeroSugerido;
-                // Atualizar campo série com a última série usada
-                const serieField = document.getElementById('serie');
-                if (serieField && data.serie) {
-                    serieField.value = data.serie;
-                }
                 numeroAlteradoManualmente = false;
-                console.log('✅ Próximo número:', data.proximo_numero, '| Série:', data.serie);
+                console.log('✅ Próximo número:', data.proximo_numero);
             } else {
                 console.error('❌ Erro ao buscar número:', data.error);
+                // Manter valor atual em caso de erro
             }
         })
         .catch(error => {
             console.error('❌ Erro na requisição:', error);
+            // Manter valor atual em caso de erro
         });
 }
 
@@ -2463,215 +2926,6 @@ function confirmarAlteracaoNumero() {
 }
 
 // Validar formulário
-// Verifica se existe item sem produto selecionado; se sim, alerta e foca no campo.
-// Retorna true se tudo OK, false se encontrou item vazio.
-function verificarItensVazios() {
-    const itens = document.querySelectorAll('#itensContainer [id^="item-"]');
-    for (let i = 0; i < itens.length; i++) {
-        const itemDiv = itens[i];
-        const itemId = itemDiv.id.split('-')[1];
-        const produtoSelect = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
-        if (produtoSelect && !produtoSelect.value) {
-            const numero = i + 1;
-            alert(`O Item ${numero} está sem produto selecionado. Preencha ou remova o item antes de continuar.`);
-            itemDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => { produtoSelect.focus(); }, 400);
-            return false;
-        }
-    }
-    return true;
-}
-
-// ========== PRÉ-VALIDAÇÃO COMPLETA (IA / XML / DANFE) ==========
-/**
- * Valida todos os campos do formulário antes de qualquer ação.
- * Retorna true se OK, false se houver erros (e exibe o modal com a lista).
- */
-function _marcarInvalido(el, lista) {
-    if (!el) return;
-    el.classList.add('is-invalid', 'is-invalid-validacao');
-    el.addEventListener('input',  () => el.classList.remove('is-invalid', 'is-invalid-validacao'), { once: true });
-    el.addEventListener('change', () => el.classList.remove('is-invalid', 'is-invalid-validacao'), { once: true });
-    lista.push(el);
-}
-
-function validarFormularioCompleto(acao) {
-    const erros = [];
-    const camposInvalidos = [];
-
-    // Limpar marcações anteriores
-    document.querySelectorAll('.is-invalid-validacao').forEach(el => {
-        el.classList.remove('is-invalid', 'is-invalid-validacao');
-    });
-
-    // --- Cabeçalho ---
-    const destinatarioEl = document.getElementById('destinatario');
-    if (!destinatarioEl?.value) {
-        erros.push({ secao: 'Cabeçalho', campo: 'Destinatário', msg: 'Selecione o destinatário da NFe.' });
-    }
-
-    const natOpEl = document.getElementById('natOp');
-    if (!natOpEl?.value?.trim()) {
-        erros.push({ secao: 'Cabeçalho', campo: 'Natureza da Operação', msg: 'Campo obrigatório não preenchido.' });
-        _marcarInvalido(natOpEl, camposInvalidos);
-    }
-
-    const dataEmissaoEl = document.querySelector('input[name="dataEmissao"]');
-    if (!dataEmissaoEl?.value) {
-        erros.push({ secao: 'Cabeçalho', campo: 'Data de Emissão', msg: 'Selecione a data de emissão.' });
-        _marcarInvalido(dataEmissaoEl, camposInvalidos);
-    }
-
-    const numeroNfeEl = document.getElementById('numero_nfe');
-    const numeroNfe = parseInt(numeroNfeEl?.value || 0);
-    if (!numeroNfe || numeroNfe < 1) {
-        erros.push({ secao: 'Cabeçalho', campo: 'Número da NFe', msg: 'O número da NFe deve ser maior que zero.' });
-        _marcarInvalido(numeroNfeEl, camposInvalidos);
-    }
-
-    // --- Itens ---
-    const itensContainer = document.getElementById('itensContainer');
-    const itensDiv = itensContainer ? itensContainer.querySelectorAll('[id^="item-"]') : [];
-
-    if (itensDiv.length === 0) {
-        erros.push({ secao: 'Itens', campo: 'Produtos', msg: 'Adicione pelo menos um item à NFe.' });
-    }
-
-    itensDiv.forEach((itemDiv, idx) => {
-        const itemId = itemDiv.id.split('-')[1];
-        const nItem = idx + 1;
-
-        // Produto
-        const produtoEl = itemDiv.querySelector(`select[name="produto_${itemId}"]`);
-        if (!produtoEl?.value) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'Produto', msg: 'Nenhum produto selecionado.' });
-        }
-
-        // Quantidade — checagem explícita de string vazia
-        const qtdEl = itemDiv.querySelector(`input[name="quantidade_${itemId}"]`);
-        const qtdStr = (qtdEl?.value ?? '').trim();
-        const qtd = qtdStr === '' ? NaN : Number(qtdStr);
-        if (qtdStr === '' || isNaN(qtd) || qtd <= 0) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'Quantidade', msg: 'Informe a quantidade (deve ser maior que zero).' });
-            _marcarInvalido(qtdEl, camposInvalidos);
-        }
-
-        // Valor Unitário — checagem explícita de string vazia
-        const vlrUnitEl = itemDiv.querySelector(`input[name="valor_unitario_${itemId}"]`);
-        const vlrUnitStr = (vlrUnitEl?.value ?? '').trim();
-        const vlrUnit = vlrUnitStr === '' ? NaN : Number(vlrUnitStr);
-        if (vlrUnitStr === '' || isNaN(vlrUnit) || vlrUnit <= 0) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'Valor Unitário', msg: 'Informe o valor unitário (deve ser maior que zero).' });
-            _marcarInvalido(vlrUnitEl, camposInvalidos);
-        }
-
-        // Valor Total (calculado automaticamente — só verifica)
-        const vlrTotalEl = itemDiv.querySelector(`input[name="valor_total_${itemId}"]`);
-        const vlrTotalStr = (vlrTotalEl?.value ?? '').trim();
-        const vlrTotal = vlrTotalStr === '' ? NaN : Number(vlrTotalStr);
-        if (vlrTotalStr === '' || isNaN(vlrTotal) || vlrTotal <= 0) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'Valor Total', msg: 'Valor total zerado. Informe a quantidade e valor unitário.' });
-            _marcarInvalido(vlrTotalEl, camposInvalidos);
-        }
-
-        // NCM
-        const ncmEl = itemDiv.querySelector(`select[name="ncm_${itemId}"]`) || itemDiv.querySelector(`input[name="ncm_${itemId}"]`);
-        if (!ncmEl?.value) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'NCM', msg: 'NCM não preenchido.' });
-        }
-
-        // CFOP
-        const cfopEl = itemDiv.querySelector(`select[name="cfop_${itemId}"]`) || itemDiv.querySelector(`input[name="cfop_${itemId}"]`);
-        if (!cfopEl?.value) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'CFOP', msg: 'CFOP não preenchido.' });
-        }
-
-        // CST/CSOSN
-        const csosnEl = itemDiv.querySelector(`select[name="csosn_${itemId}"]`);
-        const cstIcmsEl = itemDiv.querySelector(`select[name="cst_icms_${itemId}"]`);
-        if (!(csosnEl?.value) && !(cstIcmsEl?.value)) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'CST/CSOSN', msg: 'Tributação ICMS (CST ou CSOSN) não selecionada.' });
-        }
-
-        const classificacaoIbsEl = itemDiv.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`);
-        if (IBS_CBS_OBRIGATORIO === 1 && !classificacaoIbsEl?.value) {
-            erros.push({ secao: `Item ${nItem}`, campo: 'IBS/CBS', msg: 'Classificação IBS/CBS é obrigatória para CRT 3.' });
-            _marcarInvalido(classificacaoIbsEl, camposInvalidos);
-        }
-    });
-
-    // --- Pagamento ---
-    const formaPagamentoEl = document.getElementById('formaPagamento');
-    if (!formaPagamentoEl?.value) {
-        erros.push({ secao: 'Pagamento', campo: 'Forma de Pagamento', msg: 'Selecione a forma de pagamento.' });
-    }
-
-    try {
-        const campoPagamento = document.getElementById('valorPagamento');
-        const vlrPagamento = parseValorMonetario(
-            campoPagamento?.getAttribute('data-valor-real') || campoPagamento?.value || '0'
-        );
-        if (vlrPagamento <= 0) {
-            erros.push({ secao: 'Pagamento', campo: 'Valor do Pagamento', msg: `Valor de pagamento inválido ou zero (campo mostra: "${campoPagamento?.value || ''}"). Verifique se o valor foi informado.` });
-            _marcarInvalido(campoPagamento, camposInvalidos);
-        }
-    } catch (e) {
-        console.warn('[Validação] Erro ao ler pagamento:', e);
-    }
-
-    if (erros.length === 0) return true;
-
-    _exibirModalPreValidacao(erros, acao, camposInvalidos);
-    return false;
-}
-
-function _exibirModalPreValidacao(erros, acao, camposInvalidos) {
-    // Agrupar por seção
-    const grupos = {};
-    erros.forEach(e => {
-        if (!grupos[e.secao]) grupos[e.secao] = [];
-        grupos[e.secao].push(e);
-    });
-
-    const acaoLabel = { 'ia': 'Validar com IA', 'xml': 'Visualizar XML', 'danfe': 'Preview DANFE' }[acao] || acao;
-
-    let html = `<p class="text-muted mb-3">Encontramos <strong>${erros.length} problema(s)</strong> que impedem a ação "<strong>${acaoLabel}</strong>". Corrija-os antes de continuar:</p>`;
-
-    Object.keys(grupos).forEach(secao => {
-        const isItem = secao.startsWith('Item ');
-        const icon = isItem ? 'fa-box' : (secao === 'Pagamento' ? 'fa-money-bill' : 'fa-file-alt');
-        html += `<div class="mb-3">
-            <h6 class="text-danger"><i class="fas ${icon}"></i> ${secao}</h6>
-            <ul class="list-unstyled mb-0 ps-3">`;
-        grupos[secao].forEach(e => {
-            html += `<li class="mb-1">
-                <span class="badge bg-secondary me-1">${e.campo}</span>
-                <span class="text-dark">${e.msg}</span>
-            </li>`;
-        });
-        html += `</ul></div>`;
-    });
-
-    document.getElementById('modalPreValidacaoBody').innerHTML = html;
-
-    const modalEl = document.getElementById('modalPreValidacao');
-    // Remover instância anterior caso exista
-    const instanciaAnterior = bootstrap.Modal.getInstance(modalEl);
-    if (instanciaAnterior) instanciaAnterior.dispose();
-    const modal = new bootstrap.Modal(modalEl);
-
-    // Após fechar o modal: scroll e foco no primeiro campo inválido
-    modalEl.addEventListener('hidden.bs.modal', function() {
-        const primeiro = camposInvalidos && camposInvalidos[0];
-        if (primeiro) {
-            primeiro.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => { try { primeiro.focus(); } catch (e) {} }, 350);
-        }
-    }, { once: true });
-
-    modal.show();
-}
-
 function validarFormulario() {
     const itens = document.querySelectorAll('[id^="item-"]');
     
@@ -2679,8 +2933,6 @@ function validarFormulario() {
         alert('Adicione pelo menos um item à NFe');
         return false;
     }
-
-    if (!verificarItensVazios()) return false;
     
     // Validar número da NFe
     const numeroNfe = parseInt(document.getElementById('numero_nfe').value);
@@ -2705,10 +2957,7 @@ function validarCamposObrigatorios() {
     
     // Campos obrigatórios principais
     const natOp = document.getElementById('natOp')?.value?.trim();
-    const campoValorPagamento = document.getElementById('valorPagamento');
-    const valorPagamento = parseValorMonetario(
-        campoValorPagamento?.getAttribute('data-valor-real') || campoValorPagamento?.value || 0
-    );
+    const valorPagamento = parseFloat(document.getElementById('valorPagamento')?.value || 0);
     
     // Verificar se tem pelo menos um item
     const itens = document.querySelectorAll('[id^="item-"]');
@@ -2742,13 +2991,6 @@ function validarCamposObrigatorios() {
 
 // Detectar mudança de modelo e redirecionar
 document.addEventListener('DOMContentLoaded', function() {
-    const cardPagamento = document.getElementById('cardPagamentoNfe');
-    const cardItens = document.getElementById('cardItensNfe');
-
-    if (cardPagamento && cardItens && cardItens.parentNode) {
-        cardItens.parentNode.insertBefore(cardPagamento, cardItens);
-    }
-
     const modeloSelect = document.getElementById('modelo');
     
     if (modeloSelect) {
@@ -2776,10 +3018,7 @@ let modalValidacaoIA = null;
 function validarComIA() {
     console.log('[IA] ========================================');
     console.log('[IA] validarComIA() iniciado');
-
-    // Pré-validação completa antes de enviar à IA
-    if (!validarFormularioCompleto('ia')) return;
-
+    
     // Inicializar modal Bootstrap 5 se necessário
     if (!modalValidacaoIA) {
         console.log('[IA] Criando nova instância do modal');
@@ -2929,13 +3168,17 @@ function coletarDadosFormulario() {
     // Calcular totais
     const valorProdutos = itens.reduce((sum, item) => sum + item.valor_total, 0);
     
-    // Coletar dados do pagamento — campo simples #valorPagamento com data-valor-real
-    const campoPagamento = document.getElementById('valorPagamento');
-    const formaPagamentoEl = document.getElementById('formaPagamento');
-    const valorPagamento = parseValorMonetario(
-        campoPagamento?.getAttribute('data-valor-real') || campoPagamento?.value || '0'
-    );
-    const formaPagamento = formaPagamentoEl?.value || '01';
+    // Coletar dados do pagamento
+    let valorPagamento = 0;
+    let formaPagamento = '01';
+    const pagRows = document.querySelectorAll('#tabelaPagamentos tbody tr');
+    if (pagRows.length > 0) {
+        const primeiraForma = pagRows[0].querySelector('select[name$="[forma]"]')?.value || '01';
+        formaPagamento = primeiraForma;
+        pagRows.forEach(row => {
+            valorPagamento += parseFloat(row.querySelector('input[name$="[valor]"]')?.value || 0);
+        });
+    }
     
     // Montar objeto de validação
     return {
@@ -2954,6 +3197,7 @@ function coletarDadosFormulario() {
         destinatario_nome: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-nome') || destinatarioSelect.options[destinatarioSelect.selectedIndex]?.text || '',
         destinatario_uf: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-uf') || 'SP',
         destinatario_ie: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-ie') || '',
+        destinatario_ind_ie_dest: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-ind-ie-dest') || 'C',
         
         itens: itens,
         
@@ -3068,8 +3312,32 @@ function mostrarResultadoValidacao(data) {
 
 // Visualizar XML - Gera preview do XML da NFe sem enviar ao SEFAZ
 function previewXML() {
-    // Pré-validação completa antes de gerar XML
-    if (!validarFormularioCompleto('xml')) return;
+    // Validar campos obrigatórios antes de gerar XML
+    const errors = [];
+    
+    // Validar destinatário
+    const destinatarioSelect = document.getElementById('destinatario');
+    if (!destinatarioSelect || !destinatarioSelect.value) {
+        errors.push('Destinatário é obrigatório');
+    }
+    
+    // Validar produtos
+    const itensContainer = document.getElementById('itensContainer');
+    const itensCards = itensContainer?.querySelectorAll('.card');
+    if (!itensCards || itensCards.length === 0) {
+        errors.push('Adicione pelo menos um produto');
+    }
+    
+    // Validar pagamento
+    const formaPagamento = document.getElementById('formaPagamento')?.value;
+    if (!formaPagamento || formaPagamento.trim() === '') {
+        errors.push('Selecione a forma de pagamento');
+    }
+    
+    if (errors.length > 0) {
+        alert('Corrija os seguintes erros antes de visualizar o XML:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+        return;
+    }
     
     // Mostrar loading
     const btnPreview = document.querySelector('button[onclick="previewXML()"]');
@@ -3080,6 +3348,7 @@ function previewXML() {
     
     // Atualizar JSON de todos os itens antes de coletar dados
     console.log('[PREVIEW] Atualizando JSON dos itens...');
+    normalizarSequenciaItens();
     const itens = document.querySelectorAll('[id^="item-"]');
     itens.forEach(item => {
         const itemId = item.id.split('-')[1];
@@ -3228,10 +3497,84 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, m => map[m]);
 }
 
+// Preenche classificação IBS/CBS padrão quando o campo estiver vazio
+function preencherClassificacaoIbsCbsPadrao() {
+    let preenchidos = 0;
+    const selects = document.querySelectorAll('select[name^="classificacao_ibs_cbs_id_"]');
+    const normalizarCodigoIbs = (valor) => {
+        const somenteNumeros = String(valor || '').replace(/\D/g, '');
+        const semZeros = somenteNumeros.replace(/^0+/, '');
+        return semZeros || '0';
+    };
+    const extrairCodigoDaOpcao = (opcao) => {
+        const texto = String((opcao && opcao.text) || '').trim();
+        // Formato esperado: "00-00001 - Descricao" ou "001 - Descricao"
+        // Usa somente a parte do codigo para evitar ruido numerico da descricao.
+        return texto.split(' - ')[0] || texto;
+    };
+
+    selects.forEach(select => {
+        if (!select) return;
+        if (select.value && String(select.value).trim() !== '') return;
+
+        const container = select.closest('.item-ibs-cbs');
+        if (container && container.style.display === 'none') return;
+
+        const opcoesValidas = Array.from(select.options || []).filter(opt => {
+            return opt.value && String(opt.value).trim() !== '';
+        });
+
+        if (!opcoesValidas.length) return;
+
+        // Prioriza código padrão equivalente a 00-00001 / 000001 / 001; senão usa a primeira opção válida
+        const opcaoPadrao = opcoesValidas.find(opt => normalizarCodigoIbs(extrairCodigoDaOpcao(opt)) === '1') || opcoesValidas[0];
+        select.value = opcaoPadrao.value;
+        if (typeof $ !== 'undefined' && $(select).hasClass('select2-hidden-accessible')) {
+            $(select).val(opcaoPadrao.value).trigger('change');
+        } else {
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        const match = String(select.name).match(/_(\d+)$/);
+        if (match && match[1]) {
+            atualizarItemJSON(match[1]);
+        }
+        preenchidos += 1;
+    });
+
+    if (preenchidos > 0) {
+        console.log(`✅ IBS/CBS padrão aplicado em ${preenchidos} item(ns)`);
+    }
+}
+
 // ==================== PREVIEW DANFE ====================
 function previewDANFE() {
-    // Pré-validação completa antes de gerar DANFE
-    if (!validarFormularioCompleto('danfe')) return;
+    // Validar campos obrigatórios antes de gerar DANFE
+    const errors = [];
+    
+    // Validar destinatário
+    const destinatarioSelect = document.getElementById('destinatario');
+    if (!destinatarioSelect || !destinatarioSelect.value) {
+        errors.push('Destinatário é obrigatório');
+    }
+    
+    // Validar produtos
+    const itensContainer = document.getElementById('itensContainer');
+    const itensCards = itensContainer?.querySelectorAll('.card');
+    if (!itensCards || itensCards.length === 0) {
+        errors.push('Adicione pelo menos um produto');
+    }
+    
+    // Validar pagamento
+    const formaPagamento = document.getElementById('formaPagamento')?.value;
+    if (!formaPagamento || formaPagamento.trim() === '') {
+        errors.push('Selecione a forma de pagamento');
+    }
+    
+    if (errors.length > 0) {
+        alert('Corrija os seguintes erros antes de gerar o preview do DANFE:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+        return;
+    }
     
     // Mostrar loading
     const btnPreview = document.querySelector('button[onclick="previewDANFE()"]');
@@ -3242,6 +3585,8 @@ function previewDANFE() {
     
     // Atualizar JSON de todos os itens antes de coletar dados
     console.log('[DANFE PREVIEW] Atualizando JSON dos itens...');
+    normalizarSequenciaItens();
+    preencherClassificacaoIbsCbsPadrao();
     const itens = document.querySelectorAll('[id^="item-"]');
     itens.forEach(item => {
         const itemId = item.id.split('-')[1];
@@ -3306,7 +3651,7 @@ function previewDANFE() {
         
         if (data.success && data.pdf_base64) {
             console.log('[DANFE PREVIEW] Convertendo base64 para blob...');
-            // Converter base64 para blob e abrir via link (evita bloqueio de popup)
+            // Converter base64 para blob e abrir em nova aba
             try {
                 const binaryString = atob(data.pdf_base64);
                 const bytes = new Uint8Array(binaryString.length);
@@ -3315,15 +3660,8 @@ function previewDANFE() {
                 }
                 const blob = new Blob([bytes], { type: 'application/pdf' });
                 const url = URL.createObjectURL(blob);
-                // Usar <a> com target="_blank" para não ser bloqueado por popup blocker
-                const link = document.createElement('a');
-                link.href = url;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                setTimeout(() => URL.revokeObjectURL(url), 10000);
+                console.log('[DANFE PREVIEW] Abrindo URL:', url);
+                window.open(url, '_blank');
                 console.log('[DANFE PREVIEW] PDF aberto em nova aba');
             } catch (error) {
                 console.error('[DANFE PREVIEW] Erro ao converter base64:', error);
@@ -3333,15 +3671,9 @@ function previewDANFE() {
             // PDF já foi aberto
             console.log('[DANFE PREVIEW] PDF já foi aberto');
         } else if (data.success && data.danfe_url) {
-            // Abrir URL do DANFE via link
+            // Abrir URL do DANFE em nova aba
             console.log('[DANFE PREVIEW] Abrindo URL do DANFE:', data.danfe_url);
-            const link = document.createElement('a');
-            link.href = data.danfe_url;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            window.open(data.danfe_url, '_blank');
         } else if (data.success) {
             console.warn('[DANFE PREVIEW] Sucesso mas sem PDF - data:', data);
             alert('DANFE gerado com sucesso, mas PDF não foi retornado. Verifique o console.');
@@ -3448,91 +3780,50 @@ function imprimirDanfe() {
 }
 
 // Função para enviar DANFE por email
-function solicitarEmailDestinatario() {
-    const emailInformado = prompt('Digite o email do destinatário:');
-    if (!emailInformado) {
-        return null;
-    }
-
-    const email = emailInformado.trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        alert('Email inválido!');
-        return null;
-    }
-    return email;
-}
-
-async function enviarEmailDanfe(btnEmail) {
+async function enviarEmailDanfe() {
     if (!nfeIdAtual) {
         alert('Erro: ID da NFe não encontrado');
         return;
     }
     
-    const botaoEmail = btnEmail || document.querySelector('#modalAcoesDanfe .btn-info');
-
+    // Solicitar email do destinatário
+    const emailDestinatario = prompt('Digite o email do destinatário:');
+    
+    if (!emailDestinatario || !emailDestinatario.includes('@')) {
+        alert('Email inválido!');
+        return;
+    }
+    
     try {
         // Mostrar loading
-        const textoOriginal = botaoEmail ? botaoEmail.innerHTML : '';
-        if (botaoEmail) {
-            botaoEmail.disabled = true;
-            botaoEmail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
-        }
+        const btnEmail = event.target;
+        const textoOriginal = btnEmail.innerHTML;
+        btnEmail.disabled = true;
+        btnEmail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
         
-        // Função auxiliar para parsear resposta com segurança
-        async function safeJson(resp) {
-            const text = await resp.text();
-            try { return JSON.parse(text); } catch(e) {
-                return { success: false, message: `Erro interno do servidor (${resp.status})` };
-            }
-        }
-
-        // 1) Tenta enviar com email cadastrado no destinatário
-        let response = await fetch(`/admin/nfe/${nfeIdAtual}/enviar-danfe`, {
+        // Fazer requisição para enviar email
+        const response = await fetch(`/admin/nfes/${nfeIdAtual}/enviar-danfe`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({})
+            body: JSON.stringify({
+                email_destinatario: emailDestinatario
+            })
         });
         
-        let result = await safeJson(response);
-
-        // 2) Só pede email manual se não existir no cadastro
-        if (!response.ok && result && result.needs_email_input) {
-            const emailDestinatarioManual = solicitarEmailDestinatario();
-            if (!emailDestinatarioManual) {
-                if (botaoEmail) {
-                    botaoEmail.disabled = false;
-                    botaoEmail.innerHTML = textoOriginal;
-                }
-                return;
-            }
-
-            response = await fetch(`/admin/nfe/${nfeIdAtual}/enviar-danfe`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email_destinatario: emailDestinatarioManual
-                })
-            });
-            result = await safeJson(response);
-        }
+        const result = await response.json();
         
         // Restaurar botão
-        if (botaoEmail) {
-            botaoEmail.disabled = false;
-            botaoEmail.innerHTML = textoOriginal;
-        }
+        btnEmail.disabled = false;
+        btnEmail.innerHTML = textoOriginal;
         
         if (response.ok && result.success) {
             // Fechar modal
             $('#modalAcoesDanfe').modal('hide');
             
             // Mostrar mensagem de sucesso
-            alert(result.message || 'DANFE enviado com sucesso!');
+            alert(`DANFE enviado com sucesso para ${emailDestinatario}!`);
         } else {
             alert(`Erro ao enviar email: ${result.message || 'Erro desconhecido'}`);
         }
@@ -3556,7 +3847,7 @@ async function verificarRegimeTributario() {
         const data = await response.json();
         
         if (data.success) {
-            const requerIBS = IBS_CBS_OBRIGATORIO === 1 || data.requer_ibs_cbs;
+            const requerIBS = data.requer_ibs_cbs;
             console.log(`🔍 Regime Tributário: ${data.regime_nome} (CRT=${data.crt})`);
             console.log(`📋 Requer IBS/CBS: ${requerIBS ? 'SIM ✅' : 'NÃO ❌'}`);
             
@@ -3585,7 +3876,6 @@ async function verificarRegimeTributario() {
         }
     } catch (error) {
         console.error('❌ Erro ao verificar regime tributário:', error);
-        if (typeof showToast !== 'undefined') showToast('Erro ao verificar regime tributário', 'warning');
     }
 }
 
@@ -3598,8 +3888,6 @@ async function carregarClassificacoesIBS() {
         if (data.success) {
             // Atualizar todos os selects de classificação IBS/CBS dos itens
             document.querySelectorAll('.js-select2-classificacao-ibs').forEach(select => {
-                const valorAtual = select.value;
-                let valorPadrao = '';
                 select.innerHTML = '<option value="">Nenhuma (opcional)</option>';
                 
                 data.data.forEach(c => {
@@ -3609,33 +3897,14 @@ async function carregarClassificacoesIBS() {
                     option.dataset.aliquotaIbsUf = c.aliquota_ibs_uf;
                     option.dataset.aliquotaIbsMun = c.aliquota_ibs_mun;
                     option.dataset.aliquotaCbs = c.aliquota_cbs;
-
-                    if (String(c.codigo || '').trim() === '00-00001') {
-                        valorPadrao = String(c.id);
-                    }
-
-                    if (valorAtual && String(c.id) === String(valorAtual)) {
-                        option.selected = true;
-                    }
-
                     select.appendChild(option);
                 });
-
-                // Quando não houver seleção prévia, usar o padrão solicitado (00-00001)
-                if (!select.value && valorPadrao) {
-                    select.value = valorPadrao;
-                }
-
-                if (window.jQuery && jQuery(select).data('select2')) {
-                    jQuery(select).trigger('change.select2');
-                }
             });
             
             console.log(`✅ ${data.data.length} classificações IBS/CBS carregadas para os itens`);
         }
     } catch (error) {
         console.error('❌ Erro ao carregar classificações IBS/CBS:', error);
-        if (typeof showToast !== 'undefined') showToast('Erro ao carregar classificações IBS/CBS', 'warning');
     }
 }
 
@@ -3734,7 +4003,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('🎯 SUBMIT INTERCEPTADO!', e);
             
             // Verificar qual botão foi clicado
-                const submitter = e.submitter || document.activeElement;
+            const submitter = e.submitter;
             console.log('🔍 Botão clicado:', submitter);
             console.log('🔍 Valor do botão:', submitter?.value);
             console.log('🔍 Name do botão:', submitter?.name);
@@ -3744,6 +4013,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('⚠️ Não é o botão Emitir, permitindo submit normal...');
                 return; // Deixa o navegador processar normalmente
             }
+            
+            // É o botão Emitir - prevenir submit padrão e processar com fetch
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
             
             console.log('🔍 INICIANDO VALIDAÇÃO...');
             
@@ -3781,10 +4055,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Se houver erros, mostrar e não prosseguir
             if (erros.length > 0) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-
                 let mensagemErro = 'CAMPOS OBRIGATÓRIOS NÃO PREENCHIDOS:\n\n';
                 erros.forEach((erro, index) => {
                     mensagemErro += `${index + 1}. ${erro}\n`;
@@ -3803,48 +4073,90 @@ document.addEventListener('DOMContentLoaded', function() {
                 `⚠️ ATENÇÃO: Esta ação irá transmitir a nota fiscal para a SEFAZ e não poderá ser desfeita!\n\n` +
                 `Deseja realmente continuar?`;
             
-            if (!confirm(mensagemConfirmacao)) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                console.log('⚠️ Emissão cancelada pelo usuário.');
-                return;
+            if (confirm(mensagemConfirmacao)) {
+                console.log('✅ Confirmação OK - preparando submissão...');
+                
+                // Atualizar JSON de todos os itens antes de submeter
+                normalizarSequenciaItens();
+                preencherClassificacaoIbsCbsPadrao();
+                const itens = document.querySelectorAll('[id^="item-"]');
+                itens.forEach(item => {
+                    const itemId = item.id.split('-')[1];
+                    atualizarItemJSON(itemId);
+                });
+                
+                // Desabilitar botão
+                submitter.disabled = true;
+                submitter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
+                
+                console.log('🚀 Criando FormData e enviando via fetch...');
+                
+                // Criar FormData com todos os dados do form
+                const formData = new FormData(form);
+                
+                // IMPORTANTE: Verificar se está em modo edição
+                // Modo edição: action=emit (rota /admin/nfe/edit/X)
+                // Modo novo: usar o value do botão original (emitir)
+                const isEditMode = window.location.pathname.includes('/edit/');
+                const actionValue = isEditMode ? 'emit' : submitter.value;
+                
+                formData.append('action', actionValue);
+                console.log(`✅ Campo action=${actionValue} adicionado (modo: ${isEditMode ? 'edição' : 'novo'})`);
+                
+                // Determinar URL correta
+                const actionUrl = form.getAttribute('action') || window.location.href;
+                console.log('📍 URL de destino:', actionUrl);
+                
+                // Enviar via fetch (sem validação HTML5)
+                fetch(actionUrl, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    console.log('✅ Resposta recebida:', response.status);
+                    console.log('🔍 Response redirected?', response.redirected);
+                    console.log('🔍 Response URL:', response.url);
+                    
+                    // Se foi redirecionado, ir para a nova URL
+                    if (response.redirected) {
+                        limparRascunhoNfe();
+                        console.log('🔀 Redirecionando para:', response.url);
+                        window.location.href = response.url;
+                        return;
+                    }
+                    
+                    // Processar resposta HTML
+                    return response.text().then(html => {
+                        console.log('📄 HTML recebido:', html.substring(0, 500));
+                        
+                        // Se a resposta contém "success" ou "autorizada", é sucesso
+                        if (html.includes('success') || html.includes('autorizada') || html.includes('Autorizada')) {
+                            limparRascunhoNfe();
+                            console.log('✅ NFe emitida com sucesso! Redirecionando...');
+                            // Extrair URL de redirect se houver
+                            const match = html.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/);
+                            if (match) {
+                                window.location.href = match[1];
+                            } else {
+                                // Recarregar para mostrar lista de NFes
+                                window.location.href = '/admin/nfe/list';
+                            }
+                        } else {
+                            // Substituir página com a resposta
+                            console.log('📝 Substituindo conteúdo da página...');
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('❌ Erro ao enviar:', error);
+                    alert('Erro ao enviar NFe: ' + error.message);
+                    submitter.disabled = false;
+                    submitter.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
+                });
             }
-
-            console.log('✅ Confirmação OK - enviando formulário normalmente...');
-
-            // Rascunho emitido — limpar localStorage agora que o usuário confirmou
-            if (typeof window._rascunhoLimpar === 'function') window._rascunhoLimpar();
-
-            // Atualizar JSON de todos os itens antes de submeter
-            const itens = document.querySelectorAll('[id^="item-"]');
-            itens.forEach(item => {
-                const itemId = item.id.split('-')[1];
-                atualizarItemJSON(itemId);
-            });
-
-            // Garantir que a action correta seja enviada também no submit normal
-            let actionField = form.querySelector('input[name="action"][data-generated="true"]');
-            if (!actionField) {
-                actionField = document.createElement('input');
-                actionField.type = 'hidden';
-                actionField.name = 'action';
-                actionField.dataset.generated = 'true';
-                form.appendChild(actionField);
-            }
-
-            const isEditMode = window.location.pathname.includes('/edit/');
-            actionField.value = isEditMode ? 'emit' : submitter.value;
-            console.log(`✅ Campo action=${actionField.value} preparado para submit normal.`);
-
-            const campoValorPagamento = document.getElementById('valorPagamento');
-            if (campoValorPagamento) {
-                const valorReal = campoValorPagamento.getAttribute('data-valor-real') || campoValorPagamento.value || '0.00';
-                campoValorPagamento.value = parseValorMonetario(valorReal).toFixed(2);
-            }
-
-            submitter.disabled = true;
-            submitter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
         }, true); // Usar capture phase
     }
 });
@@ -3876,7 +4188,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 200);
     {% endif %}
     
-    // Preencher campos do formulário
+    {% if edit_mode and form_data %}
+    // Preencher campos do formulário (apenas modo edição)
     {% if form_data.numero_nfe %}
     document.getElementById('numero_nfe').value = '{{ form_data.numero_nfe }}';
     {% endif %}
@@ -3891,6 +4204,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     {% if form_data.finNFe %}
     document.getElementById('finNFe').value = '{{ form_data.finNFe }}';
+    toggleNfeRefContainer('{{ form_data.finNFe }}');
+    {% endif %}
+    
+    {% if form_data.chave_nfe_ref %}
+    const chaveRefInput = document.getElementById('chave_nfe_ref');
+    if (chaveRefInput) chaveRefInput.value = '{{ form_data.chave_nfe_ref }}';
     {% endif %}
     
     {% if form_data.indPres %}
@@ -3909,13 +4228,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
     
     {% if form_data.valorPagamento %}
-    (function() {
-        var _vp = document.getElementById('valorPagamento');
-        if (_vp) {
-            _vp.value = '{{ form_data.valorPagamento }}';
-            _vp.setAttribute('data-valor-real', '{{ form_data.valorPagamento }}');
-        }
-    })();
+    document.getElementById('valorPagamento').value = '{{ form_data.valorPagamento }}';
     {% endif %}
     
     {% if form_data.modFrete %}
@@ -3930,55 +4243,56 @@ document.addEventListener('DOMContentLoaded', function() {
     // Preencher itens
     {% if initial_nfe_items %}
     console.log('📦 Adicionando {{ initial_nfe_items|length }} item(ns)...');
-    window._nfeRestaurandoRascunho = true; // bypass validação durante carga de itens em modo edição
-    (function() {
-        var _editItems = {{ initial_nfe_items|tojson }};
-        _editItems.forEach(function(item) { adicionarItemComDados(item); });
-        setTimeout(function() { window._nfeRestaurandoRascunho = false; calcularTotalGeral(); }, _editItems.length * 200 + 500);
-    })();
+    {% for item in initial_nfe_items %}
+    setTimeout(function() {
+        adicionarItemComDados({{ item|tojson }});
+    }, {{ loop.index0 * 100 }});
+    {% endfor %}
     {% endif %}
     
     console.log('✅ Dados carregados em modo edição');
+    {% endif %}
 });
 
 // Função para adicionar item com dados pré-preenchidos
 function adicionarItemComDados(itemData) {
     console.log('➕ Adicionando item com dados:', itemData);
     
-    // Adicionar um item vazio primeiro (bypass validação - carregamento programático)
-    var _prevFlag = window._nfeRestaurandoRascunho;
-    window._nfeRestaurandoRascunho = true;
+    // Adicionar um item vazio primeiro
     adicionarItem();
-    window._nfeRestaurandoRascunho = _prevFlag;
     
-    // ⚠️ Capturar itemId SINCRONAMENTE após adicionarItem() para evitar race condition
-    // quando múltiplos itens são adicionados em sequência rápida (modo edição).
-    // Se capturado dentro do setTimeout, o DOM já terá N itens adicionados e
-    // items[last] apontará para o item errado, deixando os anteriores vazios.
-    const _itensApos = document.querySelectorAll('#itensContainer [id^="item-"]');
-    const _novoItem = _itensApos[0]; // adicionarItem() insere NO TOPO (insertBefore firstChild)
-    if (!_novoItem) {
-        console.error('❌ Item não encontrado após adicionarItem()!');
-        return;
-    }
-    const itemId = itemCounter; // adicionarItem() incrementa itemCounter
-    console.log('📝 Item ID capturado sincronamente:', itemId);
-
-    // Aguardar Select2 estar pronto e preencher os dados usando o itemId já capturado
+    // Aguardar o item ser criado e preencher os dados
     setTimeout(function() {
+        const items = document.querySelectorAll('[id^="item-"]');
+        const ultimoItem = items[items.length - 1];
+        if (!ultimoItem) {
+            console.error('❌ Item não encontrado!');
+            return;
+        }
+        
+        const itemId = ultimoItem.id.split('-')[1];
+        console.log('📝 Preenchendo item ID:', itemId);
+        
         // Preencher campos do item (usando os nomes corretos do HTML)
         try {
-            // Preencher select "Produto" — Select2 AJAX: injetar opção diretamente
-            // (não há opções pré-carregadas em AJAX Select2, campo.options estaria vazio)
+            // Preencher select "Produto" com descrição
             if (itemData.descricao) {
-                var $prodSelect = $(`select[name="produto_${itemId}"]`);
-                if ($prodSelect.length) {
-                    // Usar produto_id salvo (se disponível) ou a própria descrição como valor
-                    var prodVal = itemData.produto_id || itemData.descricao;
-                    var prodOpt = new Option(itemData.descricao, prodVal, true, true);
-                    $prodSelect.empty().append(prodOpt).trigger('change');
-                    console.log('✅ Produto injetado no Select2 (modo edição):', itemData.descricao);
-                    // Não disparar carregarProduto() — campos serão preenchidos manualmente abaixo
+                const campo = document.querySelector(`select[name="produto_${itemId}"]`);
+                if (campo) {
+                    // Procurar option com essa descrição
+                    for (let option of campo.options) {
+                        if (option.text === itemData.descricao || option.dataset.descricao === itemData.descricao) {
+                            option.selected = true;
+                            campo.value = option.value;
+                            // Atualizar Select2 se estiver inicializado
+                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
+                                $(campo).val(option.value).trigger('change');
+                            }
+                            console.log('✅ Produto selecionado:', itemData.descricao);
+                            // Não chamar carregarProduto() aqui - campos já serão preenchidos manualmente
+                            break;
+                        }
+                    }
                 }
             }
             if (itemData.codigo_produto || itemData.codigo) {
@@ -4009,11 +4323,6 @@ function adicionarItemComDados(itemData) {
                     console.log('✅ Valor unitário preenchido:', campo.value);
                     // Calcular total
                     calcularTotal(itemId);
-                    // Forçar valor_total armazenado para garantir exatidão
-                    if (itemData.valor_total) {
-                        var _tc = document.querySelector('input[name="valor_total_' + itemId + '"]');
-                        if (_tc) _tc.value = String(itemData.valor_total);
-                    }
                 }
             }
             if (itemData.ncm) {
@@ -4035,12 +4344,21 @@ function adicionarItemComDados(itemData) {
                 }
             }
             if (itemData.cfop) {
-                // CFOP usa Select2 AJAX — injetar opção diretamente
-                var $cfopSelect = $(`select[name="cfop_${itemId}"]`);
-                if ($cfopSelect.length) {
-                    var cfopOpt = new Option(itemData.cfop, itemData.cfop, true, true);
-                    $cfopSelect.empty().append(cfopOpt).trigger('change');
-                    console.log('✅ CFOP injetado no Select2 (modo edição):', itemData.cfop);
+                const campo = document.querySelector(`select[name="cfop_${itemId}"]`);
+                if (campo) {
+                    // Procurar option com esse CFOP
+                    for (let option of campo.options) {
+                        if (option.value === itemData.cfop) {
+                            option.selected = true;
+                            campo.value = itemData.cfop;
+                            // Atualizar Select2 se estiver inicializado
+                            if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
+                                $(campo).val(itemData.cfop).trigger('change');
+                            }
+                            console.log('✅ CFOP selecionado:', itemData.cfop);
+                            break;
+                        }
+                    }
                 }
             }
             if (itemData.origem !== undefined) {
@@ -4068,16 +4386,22 @@ function adicionarItemComDados(itemData) {
                     }
                 }
             }
-            
-            console.log('✅ Item preenchido (modo edição)');
-            
-            // Gravar JSON original diretamente no campo hidden para preservar todos os dados
-            // fiscais (NCM, CFOP, CST, descrição, etc.) sem depender dos selects estarem preenchidos
-            var hiddenJson = document.getElementById(`item_json_${itemId}`);
-            if (hiddenJson) {
-                hiddenJson.value = JSON.stringify(itemData);
-                console.log('✅ JSON do item gravado diretamente (modo edição)');
+
+            if (itemData.classificacao_ibs_cbs_id) {
+                const campo = document.querySelector(`select[name="classificacao_ibs_cbs_id_${itemId}"]`);
+                if (campo) {
+                    campo.value = String(itemData.classificacao_ibs_cbs_id);
+                    if (typeof $ !== 'undefined' && $(campo).hasClass('select2-hidden-accessible')) {
+                        $(campo).val(String(itemData.classificacao_ibs_cbs_id)).trigger('change');
+                    }
+                    console.log('✅ Classificação IBS/CBS selecionada:', itemData.classificacao_ibs_cbs_id);
+                }
             }
+            
+            console.log('✅ Item preenchido');
+            
+            // Atualizar JSON do item
+            atualizarItemJSON(itemId);
         } catch (error) {
             console.error('❌ Erro ao preencher item:', error);
         }
@@ -4152,306 +4476,5 @@ $(document).ready(function() {
     
     console.log('🎉 Assistente IA inicializado com sucesso!');
 });
-
-// ============================================================
-// AUTO-SAVE / RASCUNHO LOCAL (localStorage)
-// ============================================================
-(function() {
-    const _clienteId = {% if emitente_data and emitente_data.cliente_id %}{{ emitente_data.cliente_id }}{% else %}null{% endif %};
-    const _editMode = {% if edit_mode %}true{% else %}false{% endif %};
-    const _STORAGE_KEY = _clienteId ? `nfe_rascunho_cliente_${_clienteId}` : null;
-
-    if (!_STORAGE_KEY) return; // Segurança: não salvar sem cliente_id
-
-    // ── Serializar estado atual do formulário ───────────────
-    function _rascunhoSerializar() {
-        try {
-            // Campos cabeçalho
-            const dados = {
-                ts: Date.now(),
-                natOp:           document.getElementById('natOp')?.value || '',
-                tpNF:            document.getElementById('tpNF')?.value || '',
-                finNFe:          document.getElementById('finNFe')?.value || '',
-                indPres:         document.getElementById('indPres')?.value || '',
-                formaPagamento:  document.getElementById('formaPagamento')?.value || '',
-                modFrete:        document.getElementById('modFrete')?.value || '',
-                infCpl:          document.getElementById('infCpl')?.value || '',
-                destinatario:    document.getElementById('destinatario')?.value || '',
-                items: []
-            };
-
-            // Coletar JSON de cada item (já mantido atualizado por atualizarItemJSON)
-            document.querySelectorAll('[id^="item-"]').forEach(function(itemDiv) {
-                const itemId = itemDiv.id.split('-')[1];
-                const hiddenJson = document.getElementById(`item_json_${itemId}`);
-                if (hiddenJson && hiddenJson.value) {
-                    try {
-                        dados.items.push(JSON.parse(hiddenJson.value));
-                    } catch(e) { /* ignorar item inválido */ }
-                }
-            });
-
-            return dados;
-        } catch(e) {
-            console.warn('[Rascunho] Erro ao serializar:', e);
-            return null;
-        }
-    }
-
-    // ── Salvar no localStorage ───────────────────────────────
-    function _rascunhoSalvar() {
-        if (_editMode) return; // Não sobrescrever rascunho em modo edição
-        if (window._nfeRestaurandoRascunho) return; // Não salvar durante restauração
-        const dados = _rascunhoSerializar();
-        if (!dados) return;
-        try {
-            localStorage.setItem(_STORAGE_KEY, JSON.stringify(dados));
-            _rascunhoAtualizarIndicador(dados.ts);
-        } catch(e) {
-            console.warn('[Rascunho] Não foi possível salvar (localStorage cheio?):', e);
-        }
-    }
-
-    // ── Limpar rascunho ──────────────────────────────────────
-    function _rascunhoLimpar() {
-        if (!_STORAGE_KEY) return;
-        localStorage.removeItem(_STORAGE_KEY);
-        const ind = document.getElementById('_rascunhoIndicador');
-        if (ind) ind.style.display = 'none';
-    }
-
-    // ── Atualizar indicador visual ───────────────────────────
-    function _rascunhoAtualizarIndicador(ts) {
-        let ind = document.getElementById('_rascunhoIndicador');
-        if (!ind) return;
-        const hora = new Date(ts).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-        ind.textContent = `Rascunho salvo às ${hora}`;
-        ind.style.display = 'inline';
-    }
-
-    // ── Preencher campos de um item já adicionado ────────────
-    function _preencherItem(itemId, d) {
-        function _set(sel, val) { const el = document.querySelector(sel); if(el) el.value = val; }
-        function _setS2(name, val, text) {
-            // Para selects AJAX (produto/ncm/cfop): injeta opção e aciona Select2
-            const el = document.querySelector(`select[name="${name}"]`);
-            if (!el || !val) return;
-            if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
-                const opt = new Option(text || val, val, true, true);
-                $(el).append(opt).trigger('change');
-            } else {
-                // Select2 ainda não inicializado: adicionar option diretamente
-                const opt = document.createElement('option');
-                opt.value = val; opt.text = text || val; opt.selected = true;
-                el.appendChild(opt);
-                el.value = val;
-            }
-        }
-        function _setSelect(name, val) {
-            const el = document.querySelector(`select[name="${name}"]`);
-            if (!el || val === undefined || val === null || val === '') return;
-            el.value = val;
-            if (typeof $ !== 'undefined' && $(el).hasClass('select2-hidden-accessible')) {
-                $(el).val(val).trigger('change');
-            }
-        }
-
-        if (d.descricao)      _setS2(`produto_${itemId}`,     d.descricao,  d.descricao);
-        if (d.codigo_produto) _set(`input[name="codigo_produto_${itemId}"]`, d.codigo_produto);
-        if (d.unidade)        _set(`input[name="unidade_${itemId}"]`,        d.unidade);
-        if (d.quantidade)     _set(`input[name="quantidade_${itemId}"]`,     d.quantidade);
-        if (d.valor_unitario) _set(`input[name="valor_unitario_${itemId}"]`, d.valor_unitario);
-        if (d.valor_total)    _set(`input[name="valor_total_${itemId}"]`,    d.valor_total);
-        if (d.ncm)            _setS2(`ncm_${itemId}`,  d.ncm,  d.ncm);
-        if (d.cfop)           _setS2(`cfop_${itemId}`, d.cfop, d.cfop);
-        _setSelect(`origem_${itemId}`,               d.origem);
-        _setSelect(`csosn_${itemId}`,                d.csosn_icms);
-        _setSelect(`cst_icms_${itemId}`,             d.cst_icms);
-        _setSelect(`modalidade_bc_icms_${itemId}`,   d.modalidade_bc_icms);
-        _setSelect(`motivo_desoneracao_icms_${itemId}`, d.motivo_desoneracao_icms);
-        _setSelect(`cst_pis_${itemId}`,              d.cst_pis);
-        _setSelect(`cst_cofins_${itemId}`,           d.cst_cofins);
-        if (d.aliquota_icms)    _set(`input[name="aliquota_icms_${itemId}"]`,    d.aliquota_icms);
-        if (d.reducao_base_icms) _set(`input[name="reducao_base_icms_${itemId}"]`, d.reducao_base_icms);
-        if (d.cbenef)           _set(`input[name="cbenef_${itemId}"]`,           d.cbenef);
-        if (d.aliquota_pis)     _set(`input[name="aliquota_pis_${itemId}"]`,     d.aliquota_pis);
-        if (d.aliquota_cofins)  _set(`input[name="aliquota_cofins_${itemId}"]`,  d.aliquota_cofins);
-        if (d.cst_ipi)          _set(`input[name="cst_ipi_${itemId}"]`,          d.cst_ipi);
-        if (d.aliquota_ipi)     _set(`input[name="aliquota_ipi_${itemId}"]`,     d.aliquota_ipi);
-        if (d.classificacao_ibs_cbs_id) _setSelect(`classificacao_ibs_cbs_id_${itemId}`, d.classificacao_ibs_cbs_id);
-
-        // Definir hidden JSON diretamente (garante envio correto independente do visual)
-        const hidden = document.getElementById(`item_json_${itemId}`);
-        if (hidden) hidden.value = JSON.stringify(d);
-
-        if (typeof calcularTotal === 'function') try { calcularTotal(itemId); } catch(e) {}
-    }
-
-    // ── Restaurar dados no formulário ────────────────────────
-    function _rascunhoRestaurar(dados) {
-        try {
-            // Campos cabeçalho
-            if (dados.natOp)          { const el = document.getElementById('natOp');          if(el) el.value = dados.natOp; }
-            if (dados.tpNF)           { const el = document.getElementById('tpNF');           if(el) el.value = dados.tpNF; }
-            if (dados.finNFe)         { const el = document.getElementById('finNFe');         if(el) el.value = dados.finNFe; }
-            if (dados.indPres)        { const el = document.getElementById('indPres');        if(el) el.value = dados.indPres; }
-            if (dados.formaPagamento) { const el = document.getElementById('formaPagamento'); if(el) el.value = dados.formaPagamento; }
-            // valorPagamento será restaurado APÓS os itens (evita ser sobrescrito por recalcularTotais)
-            if (dados.modFrete)  { const el = document.getElementById('modFrete');  if(el) { el.value = dados.modFrete; if(typeof toggleDadosTransportadora === 'function') toggleDadosTransportadora(); } }
-            if (dados.infCpl)    { const el = document.getElementById('infCpl');    if(el) el.value = dados.infCpl; }
-
-            // Destinatário
-            if (dados.destinatario) {
-                const sel = document.getElementById('destinatario');
-                if (sel) {
-                    sel.value = dados.destinatario;
-                    if (typeof $ !== 'undefined' && $(sel).hasClass('select2-hidden-accessible')) {
-                        $(sel).val(dados.destinatario).trigger('change');
-                    }
-                    if (typeof atualizarDestinatarioInfo === 'function') atualizarDestinatarioInfo();
-                }
-            }
-
-            // Remover item vazio adicionado automaticamente
-            document.querySelectorAll('#itensContainer [id^="item-"]').forEach(function(el) { el.remove(); });
-
-            if (!Array.isArray(dados.items) || dados.items.length === 0) return;
-
-            // Zerar contador para que os itens restaurados comecem em 1, 2, 3...
-            itemCounter = 0;
-
-            // Adicionar todos os itens vazios de uma vez (com flag que desativa a guarda)
-            // itemCounter é var de escopo externo incrementada por adicionarItem()
-            window._nfeRestaurandoRascunho = true;
-            const itemIds = [];
-            dados.items.forEach(function() {
-                adicionarItem();
-                itemIds.push(itemCounter); // valor após incremento = ID do item recém criado
-            });
-
-            // Preencher cada item após Select2 inicializar (~500ms)
-            // Flag é mantida até DEPOIS do preenchimento para evitar save com dados vazios
-            setTimeout(function() {
-                dados.items.forEach(function(itemData, i) {
-                    const itemId = itemIds[i];
-                    if (itemId) _preencherItem(itemId, itemData);
-                });
-
-                // Recalcular total geral uma vez final para garantir valor correto
-                // (não restauramos valorPagamento do rascunho pois é sempre derivado dos itens)
-                window._nfeRestaurandoRascunho = false; // liberar ANTES de recalcular
-                if (typeof calcularTotalGeral === 'function') try { calcularTotalGeral(); } catch(e) {}
-
-                console.log('[Rascunho] ' + dados.items.length + ' item(ns) restaurado(s).');
-            }, 500);
-
-        } catch(e) {
-            console.error('[Rascunho] Erro ao restaurar:', e);
-        }
-    }
-
-    // ── Mostrar toast de recuperação ─────────────────────────
-    function _rascunhoMostrarToast(dados) {
-        const toastHtml = `
-        <div id="_rascunhoToast" class="toast align-items-center text-white bg-primary border-0 position-fixed"
-             style="bottom:20px;right:20px;z-index:9999;min-width:340px;" role="alert" aria-live="assertive">
-          <div class="d-flex">
-            <div class="toast-body">
-              <i class="fas fa-save me-1"></i>
-              <strong>Rascunho encontrado</strong> (${new Date(dados.ts).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})})<br>
-              ${dados.items.length} item(ns) — deseja restaurar?
-            </div>
-            <div class="d-flex flex-column justify-content-center me-2 gap-1">
-              <button type="button" class="btn btn-light btn-sm" id="_btnRascunhoRestaurar">Restaurar</button>
-              <button type="button" class="btn btn-outline-light btn-sm" id="_btnRascunhoDescartar">Descartar</button>
-            </div>
-          </div>
-        </div>`;
-        document.body.insertAdjacentHTML('beforeend', toastHtml);
-
-        const toastEl = document.getElementById('_rascunhoToast');
-        const bsToast = new bootstrap.Toast(toastEl, {autohide: false});
-        bsToast.show();
-
-        document.getElementById('_btnRascunhoRestaurar').addEventListener('click', function() {
-            bsToast.hide();
-            toastEl.remove();
-            _rascunhoRestaurar(dados);
-            _rascunhoAtualizarIndicador(dados.ts);
-        });
-        document.getElementById('_btnRascunhoDescartar').addEventListener('click', function() {
-            bsToast.hide();
-            toastEl.remove();
-            _rascunhoLimpar();
-            window._nfeRestaurandoRascunho = false; // libera auto-save após descarte
-        });
-    }
-
-    // ── Inicialização ────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', function() {
-        // Criar indicador visual de rascunho salvo
-        const areaAcoes = document.querySelector('.col-md-12.text-center');
-        if (areaAcoes) {
-            const ind = document.createElement('small');
-            ind.id = '_rascunhoIndicador';
-            ind.className = 'text-muted ms-3';
-            ind.style.display = 'none';
-            areaAcoes.appendChild(ind);
-        }
-
-        // Verificar se existe rascunho salvo (só em modo criação)
-        if (!_editMode) {
-            try {
-                const salvo = localStorage.getItem(_STORAGE_KEY);
-                if (salvo) {
-                    const dados = JSON.parse(salvo);
-                    // Só mostrar se o rascunho tem menos de 7 dias
-                    const diasAtras = (Date.now() - dados.ts) / (1000 * 60 * 60 * 24);
-                    if (diasAtras <= 7) {
-                        // Bloquear qualquer auto-save IMEDIATAMENTE para não sobrescrever
-                        // o rascunho bom com o item vazio adicionado automaticamente na página
-                        window._nfeRestaurandoRascunho = true;
-                        // Aguardar Select2 inicializar antes de mostrar o toast
-                        setTimeout(function() { _rascunhoMostrarToast(dados); }, 1200);
-                    } else {
-                        localStorage.removeItem(_STORAGE_KEY); // Rascunho expirado
-                    }
-                }
-            } catch(e) {
-                console.warn('[Rascunho] Erro ao ler localStorage:', e);
-            }
-        }
-
-        // Auto-save a cada 60 segundos
-        setInterval(_rascunhoSalvar, 60000);
-
-        // Salvar ao adicionar/remover item (observar mudanças no container)
-        const container = document.getElementById('itensContainer');
-        if (container) {
-            const observer = new MutationObserver(function(mutations) {
-                const relevante = mutations.some(function(m) {
-                    return m.type === 'childList' && (m.addedNodes.length > 0 || m.removedNodes.length > 0);
-                });
-                if (relevante) setTimeout(_rascunhoSalvar, 400);
-            });
-            observer.observe(container, {childList: true, subtree: false});
-        }
-
-        // Salvar ao trocar destinatário
-        const destSelect = document.getElementById('destinatario');
-        if (destSelect) destSelect.addEventListener('change', function() { setTimeout(_rascunhoSalvar, 200); });
-
-        // Salvar ao trocar forma de pagamento
-        const pagSelect = document.getElementById('formaPagamento');
-        if (pagSelect) pagSelect.addEventListener('change', _rascunhoSalvar);
-    });
-
-    // Limpar rascunho ao submeter formulário (emitir ou salvar rascunho manual)
-    document.addEventListener('DOMContentLoaded', function() {
-        // Expor globalmente para uso externo
-        window._rascunhoLimpar = _rascunhoLimpar;
-        window._rascunhoSalvar = _rascunhoSalvar;
-    });
-})();
 </script>
 {% endblock %}

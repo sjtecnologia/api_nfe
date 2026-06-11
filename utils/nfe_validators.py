@@ -215,10 +215,11 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     if not form_data.get('formaPagamento'):
         erros.append("Forma de pagamento é obrigatória")
     
-    # Valor pagamento opcional - será calculado do total se não fornecido
-    if form_data.get('valorPagamento'):
+    # Valor pagamento opcional — não validar para 'Sem Pagamento' (90)
+    if form_data.get('valorPagamento') and str(form_data.get('formaPagamento')).strip() != '90':
         try:
-            valor_pag = float(form_data.get('valorPagamento'))
+            valor_str = str(form_data.get('valorPagamento')).replace(',', '.')
+            valor_pag = float(valor_str)
             if valor_pag <= 0:
                 erros.append("Valor do pagamento deve ser maior que zero")
         except ValueError:

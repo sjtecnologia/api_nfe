@@ -1840,6 +1840,15 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
                     aliq_icms = float(icms_data.get('aliquota', 0))
                     bc_icms = round(float(icms_data.get('base_calculo', valor_total)), 2)
                     valor_icms = round(bc_icms * aliq_icms / 100, 2) if aliq_icms > 0 else 0.0
+                    # CSOSN 900 (Outros): permite vBC/pICMS/vICMS além do crédito SN
+                    # Obrigatório para devolução (finNFe=4) com Simples Nacional para que o
+                    # ICMS apareça no ICMSTot/vICMS e consequentemente no DANFE
+                    if csosn == '900' and bc_icms > 0 and aliq_icms > 0:
+                        etree.SubElement(icms_sn, "modBC").text = str(icms_data.get('modalidade_bc', '3'))
+                        etree.SubElement(icms_sn, "vBC").text = f"{bc_icms:.2f}"
+                        etree.SubElement(icms_sn, "pICMS").text = f"{aliq_icms:.2f}"
+                        etree.SubElement(icms_sn, "vICMS").text = f"{valor_icms:.2f}"
+                        logger.debug(f"[DEBUG-ICMS] CSOSN 900 - modBC:3 vBC:{bc_icms:.2f} pICMS:{aliq_icms:.2f} vICMS:{valor_icms:.2f}")
                     # Adicionar campos SOMENTE se alíquota > 0 (se zero, OMITIR pCredSN/vCredICMSSN)
                     if aliq_icms > 0:
                         etree.SubElement(icms_sn, "pCredSN").text = f"{aliq_icms:.2f}"
@@ -1933,13 +1942,26 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
             
             # IPI
             ipi_data = item.get('ipi', {})
-            if ipi_data and ipi_data.get('valor'):
+            ipi_valor = float(ipi_data.get('valor', 0)) if ipi_data else 0.0
+            ipi_cst = str(ipi_data.get('cst', '99')) if ipi_data else '99'
+            # CSTs tributados pelo IPI (geram valor a pagar): 00, 49, 50
+            # CSTs não tributados (isenção/suspensão/imunidade): 01-05, 51-55, 99
+            ipi_csts_tributados = {'00', '49', '50'}
+            if ipi_data and (ipi_valor > 0 or ipi_cst in ipi_csts_tributados):
                 ipi = etree.SubElement(imposto, "IPI")
-                ipi_trib = etree.SubElement(ipi, "IPITrib")
-                etree.SubElement(ipi_trib, "CST").text = str(ipi_data.get('cst', '50'))
-                etree.SubElement(ipi_trib, "vBC").text = f"{float(ipi_data.get('base_calculo', 0)):.2f}"
-                etree.SubElement(ipi_trib, "pIPI").text = f"{float(ipi_data.get('aliquota', 0)):.2f}"
-                etree.SubElement(ipi_trib, "vIPI").text = f"{float(ipi_data['valor']):.2f}"
+                # cEnq é obrigatório pelo schema da NFe (999 = outros/não enquadrado)
+                etree.SubElement(ipi, "cEnq").text = str(ipi_data.get('cenq', '999'))
+                if ipi_cst in ipi_csts_tributados:
+                    # IPITrib: IPI com incidência
+                    ipi_trib = etree.SubElement(ipi, "IPITrib")
+                    etree.SubElement(ipi_trib, "CST").text = ipi_cst
+                    etree.SubElement(ipi_trib, "vBC").text = f"{float(ipi_data.get('base_calculo', 0)):.2f}"
+                    etree.SubElement(ipi_trib, "pIPI").text = f"{float(ipi_data.get('aliquota', 0)):.2f}"
+                    etree.SubElement(ipi_trib, "vIPI").text = f"{ipi_valor:.2f}"
+                else:
+                    # IPINT: IPI não tributado (isento, suspenso, imune, outros)
+                    ipi_nt = etree.SubElement(ipi, "IPINT")
+                    etree.SubElement(ipi_nt, "CST").text = ipi_cst
             
             # PIS
             pis_data = item.get('pis', {})
@@ -2004,7 +2026,9 @@ def generate_nfe_xml_LEGACY(form_data: Dict[str, Any], emitente_data: Dict[str, 
         etree.SubElement(icms_tot, "vDesc").text = f"{total_desconto:.2f}"
         etree.SubElement(icms_tot, "vII").text = "0.00"
         etree.SubElement(icms_tot, "vIPI").text = f"{total_ipi:.2f}"
-        etree.SubElement(icms_tot, "vIPIDevol").text = "0.00"
+        # vIPIDevol: IPI devolvido — obrigatório preenchido quando finNFe=4 (devolução) e há IPI
+        vipIDevol = total_ipi if fin_nfe == '4' and total_ipi > 0 else 0.0
+        etree.SubElement(icms_tot, "vIPIDevol").text = f"{vipIDevol:.2f}"
         etree.SubElement(icms_tot, "vPIS").text = f"{total_pis:.2f}"
         etree.SubElement(icms_tot, "vCOFINS").text = f"{total_cofins:.2f}"
         etree.SubElement(icms_tot, "vOutro").text = f"{total_outras:.2f}"

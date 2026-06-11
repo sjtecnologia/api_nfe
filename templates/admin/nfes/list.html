@@ -224,6 +224,20 @@
                                                         <i class="fas fa-ban"></i>
                                                     </button>
                                                     <button type="button"
+                                                            class="btn btn-sm btn-outline-primary btn-carta-correcao"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            data-numero="{{ nfe.numero }}"
+                                                            title="Carta de Correção (CC-e)">
+                                                        <i class="fas fa-file-signature"></i>
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary btn-historico-cce"
+                                                            data-nfe-id="{{ nfe.nfe_emitida_id }}"
+                                                            data-numero="{{ nfe.numero }}"
+                                                            title="Histórico de CC-e">
+                                                        <i class="fas fa-history"></i>
+                                                    </button>
+                                                    <button type="button"
                                                             class="btn btn-sm btn-outline-info btn-duplicar-nfe"
                                                             data-nfe-id="{{ nfe.nfe_emitida_id }}"
                                                             data-numero="{{ nfe.numero }}"
@@ -699,6 +713,243 @@ async function confirmarCancelamento(nfeId) {
         if (btnConfirmar) {
             btnConfirmar.disabled = false;
             btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Confirmar Cancelamento';
+        }
+    }
+}
+
+// ==================== CARTA DE CORREÇÃO (CC-e) ====================
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-carta-correcao').forEach(button => {
+        button.addEventListener('click', function() {
+            const nfeId = this.dataset.nfeId;
+            const numero = this.dataset.numero;
+            abrirModalCce(nfeId, numero);
+        });
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-historico-cce').forEach(button => {
+        button.addEventListener('click', function() {
+            const nfeId = this.dataset.nfeId;
+            const numero = this.dataset.numero;
+            abrirHistoricoCce(nfeId, numero);
+        });
+    });
+});
+
+function abrirModalCce(nfeId, numero) {
+    const modalHtml = `
+        <div class="modal fade" id="modalCceNfe" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-file-signature"></i> Carta de Correção - NFe ${numero}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            A CC-e corrige informações permitidas sem alterar valores de imposto, remetente/destinatário ou data de emissão.
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="textoCce" class="form-label">
+                                Texto da Correção <span class="text-danger">*</span>
+                            </label>
+                            <textarea
+                                class="form-control"
+                                id="textoCce"
+                                rows="5"
+                                placeholder="Descreva claramente a correção (mínimo 15 e máximo 1000 caracteres)"
+                                required
+                                minlength="15"
+                                maxlength="1000"></textarea>
+                            <small class="form-text text-muted">
+                                Limite: 20 eventos por NFe. A correção será enviada para a SEFAZ.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="confirmarCce(${nfeId})">
+                            <i class="fas fa-paper-plane"></i> Enviar CC-e
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const modalExistente = document.getElementById('modalCceNfe');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modal = new bootstrap.Modal(document.getElementById('modalCceNfe'));
+    modal.show();
+}
+
+async function confirmarCce(nfeId) {
+    const correcao = document.getElementById('textoCce').value.trim();
+
+    if (!correcao || correcao.length < 15 || correcao.length > 1000) {
+        alert('Informe uma correção com mínimo de 15 e máximo de 1000 caracteres.');
+        return;
+    }
+
+    if (!confirm('Confirmar envio da Carta de Correção para a SEFAZ?')) {
+        return;
+    }
+
+    try {
+        const btnEnviar = document.querySelector('#modalCceNfe .btn-primary');
+        btnEnviar.disabled = true;
+        btnEnviar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+        const response = await fetch(`/admin/nfe/carta-correcao/${nfeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                correcao: correcao
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalCceNfe'));
+            if (modal) modal.hide();
+
+            let msg = 'CC-e registrada com sucesso na SEFAZ!';
+            if (result.sequencia_evento) msg += `\nSequência: ${result.sequencia_evento}`;
+            if (result.protocolo) msg += `\nProtocolo: ${result.protocolo}`;
+            if (result.codigo) msg += `\nCódigo: ${result.codigo}`;
+
+            alert(msg);
+        } else {
+            alert(`Erro ao registrar CC-e: ${result.message || 'Erro desconhecido'}`);
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar CC-e';
+        }
+    } catch (error) {
+        console.error('Erro ao registrar CC-e:', error);
+        alert(`Erro ao registrar CC-e: ${error.message}`);
+        const btnEnviar = document.querySelector('#modalCceNfe .btn-primary');
+        if (btnEnviar) {
+            btnEnviar.disabled = false;
+            btnEnviar.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar CC-e';
+        }
+    }
+}
+
+async function abrirHistoricoCce(nfeId, numero) {
+    const modalHtml = `
+        <div class="modal fade" id="modalHistoricoCce" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-secondary text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-history"></i> Histórico de CC-e - NFe ${numero}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="historicoCceBody">
+                        <div class="text-center py-3">
+                            <i class="fas fa-spinner fa-spin"></i> Carregando histórico...
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const modalExistente = document.getElementById('modalHistoricoCce');
+    if (modalExistente) {
+        modalExistente.remove();
+    }
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalEl = document.getElementById('modalHistoricoCce');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    try {
+        const response = await fetch(`/admin/nfe/carta-correcao/${nfeId}/historico`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        const result = await response.json();
+        const body = document.getElementById('historicoCceBody');
+
+        if (!response.ok || !result.success) {
+            body.innerHTML = `<div class="alert alert-danger mb-0">${result.message || 'Erro ao carregar histórico de CC-e'}</div>`;
+            return;
+        }
+
+        const eventos = Array.isArray(result.eventos) ? result.eventos : [];
+        if (eventos.length === 0) {
+            body.innerHTML = '<div class="alert alert-info mb-0"><i class="fas fa-info-circle"></i> Esta NFe ainda não possui Carta de Correção registrada.</div>';
+            return;
+        }
+
+        const linhas = eventos.map((ev) => {
+            const seq = ev.sequencia_evento || '-';
+            const protocolo = ev.protocolo || '-';
+            const codigo = ev.codigo || '-';
+            const mensagem = ev.mensagem || '-';
+            const dataEvento = ev.data_evento || '-';
+            const correcao = ev.correcao || '-';
+            return `
+                <tr>
+                    <td><strong>${seq}</strong></td>
+                    <td>${protocolo}</td>
+                    <td>${codigo}</td>
+                    <td>${dataEvento}</td>
+                    <td>${mensagem}</td>
+                    <td><small>${correcao}</small></td>
+                </tr>
+            `;
+        }).join('');
+
+        body.innerHTML = `
+            <div class="mb-2"><strong>Total de eventos:</strong> ${eventos.length}</div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                        <tr>
+                            <th>Seq.</th>
+                            <th>Protocolo</th>
+                            <th>Código</th>
+                            <th>Data Evento</th>
+                            <th>Mensagem</th>
+                            <th>Correção</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${linhas}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        const body = document.getElementById('historicoCceBody');
+        if (body) {
+            body.innerHTML = `<div class="alert alert-danger mb-0">Erro ao carregar histórico de CC-e: ${error.message}</div>`;
         }
     }
 }

@@ -298,7 +298,7 @@ input[readonly] {
                     <div class="col-md-3">
                         <div class="form-group">
                             <label for="finNFe">Finalidade da Emissão *</label>
-                            <select class="form-control" name="finNFe" id="finNFe" required>
+                            <select class="form-control" name="finNFe" id="finNFe" required onchange="toggleNfeRefContainer(this.value)">
                                 <option value="1" selected>1 - Normal</option>
                                 <option value="2">2 - Complementar</option>
                                 <option value="3">3 - Ajuste</option>
@@ -317,6 +317,18 @@ input[readonly] {
                                 <option value="4">4 - Entrega a domicílio</option>
                                 <option value="5">5 - Presencial fora do estabelecimento</option>
                             </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row" id="nfeRefContainer" style="display:none;">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label for="chave_nfe_ref">Chave de Acesso da NF-e Original (devolução) *</label>
+                            <input type="text" class="form-control" id="chave_nfe_ref" name="chave_nfe_ref"
+                                   maxlength="44" placeholder="44 dígitos da chave de acesso da NF-e de compra"
+                                   pattern="[0-9]{44}" title="Informe os 44 dígitos da chave de acesso da NF-e original">
+                            <small class="form-text text-muted">Informe a chave de acesso (44 dígitos) da NF-e original que está sendo devolvida.</small>
                         </div>
                     </div>
                 </div>
@@ -369,6 +381,7 @@ input[readonly] {
                                         data-nome="{{ dest.nome_razao_social }}"
                                         data-documento="{{ dest.cpf_cnpj }}"
                                         data-ie="{{ dest.ie or '' }}"
+                                        data-ind-ie-dest="{{ dest.ie_indicador_nfe or 'C' }}"
                                         data-endereco="{{ dest.logradouro }}, {{ dest.numero }} - {{ dest.bairro }}"
                                         data-cidade="{{ dest.nome_municipio }}/{{ dest.uf }}"
                                         data-cep="{{ dest.cep }}"
@@ -389,6 +402,21 @@ input[readonly] {
                         <span id="destDocumento"></span><br>
                         <span id="destEndereco"></span><br>
                         <span id="destCidade"></span> - CEP: <span id="destCep"></span>
+                    </div>
+                    <!-- Campo IE manual: aparece quando destinatário não tem IE cadastrada -->
+                    <div id="destIeManualContainer" style="display:none;" class="mt-2">
+                        <div class="alert alert-warning py-2">
+                            <strong>⚠️ Inscrição Estadual não cadastrada.</strong>
+                            Informe a IE do destinatário para emitir NF-e com ICMS (ex.: devolução).
+                            <div class="input-group mt-1" style="max-width:400px">
+                                <input type="text" id="destIeManual" name="destinatario_ie_manual"
+                                       class="form-control form-control-sm"
+                                       placeholder="IE do destinatário (somente números, ou ISENTO)">
+                                <div class="input-group-append">
+                                    <span class="input-group-text text-muted" style="font-size:0.8em">opcional</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1149,7 +1177,7 @@ document.addEventListener('DOMContentLoaded', function() {
     aplicarMascaraMoeda('vFrete');
     aplicarMascaraMoeda('vSeg');
     aplicarMascaraMoeda('vDesc');
-    aplicarMascaraMoeda('valorPagamento');
+    // valorPagamento é preenchido automaticamente por recalcularTotais — não aplicar máscara
     console.log('💰 Máscaras monetárias aplicadas');
     
     // Validar campos obrigatórios inicialmente
@@ -1167,6 +1195,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (valorPagamento) {
         valorPagamento.addEventListener('input', validarCamposObrigatorios);
         valorPagamento.addEventListener('change', validarCamposObrigatorios);
+    }
+    
+    // Listener para mostrar/ocultar campo de chave NF-e referenciada
+    const finNFeSelect = document.getElementById('finNFe');
+    if (finNFeSelect) {
+        finNFeSelect.addEventListener('change', function() {
+            toggleNfeRefContainer(this.value);
+        });
+        // Inicializar estado atual
+        toggleNfeRefContainer(finNFeSelect.value);
     }
     
     console.log('✅ Validação de campos obrigatórios ativada');
@@ -1237,8 +1275,19 @@ function atualizarDestinatarioInfo() {
         document.getElementById('destCidade').textContent = option.dataset.cidade;
         document.getElementById('destCep').textContent = option.dataset.cep;
         infoDiv.style.display = 'block';
+
+        // Mostrar campo de IE manual quando destinatário (CNPJ) não tem IE cadastrada
+        const ie = (option.dataset.ie || '').trim();
+        const isCnpj = (option.dataset.documento || '').replace(/\D/g,'').length === 14;
+        const ieManualContainer = document.getElementById('destIeManualContainer');
+        if (ieManualContainer) {
+            ieManualContainer.style.display = (isCnpj && !ie) ? 'block' : 'none';
+            if (ie) document.getElementById('destIeManual').value = '';
+        }
     } else {
         infoDiv.style.display = 'none';
+        const ieManualContainer = document.getElementById('destIeManualContainer');
+        if (ieManualContainer) ieManualContainer.style.display = 'none';
     }
 }
 
@@ -1304,14 +1353,14 @@ function adicionarItem() {
                     <div class="form-group">
                         <label>Quantidade *</label>
                         <input type="number" step="0.0001" name="quantidade_${itemCounter}" 
-                               class="form-control" min="0.0001" onchange="calcularTotal(${itemCounter})" required>
+                               class="form-control" min="0.0001" onchange="calcularTotal(${itemCounter})" oninput="calcularTotal(${itemCounter})" required>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
                         <label>Valor Unitário *</label>
                         <input type="number" step="0.01" name="valor_unitario_${itemCounter}" 
-                               class="form-control" min="0.01" onchange="calcularTotal(${itemCounter})" required>
+                               class="form-control" min="0.01" onchange="calcularTotal(${itemCounter})" oninput="calcularTotal(${itemCounter})" required>
                     </div>
                 </div>
                 <div class="col-md-3">
@@ -2138,6 +2187,39 @@ function atualizarItemJSON(itemId) {
     
     console.log(`📝 Item ${itemId} - JSON atualizado:`, itemData);
     document.getElementById(`item_json_${itemId}`).value = JSON.stringify(itemData);
+
+    // Auto-ajustar finNFe com base no CFOP selecionado
+    const cfopSelecionado = (itemData.cfop || '').toString().trim();
+    const finNFeSelect = document.getElementById('finNFe');
+    if (finNFeSelect) {
+        // CFOPs de devolução: 5201-5204, 5210-5212, 5410-5413, 5553, 6201-6204, 6210-6212, 6410-6413, 6553
+        const cfopDevol = /^[56](20[1-4]|21[0-2]|41[0-3]|553)$/.test(cfopSelecionado);
+        if (cfopDevol && finNFeSelect.value !== '4') {
+            finNFeSelect.value = '4';
+            console.log(`🔄 finNFe auto-ajustado para 4 (devolução) pelo CFOP ${cfopSelecionado}`);
+        } else if (!cfopDevol && finNFeSelect.value === '4') {
+            finNFeSelect.value = '1';
+            console.log(`🔄 finNFe auto-ajustado para 1 (normal) — CFOP ${cfopSelecionado} não é de devolução`);
+        }
+        toggleNfeRefContainer(finNFeSelect.value);
+    }
+}
+
+function toggleNfeRefContainer(finNFeValue) {
+    const container = document.getElementById('nfeRefContainer');
+    const chaveInput = document.getElementById('chave_nfe_ref');
+    if (!container) { console.warn('⚠️ nfeRefContainer não encontrado'); return; }
+    if (String(finNFeValue) === '4') {
+        container.style.display = 'block';
+        container.style.removeProperty('display'); // garante visibilidade
+        container.removeAttribute('hidden');
+        container.style.display = 'block';
+        if (chaveInput) chaveInput.required = true;
+        console.log('✅ Campo chave NF-e referenciada visível');
+    } else {
+        container.style.display = 'none';
+        if (chaveInput) { chaveInput.required = false; chaveInput.value = ''; }
+    }
 }
 
 // Remover item
@@ -2211,12 +2293,10 @@ function recalcularTotais() {
     const campoPagamento = document.getElementById('valorPagamento');
     if (campoPagamento) {
         const valorFormatado = totalNFe.toFixed(2);
-        // Usar formatação brasileira para exibição (vírgula como decimal)
-        const valorBR = valorFormatado.replace('.', ',');
-        campoPagamento.value = valorBR;
+        campoPagamento.value = valorFormatado;
         campoPagamento.setAttribute('data-valor-real', valorFormatado);
         
-        console.log(`💳 Valor do Pagamento atualizado: R$ ${valorBR} (valor real: ${valorFormatado})`);
+        console.log(`💳 Valor do Pagamento atualizado: R$ ${valorFormatado}`);
     }
     
     console.log(`💰 Totais: Produtos=${totalProdutos.toFixed(2)} + Frete=${vFrete.toFixed(2)} + Seguro=${vSeg.toFixed(2)} - Desconto=${vDesc.toFixed(2)} = Total NFe=${totalNFe.toFixed(2)}`);
@@ -2558,6 +2638,7 @@ function coletarDadosFormulario() {
         destinatario_nome: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-nome') || destinatarioSelect.options[destinatarioSelect.selectedIndex]?.text || '',
         destinatario_uf: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-uf') || 'SP',
         destinatario_ie: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-ie') || '',
+        destinatario_ind_ie_dest: destinatarioSelect.options[destinatarioSelect.selectedIndex]?.getAttribute('data-ind-ie-dest') || 'C',
         
         itens: itens,
         
@@ -3506,6 +3587,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     {% if form_data.finNFe %}
     document.getElementById('finNFe').value = '{{ form_data.finNFe }}';
+    toggleNfeRefContainer('{{ form_data.finNFe }}');
+    {% endif %}
+    
+    {% if form_data.chave_nfe_ref %}
+    const chaveRefInput = document.getElementById('chave_nfe_ref');
+    if (chaveRefInput) chaveRefInput.value = '{{ form_data.chave_nfe_ref }}';
     {% endif %}
     
     {% if form_data.indPres %}

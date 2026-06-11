@@ -268,6 +268,8 @@ def favicon():
 
 import logging
 
+from utils.rastro import capture_exception
+
 logger = logging.getLogger(__name__)
 
 
@@ -323,6 +325,12 @@ def internal_error(error):
         exc_info=True,
     )
 
+    # Envia ao Rastro de forma assíncrona (fire-and-forget)
+    _exc = exc_value if exc_value else (error if isinstance(error, BaseException) else None)
+    if _exc:
+        _rid = getattr(g, 'request_id', None)
+        capture_exception(_exc, level='error', trace_id=_rid)
+
     if _is_api_request():
         return jsonify({'success': False, 'error': 'Erro interno do servidor', 'message': 'Tente novamente mais tarde.'}), 500
 
@@ -335,6 +343,8 @@ def handle_exception(e):
     if isinstance(e, HTTPException):
         return e
     logger.error("Exceção não tratada — %s: %s", type(e).__name__, str(e), exc_info=True)
+    _rid = getattr(g, 'request_id', None)
+    capture_exception(e, level='error', trace_id=_rid)
     return internal_error(e)
 
 
