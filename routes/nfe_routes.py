@@ -31,6 +31,14 @@ logger = logging.getLogger(__name__)
 nfe_bp = Blueprint('nfe', __name__)
 
 
+def _formatar_erro_nfe_para_usuario(erro: Exception) -> str:
+    mensagem = str(erro or '').strip()
+    prefixo = 'Erro ao gerar XML da NFe com nfelib:'
+    if mensagem.startswith(prefixo):
+        mensagem = mensagem[len(prefixo):].strip()
+    return mensagem or 'Não foi possível gerar a NF-e. Revise os dados informados.'
+
+
 @nfe_bp.route('/api/produtos')
 @login_required
 def api_produtos():
@@ -172,7 +180,7 @@ def api_proximo_numero():
         })
     except Exception as e:
         logger.error(f"[X] Erro api_proximo_numero: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False, 'error': 'Falha ao calcular o próximo número da NF-e'})
     finally:
         db.close()
 
@@ -612,14 +620,14 @@ def emitir_nfe():
                     })
                     
                 except ValueError as ve:
-                    erro_msg = str(ve)
+                    erro_msg = _formatar_erro_nfe_para_usuario(ve)
                     logger.error(f"❌ ERRO DE VALIDAÇÃO: {erro_msg}")
                     return jsonify({'success': False, 'message': erro_msg}), 400
                 except Exception as e:
                     logger.error(f"❌ ERRO: Erro no preview DANFE: {e}")
                     import traceback
                     traceback.print_exc()
-                    return jsonify({'success': False, 'message': f'Erro ao gerar DANFE preview: {str(e)}'}), 500
+                    return jsonify({'success': False, 'message': _formatar_erro_nfe_para_usuario(e)}), 500
             
             if action == 'emitir':
                 logger.debug(" === PROCESSANDO EMISSÃO ===")
@@ -739,7 +747,9 @@ def emitir_nfe():
                         logger.error(f"❌ [VALIDAÇÃO TRIBUTÁRIA] {len(erros_tributacao)} erro(s) encontrado(s)")
                         for erro in erros_tributacao:
                             logger.error(f"  • {erro}")
-                        flash('Erros de tributação encontrados:\n' + '\n'.join(erros_tributacao), 'danger')
+                        flash('Erros de tributação encontrados. Corrija os itens abaixo:', 'danger')
+                        for erro in erros_tributacao:
+                            flash(erro, 'warning')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     logger.warning("✅ [VALIDAÇÃO TRIBUTÁRIA] Tributação válida")
                     
@@ -760,7 +770,7 @@ def emitir_nfe():
                         logger.debug(f" XML preview: {xml_nfe[:200]}...")
                     except ValueError as ve:
                         # Erros de validação tributária
-                        erro_msg = str(ve)
+                        erro_msg = _formatar_erro_nfe_para_usuario(ve)
                         logger.error(f"ERRO DE VALIDAÇÃO: {erro_msg}")
                         
                         # Dividir mensagem em linhas para flash individual
@@ -779,7 +789,7 @@ def emitir_nfe():
                         logger.error(f"ERRO: ERRO ao gerar XML: {e}")
                         import traceback
                         traceback.print_exc()
-                        flash(f'Erro ao gerar XML: {str(e)}', 'danger')
+                        flash(_formatar_erro_nfe_para_usuario(e), 'danger')
                         return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     # OK: VALIDAR XML GERADO
@@ -3060,15 +3070,21 @@ def reenviar_nfe(nfe_id):
         # tpAmb SEFAZ: 1=Produção, 2=Homologação
         tp_amb = 1 if ambiente == 'producao' else 2
         
-        xml_gerado = generate_nfe_xml(
-            json_data.get('form_data', {}),
-            emitente_data_for_template,
-            destinatario_data,
-            json_data.get('items', []),
-            tp_amb,
-            'emitir',
-            include_resp_tec=False  # SEFAZ-SP rejeita infRespTec com 225
-        )
+        try:
+            xml_gerado = generate_nfe_xml(
+                json_data.get('form_data', {}),
+                emitente_data_for_template,
+                destinatario_data,
+                json_data.get('items', []),
+                tp_amb,
+                'emitir',
+                include_resp_tec=False  # SEFAZ-SP rejeita infRespTec com 225
+            )
+        except ValueError as ve:
+            return jsonify({
+                'success': False,
+                'message': _formatar_erro_nfe_para_usuario(ve)
+            }), 400
         
         # Assinar XML - BLOQUEIA SE FALHAR
         try:
@@ -3433,14 +3449,20 @@ def emitir_rascunho(nfe_id):
         logger.debug(f"[DEBUG] Ambiente: {ambiente} (tpAmb={tp_amb})")
         logger.debug(f"[DEBUG] Items: {len(json_data.get('items', []))}")
         
-        xml_gerado = generate_nfe_xml(
-            json_data.get('form_data', {}),
-            emitente_data_for_template,
-            destinatario_data,  # OK: AGORA É DICT VÁLIDO
-            json_data.get('items', []),
-            tp_amb,
-            'emitir'
-        )
+        try:
+            xml_gerado = generate_nfe_xml(
+                json_data.get('form_data', {}),
+                emitente_data_for_template,
+                destinatario_data,  # OK: AGORA É DICT VÁLIDO
+                json_data.get('items', []),
+                tp_amb,
+                'emitir'
+            )
+        except ValueError as ve:
+            return jsonify({
+                'success': False,
+                'message': _formatar_erro_nfe_para_usuario(ve)
+            }), 400
         
         # Log do XML gerado (primeiros 500 caracteres)
         logger.debug(f"[DEBUG] XML gerado (início): {xml_gerado[:500]}...")

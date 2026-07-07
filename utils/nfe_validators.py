@@ -1,7 +1,42 @@
 import re
+import logging
 from datetime import datetime
 from decimal import Decimal
 from utils.helpers import limpar_cnpj_cpf, formatar_cnpj, formatar_cpf  # noqa: F401 (reexported)
+
+
+logger = logging.getLogger(__name__)
+
+
+def _descricao_item_validacao(item, indice):
+    descricao = str(item.get('descricao') or item.get('codigo_produto') or item.get('codigo') or '').strip()
+    if descricao:
+        return f"Item {indice} ({descricao[:60]})"
+    return f"Item {indice}"
+
+
+def _valor_numerico_texto(valor):
+    texto = str(valor or '').strip()
+    if not texto:
+        return ''
+    texto = texto.replace('R$', '').replace(' ', '')
+    if ',' in texto and '.' in texto:
+        if texto.rfind(',') > texto.rfind('.'):
+            texto = texto.replace('.', '').replace(',', '.')
+        else:
+            texto = texto.replace(',', '')
+    elif ',' in texto:
+        texto = texto.replace('.', '').replace(',', '.')
+    return texto
+
+
+def _mascarar_documento(valor):
+    digits = re.sub(r'[^0-9]', '', str(valor or ''))
+    if not digits:
+        return ''
+    if len(digits) <= 4:
+        return '*' * len(digits)
+    return ('*' * (len(digits) - 4)) + digits[-4:]
 
 def validar_cnpj(cnpj):
     """
@@ -85,19 +120,19 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
     """
     erros = []
     
-    print(f"[SEARCH] VALIDAÇÃO - CNPJ Emitente recebido: '{emitente_data.get('cnpj')}'")
-    print(f"[SEARCH] VALIDAÇÃO - Tipo do CNPJ: {type(emitente_data.get('cnpj'))}")
+    logger.debug("VALIDAÇÃO - CNPJ emitente recebido: %s", _mascarar_documento(emitente_data.get('cnpj')))
+    logger.debug("VALIDAÇÃO - Tipo do CNPJ emitente: %s", type(emitente_data.get('cnpj')))
     
     # [OK] VALIDAÇÕES DO EMITENTE
     cnpj_emitente = emitente_data.get('cnpj', '').strip()
-    print(f"[SEARCH] VALIDAÇÃO - CNPJ após strip: '{cnpj_emitente}'")
+    logger.debug("VALIDAÇÃO - CNPJ emitente normalizado: %s", _mascarar_documento(cnpj_emitente))
     
     if not cnpj_emitente:
         erros.append("CNPJ do emitente é obrigatório")
     elif not validar_cnpj(cnpj_emitente):
         erros.append(f"CNPJ do emitente é inválido: {cnpj_emitente}")
     else:
-        print(f"[OK] CNPJ do emitente válido: {cnpj_emitente}")
+        logger.debug("VALIDAÇÃO - CNPJ do emitente válido: %s", _mascarar_documento(cnpj_emitente))
     
     if not emitente_data.get('razao_social'):
         erros.append("Razão social do emitente é obrigatória")
@@ -116,7 +151,7 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
         erros.append("Destinatário é obrigatório")
     else:
         cpf_cnpj_dest = destinatario_data.get('cpf_cnpj', '').strip()
-        print(f"[SEARCH] VALIDAÇÃO - CPF/CNPJ Destinatário: '{cpf_cnpj_dest}'")
+        logger.debug("VALIDAÇÃO - CPF/CNPJ destinatário: %s", _mascarar_documento(cpf_cnpj_dest))
         
         if not cpf_cnpj_dest:
             erros.append("CPF/CNPJ do destinatário é obrigatório")
@@ -127,12 +162,25 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
                 if not validar_cpf(cpf_cnpj_dest):
                     erros.append(f"CPF do destinatário é inválido: {cpf_cnpj_dest}")
                 else:
-                    print(f"[OK] CPF do destinatário válido: {cpf_cnpj_dest}")
+                    logger.debug("VALIDAÇÃO - CPF destinatário válido: %s", _mascarar_documento(cpf_cnpj_dest))
             elif len(cpf_cnpj_limpo) == 14:
                 if not validar_cnpj(cpf_cnpj_dest):
                     erros.append(f"CNPJ do destinatário é inválido: {cpf_cnpj_dest}")
                 else:
-                    print(f"[OK] CNPJ do destinatário válido: {cpf_cnpj_dest}")
+                    logger.debug("VALIDAÇÃO - CNPJ destinatário válido: %s", _mascarar_documento(cpf_cnpj_dest))
+
+                ie_dest = str(
+                    destinatario_data.get('inscricao_estadual')
+                    or destinatario_data.get('ie')
+                    or ''
+                ).strip()
+                indicador_ie = str(destinatario_data.get('ie_indicador_nfe') or '').strip().upper()
+                if not ie_dest and indicador_ie in ('C', '1', 'CONTRIBUINTE'):
+                    erros.append(
+                        "Campo Inscrição estadual do destinatário está vazio. "
+                        "Se o destinatário for contribuinte, preencha a IE no cadastro ou no campo IE manual; "
+                        "se não for contribuinte/isento, ajuste o indicador de IE no cadastro."
+                    )
             else:
                 erros.append(f"CPF/CNPJ do destinatário deve ter 11 ou 14 dígitos: {cpf_cnpj_dest}")
         
@@ -164,7 +212,8 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
         erros.append("Pelo menos um item deve ser informado")
     else:
         for i, item in enumerate(nfe_items, 1):
-            item_prefix = f"Item {i}: "
+            item_prefix = _descricao_item_validacao(item, i)
+            item_prefix_campo = f"{item_prefix}: "
             
             # Descrição é opcional - será buscada do produto se não fornecida
             # if not item.get('descricao'):
@@ -173,43 +222,49 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
             # Quantidade é opcional - usar 1 se não fornecida
             if item.get('quantidade'):
                 try:
-                    qtd = float(item.get('quantidade'))
+                    qtd = float(_valor_numerico_texto(item.get('quantidade')))
                     if qtd <= 0:
-                        erros.append(f"{item_prefix}Quantidade deve ser maior que zero")
+                        erros.append(f"{item_prefix_campo}campo Quantidade deve ser maior que zero")
                 except ValueError:
-                    erros.append(f"{item_prefix}Quantidade deve ser um número válido")
+                    erros.append(f"{item_prefix_campo}campo Quantidade deve conter apenas números")
             
             if not item.get('valor_unitario'):
-                erros.append(f"{item_prefix}Valor unitário é obrigatório")
+                erros.append(f"{item_prefix_campo}campo Valor unitário é obrigatório")
             else:
                 try:
-                    valor = float(item.get('valor_unitario'))
+                    valor = float(_valor_numerico_texto(item.get('valor_unitario')))
                     if valor <= 0:
-                        erros.append(f"{item_prefix}Valor unitário deve ser maior que zero")
+                        erros.append(f"{item_prefix_campo}campo Valor unitário deve ser maior que zero")
                 except ValueError:
-                    erros.append(f"{item_prefix}Valor unitário deve ser um número válido")
+                    erros.append(f"{item_prefix_campo}campo Valor unitário deve conter apenas números")
             
             if not item.get('ncm'):
-                erros.append(f"{item_prefix}NCM é obrigatório")
+                erros.append(f"{item_prefix_campo}campo NCM é obrigatório")
             elif len(re.sub(r'[^0-9]', '', item.get('ncm', ''))) != 8:
-                erros.append(f"{item_prefix}NCM deve ter 8 dígitos")
+                erros.append(f"{item_prefix_campo}campo NCM deve ter 8 dígitos")
             
             if not item.get('cfop'):
-                erros.append(f"{item_prefix}CFOP é obrigatório")
+                erros.append(f"{item_prefix_campo}campo CFOP é obrigatório")
             elif len(re.sub(r'[^0-9]', '', item.get('cfop', ''))) != 4:
-                erros.append(f"{item_prefix}CFOP deve ter 4 dígitos")
+                erros.append(f"{item_prefix_campo}campo CFOP deve ter 4 dígitos")
             
             # Validar CST ICMS ou CSOSN (um dos dois é obrigatório)
             # Aceitar ambos os formatos: csosn_icms (usado no XML) ou csosn (legado)
             if not item.get('cst_icms') and not item.get('csosn_icms') and not item.get('csosn'):
-                erros.append(f"{item_prefix}CST ICMS ou CSOSN é obrigatório")
+                regime = emitente_data.get('regime_tributario_id')
+                if str(regime) in ('1', '2'):
+                    erros.append(f"{item_prefix_campo}campo CSOSN é obrigatório para este regime tributário")
+                elif str(regime) == '3':
+                    erros.append(f"{item_prefix_campo}campo CST ICMS é obrigatório para este regime tributário")
+                else:
+                    erros.append(f"{item_prefix_campo}campo CST ICMS ou CSOSN é obrigatório")
             
             if item.get('origem') is None or item.get('origem') == '':
-                erros.append(f"{item_prefix}Origem da mercadoria é obrigatória")
+                erros.append(f"{item_prefix_campo}campo Origem da mercadoria é obrigatório")
 
             if form_data.get('regime_tributario_id') == 3:
                 if not item.get('classificacao_ibs_cbs_id'):
-                    erros.append(f"{item_prefix}Classificação IBS/CBS é obrigatória para CRT=3")
+                    erros.append(f"{item_prefix_campo}campo Classificação IBS/CBS é obrigatório para CRT=3")
     
     # [OK] VALIDAÇÃO DO PAGAMENTO
     if not form_data.get('formaPagamento'):
@@ -225,10 +280,10 @@ def validar_dados_nfe(form_data, emitente_data, destinatario_data, nfe_items):
         except ValueError:
             erros.append("Valor do pagamento deve ser um número válido")
     
-    print(f"[SEARCH] VALIDAÇÃO FINAL - {len(erros)} erros encontrados")
+    logger.debug("VALIDAÇÃO FINAL - %s erro(s) encontrado(s)", len(erros))
     if erros:
         for erro in erros:
-            print(f"[X] {erro}")
+            logger.debug("VALIDAÇÃO - erro: %s", erro)
     
     return erros
 
@@ -242,7 +297,7 @@ def validar_xml_nfe(xml_content):
         erros.append("XML não foi gerado")
         return False, erros
     
-    print(f"[SEARCH] VALIDAÇÃO XML - Tamanho: {len(xml_content)} caracteres")
+    logger.debug("VALIDAÇÃO XML - tamanho: %s caracteres", len(xml_content))
     
     # Converter para minúsculas para validação case-insensitive
     xml_lower = xml_content.lower()
@@ -251,67 +306,67 @@ def validar_xml_nfe(xml_content):
     if '<nfe>' not in xml_lower and '<nfe ' not in xml_lower:
         erros.append("XML não contém tag NFe")
     else:
-        print("[OK] Tag NFe encontrada")
+        logger.debug("VALIDAÇÃO XML - tag NFe encontrada")
     
     if '<emit>' not in xml_lower:
         erros.append("XML não contém dados do emitente")
     else:
-        print("[OK] Dados do emitente encontrados")
+        logger.debug("VALIDAÇÃO XML - dados do emitente encontrados")
     
     if '<dest>' not in xml_lower:
         erros.append("XML não contém dados do destinatário")
     else:
-        print("[OK] Dados do destinatário encontrados")
+        logger.debug("VALIDAÇÃO XML - dados do destinatário encontrados")
     
     # [OK] VALIDAÇÃO DE ITENS - CORRIGIDA
     if '<det ' not in xml_lower and '<det>' not in xml_lower:
         erros.append("XML não contém itens da NFe")
-        print(f"[X] Tag <det> não encontrada no XML")
-        print(f"[SEARCH] Buscando por 'det' no XML...")
+        logger.debug("VALIDAÇÃO XML - tag <det> não encontrada")
+        logger.debug("VALIDAÇÃO XML - buscando por 'det' no XML")
         # Debug: mostrar onde deveria estar
         if 'det' in xml_lower:
-            print("[OK] Palavra 'det' encontrada em algum lugar")
+            logger.debug("VALIDAÇÃO XML - palavra 'det' encontrada em algum lugar")
         else:
-            print("[X] Palavra 'det' não encontrada em lugar nenhum")
+            logger.debug("VALIDAÇÃO XML - palavra 'det' não encontrada")
     else:
-        print("[OK] Itens da NFe encontrados")
+        logger.debug("VALIDAÇÃO XML - itens da NFe encontrados")
     
     # [OK] VALIDAÇÕES ADICIONAIS
     if '<infnfe' not in xml_lower:
         erros.append("XML não contém informações da NFe (infNFe)")
     else:
-        print("[OK] infNFe encontrado")
+        logger.debug("VALIDAÇÃO XML - infNFe encontrado")
     
     if '<ide>' not in xml_lower:
         erros.append("XML não contém identificação da NFe")
     else:
-        print("[OK] IDE encontrado")
+        logger.debug("VALIDAÇÃO XML - IDE encontrado")
     
     # Verificar se tem assinatura (se já foi assinado)
     has_signature = '<signature>' in xml_lower or '<ds:signature>' in xml_lower
     if has_signature:
-        print("[OK] Assinatura encontrada no XML")
+        logger.debug("VALIDAÇÃO XML - assinatura encontrada")
     else:
-        print("ℹ️ XML ainda não foi assinado")
+        logger.debug("VALIDAÇÃO XML - XML ainda não foi assinado")
     
     # [OK] DEBUG: Mostrar estrutura do XML
-    print("[SEARCH] ESTRUTURA XML DEBUG:")
+    logger.debug("VALIDAÇÃO XML - estrutura (amostra):")
     linhas = xml_content.split('\n')[:20]  # Primeiras 20 linhas
     for i, linha in enumerate(linhas, 1):
         if 'det' in linha.lower():
-            print(f"  {i:2d}: {linha.strip()} ⭐")  # Marcar linhas com 'det'
+            logger.debug("%2d: %s [DET]", i, linha.strip())
         elif any(tag in linha.lower() for tag in ['nfe', 'emit', 'dest', 'ide']):
-            print(f"  {i:2d}: {linha.strip()} [OK]")
+            logger.debug("%2d: %s [OK]", i, linha.strip())
         else:
-            print(f"  {i:2d}: {linha.strip()}")
+            logger.debug("%2d: %s", i, linha.strip())
     
     if erros:
-        print(f"[X] VALIDAÇÃO XML - {len(erros)} erros encontrados:")
+        logger.debug("VALIDAÇÃO XML - %s erro(s) encontrado(s)", len(erros))
         for erro in erros:
-            print(f"   - {erro}")
+            logger.debug("VALIDAÇÃO XML - erro: %s", erro)
         return False, erros
     
-    print(f"[OK] VALIDAÇÃO XML - XML válido!")
+    logger.debug("VALIDAÇÃO XML - XML válido")
     return True, []
 
 # limpar_cnpj_cpf, formatar_cnpj e formatar_cpf são importadas de utils.helpers (acima).

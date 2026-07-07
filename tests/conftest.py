@@ -6,6 +6,8 @@ de ambiente ANTES da importação para evitar RuntimeError de
 configuração ausente.
 """
 import os
+import sys
+from pathlib import Path
 import pytest
 import werkzeug
 
@@ -16,6 +18,11 @@ if not hasattr(werkzeug, '__version__'):
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-only-for-tests")
 os.environ.setdefault("FLASK_ENV", "testing")
+
+# Garante import absoluto de módulos do projeto (ex.: utils.*, routes.*) nos testes.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 @pytest.fixture(scope="session")

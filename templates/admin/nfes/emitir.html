@@ -1182,7 +1182,14 @@ function _aplicarItensRascunho(itens) {
         setValue(`input[name="reducao_base_icms_${itemId}"]`, item.reducao_base_icms);
         setValue(`select[name="modalidade_bc_icms_${itemId}"]`, item.modalidade_bc_icms);
         setValue(`select[name="motivo_desoneracao_icms_${itemId}"]`, item.motivo_desoneracao_icms);
-        setValue(`input[name="cbenef_${itemId}"]`, item.cbenef);
+        // cBenef: restaurar valor no Select2 (adicionar option e selecionar)
+        if (item.cbenef) {
+            const $cbenefSel = $(`select[name="cbenef_${itemId}"]`);
+            if ($cbenefSel.find(`option[value="${item.cbenef}"]`).length === 0) {
+                $cbenefSel.append(new Option(item.cbenef, item.cbenef, true, true));
+            }
+            $cbenefSel.val(item.cbenef).trigger('change.select2');
+        }
         setValue(`input[name="bc_icms_${itemId}"]`, item.bc_icms);
         setValue(`input[name="valor_icms_${itemId}"]`, item.valor_icms);
         setValue(`select[name="cst_pis_${itemId}"]`, item.cst_pis);
@@ -1299,7 +1306,7 @@ function _coletarItensParaRascunho() {
             reducao_base_icms: document.querySelector(`input[name="reducao_base_icms_${itemId}"]`)?.value || '0.00',
             modalidade_bc_icms: document.querySelector(`select[name="modalidade_bc_icms_${itemId}"]`)?.value || '',
             motivo_desoneracao_icms: document.querySelector(`select[name="motivo_desoneracao_icms_${itemId}"]`)?.value || '',
-            cbenef: document.querySelector(`input[name="cbenef_${itemId}"]`)?.value || '',
+            cbenef: document.querySelector(`select[name="cbenef_${itemId}"]`)?.value || '',
             bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`)?.value || '0.00',
             valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00',
             cst_pis: document.querySelector(`select[name="cst_pis_${itemId}"]`)?.value || '',
@@ -2026,14 +2033,20 @@ function adicionarItem(options = {}) {
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
-                        <label>Cód. Benef. Fiscal</label>
-                        <input type="text" name="cbenef_${itemCounter}" 
-                               class="form-control" 
-                               placeholder="Ex: SP000123"
-                               maxlength="10"
-                               onchange="atualizarItemJSON(${itemCounter})"
-                               title="Código de benefício fiscal quando CST indicar benefício (20, 30, 40, 41, 50, 70)">
-                        <small class="form-text text-muted">Obrigatório para CST 20,30,40,41,50,70</small>
+                        <label>Cód. Benef. Fiscal
+                            <span id="cbenef-obrigatorio-${itemCounter}" class="text-danger" style="display:none" title="Obrigatório para este CST">*</span>
+                        </label>
+                        <select name="cbenef_${itemCounter}"
+                                id="cbenef-select-${itemCounter}"
+                                class="form-control js-cbenef-select"
+                                data-item="${itemCounter}"
+                                onchange="atualizarItemJSON(${itemCounter})"
+                                style="width:100%">
+                            <option value=""></option>
+                        </select>
+                        <small class="form-text text-muted" id="cbenef-hint-${itemCounter}">
+                            Obrigatório para CST 20,30,40,41,50,51,53,70,90 em SP
+                        </small>
                     </div>
                 </div>
                 {% endif %}
@@ -2337,8 +2350,85 @@ function initSelect2ForItem(itemId) {
                 inputTooShort: () => "Digite ao menos 2 caracteres"
             }
         });
+
+        // cBenef (Select2 AJAX filtrado pelo CST selecionado)
+        initCBenefSelect2(itemId);
+
+        // Quando CST mudar: recarregar opções de cBenef e mostrar/ocultar obrigatoriedade
+        $(`select[name="cst_icms_${itemId}"]`).on('change', function() {
+            atualizarCBenefPorCST(itemId);
+        });
+
         console.log(`✅ Select2 inicializado para item ${itemId}`);
     }
+}
+
+const CBENEF_CSTS_OBRIGATORIOS = ['20','30','40','41','50','51','53','70','90'];
+const UF_EMITENTE_CBENEF = '{{ emitente.uf if emitente else "" }}';
+
+function initCBenefSelect2(itemId) {
+    $(`select[name="cbenef_${itemId}"]`).select2({
+        width: '100%',
+        allowClear: true,
+        placeholder: 'Buscar código cBenef...',
+        minimumInputLength: 0,
+        ajax: {
+            url: '/admin/api/cbenef/buscar',
+            dataType: 'json',
+            delay: 250,
+            data: function(params) {
+                const cst = $(`select[name="cst_icms_${itemId}"]`).val() || '';
+                return {
+                    q: params.term || '',
+                    cst: cst,
+                    uf: UF_EMITENTE_CBENEF
+                };
+            },
+            processResults: function(data) {
+                return {
+                    results: (data.codigos || []).map(function(c) {
+                        return {
+                            id: c.codigo,
+                            text: c.codigo + ' — ' + c.descricao,
+                            dispositivo: c.dispositivo
+                        };
+                    })
+                };
+            },
+            cache: false
+        },
+        language: {
+            noResults: () => "Nenhum código cBenef encontrado para este CST",
+            searching: () => "Pesquisando...",
+            inputTooShort: () => "Aguardando..."
+        },
+        templateResult: function(item) {
+            if (!item.id) return item.text;
+            const disp = item.dispositivo ? `<br><small class="text-muted">${item.dispositivo}</small>` : '';
+            return $(`<span><strong>${item.id}</strong> — ${item.text.split(' — ')[1] || ''}${disp}</span>`);
+        }
+    }).on('change', function() {
+        atualizarItemJSON(itemId);
+    });
+}
+
+function atualizarCBenefPorCST(itemId) {
+    const cst = ($(`select[name="cst_icms_${itemId}"]`).val() || '').toString().padStart(2,'0');
+    const obrigatorio = CBENEF_CSTS_OBRIGATORIOS.includes(cst) && UF_EMITENTE_CBENEF === 'SP';
+    const $asterisco = $(`#cbenef-obrigatorio-${itemId}`);
+    const $hint = $(`#cbenef-hint-${itemId}`);
+    const $select = $(`select[name="cbenef_${itemId}"]`);
+
+    if (obrigatorio) {
+        $asterisco.show();
+        $hint.html('<span class="text-danger">Obrigatório para este CST em SP (tabela v20260626)</span>');
+    } else {
+        $asterisco.hide();
+        $hint.text('Opcional para este CST');
+    }
+
+    // Limpar seleção anterior e recarregar
+    $select.val(null).trigger('change');
 }
 
 // Abrir modal de busca NCM
@@ -2839,7 +2929,7 @@ function atualizarItemJSON(itemId, options = {}) {
         reducao_base_icms: document.querySelector(`input[name="reducao_base_icms_${itemId}"]`)?.value || '0.00',
         modalidade_bc_icms: document.querySelector(`select[name="modalidade_bc_icms_${itemId}"]`)?.value || '',
         motivo_desoneracao_icms: document.querySelector(`select[name="motivo_desoneracao_icms_${itemId}"]`)?.value || '',
-        cbenef: document.querySelector(`input[name="cbenef_${itemId}"]`)?.value || '',
+        cbenef: document.querySelector(`select[name="cbenef_${itemId}"]`)?.value || '',
         bc_icms: document.querySelector(`input[name="bc_icms_${itemId}"]`)?.value || '0.00',
         valor_icms: document.querySelector(`input[name="valor_icms_${itemId}"]`)?.value || '0.00',
         // PIS

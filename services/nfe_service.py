@@ -78,11 +78,18 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
     logger.debug(f"Regime: {regime_nome} (CRT {crt})")
     logger.debug(f"Total de itens: {len(itens)}")
     
+    def _item_label(indice: int, item_data: Dict) -> str:
+        descricao = str(item_data.get('descricao') or item_data.get('codigo_produto') or item_data.get('codigo') or '').strip()
+        if descricao:
+            return f"Item {indice} ({descricao[:60]})"
+        return f"Item {indice}"
+
     for i, item in enumerate(itens, 1):
+        item_label = _item_label(i, item)
         cfop = str(item.get('cfop', ''))
         
         if not cfop:
-            erros.append(f"Item {i} ({item.get('descricao', 'sem descrição')}): CFOP não informado")
+            erros.append(f"{item_label}: campo CFOP não informado")
             continue
         
         # Validações para Simples Nacional (CRT = 1)
@@ -90,20 +97,15 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
             csosn = str(item.get('csosn_icms', ''))
             
             if not csosn:
-                erros.append(f"Item {i} ({item.get('descricao', '')}): CSOSN não informado (obrigatório no Simples Nacional)")
+                erros.append(f"{item_label}: campo CSOSN é obrigatório para Simples Nacional")
                 continue
             
             # CFOP 5401/6401 = Venda de produção própria com ST (SUBSTITUTO)
             # Incompatível com Simples Nacional
             if cfop in ['5401', '6401']:
                 erros.append(
-                    f"Item {i} ({item.get('descricao', '')}): "
-                    f"CFOP {cfop} é incompatível com Simples Nacional.\n"
-                    f"  • CFOP {cfop} = Venda de produção própria com ST (empresa é SUBSTITUTA)\n"
-                    f"  • Simples Nacional não pode ser substituto tributário\n"
-                    f"  • Sugestões:\n"
-                    f"    - CFOP 5405/6405 se for ST SUBSTITUÍDO (fornecedor já recolheu ST)\n"
-                    f"    - CFOP 5102/6102 para venda normal sem ST"
+                    f"{item_label}: CFOP {cfop} não pode ser usado no Simples Nacional. "
+                    f"Revise o CFOP do item; normalmente usa-se 5405/6405 para ST já retido ou 5102/6102 para venda normal."
                 )
             
             # CFOP 5405/6405 = Venda de mercadoria ST na condição de SUBSTITUÍDO
@@ -111,12 +113,8 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
             elif cfop in ['5405', '6405']:
                 if csosn != '500':
                     erros.append(
-                        f"Item {i} ({item.get('descricao', '')}): "
-                        f"CFOP {cfop} requer CSOSN 500.\n"
-                        f"  • CFOP {cfop} = Mercadoria ST já tributada (você é SUBSTITUÍDO)\n"
-                        f"  • CSOSN atual: {csosn}\n"
-                        f"  • CSOSN 500 = ICMS cobrado anteriormente por ST\n"
-                        f"  • Corrija o CSOSN no cadastro do produto"
+                        f"{item_label}: CFOP {cfop} exige CSOSN 500. "
+                        f"Valor atual do CSOSN: {csosn or 'não informado'}."
                     )
             
             # CFOP 5102/6102 = Venda normal
@@ -124,13 +122,8 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
             elif cfop in ['5102', '6102', '5103', '6103']:
                 if csosn not in ['102', '103', '300', '400', '900']:
                     erros.append(
-                        f"Item {i} ({item.get('descricao', '')}): "
-                        f"CFOP {cfop} não é compatível com CSOSN {csosn}.\n"
-                        f"  • Para operação normal, use:\n"
-                        f"    - CSOSN 102: Tributada sem crédito\n"
-                        f"    - CSOSN 103: Isenção com crédito\n"
-                        f"    - CSOSN 400: Não tributada\n"
-                        f"    - CSOSN 900: Outros"
+                        f"{item_label}: CFOP {cfop} não é compatível com CSOSN {csosn or 'não informado'}. "
+                        f"Para venda normal, use um dos CSOSN: 102, 103, 300, 400 ou 900."
                     )
         
         # Validações para Regime Normal (CRT = 3)
@@ -138,19 +131,15 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
             cst = str(item.get('cst_icms', ''))
             
             if not cst:
-                erros.append(f"Item {i} ({item.get('descricao', '')}): CST não informado (obrigatório no Regime Normal)")
+                erros.append(f"{item_label}: campo CST ICMS é obrigatório para Regime Normal")
                 continue
             
             # CFOP 5405/6405 com CST
             if cfop in ['5405', '6405']:
                 if cst not in ['10', '60']:
                     erros.append(
-                        f"Item {i} ({item.get('descricao', '')}): "
-                        f"CFOP {cfop} requer CST 10 ou 60.\n"
-                        f"  • CFOP {cfop} = Mercadoria ST (substituído)\n"
-                        f"  • CST atual: {cst}\n"
-                        f"  • CST 10 = Tributada com ST\n"
-                        f"  • CST 60 = ICMS ST cobrado anteriormente"
+                        f"{item_label}: CFOP {cfop} exige CST 10 ou 60. "
+                        f"Valor atual do CST: {cst or 'não informado'}."
                     )
     
     if erros:
@@ -161,9 +150,9 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
         logger.debug(f"✅ Validação tributária OK - {len(itens)} itens validados")
     
     # ========== VALIDAÇÃO ADICIONAL COM IA (APENAS AVISOS) ==========
-    # DESABILITADO: A IA está retornando falsos positivos que bloqueiam emissões válidas
-    # Exemplo: CFOP 5101 + CSOSN 101 é válido mas a IA rejeita incorretamente
-    if False:  # Desabilitado temporariamente
+    # Ativar apenas por feature flag para evitar comportamento inesperado em produção.
+    validacao_ia_habilitada = os.getenv('HABILITAR_VALIDACAO_IA_TRIBUTACAO', '0').strip() == '1'
+    if validacao_ia_habilitada:
         try:
             logger.debug("\n🤖 Executando validação adicional com IA...")
             import requests
@@ -1389,6 +1378,8 @@ def generate_nfe_xml(form_data: Dict[str, Any], emitente_data: Dict[str, Any],
         
         return xml_nfe
         
+    except ValueError:
+        raise
     except Exception as e:
         logger.error(f"❌ [NFELIB] Erro ao gerar XML: {e}")
         import traceback

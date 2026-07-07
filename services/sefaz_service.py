@@ -8,6 +8,41 @@ from xml.sax.saxutils import escape
 from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
 
 
+def _montar_mensagem_rejeicao_sefaz(codigo_status, motivo):
+    codigo = str(codigo_status or '').strip()
+    motivo_limpo = str(motivo or '').strip()
+
+    mensagens = {
+        '204': 'Rejeição 204: já existe uma NF-e emitida com essa numeração. Revise o número da nota antes de reenviar.',
+        '225': 'Rejeição 225: a SEFAZ recusou o XML da NF-e por inconsistência de preenchimento. Revise os campos obrigatórios, cadastro do destinatário e dados tributários dos itens.',
+        '233': 'Rejeição 233: há problema na inscrição estadual do destinatário. Revise IE, indicador de contribuinte e UF do destinatário.',
+        '237': 'Rejeição 237: o CPF ou CNPJ do destinatário é inválido. Corrija o cadastro do destinatário antes de emitir.',
+        '239': 'Rejeição 239: há problema na IE do emitente. Revise a inscrição estadual cadastrada no emitente.',
+        '252': 'Rejeição 252: o ambiente informado na NF-e não confere com o serviço da SEFAZ. Revise se a emissão está em produção ou homologação.',
+        '328': 'Rejeição 328: CFOP incompatível com a operação informada. Revise CFOP, UF do destinatário e tipo da operação.',
+        '386': 'Rejeição 386: CFOP não é permitido para o perfil tributário informado. Revise a tributação do item.',
+        '481': 'Rejeição 481: inscrição estadual do emitente está inválida na SEFAZ. Revise o cadastro do emitente.',
+        '482': 'Rejeição 482: inscrição estadual do destinatário está inválida. Revise o cadastro do destinatário.',
+        '483': 'Rejeição 483: inscrição estadual do emitente não confere com o CNPJ informado. Revise o cadastro do emitente.',
+        '531': 'Rejeição 531: total da base ou do ICMS difere da soma dos itens. Revise os valores tributários dos produtos.',
+        '532': 'Rejeição 532: total do ICMS ST difere da soma dos itens. Revise a tributação ST dos produtos.',
+        '539': 'Rejeição 539: já existe NF-e com a mesma numeração para esse emitente. Gere a nota com outro número.',
+        '600': 'Rejeição 600: CSOSN incompatível com o CFOP ou com o regime tributário. Revise a tributação do item.',
+        '656': 'Rejeição 656: a SEFAZ bloqueou novos envios por consumo indevido. Aguarde alguns minutos e gere uma nova NF-e com outra numeração se necessário.',
+    }
+
+    base = mensagens.get(codigo)
+    if not base:
+        if codigo:
+            base = f'Rejeição {codigo}: {motivo_limpo or "A SEFAZ recusou a NF-e."}'
+        else:
+            base = motivo_limpo or 'A SEFAZ recusou a NF-e.'
+
+    if motivo_limpo and motivo_limpo.lower() not in base.lower():
+        return f'{base} Detalhe SEFAZ: {motivo_limpo}'
+    return base
+
+
 def _resolve_ca_bundle():
     """Resolve o bundle CA mais adequado para a comunicação com a SEFAZ."""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -267,7 +302,8 @@ class SefazService:
                         'success': False,
                         'status': 'REJEITADA',
                         'codigo': codigo_status,
-                        'mensagem': motivo,
+                        'mensagem': _montar_mensagem_rejeicao_sefaz(codigo_status, motivo),
+                        'motivo': motivo,
                         'protocolo': protocolo,
                         'chave_acesso': chave_acesso,
                         'resposta_completa': resposta_xml

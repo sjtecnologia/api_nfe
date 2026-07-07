@@ -6458,3 +6458,50 @@ def test_email():
                              email_testado=email_destino)
     
     return render_template('admin/test_email.html')
+
+
+# =============================================================================
+# cBenef-SP – Tabela oficial v20260626
+# =============================================================================
+
+@admin_bp.route('/api/cbenef/buscar')
+@login_required
+def api_cbenef_buscar():
+    """
+    Retorna códigos cBenef-SP filtrados por CST e/ou termo de busca.
+    Parâmetros GET:
+      cst  – CST a filtrar (ex.: 20)
+      q    – Termo livre (código ou descrição)
+      uf   – UF do emitente (só retorna dados se UF=SP; outros retornam lista vazia)
+    """
+    from services.cbenef_sp_table import codigos_para_cst, TABELA_CBENEF_SP
+
+    uf = (request.args.get('uf') or 'SP').strip().upper()
+    if uf != 'SP':
+        return jsonify({'codigos': [], 'total': 0})
+
+    cst = (request.args.get('cst') or '').strip().zfill(2) if request.args.get('cst') else None
+    termo = (request.args.get('q') or '').strip().upper()
+
+    if cst:
+        candidatos = codigos_para_cst(cst)
+    else:
+        candidatos = [
+            {'codigo': cod, **dados}
+            for cod, dados in TABELA_CBENEF_SP.items()
+            if cod != 'SEM CBENEF'
+        ]
+
+    if termo:
+        candidatos = [
+            c for c in candidatos
+            if termo in c['codigo'].upper() or termo in c['descricao'].upper()
+        ]
+
+    # Limitar a 50 para não sobrecarregar o select2
+    resultado = candidatos[:50]
+
+    return jsonify({
+        'codigos': resultado,
+        'total': len(candidatos),
+    })

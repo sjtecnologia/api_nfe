@@ -5,13 +5,38 @@ Substitui a geração manual de XML por uma biblioteca validada e homologada
 
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe
 from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import TenderEmi, Tendereco
 from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf, normalizar_texto as remover_acentos
 from services.ibs_cbs_service import calcular_ibs_cbs, gerar_xml_ibscbs, gerar_xml_totais_ibscbs
+from services.cbenef_sp_table import validar_cbenef_para_cst, codigos_para_cst, TABELA_CBENEF_SP
 from config.settings import HABILITAR_IBS_CBS
 import re
+
+
+# Regras da tabela cBenef-SP (v20260626)
+CBENEF_SP_CSTS_SEM_OBRIGATORIEDADE = {'00', '02', '10', '15', '60', '61'}
+CBENEF_SP_CSTS_REDUCAO_ISENCAO = {'20', '30', '40', '41', '50', '51', '53', '70', '90'}
+CBENEF_SP_SEM_CBENEF_BLOQUEIO = datetime(2026, 7, 1, tzinfo=timezone.utc)
+
+
+DECIMAL_FIELD_LABELS = {
+    'quantidade': 'Quantidade',
+    'valor_unitario': 'Valor unitário',
+    'valor_total': 'Valor total',
+    'aliquota_icms': 'Alíquota de ICMS',
+    'reducao_base_icms': 'Redução da base de ICMS',
+    'bc_icms': 'Base de cálculo do ICMS',
+    'valor_icms': 'Valor do ICMS',
+    'vBCSTRet': 'Base ST retida',
+    'pST': 'Alíquota ST',
+    'vICMSSubstituto': 'Valor do ICMS substituto',
+    'vICMSSTRet': 'Valor do ICMS ST retido',
+    'aliquota_pis': 'Alíquota do PIS',
+    'aliquota_cofins': 'Alíquota do COFINS',
+    'aliquota_ipi': 'Alíquota do IPI',
+}
 
 
 # Mapeamento de códigos IBGE mais comuns → nome do município
@@ -102,6 +127,123 @@ def normalizar_uf(uf_valor: str, fallback: str = 'SP') -> str:
     }
 
     return mapa_uf.get(uf, fallback)
+
+
+def _normalizar_valor_decimal(valor: Any, default: str) -> str:
+    if valor is None:
+        return default
+
+    if isinstance(valor, Decimal):
+        return str(valor)
+
+    texto = str(valor).strip()
+    if not texto:
+        return default
+
+    texto = texto.replace('R$', '').replace(' ', '')
+    if ',' in texto and '.' in texto:
+        if texto.rfind(',') > texto.rfind('.'):
+            texto = texto.replace('.', '').replace(',', '.')
+        else:
+            texto = texto.replace(',', '')
+    elif ',' in texto:
+        texto = texto.replace('.', '').replace(',', '.')
+
+    return texto or default
+
+
+def _decimal_from_item(item: Dict[str, Any], campo: str, default: str, idx: int) -> Decimal:
+    try:
+        return Decimal(_normalizar_valor_decimal(item.get(campo), default))
+    except (InvalidOperation, ValueError, TypeError):
+        rotulo = DECIMAL_FIELD_LABELS.get(campo, campo)
+        valor_original = item.get(campo)
+        descricao_item = str(item.get('descricao') or item.get('codigo_produto') or item.get('codigo') or '').strip()
+        contexto_item = f"Item {idx}"
+        if descricao_item:
+            contexto_item += f" ({descricao_item[:60]})"
+        raise ValueError(
+            f"{contexto_item}: o campo '{rotulo}' está com valor inválido ({repr(valor_original)}). Use apenas números."
+        )
+
+
+def _extrair_cbenef_item(item: Dict[str, Any]) -> str:
+    """Extrai cBenef do item aceitando variações de chave."""
+    valor = (
+        item.get('cbenef')
+        or item.get('cBenef')
+        or item.get('codigo_beneficio_fiscal')
+        or item.get('codigo_beneficio_icms')
+        or ''
+    )
+    return str(valor).strip().upper()
+
+
+def _resolver_cbenef_sp(
+    item: Dict[str, Any],
+    idx: int,
+    cst_item: str,
+    uf_emitente: str,
+    data_emissao: datetime
+) -> str:
+    """
+    Resolve e valida cBenef para emissão em SP conforme tabela oficial v20260626.
+
+    Regras:
+    - CSTs sem obrigatoriedade (00, 02, 10, 15, 60, 61): não é obrigatório.
+    - CSTs de redução/isenção (20, 30, 40, 41, 50, 51, 53, 70, 90): obrigatório.
+    - 'SEM CBENEF' não é permitido a partir de 01/07/2026.
+    - O código deve existir na tabela SP e ser válido para o CST informado.
+    """
+    if (uf_emitente or '').strip().upper() != 'SP':
+        return _extrair_cbenef_item(item)
+
+    cst_norm = str(cst_item or '').strip().zfill(2)
+    cbenef = _extrair_cbenef_item(item)
+
+    if cst_norm in CBENEF_SP_CSTS_SEM_OBRIGATORIEDADE:
+        return cbenef
+
+    if cst_norm in CBENEF_SP_CSTS_REDUCAO_ISENCAO and not cbenef:
+        sugestoes = codigos_para_cst(cst_norm)
+        hint = ''
+        if sugestoes:
+            hint = f" Exemplos: {', '.join(s['codigo'] for s in sugestoes[:3])}..."
+        raise ValueError(
+            f"Item {idx}: cBenef obrigatório para CST {cst_norm} em emissor SP "
+            f"(redução/isenção de ICMS). Informe o código da tabela cBenef-SP.{hint}"
+        )
+
+    if not cbenef:
+        return ''
+
+    if cbenef == 'SEM CBENEF':
+        data_ref = data_emissao
+        if data_ref.tzinfo is None:
+            data_ref = data_ref.replace(tzinfo=timezone.utc)
+        else:
+            data_ref = data_ref.astimezone(timezone.utc)
+
+        if data_ref >= CBENEF_SP_SEM_CBENEF_BLOQUEIO:
+            raise ValueError(
+                f"Item {idx}: código 'SEM CBENEF' não é permitido desde 01/07/2026 "
+                f"na tabela cBenef-SP. Informe código SP válido (ex.: SP099090)."
+            )
+        return cbenef
+
+    # Validar formato básico
+    if not re.match(r'^SP\d{6}$', cbenef):
+        raise ValueError(
+            f"Item {idx}: cBenef inválido '{cbenef}'. "
+            f"Use formato SP + 6 dígitos (ex.: SP099090)."
+        )
+
+    # Validar código na tabela oficial e compatibilidade com o CST
+    ok, erro = validar_cbenef_para_cst(cbenef, cst_norm)
+    if not ok:
+        raise ValueError(f"Item {idx}: {erro}")
+
+    return cbenef
 
 
 def obter_aliquota_maxima_icms_interestadual(uf_origem: str, uf_destino: str, origem_mercadoria: str) -> Decimal:
@@ -667,9 +809,9 @@ def generate_nfe_xml_nfelib(
         print(f"   - Keys disponíveis: {list(item.keys())}")
         
         # Formatar valores com casas decimais corretas
-        quantidade = Decimal(str(item.get('quantidade', '1')))
-        valor_unitario = Decimal(str(item.get('valor_unitario', '0')))
-        valor_total = Decimal(str(item.get('valor_total', '0')))
+        quantidade = _decimal_from_item(item, 'quantidade', '1', idx)
+        valor_unitario = _decimal_from_item(item, 'valor_unitario', '0', idx)
+        valor_total = _decimal_from_item(item, 'valor_total', '0', idx)
         
         # Quantidade: até 4 casas decimais (padrão NFe)
         qcom_str = f"{quantidade:.4f}"
@@ -710,7 +852,7 @@ def generate_nfe_xml_nfelib(
             indTot="1"
         )
         
-        v_prod_total += Decimal(str(item.get('valor_total', '0.00')))
+        v_prod_total += _decimal_from_item(item, 'valor_total', '0.00', idx)
         
         # VERIFICAR CRT DO EMITENTE para usar CST ou CSOSN
         crt_int = int(crt_emitente) if crt_emitente.isdigit() else 1
@@ -725,6 +867,7 @@ def generate_nfe_xml_nfelib(
         
         # DECISÃO: CST ou CSOSN baseado no CRT
         icms_uf_dest = None  # DIFAL (EC 87/2015) – definido no bloco regime normal se aplicável
+        cbenef_resolvido = ''
         if usar_csosn:
             # SIMPLES NACIONAL - usar CSOSN
             if not csosn_item:
@@ -740,10 +883,10 @@ def generate_nfe_xml_nfelib(
             
             # Buscar dados de ICMS para Simples Nacional
             sn_origem = str(item.get('origem', '0'))
-            sn_aliq = Decimal(str(item.get('aliquota_icms', '0')))
+            sn_aliq = _decimal_from_item(item, 'aliquota_icms', '0', idx)
             sn_bc_raw = item.get('bc_icms', valor_total)
             try:
-                sn_bc = Decimal(str(sn_bc_raw))
+                sn_bc = Decimal(_normalizar_valor_decimal(sn_bc_raw, str(valor_total)))
             except Exception:
                 sn_bc = valor_total
             if sn_bc <= 0 and csosn_item not in ('500',):
@@ -756,10 +899,10 @@ def generate_nfe_xml_nfelib(
             # Criar ICMS com CSOSN
             if csosn_item == '500':
                 # Pegar campos ICMS ST do formulário
-                v_bc_st_ret = Decimal(str(item.get('vBCSTRet', '0')))
-                p_st = Decimal(str(item.get('pST', '0')))
-                v_icms_substituto = Decimal(str(item.get('vICMSSubstituto', '0')))
-                v_icms_st_ret = Decimal(str(item.get('vICMSSTRet', '0')))
+                v_bc_st_ret = _decimal_from_item(item, 'vBCSTRet', '0', idx)
+                p_st = _decimal_from_item(item, 'pST', '0', idx)
+                v_icms_substituto = _decimal_from_item(item, 'vICMSSubstituto', '0', idx)
+                v_icms_st_ret = _decimal_from_item(item, 'vICMSSTRet', '0', idx)
                 
                 icms_sn = Nfe.InfNfe.Det.Imposto.Icms.Icmssn500(
                     orig=sn_origem,
@@ -821,17 +964,28 @@ def generate_nfe_xml_nfelib(
                 cst_item = '20'  # CST 20 = Redução de BC (padrão seguro)
             
             print(f"  [NFELIB] Item {idx} - CFOP {cfop} → CST {cst_item}")
+
+            # Regras cBenef-SP para CSTs com redução/isenção
+            cbenef_resolvido = _resolver_cbenef_sp(
+                item=item,
+                idx=idx,
+                cst_item=cst_item,
+                uf_emitente=uf_emitente,
+                data_emissao=data_emissao,
+            )
+            if cbenef_resolvido:
+                item['_cbenef_resolvido'] = cbenef_resolvido
             
             # Buscar dados tributários do item
             origem = item.get('origem', '0')
-            aliquota_icms = Decimal(str(item.get('aliquota_icms', '7')))
-            reducao_bc = Decimal(str(item.get('reducao_base_icms', '0')))
+            aliquota_icms = _decimal_from_item(item, 'aliquota_icms', '7', idx)
+            reducao_bc = _decimal_from_item(item, 'reducao_base_icms', '0', idx)
             bc_icms_raw = item.get('bc_icms', valor_total)
             try:
-                bc_icms = Decimal(str(bc_icms_raw))
+                bc_icms = Decimal(_normalizar_valor_decimal(bc_icms_raw, str(valor_total)))
             except Exception:
                 bc_icms = valor_total
-            valor_icms = Decimal(str(item.get('valor_icms', '0')))
+            valor_icms = _decimal_from_item(item, 'valor_icms', '0', idx)
             modalidade_bc = str(item.get('modalidade_bc_icms') or '3').strip() or '3'
             modalidade_bc_st = str(item.get('modalidade_bc_st') or '4').strip() or '4'
 
@@ -881,7 +1035,6 @@ def generate_nfe_xml_nfelib(
                 # Redução de base de cálculo
                 motivo_deson = item.get('motivo_desoneracao_icms')
                 # cBenef será adicionado manualmente ao XML (nfelib não suporta)
-                cbenef = item.get('cbenef', '').strip() if item.get('cbenef') else None
                 icms20_params = {
                     'orig': origem,
                     'CST': "20",
@@ -905,7 +1058,6 @@ def generate_nfe_xml_nfelib(
             elif cst_item in ['40', '41', '50']:
                 # Isenta, não tributada ou suspensão
                 motivo_deson = item.get('motivo_desoneracao_icms')
-                cbenef = item.get('cbenef', '').strip() if item.get('cbenef') else None
                 icms40_params = {
                     'orig': origem,
                     'CST': cst_item
@@ -979,8 +1131,8 @@ def generate_nfe_xml_nfelib(
                 cst_pis = '01'
             if not cst_cofins or cst_cofins == '':
                 cst_cofins = '01'
-            aliq_pis = Decimal(str(item.get('aliquota_pis', '1.65')))
-            aliq_cofins = Decimal(str(item.get('aliquota_cofins', '7.6')))
+            aliq_pis = _decimal_from_item(item, 'aliquota_pis', '1.65', idx)
+            aliq_cofins = _decimal_from_item(item, 'aliquota_cofins', '7.6', idx)
             
             # PIS
             if cst_pis in ['01', '02']:
@@ -1013,7 +1165,7 @@ def generate_nfe_xml_nfelib(
         # IPI - Imposto sobre Produtos Industrializados
         ipi = None
         cst_ipi = item.get('cst_ipi')
-        aliq_ipi = Decimal(str(item.get('aliquota_ipi', '0')))
+        aliq_ipi = _decimal_from_item(item, 'aliquota_ipi', '0', idx)
         
         if cst_ipi:
             if cst_ipi in ['00', '49', '50', '99'] and aliq_ipi > 0:
@@ -1366,17 +1518,18 @@ def generate_nfe_xml_nfelib(
             # ========== ADICIONAR cBenef MANUALMENTE (nfelib não suporta) ==========
             print(f"🔧 [cBenef] Verificando necessidade de adicionar cBenef manualmente...")
             for idx, item in enumerate(items, 1):
-                cbenef = item.get('cbenef', '').strip() if item.get('cbenef') else None
+                cbenef = (item.get('_cbenef_resolvido') or _extrair_cbenef_item(item) or '').strip().upper()
                 if cbenef:
                     print(f"  [cBenef] Item {idx} - Código: {cbenef}")
                     # Encontrar o elemento det correspondente
                     det_elem = xml_tree.find(f'.//nfe:det[@nItem="{idx}"]', ns)
                     if det_elem is not None:
-                        # Encontrar ICMS20 ou ICMS40
-                        icms20_elem = det_elem.find('.//nfe:ICMS20', ns)
-                        icms40_elem = det_elem.find('.//nfe:ICMS40', ns)
-                        
-                        target_elem = icms20_elem if icms20_elem is not None else icms40_elem
+                        # Encontrar grupo ICMS que suporta cBenef
+                        target_elem = None
+                        for grupo_icms in ('ICMS20', 'ICMS40', 'ICMS30', 'ICMS51', 'ICMS70', 'ICMS90'):
+                            target_elem = det_elem.find(f'.//nfe:{grupo_icms}', ns)
+                            if target_elem is not None:
+                                break
                         if target_elem is not None:
                             # Adicionar <cBenef> após <CST>
                             cst_elem = target_elem.find('nfe:CST', ns)
