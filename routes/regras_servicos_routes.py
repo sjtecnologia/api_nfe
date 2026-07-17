@@ -15,6 +15,23 @@ def _get_db():
     return next(get_db())
 
 
+# Expressão SQL que normaliza um código LC116 removendo zeros à esquerda de cada
+# parte (ex.: '01.01' e '1.01' passam a ser comparáveis como '1.1'). Necessário
+# porque a tela de emissão de NFS-e usa códigos sem zero à esquerda (dict fixo em
+# models/nfse_model.py) enquanto o cadastro de regras usa os códigos oficiais
+# com zero à esquerda (tabela codigos_servico_lc116, ex.: '01.01').
+_NORMALIZA_LC116_SQL = r"regexp_replace({coluna}, '(^|\.)0+(\d)', '\1\2', 'g')"
+
+
+def _normalizar_codigo_lc116(codigo):
+    """Remove zeros à esquerda de cada parte do código LC116 (ex.: '01.01' -> '1.1').
+    Deve produzir o mesmo resultado que _NORMALIZA_LC116_SQL aplicado na coluna do banco."""
+    if not codigo:
+        return codigo
+    partes = str(codigo).split('.')
+    return '.'.join(p.lstrip('0') or '0' for p in partes)
+
+
 @regras_servicos_bp.route('/')
 @login_required
 @permission_required('regras_tributacao.view')
@@ -188,7 +205,11 @@ def salvar_regra_servico():
             'cliente_id': int(cliente_id),
             'regime_tributario_id': int(request.form.get('regime_tributario_id')),
             'codigo_servico_lc116': request.form.get('codigo_servico_lc116'),
-            'codigo_nbs': request.form.get('codigo_nbs', '101010000'),
+            # codigo_nbs é VARCHAR(9) no banco (GISS exige só dígitos, sem pontos).
+            # Alguns selects carregam o código no formato "1.0101.10.00" (tabela
+            # codigos_nbs); removemos pontos/traços e truncamos por segurança
+            # para nunca estourar o limite da coluna (StringDataRightTruncation).
+            'codigo_nbs': (request.form.get('codigo_nbs', '101010000') or '101010000').replace('.', '').replace('-', '')[:9],
             'descricao_servico': request.form.get('descricao_servico', ''),
             'aliquota_iss': Decimal(request.form.get('aliquota_iss', '5.00')),
             'iss_retido': request.form.get('iss_retido') == 'on',
@@ -368,11 +389,13 @@ def api_buscar_regra_servico():
             return jsonify({'success': False, 'error': 'Parâmetros inválidos'}), 400
         
         # Buscar regra com maior prioridade
-        query = text("""
+        # Compara códigos LC116 normalizados (sem zero à esquerda), pois a tela
+        # de emissão usa formato '1.01' e o cadastro de regras usa '01.01'.
+        query = text(f"""
             SELECT *
             FROM regras_tributacao_servicos
             WHERE cliente_id = :cliente_id
-              AND codigo_servico_lc116 = :codigo_servico
+              AND {_NORMALIZA_LC116_SQL.format(coluna='codigo_servico_lc116')} = :codigo_servico
               AND ativo = TRUE
               AND (uf_destino IS NULL OR uf_destino = :uf_destino)
             ORDER BY prioridade ASC
@@ -381,7 +404,7 @@ def api_buscar_regra_servico():
         
         result = db.execute(query, {
             'cliente_id': cliente_id,
-            'codigo_servico': codigo_servico,
+            'codigo_servico': _normalizar_codigo_lc116(codigo_servico),
             'uf_destino': uf_destino or ''
         }).fetchone()
         
@@ -418,12 +441,12 @@ def api_buscar_regra_servico_get():
         if not cliente_id or not codigo_servico:
             return jsonify({'success': False, 'error': 'Parâmetros inválidos', 'regra': None}), 400
         
-        # Buscar regra com maior prioridade
-        query = text("""
+        # Buscar regra com maior prioridade (código LC116 normalizado, ver comentário acima)
+        query = text(f"""
             SELECT *
             FROM regras_tributacao_servicos
             WHERE cliente_id = :cliente_id
-              AND codigo_servico_lc116 = :codigo_servico
+              AND {_NORMALIZA_LC116_SQL.format(coluna='codigo_servico_lc116')} = :codigo_servico
               AND ativo = TRUE
               AND (uf_destino IS NULL OR uf_destino = :uf_destino)
             ORDER BY prioridade ASC
@@ -432,7 +455,7 @@ def api_buscar_regra_servico_get():
         
         result = db.execute(query, {
             'cliente_id': int(cliente_id),
-            'codigo_servico': codigo_servico,
+            'codigo_servico': _normalizar_codigo_lc116(codigo_servico),
             'uf_destino': uf_destino
         }).fetchone()
         

@@ -438,6 +438,7 @@ class Cliente(Base):
     nfes_emitidas = relationship('NFeEmitidas', back_populates='cliente', cascade='all, delete-orphan')
     inutilizacoes = relationship('NFeInutilizacao', back_populates='cliente', cascade='all, delete-orphan')
     produtos = relationship('Produto', back_populates='cliente', cascade='all, delete-orphan')
+    servicos = relationship('Servico', back_populates='cliente', cascade='all, delete-orphan')
     regras_tributacao = relationship('RegraTributacao', back_populates='cliente', cascade='all, delete-orphan')
     regras_servicos = relationship('RegraTributacaoServico', back_populates='cliente', cascade='all, delete-orphan')
     destinatarios_nfe = relationship('DestinatarioNFe', back_populates='cliente', cascade='all, delete-orphan')
@@ -698,6 +699,51 @@ class Produto(Base):
 
     def __repr__(self):
         return f"<Produto(id={self.produto_id}, codigo='{self.codigo_interno}', descricao='{self.descricao[:30]}...')>"
+
+
+class Servico(Base):
+    """
+    Catálogo de Serviços do cliente — análogo ao catálogo de Produtos, mas
+    para itens faturáveis via NFS-e. A classificação tributária (LC116, NBS,
+    ISS, IBS/CBS) fica em `RegraTributacaoServico` (assim como Produto usa
+    NCM/CFOP/CST); aqui ficam apenas os dados comerciais do serviço.
+    """
+    __tablename__ = 'servicos'
+    servico_id = Column(Integer, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id'), nullable=False)
+    codigo_interno = Column(String(50), nullable=False)
+    descricao = Column(Text, nullable=False)
+    unidade = Column(String(6), nullable=False, default='UN')
+    valor_padrao = Column(Numeric(15, 2), nullable=False, default=0)
+    regra_id = Column(Integer, ForeignKey('regras_tributacao_servicos.regra_id'), nullable=True)
+    ativo = Column(Boolean, default=True, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    data_cadastro = Column(DateTime, default=datetime.now, nullable=False)
+    data_atualizacao = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('cliente_id', 'codigo_interno', name='servico_codigo_interno_u'),
+    )
+
+    cliente = relationship('Cliente', back_populates='servicos')
+    regra = relationship('RegraTributacaoServico', foreign_keys=[regra_id])
+    created_by_user = relationship('UserModel', foreign_keys=[created_by_user_id])
+
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        if self.regra:
+            data['regra'] = {
+                'regra_id': self.regra.regra_id,
+                'codigo_servico_lc116': self.regra.codigo_servico_lc116,
+                'codigo_nbs': self.regra.codigo_nbs,
+                'aliquota_iss': float(self.regra.aliquota_iss) if self.regra.aliquota_iss is not None else None,
+            }
+        else:
+            data['regra'] = None
+        return data
+
+    def __repr__(self):
+        return f"<Servico(id={self.servico_id}, codigo='{self.codigo_interno}', descricao='{self.descricao[:30]}...')>"
 
 class RegraTributacao(Base):
     __tablename__ = 'regras_tributacao'

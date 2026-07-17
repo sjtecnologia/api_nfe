@@ -1005,6 +1005,11 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('servicos.list_servicos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-tools"></i> Serviços
+                                    </a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
                                         <i class="fas fa-address-book"></i> Destinatários
                                     </a>
@@ -1072,13 +1077,13 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
-                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-boxes"></i> Produtos
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-boxes"></i> Produtos
+                                    <a class="nav-link" href="{{ url_for('servicos.list_servicos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-tools"></i> Serviços
                                     </a>
                                 </li>
                                 <li class="nav-item">
@@ -1101,13 +1106,13 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
-                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-boxes"></i> Produtos
                                     </a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
-                                        <i class="fas fa-boxes"></i> Produtos
+                                    <a class="nav-link" href="{{ url_for('servicos.list_servicos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-tools"></i> Serviços
                                     </a>
                                 </li>
                                 <li class="nav-item">
@@ -1270,7 +1275,7 @@
                     | Usuário: <strong>{{ current_user.username }}</strong>
                     <span class="badge bg-primary ms-1">{{ current_user.roles[0].name }}</span>                    
                 {% endif %}
-                | © 2025
+                | © 2026
             </small>
         </div>
     </footer>

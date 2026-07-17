@@ -192,7 +192,24 @@ input[readonly] {
                 <div id="alertRegraNotFound" class="alert alert-warning d-none" role="alert">
                     <i class="fas fa-exclamation-triangle"></i> <strong>Regra não encontrada!</strong> Preencha os dados manualmente.
                 </div>
-                
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="servico_catalogo">
+                                <i class="fas fa-tools"></i> Selecionar do Catálogo de Serviços
+                            </label>
+                            <select class="form-control" id="servico_catalogo" onchange="preencherServicoDoCatalogo()">
+                                <option value="">-- Preencher manualmente --</option>
+                            </select>
+                            <small class="text-muted">
+                                Ao escolher um serviço cadastrado, os campos abaixo são preenchidos automaticamente.
+                                <a href="{{ url_for('servicos.list_servicos') }}" target="_blank">Gerenciar catálogo</a>.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-md-3">
                         <div class="form-group">
@@ -540,6 +557,12 @@ input[readonly] {
                 <button type="button" class="btn btn-info btn-lg me-2" onclick="validarComIA()" id="btnValidarIA">
                     <i class="fas fa-robot"></i> Validar com IA
                 </button>
+                <button type="button" class="btn btn-outline-primary btn-lg me-2" onclick="previewXmlNfse()" id="btnPreviewXmlNfse">
+                    <i class="fas fa-eye"></i> Visualizar XML
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-lg me-2" onclick="previewDanfeNfse()" id="btnPreviewDanfeNfse">
+                    <i class="fas fa-file-pdf"></i> Preview DANFE
+                </button>
                 <button type="submit" class="btn btn-primary btn-lg me-2">
                     <i class="fas fa-paper-plane"></i> Emitir NFS-e
                 </button>
@@ -772,6 +795,65 @@ function parseFloatBR(valor) {
     let valorLimpo = valor.toString().replace(/\./g, '').replace(',', '.');
     return parseFloat(valorLimpo) || 0;
 }
+
+// ===================== Catálogo de Serviços =====================
+let catalogoServicos = {};
+
+// O campo #codigo_nbs é um select2 alimentado via AJAX (sem <option> pré-carregadas).
+// Para selecionar um valor programaticamente é preciso criar a opção antes de
+// atribuí-la, senão o select2 não exibe nada (o .val() sozinho não funciona).
+function definirCodigoNbs(codigoNbs, descricao) {
+    if (!codigoNbs) return;
+    const select = $('#codigo_nbs');
+    if (select.find("option[value='" + codigoNbs + "']").length === 0) {
+        const texto = codigoNbs + (descricao ? ' - ' + descricao : '');
+        const novaOpcao = new Option(texto, codigoNbs, true, true);
+        select.append(novaOpcao);
+    }
+    select.val(codigoNbs).trigger('change');
+}
+
+function carregarCatalogoServicos() {
+    fetch('{{ url_for("servicos.api_list_servicos") }}')
+        .then(response => response.json())
+        .then(lista => {
+            const select = document.getElementById('servico_catalogo');
+            if (!select) return;
+            lista.forEach(function(servico) {
+                catalogoServicos[servico.servico_id] = servico;
+                const option = document.createElement('option');
+                option.value = servico.servico_id;
+                option.textContent = servico.codigo_interno + ' - ' + servico.descricao;
+                select.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Erro ao carregar catálogo de serviços:', error));
+}
+
+function preencherServicoDoCatalogo() {
+    const servicoId = document.getElementById('servico_catalogo').value;
+    if (!servicoId) return;
+    const servico = catalogoServicos[servicoId];
+    if (!servico) return;
+
+    document.getElementById('discriminacao').value = servico.descricao || '';
+    document.getElementById('valor_servico').value = formatarMoedaBR(servico.valor_padrao || 0);
+
+    if (servico.codigo_nbs) {
+        definirCodigoNbs(servico.codigo_nbs, servico.descricao);
+    }
+
+    if (servico.codigo_servico_lc116) {
+        const selectCodigo = document.getElementById('codigo_servico');
+        selectCodigo.value = servico.codigo_servico_lc116;
+        // Dispara o fluxo já existente de alíquota + busca de regra tributária
+        atualizarAliquota();
+        buscarRegraTributaria();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', carregarCatalogoServicos);
+// ===================================================================
 
 // Formatar campo monetário quando sai do campo
 function formatarCampoMonetario(input) {
@@ -1244,7 +1326,7 @@ function buscarRegraTributaria() {
                 
                 // Preencher campos automaticamente - Dados do Serviço
                 if (regra.codigo_nbs) {
-                    $('#codigo_nbs').val(regra.codigo_nbs);
+                    definirCodigoNbs(regra.codigo_nbs, regra.descricao_servico);
                 }
                 
                 if (regra.aliquota_iss) {
@@ -1323,5 +1405,203 @@ $('#tomador_uf, #tomador_select').on('change', function() {
         buscarRegraTributaria();
     }
 });
+
+// ========== PREVIEW XML / DANFE (antes da emissão) ==========
+
+function validarCamposObrigatoriosNfse() {
+    const errors = [];
+
+    if (!document.getElementById('tomador_select').value) {
+        errors.push('Selecione o Tomador');
+    }
+    if (!document.getElementById('codigo_servico').value) {
+        errors.push('Selecione o Código de Serviço (LC 116)');
+    }
+    if (!document.getElementById('discriminacao').value.trim()) {
+        errors.push('Preencha a Discriminação do Serviço');
+    }
+    const valorServico = parseFloatBR(document.getElementById('valor_servico').value);
+    if (!valorServico) {
+        errors.push('Informe o Valor dos Serviços');
+    }
+
+    return errors;
+}
+
+function coletarFormDataNfse() {
+    const form = document.getElementById('nfseForm');
+    return new FormData(form);
+}
+
+function previewXmlNfse() {
+    const errors = validarCamposObrigatoriosNfse();
+    if (errors.length > 0) {
+        alert('Corrija os seguintes erros antes de visualizar o XML:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+        return;
+    }
+
+    const btn = document.getElementById('btnPreviewXmlNfse');
+    const htmlOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando XML...';
+
+    fetch('{{ url_for("nfse.preview_xml") }}', {
+        method: 'POST',
+        body: coletarFormDataNfse()
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.xml_preview) {
+                mostrarModalXMLNfse(data.xml_preview);
+            } else {
+                alert('Erro ao gerar XML: ' + (data.message || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('[PREVIEW XML NFS-e] Erro:', error);
+            alert('Erro ao gerar preview do XML. Verifique o console para mais detalhes.');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = htmlOriginal;
+        });
+}
+
+function previewDanfeNfse() {
+    const errors = validarCamposObrigatoriosNfse();
+    if (errors.length > 0) {
+        alert('Corrija os seguintes erros antes de gerar o preview do DANFE:\n\n' + errors.map((e, i) => `${i + 1}. ${e}`).join('\n'));
+        return;
+    }
+
+    const btn = document.getElementById('btnPreviewDanfeNfse');
+    const htmlOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando DANFE...';
+
+    fetch('{{ url_for("nfse.preview_danfe") }}', {
+        method: 'POST',
+        body: coletarFormDataNfse()
+    })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (response.ok && contentType && contentType.includes('application/pdf')) {
+                return response.blob().then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                    return { success: true };
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.success === false) {
+                alert('Erro ao gerar DANFE: ' + (data.message || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('[PREVIEW DANFE NFS-e] Erro:', error);
+            alert('Erro ao gerar preview do DANFE. Verifique o console para mais detalhes.');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = htmlOriginal;
+        });
+}
+
+// Modal simples para exibir o XML formatado (mesmo padrão usado na emissão de NFe)
+function mostrarModalXMLNfse(xmlString) {
+    const formatted = formatXMLNfse(xmlString);
+
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); display: flex; align-items: center;
+        justify-content: center; z-index: 10000;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: white; border-radius: 8px; width: 90%; max-width: 1000px;
+        max-height: 90vh; display: flex; flex-direction: column;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    `;
+
+    modalContent.innerHTML = `
+        <div style="padding: 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">Preview do XML do RPS (NFS-e)</h3>
+            <div>
+                <button onclick="copiarXMLNfse()" style="padding: 8px 16px; margin-right: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    <i class="fas fa-copy"></i> Copiar
+                </button>
+                <button onclick="fecharModalXMLNfse()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+        <div style="padding: 20px; overflow: auto; flex: 1;">
+            <pre id="xmlContentNfse" style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow: auto; margin: 0; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4;">${escapeHtmlNfse(formatted)}</pre>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) {
+            fecharModalXMLNfse();
+        }
+    });
+}
+
+function formatXMLNfse(xml) {
+    const PADDING = '  ';
+    const reg = /(>)(<)(\/*)/g;
+    let formatted = '';
+    let pad = 0;
+
+    xml = xml.replace(reg, '$1\n$2$3');
+
+    xml.split('\n').forEach(function (node) {
+        let indent = 0;
+        if (node.match(/.+<\/\w[^>]*>$/)) {
+            indent = 0;
+        } else if (node.match(/^<\/\w/)) {
+            if (pad !== 0) pad -= 1;
+        } else if (node.match(/^<\w([^>]*[^\/])?>.*$/)) {
+            indent = 1;
+        } else {
+            indent = 0;
+        }
+        formatted += PADDING.repeat(pad) + node + '\n';
+        pad += indent;
+    });
+
+    return formatted.trim();
+}
+
+function escapeHtmlNfse(text) {
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+function copiarXMLNfse() {
+    const xmlContent = document.getElementById('xmlContentNfse');
+    if (xmlContent) {
+        navigator.clipboard.writeText(xmlContent.textContent).then(() => {
+            alert('XML copiado para a área de transferência!');
+        }).catch(err => {
+            console.error('Erro ao copiar:', err);
+            alert('Erro ao copiar XML. Tente selecionar e copiar manualmente.');
+        });
+    }
+}
+
+function fecharModalXMLNfse() {
+    const modal = document.querySelector('div[style*="position: fixed"]');
+    if (modal) {
+        modal.remove();
+    }
+}
 </script>
 {% endblock %}

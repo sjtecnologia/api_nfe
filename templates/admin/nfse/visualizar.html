@@ -24,6 +24,10 @@
                     <a href="{{ url_for('nfse.download_xml', nfse_id=nfse.id) }}" class="btn btn-secondary">
                         <i class="fas fa-file-code"></i> Download XML
                     </a>
+                    <a href="{{ url_for('nfse.download_danfse', nfse_id=nfse.id) }}" class="btn btn-info"
+                       title="Disponível apenas após confirmação da NFS-e no ADN (ChaveNotaNacional)">
+                        <i class="fas fa-file-pdf"></i> DANFSe (PDF)
+                    </a>
                     {% if nfse.status == '1' %}
                     <a href="{{ url_for('nfse.cancelar', nfse_id=nfse.id) }}" class="btn btn-danger">
                         <i class="fas fa-times"></i> Cancelar

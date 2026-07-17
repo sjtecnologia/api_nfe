@@ -52,14 +52,21 @@
                         </tr>
                         {% endif %}
                         
+                        {% if resultado.chave_nota_nacional %}
+                        <tr>
+                            <th>Chave de Acesso (ADN):</th>
+                            <td><code>{{ resultado.chave_nota_nacional }}</code></td>
+                        </tr>
+                        {% endif %}
+
                         <tr>
                             <th>Status:</th>
                             <td>
-                                {% if resultado.situacao == '1' or resultado.situacao == 'processado' %}
+                                {% if resultado.situacao_codigo == '4' %}
                                     <span class="badge bg-success">Processado com Sucesso</span>
-                                {% elif resultado.situacao == '2' or resultado.situacao == 'aguardando' %}
+                                {% elif resultado.situacao_codigo in ('1', '2') %}
                                     <span class="badge bg-warning">Aguardando Processamento</span>
-                                {% elif resultado.situacao == '3' or resultado.situacao == 'erro' %}
+                                {% elif resultado.situacao_codigo == '3' %}
                                     <span class="badge bg-danger">Erro no Processamento</span>
                                 {% else %}
                                     <span class="badge bg-secondary">{{ resultado.situacao or 'Desconhecido' }}</span>
@@ -71,6 +78,13 @@
                         <tr>
                             <th>Mensagem:</th>
                             <td>{{ resultado.mensagem }}</td>
+                        </tr>
+                        {% endif %}
+                        
+                        {% if resultado.erro %}
+                        <tr>
+                            <th>Erro:</th>
+                            <td class="text-danger">{{ resultado.erro }}</td>
                         </tr>
                         {% endif %}
                         
@@ -95,6 +109,14 @@
                     {% endif %}
 
                     <div class="text-center mt-4">
+                        {% if sucesso and nfse_id %}
+                        <a href="{{ url_for('nfse.visualizar', nfse_id=nfse_id) }}" class="btn btn-success me-2">
+                            <i class="fas fa-eye"></i> Ver NFS-e
+                        </a>
+                        <a href="{{ url_for('nfse.download_danfse', nfse_id=nfse_id) }}" class="btn btn-info me-2">
+                            <i class="fas fa-file-pdf"></i> DANFSe (PDF)
+                        </a>
+                        {% endif %}
                         <a href="{{ url_for('nfse.consultar_status', protocolo=protocolo) }}" class="btn btn-primary me-2">
                             <i class="fas fa-sync"></i> Atualizar Status
                         </a>

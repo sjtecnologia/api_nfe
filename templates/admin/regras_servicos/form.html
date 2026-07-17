@@ -253,13 +253,18 @@ $(document).ready(function() {
                     $select.append('<option value="101010000">101.01.00.00 - Padrão (nenhum específico cadastrado)</option>');
                 } else {
                     codigos.forEach(function(nbs) {
+                        // A coluna codigo_nbs no banco é VARCHAR(9) e o GISS exige
+                        // o código só com dígitos (sem pontos). A tabela codigos_nbs
+                        // guarda no formato "1.0101.10.00" (exibição); removemos os
+                        // pontos aqui para nunca enviar um valor maior que 9 chars.
+                        const codigoSemPontos = nbs.codigo.replace(/\./g, '');
                         const texto = nbs.codigo + ' - ' + nbs.descricao;
                         const option = $('<option></option>')
-                            .attr('value', nbs.codigo)
+                            .attr('value', codigoSemPontos)
                             .attr('data-descricao', nbs.descricao)
                             .text(texto);
                         
-                        if (nbs.codigo === valorAtual) {
+                        if (codigoSemPontos === valorAtual) {
                             option.prop('selected', true);
                         }
                         

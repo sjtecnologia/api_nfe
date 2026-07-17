@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Serviços - {{ cliente_nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">🛠️ Serviços</h1>
+                    <div class="page-subtitle">
+                        {{ cliente_nome }}
+                    </div>
+                </div>
+                <div>
+                    {% if can_create() %}
+                    <a href="{{ url_for('servicos.create_servico', cliente_id=cliente_id) }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Novo Serviço
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="col-md-3">
+                    <label class="form-label">Código</label>
+                    <input type="text" class="form-control" name="codigo" placeholder="Código interno" value="{{ request.args.get('codigo', '') }}">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Descrição</label>
+                    <input type="text" class="form-control" name="descricao" placeholder="Descrição do serviço" value="{{ request.args.get('descricao', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" name="ativo">
+                        <option value="">Todos</option>
+                        <option value="1" {% if request.args.get('ativo') == '1' %}selected{% endif %}>Ativo</option>
+                        <option value="0" {% if request.args.get('ativo') == '0' %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    {% if request.args.get('codigo') or request.args.get('descricao') or (request.args.get('ativo') and request.args.get('ativo') != 'todos') %}
+                    <a href="{{ url_for('servicos.list_servicos') }}?cliente_id={{ cliente_id }}" class="btn btn-secondary ms-1">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Serviços -->
+    <div class="card">
+        <div class="card-body">
+            {% if servicos %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Código</th>
+                                <th>Descrição</th>
+                                <th>Unidade</th>
+                                <th>Valor Padrão</th>
+                                <th>Código LC116 / NBS</th>
+                                <th>Alíquota ISS</th>
+                                <th>Status</th>
+                                <th width="150">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for servico in servicos %}
+                                <tr>
+                                    <td>{{ servico.servico_id }}</td>
+                                    <td>{{ servico.codigo_interno }}</td>
+                                    <td><strong>{{ servico.descricao }}</strong></td>
+                                    <td>{{ servico.unidade }}</td>
+                                    <td>
+                                        {% if servico.valor_padrao %}
+                                            R$ {{ "%.2f"|format(servico.valor_padrao) }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if servico.codigo_servico_lc116 %}
+                                            <span class="badge bg-info">{{ servico.codigo_servico_lc116 }}</span>
+                                            {% if servico.codigo_nbs %}<span class="badge bg-secondary">{{ servico.codigo_nbs }}</span>{% endif %}
+                                        {% else %}
+                                            <span class="text-muted">Sem regra vinculada</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if servico.aliquota_iss is not none %}
+                                            {{ "%.2f"|format(servico.aliquota_iss) }}%
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if servico.ativo else 'danger' }}">
+                                            {{ 'Ativo' if servico.ativo else 'Inativo' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if can_edit() %}
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('servicos.editar_servico', servico_id=servico.servico_id) }}"
+                                               class="btn btn-sm btn-outline-primary" title="Editar">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <form method="post" action="{{ url_for('servicos.duplicar_servico', servico_id=servico.servico_id) }}" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm btn-outline-info" title="Duplicar Serviço" onclick="return confirm('Deseja duplicar este serviço?');">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                            </form>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-{{ 'danger' if servico.ativo else 'success' }} btn-toggle-status-servico"
+                                                    data-servico-id="{{ servico.servico_id }}"
+                                                    data-novo-status="{{ 'false' if servico.ativo else 'true' }}"
+                                                    data-cliente-id="{{ cliente_id }}"
+                                                    title="{{ 'Desativar' if servico.ativo else 'Ativar' }}">
+                                                <i class="fas fa-{{ 'eye-slash' if servico.ativo else 'eye' }}"></i>
+                                            </button>
+                                            <form method="post" action="{{ url_for('servicos.delete_servico', servico_id=servico.servico_id) }}" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                        title="Excluir serviço"
+                                                        onclick="return confirm('Tem certeza que deseja excluir o serviço {{ servico.descricao|replace("'", "\\'") }}? Esta ação não pode ser desfeita.');">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                        {% else %}
+                                        <span class="text-muted"><i class="fas fa-eye"></i> Visualização</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if pagination and pagination.total_pages > 1 %}
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <span class="text-muted">
+                        Mostrando {{ (pagination.page - 1) * pagination.per_page + 1 }}–{{ [pagination.page * pagination.per_page, pagination.total] | min }} de {{ pagination.total }} serviços
+                    </span>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="?page={{ pagination.page - 1 }}&cliente_id={{ cliente_id }}&codigo={{ request.args.get('codigo','') }}&descricao={{ request.args.get('descricao','') }}&ativo={{ request.args.get('ativo','') }}">«</a>
+                            </li>
+                            {% for p in range([1, pagination.page - 2] | max, [pagination.total_pages + 1, pagination.page + 3] | min) %}
+                            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                                <a class="page-link" href="?page={{ p }}&cliente_id={{ cliente_id }}&codigo={{ request.args.get('codigo','') }}&descricao={{ request.args.get('descricao','') }}&ativo={{ request.args.get('ativo','') }}">{{ p }}</a>
+                            </li>
+                            {% endfor %}
+                            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="?page={{ pagination.page + 1 }}&cliente_id={{ cliente_id }}&codigo={{ request.args.get('codigo','') }}&descricao={{ request.args.get('descricao','') }}&ativo={{ request.args.get('ativo','') }}">»</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-tools fa-4x text-muted mb-4"></i>
+                    <h5 class="text-muted">Nenhum serviço cadastrado</h5>
+                    {% if can_create() %}
+                    <p class="text-muted">Comece adicionando um novo serviço ao catálogo.</p>
+                    <a href="{{ url_for('servicos.create_servico', cliente_id=cliente_id) }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus"></i> Adicionar Primeiro Serviço
+                    </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-toggle-status-servico').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const servicoId = this.getAttribute('data-servico-id');
+            const novoStatus = this.getAttribute('data-novo-status');
+            if (confirm('Deseja alterar o status deste serviço?')) {
+                fetch('{{ url_for("servicos.alterar_status_servico") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'servico_id=' + servicoId + '&ativo=' + novoStatus
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Erro: ' + (data.error || 'falha ao alterar status'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('Erro ao alterar status do serviço');
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

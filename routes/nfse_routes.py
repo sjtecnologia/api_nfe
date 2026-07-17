@@ -36,6 +36,93 @@ def br_to_float(valor_str):
         return 0.0
 
 
+def _coletar_dados_prestador_nfse(form, prestador_data):
+    """Monta os dicts `dados` (campos do formulário de emissão) e `prestador_dict`
+    a partir do form da tela de emissão de NFS-e e do Cliente (prestador).
+
+    Compartilhado entre a emissão real (`emitir`) e as prévias
+    (`preview_xml`/`preview_danfe`) para não duplicar o mapeamento de campos.
+    """
+    dados = {
+        'cliente_id': prestador_data.cliente_id,
+        'numero_rps': form.get('numero_rps'),
+        'serie_rps': form.get('serie_rps', '1'),
+        'tipo_rps': form.get('tipo_rps', '1'),
+        'data_competencia': form.get('data_competencia'),
+        'natureza_operacao': form.get('natureza_operacao', '1'),
+        'ambiente': form.get('ambiente', 'homologacao'),
+
+        # Tomadores
+        'tomador_cpf_cnpj': form.get('tomador_cpf_cnpj', ''),
+        'tomador_razao_social': form.get('tomador_razao_social', ''),
+        'tomador_inscricao_municipal': form.get('tomador_inscricao_municipal'),
+        'tomador_logradouro': form.get('tomador_logradouro', ''),
+        'tomador_numero': form.get('tomador_numero', ''),
+        'tomador_complemento': form.get('tomador_complemento', ''),
+        'tomador_bairro': form.get('tomador_bairro', ''),
+        'tomador_codigo_municipio': form.get('tomador_codigo_municipio', ''),
+        'tomador_uf': form.get('tomador_uf', 'SP'),
+        'tomador_cep': form.get('tomador_cep', ''),
+        'tomador_telefone': form.get('tomador_telefone', ''),
+        'tomador_email': form.get('tomador_email', ''),
+
+        # Serviço
+        'codigo_servico': form.get('codigo_servico', '17.01'),
+        'codigo_cnae': form.get('codigo_cnae'),
+        'discriminacao': form.get('discriminacao', ''),
+        'valor_servico': br_to_float(form.get('valor_servico', 0)),
+        'valor_deducoes': br_to_float(form.get('valor_deducoes', 0)),
+        'valor_pis': br_to_float(form.get('valor_pis', 0)),
+        'valor_cofins': br_to_float(form.get('valor_cofins', 0)),
+        'valor_inss': br_to_float(form.get('valor_inss', 0)),
+        'valor_ir': br_to_float(form.get('valor_ir', 0)),
+        'valor_csll': br_to_float(form.get('valor_csll', 0)),
+        'outras_retencoes': br_to_float(form.get('outras_retencoes', 0)),
+        'desconto_incondicionado': br_to_float(form.get('desconto_incondicionado', 0)),
+        'desconto_condicionado': br_to_float(form.get('desconto_condicionado', 0)),
+        'aliquota_iss': br_to_float(form.get('aliquota_iss', 0)),
+        'iss_retido': form.get('iss_retido') == 'on',
+        'codigo_municipio_prestacao': form.get('codigo_municipio_prestacao', '3549805'),
+
+        # Campos obrigatórios Reforma Tributária (LC 214/2025)
+        'codigo_nbs': form.get('codigo_nbs', '101010000'),
+        'percentual_total_tributos_federais': br_to_float(form.get('percentual_total_tributos_federais', 0)),
+        'percentual_total_tributos_estaduais': br_to_float(form.get('percentual_total_tributos_estaduais', 0)),
+        'percentual_total_tributos_municipais': br_to_float(form.get('percentual_total_tributos_municipais', 5)),
+        'finalidade_nfse': form.get('finalidade_nfse', '0'),
+        'indicador_consumidor_final': form.get('indicador_consumidor_final', '0'),
+        'codigo_indicador_operacao': form.get('codigo_indicador_operacao', '000001'),
+        'indicador_destinatario': form.get('indicador_destinatario', '0'),
+        'cst_ibs_cbs': form.get('cst_ibs_cbs', '001'),
+        'codigo_classificacao_tributaria': form.get('codigo_classificacao_tributaria', '000001'),
+        'codigo_localidade_incidencia': form.get('codigo_localidade_incidencia', '3549805'),
+        'percentual_redutor': br_to_float(form.get('percentual_redutor', 0)),
+        'regime_especial_tributacao': form.get('regime_especial_tributacao'),
+        # Buscar do regime tributário do cliente (CRT=1 = Simples Nacional)
+        'optante_simples_nacional': prestador_data.regime_tributario.crt == 1 if prestador_data.regime_tributario else False,
+        'incentivador_cultural': form.get('incentivador_cultural') == 'on',
+
+        # Informações adicionais
+        'informacoes_complementares': form.get('informacoes_complementares', '')
+    }
+
+    prestador_dict = {
+        'cnpj': prestador_data.cnpj if hasattr(prestador_data, 'cnpj') else '',
+        'inscricao_municipal': prestador_data.inscricao_municipal if hasattr(prestador_data, 'inscricao_municipal') else '',
+        'razao_social': prestador_data.razao_social if hasattr(prestador_data, 'razao_social') else '',
+        'nome_fantasia': prestador_data.nome_fantasia if hasattr(prestador_data, 'nome_fantasia') else '',
+        'logradouro': prestador_data.logradouro if hasattr(prestador_data, 'logradouro') else '',
+        'numero': prestador_data.numero if hasattr(prestador_data, 'numero') else '',
+        'bairro': prestador_data.bairro if hasattr(prestador_data, 'bairro') else '',
+        'codigo_municipio': '3549805',  # SJRP
+        'uf': prestador_data.uf if hasattr(prestador_data, 'uf') else 'SP',
+        'cep': prestador_data.cep if hasattr(prestador_data, 'cep') else '',
+        'optante_simples': getattr(prestador_data, 'optante_simples', True)
+    }
+
+    return dados, prestador_dict
+
+
 @nfse_bp.route('/')
 @login_required
 @viewer_or_higher_required()
@@ -219,84 +306,7 @@ def emitir():
             return redirect(url_for('nfse.emitir_form'))
         
         # Coletar dados do formulário
-        dados = {
-            'cliente_id': cliente_id,
-            'numero_rps': request.form.get('numero_rps'),
-            'serie_rps': request.form.get('serie_rps', '1'),
-            'tipo_rps': request.form.get('tipo_rps', '1'),
-            'data_competencia': request.form.get('data_competencia'),
-            'natureza_operacao': request.form.get('natureza_operacao', '1'),
-            'ambiente': request.form.get('ambiente', 'homologacao'),
-            
-            # Tomadores
-            'tomador_cpf_cnpj': request.form.get('tomador_cpf_cnpj', ''),
-            'tomador_razao_social': request.form.get('tomador_razao_social', ''),
-            'tomador_inscricao_municipal': request.form.get('tomador_inscricao_municipal'),
-            'tomador_logradouro': request.form.get('tomador_logradouro', ''),
-            'tomador_numero': request.form.get('tomador_numero', ''),
-            'tomador_complemento': request.form.get('tomador_complemento', ''),
-            'tomador_bairro': request.form.get('tomador_bairro', ''),
-            'tomador_codigo_municipio': request.form.get('tomador_codigo_municipio', ''),
-            'tomador_uf': request.form.get('tomador_uf', 'SP'),
-            'tomador_cep': request.form.get('tomador_cep', ''),
-            'tomador_telefone': request.form.get('tomador_telefone', ''),
-            'tomador_email': request.form.get('tomador_email', ''),
-            
-            # Serviço
-            'codigo_servico': request.form.get('codigo_servico', '17.01'),
-            'codigo_cnae': request.form.get('codigo_cnae'),
-            'discriminacao': request.form.get('discriminacao', ''),
-            'valor_servico': br_to_float(request.form.get('valor_servico', 0)),
-            'valor_deducoes': br_to_float(request.form.get('valor_deducoes', 0)),
-            'valor_pis': br_to_float(request.form.get('valor_pis', 0)),
-            'valor_cofins': br_to_float(request.form.get('valor_cofins', 0)),
-            'valor_inss': br_to_float(request.form.get('valor_inss', 0)),
-            'valor_ir': br_to_float(request.form.get('valor_ir', 0)),
-            'valor_csll': br_to_float(request.form.get('valor_csll', 0)),
-            'outras_retencoes': br_to_float(request.form.get('outras_retencoes', 0)),
-            'desconto_incondicionado': br_to_float(request.form.get('desconto_incondicionado', 0)),
-            'desconto_condicionado': br_to_float(request.form.get('desconto_condicionado', 0)),
-            'aliquota_iss': br_to_float(request.form.get('aliquota_iss', 0)),
-            'iss_retido': request.form.get('iss_retido') == 'on',
-            'codigo_municipio_prestacao': request.form.get('codigo_municipio_prestacao', '3549805'),
-            
-            # Campos obrigatórios Reforma Tributária (LC 214/2025)
-            'codigo_nbs': request.form.get('codigo_nbs', '101010000'),
-            'percentual_total_tributos_federais': br_to_float(request.form.get('percentual_total_tributos_federais', 0)),
-            'percentual_total_tributos_estaduais': br_to_float(request.form.get('percentual_total_tributos_estaduais', 0)),
-            'percentual_total_tributos_municipais': br_to_float(request.form.get('percentual_total_tributos_municipais', 5)),
-            'finalidade_nfse': request.form.get('finalidade_nfse', '0'),
-            'indicador_consumidor_final': request.form.get('indicador_consumidor_final', '0'),
-            'codigo_indicador_operacao': request.form.get('codigo_indicador_operacao', '000001'),
-            'indicador_destinatario': request.form.get('indicador_destinatario', '0'),
-            'cst_ibs_cbs': request.form.get('cst_ibs_cbs', '001'),
-            'codigo_classificacao_tributaria': request.form.get('codigo_classificacao_tributaria', '000001'),
-            'codigo_localidade_incidencia': request.form.get('codigo_localidade_incidencia', '3549805'),
-            'percentual_redutor': br_to_float(request.form.get('percentual_redutor', 0)),
-            'regime_especial_tributacao': request.form.get('regime_especial_tributacao'),
-            # CORREÇÃO: Buscar do regime tributário do cliente (CRT=1 = Simples Nacional)
-            # Carrega o relacionamento regime_tributario se ainda não estiver carregado
-            'optante_simples_nacional': prestador_data.regime_tributario.crt == 1 if prestador_data.regime_tributario else False,
-            'incentivador_cultural': request.form.get('incentivador_cultural') == 'on',
-            
-            # Informações adicionais
-            'informacoes_complementares': request.form.get('informacoes_complementares', '')
-        }
-        
-        # Converter prestador_data para dict
-        prestador_dict = {
-            'cnpj': prestador_data.cnpj if hasattr(prestador_data, 'cnpj') else '',
-            'inscricao_municipal': prestador_data.inscricao_municipal if hasattr(prestador_data, 'inscricao_municipal') else '',
-            'razao_social': prestador_data.razao_social if hasattr(prestador_data, 'razao_social') else '',
-            'nome_fantasia': prestador_data.nome_fantasia if hasattr(prestador_data, 'nome_fantasia') else '',
-            'logradouro': prestador_data.logradouro if hasattr(prestador_data, 'logradouro') else '',
-            'numero': prestador_data.numero if hasattr(prestador_data, 'numero') else '',
-            'bairro': prestador_data.bairro if hasattr(prestador_data, 'bairro') else '',
-            'codigo_municipio': '3549805',  # SJRP
-            'uf': prestador_data.uf if hasattr(prestador_data, 'uf') else 'SP',
-            'cep': prestador_data.cep if hasattr(prestador_data, 'cep') else '',
-            'optante_simples': getattr(prestador_data, 'optante_simples', True)
-        }
+        dados, prestador_dict = _coletar_dados_prestador_nfse(request.form, prestador_data)
         
         # Criar objeto NFS-e
         nfse = criar_nfse_de_formulario(dados, prestador_dict)
@@ -437,44 +447,256 @@ def emitir():
         db.close()
 
 
+def _carregar_prestador_para_preview(db, request_form):
+    """Resolve cliente_id (mesmo padrão de emitir/emitir_form) e carrega o
+    prestador com regime tributário. Retorna (prestador_data, cliente_id) ou
+    (None, None) se não houver acesso/prestador."""
+    from sqlalchemy.orm import joinedload
+
+    accessible_clients = get_accessible_client_ids(db)
+    if not accessible_clients:
+        return None, None
+
+    cliente_id = None
+    if request_form.get('cliente_id'):
+        try:
+            cliente_id = int(request_form.get('cliente_id'))
+            if cliente_id not in accessible_clients:
+                return None, None
+        except ValueError:
+            return None, None
+    elif session.get('current_client_id'):
+        cliente_id = session.get('current_client_id')
+        if cliente_id not in accessible_clients:
+            cliente_id = accessible_clients[0]
+    else:
+        cliente_id = accessible_clients[0]
+
+    prestador_data = db.query(Cliente).options(
+        joinedload(Cliente.regime_tributario)
+    ).filter(Cliente.cliente_id == cliente_id).first()
+
+    return prestador_data, cliente_id
+
+
+@nfse_bp.route('/preview-xml', methods=['POST'])
+@login_required
+@editor_or_admin_required()
+def preview_xml():
+    """Gera o XML do RPS a partir dos dados do formulário, SEM enviar ao GISS
+    nem salvar no banco — usado pelo botão 'Visualizar XML' na tela de emissão."""
+    db = next(get_db())
+    try:
+        prestador_data, cliente_id = _carregar_prestador_para_preview(db, request.form)
+        if not prestador_data:
+            return jsonify({'success': False, 'message': 'Prestador não encontrado ou sem acesso.'}), 404
+
+        dados, prestador_dict = _coletar_dados_prestador_nfse(request.form, prestador_data)
+        nfse = criar_nfse_de_formulario(dados, prestador_dict)
+
+        ambiente = dados.get('ambiente', 'homologacao')
+        service = NFSeService(ambiente=ambiente)
+        xml_rps = service.gerar_xml_rps(nfse)
+
+        return jsonify({'success': True, 'xml_preview': xml_rps, 'message': 'XML gerado com sucesso (preview)'})
+    except Exception as e:
+        print(f"[NFSE] Erro ao gerar preview do XML: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro ao gerar preview: {str(e)}'}), 500
+    finally:
+        db.close()
+
+
+@nfse_bp.route('/preview-danfe', methods=['POST'])
+@login_required
+@editor_or_admin_required()
+def preview_danfe():
+    """Gera um DANFSe de RASCUNHO (sem chave nacional/protocolo, pois esses
+    dados só existem após o RPS ser processado pelo GISS/ADN) a partir dos
+    dados do formulário — usado pelo botão 'Preview DANFE' na tela de emissão."""
+    import tempfile
+    import os as _os
+    from models.nfse_model import CODIGOS_MUNICIPIO_SP
+    from services.danfse_service import renderizar_danfse_pdf
+
+    db = next(get_db())
+    pdf_path = None
+    try:
+        prestador_data, cliente_id = _carregar_prestador_para_preview(db, request.form)
+        if not prestador_data:
+            return jsonify({'success': False, 'message': 'Prestador não encontrado ou sem acesso.'}), 404
+
+        dados, prestador_dict = _coletar_dados_prestador_nfse(request.form, prestador_data)
+        ambiente = dados.get('ambiente', 'homologacao')
+
+        valor_servico = dados.get('valor_servico', 0.0)
+        aliquota = dados.get('aliquota_iss', 0.0)
+        valor_iss = valor_servico * (aliquota / 100)
+        valor_liquido = valor_servico - valor_iss if dados.get('iss_retido') else valor_servico
+
+        municipio_prestacao = CODIGOS_MUNICIPIO_SP.get(
+            dados.get('codigo_municipio_prestacao'), dados.get('codigo_municipio_prestacao')
+        )
+
+        dados_rascunho = {
+            'chave_acesso': None,
+            'numero_nfse': None,
+            'competencia': dados.get('data_competencia'),
+            'dh_proc': None,
+            'numero_dps': dados.get('numero_rps'),
+            'serie_dps': dados.get('serie_rps'),
+            'dh_emi_dps': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+            'tp_emit': 'Prestador',
+            'c_stat': '0',
+            'fin_nfse': dados.get('finalidade_nfse'),
+            'tp_amb': '2' if ambiente == 'homologacao' else '1',
+            'amb_ger': 'Rascunho local (pré-envio ao GISS/ADN)',
+            'x_loc_emi': municipio_prestacao,
+            'prest_cnpj': prestador_dict.get('cnpj'),
+            'prest_im': prestador_dict.get('inscricao_municipal'),
+            'prest_fone': getattr(prestador_data, 'telefone_contato', None),
+            'prest_nome': prestador_dict.get('razao_social'),
+            'prest_email': getattr(prestador_data, 'email_contato', None),
+            'toma_cnpj': dados.get('tomador_cpf_cnpj'),
+            'toma_nome': dados.get('tomador_razao_social'),
+            'toma_fone': dados.get('tomador_telefone'),
+            'toma_email': dados.get('tomador_email'),
+            'dest_cnpj': None,
+            'dest_nome': None,
+            'c_trib_nac': dados.get('codigo_servico'),
+            'c_nbs': dados.get('codigo_nbs'),
+            'x_trib_nac': None,
+            'x_desc_serv': dados.get('discriminacao'),
+            'trib_issqn': '1' if aliquota else None,
+            'v_bc_issqn': str(valor_servico - dados.get('valor_deducoes', 0.0) - dados.get('desconto_incondicionado', 0.0)),
+            'aliq_issqn': str(aliquota) if aliquota else None,
+            'v_issqn': str(valor_iss),
+            'cst_ibscbs': dados.get('cst_ibs_cbs'),
+            'c_class_trib': dados.get('codigo_classificacao_tributaria'),
+            'v_ibs_tot': None,
+            'v_cbs_tot': None,
+            'v_serv': str(valor_servico),
+            'v_liq': str(valor_liquido),
+            'v_tot_nf': str(valor_liquido),
+            'x_inf_comp': dados.get('informacoes_complementares'),
+            'watermark_texto': 'PRÉVIA - SEM VALOR FISCAL',
+        }
+
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+            pdf_path = tmp.name
+
+        renderizar_danfse_pdf(dados_rascunho, pdf_path)
+
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+
+        return Response(pdf_bytes, mimetype='application/pdf')
+    except Exception as e:
+        print(f"[NFSE] Erro ao gerar preview do DANFE: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': f'Erro ao gerar preview do DANFE: {str(e)}'}), 500
+    finally:
+        if pdf_path:
+            try:
+                _os.remove(pdf_path)
+            except OSError:
+                pass
+        db.close()
+
+
 @nfse_bp.route('/consultar/<protocolo>')
 @login_required
 @viewer_or_higher_required()
 def consultar_status(protocolo):
-    """Consulta status do lote pelo protocolo"""
+    """
+    Consulta o status do lote no GISS Online (Ambiente de Dados Nacional) e,
+    quando processado com sucesso, persiste `numero_nfse`, `codigo_verificacao`,
+    `chave_nota_nacional` e o `xml_nfse` (CompNfse completo) — dados
+    necessários para o DANFSe (NT008).
+    """
     db = next(get_db())
     try:
-        # Obter clientes acessíveis
         accessible_clients = get_accessible_client_ids(db)
         if not accessible_clients:
             flash('Você não tem acesso a nenhum cliente.', 'danger')
             return redirect(url_for('home.home'))
-        
-        # Determinar cliente_id
+
         cliente_id = session.get('current_client_id', accessible_clients[0])
         if cliente_id not in accessible_clients:
             cliente_id = accessible_clients[0]
-        
-        # Buscar dados do prestador
+
         prestador = db.query(Cliente).filter(Cliente.cliente_id == cliente_id).first()
-        
         if not prestador:
             flash("Dados do prestador não encontrados", "danger")
             return redirect(url_for('nfse.list_nfse'))
-        
-        # TODO: Implementar consulta real ao webservice GISS
-        resultado = {
-            'situacao': 'aguardando',
-            'mensagem': 'Consulta ao webservice será implementada em breve'
-        }
-        
+
+        nfse_row = db.execute(
+            text("SELECT id, ambiente FROM nfse WHERE protocolo = :protocolo AND cliente_id = :cliente_id"),
+            {"protocolo": protocolo, "cliente_id": cliente_id}
+        ).mappings().first()
+
+        if not nfse_row:
+            flash("NFS-e com este protocolo não encontrada.", "danger")
+            return redirect(url_for('nfse.list_nfse'))
+
+        service = NFSeService(ambiente=nfse_row['ambiente'] or 'homologacao')
+        sucesso, resultado = service.consultar_lote(
+            protocolo=protocolo,
+            prestador_cnpj=(prestador.cnpj or '').replace('.', '').replace('-', '').replace('/', ''),
+            inscricao_municipal=prestador.inscricao_municipal or '',
+            db_session=db,
+            cliente_id=cliente_id,
+        )
+
+        if not sucesso:
+            flash("Erro ao consultar status: {}".format(resultado.get('erro', 'Erro desconhecido')), "danger")
+            return render_template(
+                'admin/nfse/consulta_status.html',
+                protocolo=protocolo, resultado=resultado, sucesso=False, nfse_id=nfse_row['id']
+            )
+
+        situacao_codigo = resultado.get('situacao_codigo')
+
+        if situacao_codigo == '4' and resultado.get('chave_nota_nacional'):
+            # Processado com sucesso e com chave do ADN — persistir NFS-e definitiva
+            db.execute(text("""
+                UPDATE nfse SET
+                    status = '1',
+                    numero_nfse = :numero_nfse,
+                    codigo_verificacao = :codigo_verificacao,
+                    chave_nota_nacional = :chave_nota_nacional,
+                    xml_nfse = :xml_nfse,
+                    updated_at = :updated_at
+                WHERE id = :nfse_id
+            """), {
+                "numero_nfse": resultado.get('numero_nfse'),
+                "codigo_verificacao": resultado.get('codigo_verificacao'),
+                "chave_nota_nacional": resultado.get('chave_nota_nacional'),
+                "xml_nfse": resultado.get('xml_nfse'),
+                "updated_at": datetime.now(),
+                "nfse_id": nfse_row['id'],
+            })
+            db.commit()
+            flash("NFS-e autorizada e sincronizada com o Ambiente de Dados Nacional!", "success")
+        elif situacao_codigo == '3':
+            db.execute(text("""
+                UPDATE nfse SET status = '4', mensagem_retorno = :mensagem, updated_at = :updated_at
+                WHERE id = :nfse_id
+            """), {
+                "mensagem": resultado.get('situacao', 'Processado com erro'),
+                "updated_at": datetime.now(),
+                "nfse_id": nfse_row['id'],
+            })
+            db.commit()
+            flash("Lote processado com erro pelo GISS. Verifique os detalhes.", "danger")
+        else:
+            flash(f"Status atual: {resultado.get('situacao', 'Desconhecido')}. Ainda aguardando processamento.", "info")
+
         return render_template(
             'admin/nfse/consulta_status.html',
-            protocolo=protocolo,
-            resultado=resultado,
-            sucesso=False
+            protocolo=protocolo, resultado=resultado, sucesso=(situacao_codigo == '4'), nfse_id=nfse_row['id']
         )
-        
+
     except Exception as e:
         print(f"[NFSE] Erro na consulta: {e}")
         flash(f"Erro ao consultar: {str(e)}", "danger")
@@ -629,6 +851,79 @@ def download_xml(nfse_id):
         db.close()
 
 
+@nfse_bp.route('/pdf/<int:nfse_id>')
+@login_required
+@viewer_or_higher_required()
+def download_danfse(nfse_id):
+    """
+    Gera e faz download do DANFSe (Documento Auxiliar da NFS-e Nacional),
+    conforme NT008. Exige que a NFS-e tenha sido processada com sucesso pelo
+    GISS/Ambiente de Dados Nacional (campo `xml_nfse` com `ChaveNotaNacional`
+    preenchida). NFS-e ainda pendente de consulta/confirmação não é elegível.
+    """
+    import tempfile
+    from services.danfse_service import gerar_danfse_pdf, XmlNaoENacionalError
+
+    db = next(get_db())
+    try:
+        accessible_clients = get_accessible_client_ids(db)
+        if not accessible_clients:
+            flash('Você não tem acesso a nenhum cliente.', 'danger')
+            return redirect(url_for('home.home'))
+
+        cliente_id = session.get('current_client_id', accessible_clients[0])
+        if cliente_id not in accessible_clients:
+            cliente_id = accessible_clients[0]
+
+        query = text("""
+            SELECT xml_nfse, numero_nfse, numero_rps, ambiente
+            FROM nfse WHERE id = :nfse_id AND cliente_id = :cliente_id
+        """)
+        result = db.execute(query, {"nfse_id": nfse_id, "cliente_id": cliente_id})
+        nfse_data = result.mappings().first()
+
+        if not nfse_data or not nfse_data['xml_nfse']:
+            flash("XML da NFS-e não disponível para gerar o DANFSe.", "warning")
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        numero = nfse_data['numero_nfse'] or nfse_data['numero_rps']
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            gerar_danfse_pdf(
+                nfse_data['xml_nfse'],
+                tmp_path,
+                ambiente=nfse_data['ambiente'] or 'producao',
+            )
+        except XmlNaoENacionalError as e:
+            flash(
+                "Esta NFS-e ainda não possui a chave de acesso do Ambiente de "
+                "Dados Nacional (ChaveNotaNacional). Consulte o status do lote "
+                f"no GISS antes de gerar o DANFSe. Detalhe técnico: {e}",
+                "warning"
+            )
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        with open(tmp_path, 'rb') as f:
+            pdf_bytes = f.read()
+
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename=danfse_{numero}.pdf'
+            }
+        )
+
+    except Exception as e:
+        flash(f"Erro ao gerar DANFSe: {str(e)}", "danger")
+        return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+    finally:
+        db.close()
+
+
 # ============================================================================
 # API endpoints para AJAX
 # ============================================================================
@@ -681,10 +976,18 @@ def get_servicos_lc116():
     """Retorna lista de códigos de serviço LC116 ativos"""
     db = next(get_db())
     try:
+        # item_pai preenchido = item "folha" (ex.: '1.01'); item_pai vazio/nulo =
+        # cabeçalho de seção (ex.: '1' - "Serviços de informática e congêneres").
+        # Cabeçalhos de seção não são códigos de serviço válidos para uma NFS-e
+        # e não devem aparecer como opção selecionável (bug: usuário podia
+        # escolher "1" em vez de "1.01" ao cadastrar uma regra tributária,
+        # fazendo a busca de regra na emissão nunca encontrar nada).
         query = text("""
             SELECT codigo, descricao 
             FROM codigos_servico_lc116 
             WHERE ativo = TRUE 
+              AND item_pai IS NOT NULL
+              AND item_pai != ''
             ORDER BY codigo
         """)
         result = db.execute(query)

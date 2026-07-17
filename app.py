@@ -43,6 +43,7 @@ from routes.api_keys_routes import api_keys_bp
 from routes.api_v2_routes import api_v2_bp
 from routes.webhooks_routes import webhooks_bp
 from routes.nfse_routes import nfse_bp
+from routes.servicos_routes import servicos_bp
 from routes.regras_servicos_routes import regras_servicos_bp
 from routes.classificacao_ibs_cbs_routes import classificacao_ibs_cbs_bp
 from routes.nfse_api_routes import nfse_api_bp
@@ -139,6 +140,7 @@ app.register_blueprint(webhooks_bp)  # Gerenciamento de Webhooks
 app.register_blueprint(home_bp)
 app.register_blueprint(llm_api_bp)  # API específica para LLM
 app.register_blueprint(nfse_bp)  # NFS-e Nacional
+app.register_blueprint(servicos_bp)  # Catálogo de Serviços (análogo a Produtos)
 app.register_blueprint(regras_servicos_bp)  # Regras Tributárias de Serviços
 app.register_blueprint(classificacao_ibs_cbs_bp)  # Classificações IBS/CBS - Reforma Tributária
 app.register_blueprint(nfse_api_bp)  # API NFS-e - Busca NBS e Validações NT007

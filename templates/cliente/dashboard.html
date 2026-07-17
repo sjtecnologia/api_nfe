@@ -170,11 +170,21 @@
                             <i class="fas fa-plus-circle fa-lg"></i>
                             <span class="small fw-bold">Emitir NFe</span>
                         </a>
+                        <a href="{{ url_for('nfse.emitir_form') }}?cliente_id={{ cliente.cliente_id }}"
+                           class="btn btn-success dashboard-quick-action py-3 px-4">
+                            <i class="fas fa-file-invoice-dollar fa-lg"></i>
+                            <span class="small fw-bold">Emitir NFS-e</span>
+                        </a>
                         {% endif %}
                         <a href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ cliente.cliente_id }}"
                            class="btn btn-primary dashboard-quick-action py-3 px-4">
                             <i class="fas fa-list fa-lg"></i>
                             <span class="small fw-bold">Ver NFes</span>
+                        </a>
+                        <a href="{{ url_for('nfse.list_nfse') }}?cliente_id={{ cliente.cliente_id }}"
+                           class="btn btn-primary dashboard-quick-action py-3 px-4">
+                            <i class="fas fa-list fa-lg"></i>
+                            <span class="small fw-bold">Ver NFSes</span>
                         </a>
                         <a href="{{ url_for('admin.list_destinatarios', cliente_id=cliente.cliente_id) }}"
                            class="btn btn-warning dashboard-quick-action py-3 px-4">

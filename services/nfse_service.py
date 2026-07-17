@@ -575,7 +575,6 @@ class NFSeService:
                 
                 # Salvar o LoteRps canonicalizado para debug
                 from lxml import etree as lxml_etree
-                c14n_method = lxml_etree.C14NWriterTarget(with_comments=False)
                 lote_rps_canonicalizado = lxml_etree.tostring(
                     lote_rps, 
                     method='c14n', 
@@ -591,8 +590,8 @@ class NFSeService:
                 with open('/tmp/lote_rps_c14n.xml', 'w', encoding='utf-8') as f:
                     f.write(lote_rps_canonicalizado)
                 
-                self.logger.info(f"[NFSE] LoteRps canonicalizado salvo: {len(lote_rps_canonicalizado)} bytes")
-                self.logger.info(f"[NFSE] DigestValue calculado manualmente: {digest_base64}")
+                print(f"[NFSE] LoteRps canonicalizado salvo: {len(lote_rps_canonicalizado)} bytes")
+                print(f"[NFSE] DigestValue calculado manualmente: {digest_base64}")
                 
                 # Assinar APENAS o LoteRps (detached)
                 signature_element = signer.sign(
@@ -606,7 +605,7 @@ class NFSeService:
                 ns = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
                 digest_na_assinatura = signature_element.find('.//ds:DigestValue', ns)
                 if digest_na_assinatura is not None:
-                    self.logger.info(f"[NFSE] DigestValue na assinatura: {digest_na_assinatura.text}")
+                    print(f"[NFSE] DigestValue na assinatura: {digest_na_assinatura.text}")
                 
                 # Inserir a assinatura no documento original como irmão do LoteRps
                 # (após o LoteRps, dentro de EnviarLoteRpsEnvio)
@@ -703,14 +702,20 @@ class NFSeService:
                 cert_data = base64.b64decode(cert_data)
             
             # Extrair chave privada e certificado do PFX
-            private_key, certificate, _ = pkcs12.load_key_and_certificates(
+            private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(
                 cert_data,
                 cert_senha.encode('utf-8') if isinstance(cert_senha, str) else cert_senha
             )
             
             # Salvar em arquivos temporários
+            # IMPORTANTE: incluir a cadeia de certificação intermediária (ICP-Brasil) junto do
+            # certificado do cliente no mesmo arquivo PEM. Sem a cadeia completa, o nginx do
+            # GISS pode rejeitar o handshake mTLS com "400 The SSL certificate error", mesmo
+            # com um certificado A1 válido e não expirado.
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
                 cert_file.write(certificate.public_bytes(Encoding.PEM))
+                for cert_intermediario in (additional_certs or []):
+                    cert_file.write(cert_intermediario.public_bytes(Encoding.PEM))
                 cert_file_path = cert_file.name
             
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
@@ -819,22 +824,93 @@ class NFSeService:
                 except:
                     pass
     
-    def consultar_lote(self, protocolo: str, prestador_cnpj: str, inscricao_municipal: str) -> Tuple[bool, Dict[str, Any]]:
+
+    def _carregar_certificado_mtls(self, db_session, cliente_id: int):
         """
-        Consulta situação do lote de RPS
-        
+        Carrega o certificado digital ativo do cliente no banco e converte o
+        PFX para um par PEM (cert, key) temporário, para uso em mTLS com
+        `requests`. Espelha a lógica já usada em `enviar_lote_rps`.
+
+        Returns:
+            Tuple (cert_file_path, key_file_path) — o chamador é responsável
+            por apagar os arquivos temporários após o uso.
+        """
+        from database.models import CertificadoDigital
+
+        certificado = db_session.query(CertificadoDigital).filter(
+            CertificadoDigital.cliente_id == cliente_id,
+            CertificadoDigital.ativo == True
+        ).first()
+
+        if not certificado:
+            raise ValueError("Certificado digital não encontrado ou inativo para este cliente")
+
+        cert_data = certificado.conteudo_certificado
+        cert_senha_encrypted = certificado.senha_certificado
+
+        if not cert_data or not cert_senha_encrypted:
+            raise ValueError("Dados do certificado incompletos (arquivo ou senha ausente)")
+
+        cert_senha = _decrypt_password(cert_senha_encrypted)
+
+        if not isinstance(cert_data, bytes):
+            cert_data = base64.b64decode(cert_data)
+
+        private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(
+            cert_data,
+            cert_senha.encode('utf-8') if isinstance(cert_senha, str) else cert_senha
+        )
+
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
+            cert_file.write(certificate.public_bytes(Encoding.PEM))
+            for cert_intermediario in (additional_certs or []):
+                cert_file.write(cert_intermediario.public_bytes(Encoding.PEM))
+            cert_file_path = cert_file.name
+
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
+            key_file.write(private_key.private_bytes(
+                encoding=Encoding.PEM,
+                format=PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=NoEncryption()
+            ))
+            key_file_path = key_file.name
+
+        return cert_file_path, key_file_path
+
+    def consultar_lote(
+        self,
+        protocolo: str,
+        prestador_cnpj: str,
+        inscricao_municipal: str,
+        db_session=None,
+        cliente_id: Optional[int] = None,
+    ) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Consulta situação do lote de RPS no GISS Online.
+
         Args:
             protocolo: Número do protocolo retornado no envio
             prestador_cnpj: CNPJ do prestador
             inscricao_municipal: Inscrição municipal do prestador
-            
+            db_session: Sessão do banco (para carregar o certificado mTLS do cliente)
+            cliente_id: ID do cliente (para carregar o certificado mTLS)
+
         Returns:
-            Tuple (sucesso, dados_resposta)
+            Tuple (sucesso, dados_resposta) — quando sucesso, `dados_resposta`
+            inclui `situacao_codigo`, `situacao`, e (se processado com
+            sucesso) `numero_nfse`, `codigo_verificacao`,
+            `chave_nota_nacional` e `xml_nfse` (o `CompNfse` completo).
+
+        NOTA: a operação SOAP usada aqui (`ConsultarLoteRpsRequest`) segue o
+        mesmo padrão de envelope já validado em `enviar_lote_rps`
+        (`RecepcionarLoteRpsRequest`). Validar o nome exato da operação
+        contra o WSDL do GISS em homologação antes de usar em produção.
         """
+        cert_file_path = None
+        key_file_path = None
         try:
-            # Montar XML de consulta
             xml_consulta = f'''<?xml version="1.0" encoding="UTF-8"?>
-<ConsultarSituacaoLoteRpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">
+<ConsultarLoteRpsEnvio xmlns="http://www.giss.com.br/tipos-v2_04.xsd">
     <Prestador>
         <CpfCnpj>
             <Cnpj>{prestador_cnpj}</Cnpj>
@@ -842,34 +918,67 @@ class NFSeService:
         <InscricaoMunicipal>{inscricao_municipal}</InscricaoMunicipal>
     </Prestador>
     <Protocolo>{protocolo}</Protocolo>
-</ConsultarSituacaoLoteRpsEnvio>'''
-            
-            # Montar envelope SOAP
-            soap_envelope = self._criar_envelope_soap("ConsultarSituacaoLoteRps", xml_consulta)
-            
-            headers = {
-                "Content-Type": "text/xml; charset=utf-8",
-                "SOAPAction": "ConsultarSituacaoLoteRps"
-            }
-            
+</ConsultarLoteRpsEnvio>'''
+
+            cabecalho = '''<cabecalho versao="2.04" xmlns="http://www.giss.com.br/cabecalho-v2_04.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <versaoDados>2.04</versaoDados>
+</cabecalho>'''
+
+            import html
+            cabecalho_escaped = html.escape(cabecalho)
+            dados_escaped = html.escape(xml_consulta)
+
+            soap_envelope = f'''<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:nfse="http://nfse.abrasf.org.br">
+    <soapenv:Header/>
+    <soapenv:Body>
+        <nfse:ConsultarLoteRpsRequest>
+            <nfseCabecMsg>{cabecalho_escaped}</nfseCabecMsg>
+            <nfseDadosMsg>{dados_escaped}</nfseDadosMsg>
+        </nfse:ConsultarLoteRpsRequest>
+    </soapenv:Body>
+</soapenv:Envelope>'''
+
+            headers = {"Content-Type": "text/xml; charset=utf-8"}
             url = self.urls["base"] + self.urls["consultar_lote"]
-            
+
+            cert_param = None
+            if db_session and cliente_id:
+                cert_file_path, key_file_path = self._carregar_certificado_mtls(db_session, cliente_id)
+                cert_param = (cert_file_path, key_file_path)
+            elif self.cert_path:
+                cert_param = (self.cert_path, self.cert_password)
+
+            print(f"[NFSE] Consultando lote (protocolo={protocolo}) em {url}")
             response = requests.post(
                 url,
                 data=soap_envelope.encode("utf-8"),
                 headers=headers,
-                cert=(self.cert_path, self.cert_password) if self.cert_path else None,
+                cert=cert_param,
                 timeout=60
             )
-            
+
+            try:
+                with open('/tmp/last_nfse_consulta_response.xml', 'w', encoding='utf-8') as f:
+                    f.write(response.text)
+            except Exception:
+                pass
+
             if response.status_code == 200:
                 return self._processar_resposta_consulta(response.text)
             else:
-                return False, {"erro": f"Erro HTTP {response.status_code}"}
-                
+                return False, {"erro": f"Erro HTTP {response.status_code}", "mensagem": response.text[:500]}
+
         except Exception as e:
+            print(f"[NFSE] ❌ Erro ao consultar lote: {e}")
             return False, {"erro": str(e)}
-    
+        finally:
+            for path in (cert_file_path, key_file_path):
+                if path and os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
+
     def cancelar_nfse(self, numero_nfse: str, codigo_cancelamento: str, prestador_cnpj: str, inscricao_municipal: str, codigo_municipio: str = "3549805") -> Tuple[bool, Dict[str, Any]]:
         """
         Cancela uma NFS-e
@@ -1057,29 +1166,56 @@ class NFSeService:
             }
     
     def _processar_resposta_consulta(self, xml_resposta: str) -> Tuple[bool, Dict[str, Any]]:
-        """Processa resposta da consulta de lote"""
+        """
+        Processa resposta da consulta de lote.
+
+        Além da situação do lote, extrai (quando disponível) o `CompNfse`
+        completo retornado pelo GISS — incluindo `ChaveNotaNacional` (chave de
+        acesso da NFS-e no Ambiente de Dados Nacional), `Numero` e
+        `CodigoVerificacao` — necessários para persistir a NFS-e nacional e,
+        posteriormente, gerar o DANFSe (NT008).
+        """
         try:
             root = etree.fromstring(xml_resposta.encode("utf-8"))
-            
+
             # Situação do lote
             # 1-Não Recebido, 2-Não Processado, 3-Processado com Erro, 4-Processado com Sucesso
             situacao = root.find(".//{*}Situacao")
-            
-            if situacao is not None:
-                situacao_code = situacao.text
-                situacoes = {
-                    "1": "Não Recebido",
-                    "2": "Não Processado",
-                    "3": "Processado com Erro",
-                    "4": "Processado com Sucesso"
-                }
-                return True, {
-                    "situacao_codigo": situacao_code,
-                    "situacao": situacoes.get(situacao_code, "Desconhecida")
-                }
-            
-            return False, {"erro": "Situação não encontrada na resposta"}
-            
+
+            if situacao is None:
+                return False, {"erro": "Situação não encontrada na resposta"}
+
+            situacao_code = situacao.text
+            situacoes = {
+                "1": "Não Recebido",
+                "2": "Não Processado",
+                "3": "Processado com Erro",
+                "4": "Processado com Sucesso"
+            }
+            resultado: Dict[str, Any] = {
+                "situacao_codigo": situacao_code,
+                "situacao": situacoes.get(situacao_code, "Desconhecida"),
+            }
+
+            comp_nfse = root.find(".//{*}CompNfse")
+            if comp_nfse is not None:
+                def texto(tag: str, contexto=comp_nfse) -> Optional[str]:
+                    el = contexto.find(f".//{{*}}{tag}")
+                    return el.text.strip() if el is not None and el.text else None
+
+                inf_nfse = comp_nfse.find(".//{*}InfNfse")
+                resultado["numero_nfse"] = texto("Numero", inf_nfse) if inf_nfse is not None else None
+                resultado["codigo_verificacao"] = texto("CodigoVerificacao", inf_nfse) if inf_nfse is not None else None
+                # Chave de acesso da NFS-e no Ambiente de Dados Nacional (ADN) —
+                # exigida para consulta pública e para o DANFSe (NT008)
+                resultado["chave_nota_nacional"] = texto("ChaveNotaNacional")
+                resultado["nfse_cancelada"] = comp_nfse.find(".//{*}NfseCancelamento") is not None
+                resultado["xml_nfse"] = etree.tostring(
+                    comp_nfse, encoding="unicode", pretty_print=True
+                )
+
+            return True, resultado
+
         except Exception as e:
             return False, {"erro": str(e)}
     
