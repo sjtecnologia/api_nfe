@@ -39,6 +39,30 @@ def _formatar_erro_nfe_para_usuario(erro: Exception) -> str:
     return mensagem or 'Não foi possível gerar a NF-e. Revise os dados informados.'
 
 
+def _resolver_xml_nfe_para_envio(json_nfe, status_nfe='', protocolo_sefaz='', data_autorizacao=None):
+    if isinstance(json_nfe, str):
+        try:
+            json_nfe = json.loads(json_nfe)
+        except Exception:
+            json_nfe = {}
+    elif not isinstance(json_nfe, dict):
+        json_nfe = dict(json_nfe) if json_nfe else {}
+
+    xml_content = json_nfe.get('xml_autorizado') or json_nfe.get('xml_content') or ''
+    if xml_content and status_nfe == 'AUTORIZADA' and protocolo_sefaz and '<protNFe' not in xml_content:
+        try:
+            nfe_service = NFeService()
+            resultado_fake = {
+                'protocolo': protocolo_sefaz,
+                'data_autorizacao': str(data_autorizacao) if data_autorizacao else ''
+            }
+            xml_content = nfe_service._gerar_xml_protocolo(xml_content, resultado_fake) or xml_content
+        except Exception as exc:
+            logger.warning(f"[AVISO] Protocolo XML não adicionado ao envio: {exc}")
+
+    return xml_content
+
+
 @nfe_bp.route('/api/produtos')
 @login_required
 def api_produtos():
@@ -1031,7 +1055,8 @@ def emitir_nfe():
                             destinatario_razao_social=destinatario_data['nome_razao_social'],
                             destinatario_cnpj_cpf=destinatario_data['cpf_cnpj'].replace('.','').replace('/','').replace('-',''),
                             json_nfe={
-                                'xml_content': xml_assinado,
+                                'xml_content': resultado_sefaz.get('xml_protocolo', xml_assinado),
+                                'xml_autorizado': resultado_sefaz.get('xml_protocolo', xml_assinado),
                                 'form_data': form_data_initial,
                                 'items': nfe_items,
                                 'ambiente': ambiente,
@@ -2062,23 +2087,12 @@ def enviar_danfe_email(nfe_id):
             elif not isinstance(json_nfe, dict):
                 json_nfe = dict(json_nfe) if json_nfe else {}
 
-            xml_content = json_nfe.get('xml_content') or json_nfe.get('xml_autorizado') or ''
-
-            # Se autorizada e sem protocolo, tenta montar o XML autorizado
-            status_nfe = nfe_data.get('status', '')
-            protocolo_sefaz = nfe_data.get('protocolo_sefaz', '')
-            data_autorizacao = nfe_data.get('data_autorizacao')
-            if xml_content and status_nfe == 'AUTORIZADA' and protocolo_sefaz and '<protNFe' not in xml_content:
-                try:
-                    from services.nfe_service import NFeService as _NFeS
-                    _svc = _NFeS()
-                    resultado_fake = {
-                        'protocolo': protocolo_sefaz,
-                        'data_autorizacao': str(data_autorizacao) if data_autorizacao else ''
-                    }
-                    xml_content = _svc._gerar_xml_protocolo(xml_content, resultado_fake) or xml_content
-                except Exception as ep:
-                    logger.warning(f"[AVISO] Protocolo XML não adicionado ao e-mail: {ep}")
+            xml_content = _resolver_xml_nfe_para_envio(
+                json_nfe,
+                nfe_data.get('status', ''),
+                nfe_data.get('protocolo_sefaz', ''),
+                nfe_data.get('data_autorizacao')
+            )
 
             if xml_content:
                 xml_bytes = xml_content.encode('utf-8') if isinstance(xml_content, str) else xml_content
@@ -5096,7 +5110,12 @@ def download_lote_xmls_nfe():
                         json_nfe = _json.loads(json_nfe)
                     except Exception:
                         json_nfe = {}
-                xml_content = json_nfe.get('xml_content') or json_nfe.get('xml_autorizado')
+                xml_content = _resolver_xml_nfe_para_envio(
+                    json_nfe,
+                    nfe.status,
+                    nfe.protocolo_sefaz,
+                    nfe.data_autorizacao
+                )
                 if not xml_content:
                     sem_xml += 1
                     continue

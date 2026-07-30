@@ -77,12 +77,22 @@ def _coletar_dados_prestador_nfse(form, prestador_data):
         'valor_inss': br_to_float(form.get('valor_inss', 0)),
         'valor_ir': br_to_float(form.get('valor_ir', 0)),
         'valor_csll': br_to_float(form.get('valor_csll', 0)),
+        'valor_pis_operacao': br_to_float(form.get('valor_pis_operacao', form.get('valor_pis', 0))),
+        'valor_cofins_operacao': br_to_float(form.get('valor_cofins_operacao', form.get('valor_cofins', 0))),
+        'base_calculo_pis_cofins': br_to_float(form.get('base_calculo_pis_cofins', 0)),
         'outras_retencoes': br_to_float(form.get('outras_retencoes', 0)),
         'desconto_incondicionado': br_to_float(form.get('desconto_incondicionado', 0)),
         'desconto_condicionado': br_to_float(form.get('desconto_condicionado', 0)),
         'aliquota_iss': br_to_float(form.get('aliquota_iss', 0)),
+        'aliquota_pis': br_to_float(form.get('aliquota_pis', 0)),
+        'aliquota_cofins': br_to_float(form.get('aliquota_cofins', 0)),
+        'cst_pis_cofins': form.get('cst_pis_cofins', '00'),
+        'tipo_retencao_pis_cofins': form.get('tipo_retencao_pis_cofins', '2'),
         'iss_retido': form.get('iss_retido') == 'on',
+        'csll_retida': form.get('csll_retida') == 'on',
         'codigo_municipio_prestacao': form.get('codigo_municipio_prestacao', '3549805'),
+        'giss_municipio_slug': form.get('giss_municipio_slug', '').strip(),
+        'giss_ws_host': form.get('giss_ws_host', '').strip(),
 
         # Campos obrigatórios Reforma Tributária (LC 214/2025)
         'codigo_nbs': form.get('codigo_nbs', '101010000'),
@@ -313,7 +323,11 @@ def emitir():
         
         # Inicializar serviço
         ambiente = dados.get('ambiente', 'homologacao')
-        service = NFSeService(ambiente=ambiente)
+        service = NFSeService(
+            ambiente=ambiente,
+            municipio_slug=dados.get('giss_municipio_slug') or None,
+            ws_host=dados.get('giss_ws_host') or None,
+        )
         
         # Gerar XML do RPS
         xml_rps = service.gerar_xml_rps(nfse)
@@ -495,7 +509,11 @@ def preview_xml():
         nfse = criar_nfse_de_formulario(dados, prestador_dict)
 
         ambiente = dados.get('ambiente', 'homologacao')
-        service = NFSeService(ambiente=ambiente)
+        service = NFSeService(
+            ambiente=ambiente,
+            municipio_slug=dados.get('giss_municipio_slug') or None,
+            ws_host=dados.get('giss_ws_host') or None,
+        )
         xml_rps = service.gerar_xml_rps(nfse)
 
         return jsonify({'success': True, 'xml_preview': xml_rps, 'message': 'XML gerado com sucesso (preview)'})

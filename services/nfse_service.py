@@ -5,11 +5,13 @@ Geração de XML, comunicação com webservice e processamento
 
 import os
 import json
+import re
 import requests
 import hashlib
 import uuid
 import base64
 import tempfile
+import unicodedata
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from lxml import etree
@@ -36,6 +38,11 @@ class NFSeService:
     NS_ENVIO = "http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd"
     NS_TIPOS = "http://www.giss.com.br/tipos-v2_04.xsd"
     NS_DSIG = "http://www.w3.org/2000/09/xmldsig#"
+    MUNICIPIO_HOST_ALIASES = {
+        "sao-jose-do-rio-preto": "sjrp",
+        "sao-jose-rio-preto": "sjrp",
+        "sjrp": "sjrp",
+    }
     
     # URLs do webservice - GISS Online (Atualizado conforme documentação oficial)
     # NT007 v1.03.00 - Reforma Tributária (LC 214/2025)
@@ -52,8 +59,8 @@ class NFSeService:
             "versao_anexo_vii": "1.01.00"    # AnexoVII - IndOp_IBSCBS
         },
         "producao": {
-            "base": "https://ws-rtc.giss.com.br/",
-            "wsdl": "https://ws-rtc.giss.com.br/service-ws/nf/nfse-ws?wsdl",
+            "base": "https://ws-sjrp.giss.com.br/",
+            "wsdl": "https://ws-sjrp.giss.com.br/service-ws/nf/nfse-ws?wsdl",
             "enviar_lote": "service-ws/nf/nfse-ws",
             "consultar_lote": "service-ws/nf/nfse-ws",
             "consultar_nfse": "service-ws/nf/nfse-ws",
@@ -64,7 +71,7 @@ class NFSeService:
         }
     }
     
-    def __init__(self, ambiente: str = "homologacao"):
+    def __init__(self, ambiente: str = "homologacao", municipio_slug: Optional[str] = None, ws_host: Optional[str] = None):
         """
         Inicializa o serviço NFS-e
         
@@ -72,11 +79,47 @@ class NFSeService:
             ambiente: 'homologacao' ou 'producao'
         """
         self.ambiente = ambiente
-        self.urls = self.URLS_SJRP.get(ambiente, self.URLS_SJRP["homologacao"])
+        self.urls = self._resolver_urls(ambiente, municipio_slug=municipio_slug, ws_host=ws_host)
         
         # Configurações do certificado
         self.cert_path = os.getenv("CERT_PATH", "/home/ubuntu/api_nfe/certs/certificado.pfx")
         self.cert_password = os.getenv("CERT_PASSWORD", "")
+
+    def _normalizar_municipio_slug(self, municipio_slug: str) -> str:
+        """Normaliza slug do município para o padrão do host GISS."""
+        texto = unicodedata.normalize("NFKD", municipio_slug).encode("ascii", "ignore").decode("ascii")
+        texto = re.sub(r"[^a-zA-Z0-9]+", "-", texto.lower()).strip("-")
+        return self.MUNICIPIO_HOST_ALIASES.get(texto, texto)
+
+    def _montar_urls_municipio(self, host_suffix: str) -> Dict[str, str]:
+        base = f"https://ws-{host_suffix}.giss.com.br/"
+        endpoint = "service-ws/nf/nfse-ws"
+        return {
+            "base": base,
+            "wsdl": f"{base}{endpoint}?wsdl",
+            "enviar_lote": endpoint,
+            "consultar_lote": endpoint,
+            "consultar_nfse": endpoint,
+            "cancelar": endpoint,
+            "versao_layout_rtc": "1.03.00",
+            "versao_anexo_vii": "1.01.00"
+        }
+
+    def _resolver_urls(self, ambiente: str, municipio_slug: Optional[str] = None, ws_host: Optional[str] = None) -> Dict[str, str]:
+        """Resolve URLs do webservice, priorizando host municipal e mantendo fallback legado."""
+        ambiente_urls = self.URLS_SJRP.get(ambiente, self.URLS_SJRP["homologacao"])
+        host_override = ws_host or os.getenv(f"GISS_WS_HOST_{ambiente.upper()}") or os.getenv("GISS_WS_HOST")
+        slug_override = municipio_slug or os.getenv(f"GISS_MUNICIPIO_SLUG_{ambiente.upper()}") or os.getenv("GISS_MUNICIPIO_SLUG")
+
+        if host_override:
+            return self._montar_urls_municipio(host_override.strip())
+
+        if slug_override:
+            slug_normalizado = self._normalizar_municipio_slug(slug_override)
+            if slug_normalizado:
+                return self._montar_urls_municipio(slug_normalizado)
+
+        return ambiente_urls
         
     def gerar_id_lote(self) -> str:
         """Gera ID único para o lote de RPS (apenas números, máximo 15 dígitos)"""
@@ -136,6 +179,10 @@ class NFSeService:
         if aliquota > 1:
             aliquota = aliquota / 100
         return f"{aliquota:.4f}"
+
+    def formatar_percentual(self, valor: float) -> str:
+        """Formata percentual com 2 casas conforme grupos RTC do GISS."""
+        return f"{valor:.2f}"
     
     def limpar_texto(self, texto: str, max_len: int = 2000) -> str:
         """Remove caracteres especiais e limita tamanho"""
@@ -229,7 +276,8 @@ class NFSeService:
         etree.SubElement(valores, "{%s}ValorCofins" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_cofins)
         etree.SubElement(valores, "{%s}ValorInss" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_inss)
         etree.SubElement(valores, "{%s}ValorIr" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_ir)
-        etree.SubElement(valores, "{%s}ValorCsll" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_csll)
+        valor_csll_xml = nfse.servico.valor_csll if nfse.servico.csll_retida else 0.0
+        etree.SubElement(valores, "{%s}ValorCsll" % self.NS_TIPOS).text = self.formatar_valor(valor_csll_xml)
         if nfse.servico.outras_retencoes > 0:
             etree.SubElement(valores, "{%s}OutrasRetencoes" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.outras_retencoes)
         
@@ -243,6 +291,15 @@ class NFSeService:
             etree.SubElement(valores, "{%s}DescontoIncondicionado" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.desconto_incondicionado)
         if nfse.servico.desconto_condicionado > 0:
             etree.SubElement(valores, "{%s}DescontoCondicionado" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.desconto_condicionado)
+
+        percentual_total_tributos = (
+            nfse.servico.percentual_total_tributos_federais +
+            nfse.servico.percentual_total_tributos_estaduais +
+            nfse.servico.percentual_total_tributos_municipais
+        )
+        valor_total_tributos = nfse.servico.base_calculo * (percentual_total_tributos / 100)
+        if valor_total_tributos > 0:
+            etree.SubElement(valores, "{%s}ValTotTributos" % self.NS_TIPOS).text = self.formatar_valor(valor_total_tributos)
         
         # =============================================================================================
         # REFORMA TRIBUTÁRIA (LC 214/2025) - NT007 v1.03.00
@@ -250,28 +307,62 @@ class NFSeService:
         # Referência: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/rtc
         # =============================================================================================
         
-        # 1. TRIBUTOS TOTAIS (pTotTribFed, pTotTribEst, pTotTribMun)
-        # Obrigatório conforme Anexo VI - Layout RTC IBS/CBS v1.03.00
-        if (nfse.servico.percentual_total_tributos_federais > 0 or 
-            nfse.servico.percentual_total_tributos_estaduais > 0 or 
-            nfse.servico.percentual_total_tributos_municipais > 0):
-            
+        incluir_piscofins = any([
+            nfse.servico.valor_pis_operacao > 0,
+            nfse.servico.valor_cofins_operacao > 0,
+            nfse.servico.base_calculo_pis_cofins > 0,
+            nfse.servico.aliquota_pis > 0,
+            nfse.servico.aliquota_cofins > 0,
+            nfse.servico.cst_pis_cofins != "00",
+            nfse.servico.tipo_retencao_pis_cofins == "1",
+        ])
+        incluir_totais = any([
+            nfse.servico.percentual_total_tributos_federais > 0,
+            nfse.servico.percentual_total_tributos_estaduais > 0,
+            nfse.servico.percentual_total_tributos_municipais > 0,
+        ])
+
+        if incluir_piscofins or incluir_totais:
             trib = etree.SubElement(valores, "{%s}trib" % self.NS_TIPOS)
-            trib_tot = etree.SubElement(trib, "{%s}tribTot" % self.NS_TIPOS)
-            
-            # Percentual de Tributos Federais (PIS, COFINS, IR, CSLL, etc.)
-            etree.SubElement(trib_tot, "{%s}pTotTribFed" % self.NS_TIPOS).text = \
-                f"{nfse.servico.percentual_total_tributos_federais:.2f}"
-            
-            # Percentual de Tributos Estaduais (ICMS - não aplicável a serviços, geralmente 0.00)
-            etree.SubElement(trib_tot, "{%s}pTotTribEst" % self.NS_TIPOS).text = \
-                f"{nfse.servico.percentual_total_tributos_estaduais:.2f}"
-            
-            # Percentual de Tributos Municipais (ISS)
-            etree.SubElement(trib_tot, "{%s}pTotTribMun" % self.NS_TIPOS).text = \
-                f"{nfse.servico.percentual_total_tributos_municipais:.2f}"
-        
-        # FIM da tag <Valores>
+
+            if incluir_piscofins:
+                trib_fed = etree.SubElement(trib, "{%s}tribFed" % self.NS_TIPOS)
+                piscofins = etree.SubElement(trib_fed, "{%s}piscofins" % self.NS_TIPOS)
+                etree.SubElement(piscofins, "{%s}CST" % self.NS_TIPOS).text = nfse.servico.cst_pis_cofins
+
+                if nfse.servico.base_calculo_pis_cofins > 0:
+                    etree.SubElement(piscofins, "{%s}vBCPisCofins" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.base_calculo_pis_cofins)
+                if nfse.servico.aliquota_pis > 0:
+                    etree.SubElement(piscofins, "{%s}pAliqPis" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.aliquota_pis)
+                if nfse.servico.aliquota_cofins > 0:
+                    etree.SubElement(piscofins, "{%s}pAliqCofins" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.aliquota_cofins)
+                if nfse.servico.valor_pis_operacao > 0:
+                    etree.SubElement(piscofins, "{%s}vPis" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_pis_operacao)
+                if nfse.servico.valor_cofins_operacao > 0:
+                    etree.SubElement(piscofins, "{%s}vCofins" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_cofins_operacao)
+                etree.SubElement(piscofins, "{%s}tpRetPisCofins" % self.NS_TIPOS).text = nfse.servico.tipo_retencao_pis_cofins
+
+            if incluir_totais:
+                tot_trib = etree.SubElement(trib, "{%s}totTrib" % self.NS_TIPOS)
+                percentuais = etree.SubElement(tot_trib, "{%s}pTotTrib" % self.NS_TIPOS)
+                etree.SubElement(percentuais, "{%s}pTotTribFed" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_total_tributos_federais)
+                etree.SubElement(percentuais, "{%s}pTotTribEst" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_total_tributos_estaduais)
+                etree.SubElement(percentuais, "{%s}pTotTribMun" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_total_tributos_municipais)
+
+        ibscbs = etree.SubElement(valores, "{%s}IBSCBS" % self.NS_TIPOS)
+        etree.SubElement(ibscbs, "{%s}finNFSe" % self.NS_TIPOS).text = nfse.servico.finalidade_nfse
+        etree.SubElement(ibscbs, "{%s}indFinal" % self.NS_TIPOS).text = nfse.servico.indicador_consumidor_final
+        etree.SubElement(ibscbs, "{%s}cIndOp" % self.NS_TIPOS).text = nfse.servico.codigo_indicador_operacao
+        etree.SubElement(ibscbs, "{%s}indDest" % self.NS_TIPOS).text = nfse.servico.indicador_destinatario
+
+        ibscbs_valores = etree.SubElement(ibscbs, "{%s}valores" % self.NS_TIPOS)
+        ibscbs_trib = etree.SubElement(ibscbs_valores, "{%s}trib" % self.NS_TIPOS)
+        grupo_ibscbs = etree.SubElement(ibscbs_trib, "{%s}gIBSCBS" % self.NS_TIPOS)
+        etree.SubElement(grupo_ibscbs, "{%s}CST" % self.NS_TIPOS).text = nfse.servico.cst_ibs_cbs
+        etree.SubElement(grupo_ibscbs, "{%s}cClassTrib" % self.NS_TIPOS).text = nfse.servico.codigo_classificacao_tributaria
+        etree.SubElement(ibscbs_valores, "{%s}cLocalidadeIncid" % self.NS_TIPOS).text = nfse.servico.codigo_localidade_incidencia
+        etree.SubElement(ibscbs_valores, "{%s}pRedutor" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_redutor)
+        etree.SubElement(ibscbs_valores, "{%s}vBC" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.base_calculo)
         
         # p1:IssRetido
         etree.SubElement(servico_el, "{%s}IssRetido" % self.NS_TIPOS).text = "1" if nfse.servico.iss_retido else "2"
@@ -290,6 +381,7 @@ class NFSeService:
         codigo_sem_ponto = codigo_lc116.replace(".", "")
         codigo_trib_municipal = f"80{codigo_sem_ponto.zfill(5)}" if len(codigo_sem_ponto) <= 5 else "8020001"
         etree.SubElement(servico_el, "{%s}CodigoTributacaoMunicipio" % self.NS_TIPOS).text = codigo_trib_municipal
+        etree.SubElement(servico_el, "{%s}CodigoNbs" % self.NS_TIPOS).text = nfse.servico.codigo_nbs
         
         # p1:Discriminacao do serviço
         etree.SubElement(servico_el, "{%s}Discriminacao" % self.NS_TIPOS).text = self.limpar_texto(nfse.servico.discriminacao)
@@ -306,49 +398,6 @@ class NFSeService:
         
         # p1:MunicipioIncidencia - GISS exige (código IBGE do município)
         etree.SubElement(servico_el, "{%s}MunicipioIncidencia" % self.NS_TIPOS).text = codigo_municipio
-        
-        # =============================================================================================
-        # 2. IBS/CBS - REFORMA TRIBUTÁRIA (NT007 v1.03.00)
-        # Tag obrigatória conforme Anexo VI - Layout RTC IBS/CBS v1.03.00
-        # Anexo VII v1.01.00 - Indicadores de Operação
-        # =============================================================================================
-        ibscbs = etree.SubElement(servico_el, "{%s}IBSCBS" % self.NS_TIPOS)
-        
-        # tpOp - Tipo de Operação / Finalidade da NFS-e
-        # 0=Normal, 1=Complementar, 2=Ajuste, 3=Substituição
-        etree.SubElement(ibscbs, "{%s}tpOp" % self.NS_TIPOS).text = nfse.servico.finalidade_nfse
-        
-        # indIni - Indicador de Consumidor Final
-        # 0=Não é consumidor final, 1=Consumidor final
-        etree.SubElement(ibscbs, "{%s}indIni" % self.NS_TIPOS).text = nfse.servico.indicador_consumidor_final
-        
-        # indFin - Indicador de Destinatário
-        # 0=Operação interna no município, 1=Interestadual, 2=Exterior
-        etree.SubElement(ibscbs, "{%s}indFin" % self.NS_TIPOS).text = nfse.servico.indicador_destinatario
-        
-        # cIndOp - Código do Indicador de Operação (6 dígitos)
-        # Conforme Anexo VII v1.01.00 - IndOp_IBSCBS
-        # Exemplos: 000001=Interna, 000002=Interestadual, 000003=Exportação
-        etree.SubElement(ibscbs, "{%s}cIndOp" % self.NS_TIPOS).text = nfse.servico.codigo_indicador_operacao
-        
-        # cst - Código de Situação Tributária IBS/CBS (3 dígitos)
-        # 001=Tributação normal, 002=Tributação com redução de BC, 003=Diferimento, etc.
-        etree.SubElement(ibscbs, "{%s}cst" % self.NS_TIPOS).text = nfse.servico.cst_ibs_cbs
-        
-        # cClassTrib - Código de Classificação Tributária (6 dígitos)
-        # Define o regime de tributação IBS/CBS aplicável ao serviço
-        etree.SubElement(ibscbs, "{%s}cClassTrib" % self.NS_TIPOS).text = nfse.servico.codigo_classificacao_tributaria
-        
-        # cLocInc - Código da Localidade de Incidência (código IBGE 7 dígitos)
-        # Município onde incide o IBS/CBS
-        etree.SubElement(ibscbs, "{%s}cLocInc" % self.NS_TIPOS).text = nfse.servico.codigo_localidade_incidencia
-        
-        # pRedBC - Percentual de Redução da Base de Cálculo (opcional, 0 a 100%)
-        # Só incluir se houver redução de base (valor > 0)
-        if nfse.servico.percentual_redutor > 0:
-            etree.SubElement(ibscbs, "{%s}pRedBC" % self.NS_TIPOS).text = f"{nfse.servico.percentual_redutor:.2f}"
-        
-        # FIM da tag <IBSCBS> - Finaliza elemento Serviço
         
         # p1:Prestador
         prestador_el = etree.SubElement(inf_rps, "{%s}Prestador" % self.NS_TIPOS)
@@ -1317,13 +1366,24 @@ def criar_nfse_de_formulario(dados: Dict[str, Any], prestador_data: Dict[str, An
         valor_inss=float(dados.get("valor_inss", 0)),
         valor_ir=float(dados.get("valor_ir", 0)),
         valor_csll=float(dados.get("valor_csll", 0)),
+        valor_pis_operacao=float(dados.get("valor_pis_operacao", dados.get("valor_pis", 0))),
+        valor_cofins_operacao=float(dados.get("valor_cofins_operacao", dados.get("valor_cofins", 0))),
         outras_retencoes=float(dados.get("outras_retencoes", 0)),
         desconto_incondicionado=float(dados.get("desconto_incondicionado", 0)),
         desconto_condicionado=float(dados.get("desconto_condicionado", 0)),
         aliquota_iss=float(dados.get("aliquota_iss", 0)),
+        aliquota_pis=float(dados.get("aliquota_pis", 0)),
+        aliquota_cofins=float(dados.get("aliquota_cofins", 0)),
         iss_retido=dados.get("iss_retido", False),
+        csll_retida=dados.get("csll_retida", float(dados.get("valor_csll", 0)) > 0),
+        cst_pis_cofins=dados.get("cst_pis_cofins", "00"),
+        tipo_retencao_pis_cofins=dados.get(
+            "tipo_retencao_pis_cofins",
+            "1" if (float(dados.get("valor_pis", 0)) > 0 or float(dados.get("valor_cofins", 0)) > 0) else "2"
+        ),
         codigo_municipio_prestacao=dados.get("codigo_municipio_prestacao", "3549805"),
         codigo_pais=dados.get("codigo_pais", "1058"),
+        base_calculo_pis_cofins=float(dados.get("base_calculo_pis_cofins", 0)),
         
         # Campos Reforma Tributária (LC 214/2025) - Obrigatórios GISS Online
         codigo_nbs=dados.get("codigo_nbs", "101010000"),

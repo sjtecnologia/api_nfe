@@ -65,6 +65,8 @@ class ServicoNFSe:
     valor_inss: float = 0.0
     valor_ir: float = 0.0
     valor_csll: float = 0.0
+    valor_pis_operacao: float = 0.0
+    valor_cofins_operacao: float = 0.0
     valor_iss: float = 0.0
     valor_iss_retido: float = 0.0
     outras_retencoes: float = 0.0
@@ -73,11 +75,17 @@ class ServicoNFSe:
     
     # Alíquotas
     aliquota_iss: float = 0.0
+    aliquota_pis: float = 0.0
+    aliquota_cofins: float = 0.0
     base_calculo: float = 0.0
+    base_calculo_pis_cofins: float = 0.0
     valor_liquido: float = 0.0
     
     # ISS
     iss_retido: bool = False  # 1-Sim, 2-Não
+    csll_retida: bool = False
+    cst_pis_cofins: str = "00"
+    tipo_retencao_pis_cofins: str = "2"  # 1-Retido, 2-Não Retido
     
     # Local da prestação
     codigo_municipio_prestacao: str = ""  # Código IBGE
@@ -202,9 +210,11 @@ class NFSeNacional:
                 self.servico.valor_cofins +
                 self.servico.valor_inss +
                 self.servico.valor_ir +
-                self.servico.valor_csll +
                 self.servico.outras_retencoes
             )
+
+            if self.servico.csll_retida:
+                total_retencoes += self.servico.valor_csll
             
             if self.servico.iss_retido:
                 total_retencoes += self.servico.valor_iss

@@ -392,6 +392,200 @@ class SefazService:
             print(f"[X] Erro na consulta de status: {e}")
             return {'status': 'ERRO', 'mensagem': str(e)}
 
+    def consultar_nfe_por_chave(self, chave_acesso, certificado_pfx=None, senha_certificado=None, certificado_pem=None):
+        """Consulta protocolo de uma NF-e na SEFAZ e retorna os dados da autorização."""
+        cert_temp_path = None
+        key_temp_path = None
+        pfx_temp_path = None
+
+        try:
+            if not chave_acesso or len(chave_acesso) != 44:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'message': 'Chave de acesso inválida'
+                }
+
+            cert_path = self.cert_path
+            key_path = self.key_path
+
+            if (not cert_path or not key_path) and certificado_pfx and not senha_certificado:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Senha do certificado não informada para consulta'
+                }
+
+            if (not cert_path or not key_path) and certificado_pfx and senha_certificado:
+                cert_bytes = certificado_pfx
+                if isinstance(cert_bytes, str):
+                    cert_bytes = base64.b64decode(cert_bytes)
+
+                private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(
+                    cert_bytes,
+                    senha_certificado.encode('utf-8')
+                )
+
+                if not private_key or not certificate:
+                    return {
+                        'success': False,
+                        'status': 'ERRO_CERTIFICADO',
+                        'message': 'Não foi possível extrair certificado/chave do PFX'
+                    }
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
+                    cert_file.write(certificate.public_bytes(Encoding.PEM))
+                    if additional_certs:
+                        for additional_cert in additional_certs:
+                            cert_file.write(additional_cert.public_bytes(Encoding.PEM))
+                    cert_temp_path = cert_file.name
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
+                    key_file.write(private_key.private_bytes(
+                        encoding=Encoding.PEM,
+                        format=PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=NoEncryption()
+                    ))
+                    key_temp_path = key_file.name
+
+                cert_path = cert_temp_path
+                key_path = key_temp_path
+
+            if not cert_path and certificado_pem:
+                pem_bytes = certificado_pem
+                if isinstance(pem_bytes, str):
+                    if 'BEGIN' in pem_bytes:
+                        pem_bytes = pem_bytes.encode('utf-8')
+                    else:
+                        pem_bytes = base64.b64decode(pem_bytes)
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as pem_file:
+                    pem_file.write(pem_bytes)
+                    cert_temp_path = pem_file.name
+
+                cert_path = cert_temp_path
+
+            if not cert_path:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Certificado do cliente não configurado para consulta'
+                }
+
+            tp_amb = '1' if self.ambiente == 'producao' else '2'
+            envelope = f'''<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Header>
+    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
+      <cUF>35</cUF>
+      <versaoDados>4.00</versaoDados>
+    </nfeCabecMsg>
+  </soap12:Header>
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
+      <consSitNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+        <tpAmb>{tp_amb}</tpAmb>
+        <xServ>CONSULTAR</xServ>
+        <chNFe>{chave_acesso}</chNFe>
+      </consSitNFe>
+    </nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>'''
+
+            headers = {
+                'Content-Type': 'application/soap+xml; charset=utf-8',
+                'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4/nfeConsultaNF2'
+            }
+
+            request_kwargs = {
+                'data': envelope.encode('utf-8'),
+                'headers': headers,
+                'timeout': 30,
+                'verify': self.ca_bundle
+            }
+
+            if cert_path and key_path:
+                request_kwargs['cert'] = (cert_path, key_path)
+            elif cert_path:
+                request_kwargs['cert'] = cert_path
+
+            endpoint = self.urls.get('consulta')
+            if not endpoint:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CONFIG',
+                    'message': 'Endpoint de consulta não configurado'
+                }
+
+            response = requests.post(endpoint, **request_kwargs)
+
+            if response.status_code != 200:
+                return {
+                    'success': False,
+                    'status': 'ERRO_HTTP',
+                    'codigo': response.status_code,
+                    'message': f'Erro HTTP {response.status_code}',
+                    'resposta_completa': response.text
+                }
+
+            root = ET.fromstring(response.text)
+            namespaces = {
+                'soap': 'http://www.w3.org/2003/05/soap-envelope',
+                'nfe': 'http://www.portalfiscal.inf.br/nfe'
+            }
+
+            cstat = root.find('.//nfe:protNFe//nfe:infProt//nfe:cStat', namespaces)
+            xmotivo = root.find('.//nfe:protNFe//nfe:infProt//nfe:xMotivo', namespaces)
+            nprot = root.find('.//nfe:protNFe//nfe:infProt//nfe:nProt', namespaces)
+            dhrecbto = root.find('.//nfe:protNFe//nfe:infProt//nfe:dhRecbto', namespaces)
+            digval = root.find('.//nfe:protNFe//nfe:infProt//nfe:digVal', namespaces)
+
+            if cstat is None:
+                cstat = root.find('.//{http://www.portalfiscal.inf.br/nfe}cStat')
+            if xmotivo is None:
+                xmotivo = root.find('.//{http://www.portalfiscal.inf.br/nfe}xMotivo')
+
+            codigo = cstat.text if cstat is not None else None
+            motivo = xmotivo.text if xmotivo is not None else 'Sem motivo'
+
+            if codigo in ('100', '150') and nprot is not None:
+                return {
+                    'success': True,
+                    'status': 'AUTORIZADA',
+                    'codigo': codigo,
+                    'mensagem': motivo,
+                    'protocolo': nprot.text,
+                    'dhRecbto': dhrecbto.text if dhrecbto is not None else None,
+                    'digVal': digval.text if digval is not None else None,
+                    'chave_acesso': chave_acesso,
+                    'resposta_completa': response.text
+                }
+
+            return {
+                'success': False,
+                'status': 'REJEITADA',
+                'codigo': codigo,
+                'mensagem': motivo,
+                'chave_acesso': chave_acesso,
+                'resposta_completa': response.text
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'status': 'ERRO_CONSULTA',
+                'message': f'Erro na consulta: {e}'
+            }
+        finally:
+            for temp_path in (cert_temp_path, key_temp_path, pfx_temp_path):
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+
     def cancelar_nfe(self, chave_nfe, protocolo, justificativa, cnpj_emitente,
                      certificado_pem=None, certificado_pfx=None, senha_certificado=None):
         """Envia evento de cancelamento (110111) para a SEFAZ."""

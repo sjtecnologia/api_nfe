@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime
-from services.nfse_service import criar_nfse_de_formulario
+from services.nfse_service import NFSeService, criar_nfse_de_formulario
 from models.nfse_model import NFSeNacional
 
 
@@ -242,6 +242,90 @@ def test_percentuais_default():
     assert nfse.incentivador_cultural == False
     
     print("✅ Teste de valores padrão passou!")
+
+
+def test_gerar_xml_com_tributos_federais_giss():
+    """Gera XML no formato GISS com blocos trib/totTrib/piscofins e IBSCBS."""
+
+    prestador_data = {
+        'cnpj': '12345678000190',
+        'inscricao_municipal': '12345',
+        'razao_social': 'Empresa Teste',
+        'optante_simples': True
+    }
+
+    dados = {
+        'cliente_id': 1,
+        'numero_rps': 1,
+        'data_competencia': '2026-01-30',
+        'tomador_cpf_cnpj': '12345678000190',
+        'tomador_razao_social': 'Cliente',
+        'tomador_logradouro': 'Rua',
+        'tomador_numero': '1',
+        'tomador_bairro': 'Centro',
+        'tomador_codigo_municipio': '3549805',
+        'tomador_uf': 'SP',
+        'tomador_cep': '15015000',
+        'codigo_servico': '01.01',
+        'discriminacao': 'Teste estrutura GISS',
+        'valor_servico': 1000.00,
+        'valor_pis': 15.25,
+        'valor_cofins': 70.30,
+        'valor_csll': 10.00,
+        'csll_retida': True,
+        'aliquota_iss': 5.0,
+        'base_calculo_pis_cofins': 1000.00,
+        'aliquota_pis': 1.65,
+        'aliquota_cofins': 7.60,
+        'valor_pis_operacao': 15.25,
+        'valor_cofins_operacao': 70.30,
+        'tipo_retencao_pis_cofins': '1',
+        'cst_pis_cofins': '01',
+        'codigo_nbs': '101010000',
+        'percentual_total_tributos_federais': 9.25,
+        'percentual_total_tributos_estaduais': 0.0,
+        'percentual_total_tributos_municipais': 5.0,
+        'finalidade_nfse': '0',
+        'indicador_consumidor_final': '1',
+        'codigo_indicador_operacao': '000001',
+        'indicador_destinatario': '0',
+        'cst_ibs_cbs': '001',
+        'codigo_classificacao_tributaria': '000001',
+        'codigo_localidade_incidencia': '3549805',
+        'percentual_redutor': 0.0,
+    }
+
+    nfse = criar_nfse_de_formulario(dados, prestador_data)
+    service = NFSeService()
+    xml = service.gerar_xml_rps(nfse)
+
+    assert '<p1:tribFed>' in xml
+    assert '<p1:piscofins>' in xml
+    assert '<p1:tpRetPisCofins>1</p1:tpRetPisCofins>' in xml
+    assert '<p1:totTrib>' in xml
+    assert '<p1:pTotTribFed>9.25</p1:pTotTribFed>' in xml
+    assert '<p1:IBSCBS>' in xml
+    assert '<p1:finNFSe>0</p1:finNFSe>' in xml
+    assert '<p1:cLocalidadeIncid>3549805</p1:cLocalidadeIncid>' in xml
+    assert '<p1:CodigoNbs>101010000</p1:CodigoNbs>' in xml
+
+
+def test_resolver_urls_giss_por_municipio():
+    """Permite novo padrão ws-MUNICIPIO.giss.com.br sem perder fallback atual."""
+
+    service = NFSeService(ambiente='homologacao', municipio_slug='Sao Jose do Rio Preto')
+
+    assert service.urls['base'] == 'https://ws-sjrp.giss.com.br/'
+    assert service.urls['wsdl'] == 'https://ws-sjrp.giss.com.br/service-ws/nf/nfse-ws?wsdl'
+
+
+def test_url_producao_sjrp_default():
+    """Serviço de Rio Preto deve usar o endpoint oficial informado em produção."""
+
+    service = NFSeService(ambiente='producao')
+
+    assert service.urls['base'] == 'https://ws-sjrp.giss.com.br/'
+    assert service.urls['wsdl'] == 'https://ws-sjrp.giss.com.br/service-ws/nf/nfse-ws?wsdl'
 
 
 if __name__ == '__main__':
