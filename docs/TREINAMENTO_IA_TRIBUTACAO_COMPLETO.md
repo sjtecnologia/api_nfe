@@ -472,7 +472,7 @@ Há direito a crédito sobre:
     <PercentualRedutor>0.00</PercentualRedutor>
     
     <!-- NBS -->
-    <CodigoNBS>101010000</CodigoNBS>  <!-- 9 dígitos sem pontos -->
+    <CodigoNBS>1.01.01.00.00</CodigoNBS>  <!-- entrada aceita; o sistema normaliza para 9 dígitos -->
 </DadosServico>
 ```
 

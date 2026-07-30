@@ -93,7 +93,7 @@ Ou diretamente: /admin/regras-servicos/
 2. Selecionar o cliente (se não estiver selecionado)
 3. Preencher:
    - Código do serviço (ex: 01.01 para TI, 17.05 para Medicina)
-   - Código NBS (padrão: 101010000)
+    - Código NBS (fallback interno normalizado: 101010000)
    - Regime tributário
    - Alíquota ISS (2% a 5%)
    - Se o ISS é retido
@@ -118,7 +118,7 @@ Retorna a regra com maior prioridade (menor número = mais prioritária).
 ```
 Código Serviço: 01.01
 Descrição: Análise e desenvolvimento de sistemas
-NBS: 101010000
+NBS: 1.01.01.00.00 (normalizado internamente para 101010000)
 Alíquota ISS: 2%
 ISS Retido: Não
 CST IBS/CBS: 001 (Tributado)

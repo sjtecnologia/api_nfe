@@ -4506,20 +4506,37 @@ def salvar_certificado():
 def toggle_certificado_status(certificado_id: int):
     db = _get_db()
     try:
-        row = db.execute(text("SELECT ativo FROM certificados WHERE certificado_id=:cid"),
+        cliente_id = request.form.get('cliente_id')
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        row = db.execute(text("SELECT ativo FROM certificados_digitais WHERE certificado_digital_id=:cid"),
                          {'cid': certificado_id}).fetchone()
         if not row:
-            return jsonify({'success': False, 'error': 'Não encontrado'}), 404
+            if is_ajax:
+                return jsonify({'success': False, 'error': 'Não encontrado'}), 404
+            flash('Certificado não encontrado.', 'warning')
+            return redirect(request.referrer or url_for('admin.list_clientes'))
+
         ativo_atual = row[0]
         db.execute(text("""
-            UPDATE certificados SET ativo = :novo WHERE certificado_id=:cid
+            UPDATE certificados_digitais SET ativo = :novo WHERE certificado_digital_id=:cid
         """), {'novo': not ativo_atual, 'cid': certificado_id})
         db.commit()
-        return jsonify({'success': True, 'ativo': not ativo_atual})
+
+        if is_ajax:
+            return jsonify({'success': True, 'ativo': not ativo_atual})
+
+        flash(f"Certificado {'ativado' if not ativo_atual else 'desativado'} com sucesso.", 'success')
+        if cliente_id:
+            return redirect(url_for('admin.edit_cliente', cliente_id=cliente_id))
+        return redirect(request.referrer or url_for('admin.list_clientes'))
     except Exception as e:
         db.rollback()
         logger.error(f"[X] Erro toggle_certificado_status: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': str(e)}), 500
+        flash(f'Erro ao alterar status do certificado: {str(e)}', 'danger')
+        return redirect(request.referrer or url_for('admin.list_clientes'))
     finally:
         db.close()
 

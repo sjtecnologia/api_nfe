@@ -1306,12 +1306,21 @@ class NFeService:
             # Determinar cStat e digVal baseado no ambiente
             if resultado.get('ambiente_real'):
                 # SEFAZ real retorna cStat como número (100, 150, etc)
-                cstat = resultado.get('status', '100') if resultado.get('status', '').isdigit() else '100'
-                dig_val = resultado.get('digVal', resultado.get('digest_value', ''))
+                cstat = resultado.get('status', '100') if str(resultado.get('status', '')).isdigit() else '100'
+                dig_val = (resultado.get('digVal') or resultado.get('digest_value') or '').strip()
             else:
-                # Simulação
-                cstat = 'AUTORIZADA'
+                # Em produção (tpAmb=1), nunca gerar digVal fictício.
+                if tp_amb == '1':
+                    logger.error("[PROTOCOLO] Bloqueado protocolo artificial em produção sem retorno real da SEFAZ")
+                    return xml_assinado
+
+                # Em homologação, manter marcador explícito de simulação.
+                cstat = '100'
                 dig_val = 'SIMULADO'
+
+            if tp_amb == '1' and not dig_val:
+                logger.error("[PROTOCOLO] digVal real ausente para NF-e de produção; mantendo XML original sem protNFe artificial")
+                return xml_assinado
             
             xml_protocolo = f'''<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">

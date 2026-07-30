@@ -48,7 +48,7 @@ Implementação **100% completa** dos campos da Reforma Tributária (LC 214/2025
 **Mudanças aplicadas:**
 ```python
 # Campos Reforma Tributária (LC 214/2025)
-codigo_nbs=dados.get("codigo_nbs", "101010000"),
+codigo_nbs=dados.get("codigo_nbs", "101010000"),  # fallback interno normalizado pelo serviço
 percentual_total_tributos_federais=float(dados.get("percentual_total_tributos_federais", 0)),
 percentual_total_tributos_estaduais=float(dados.get("percentual_total_tributos_estaduais", 0)),
 percentual_total_tributos_municipais=float(dados.get("percentual_total_tributos_municipais", 5)),
@@ -78,7 +78,7 @@ incentivador_cultural=dados.get("incentivador_cultural", False),
 **Campos adicionados na rota POST:**
 ```python
 # Campos obrigatórios Reforma Tributária (LC 214/2025)
-'codigo_nbs': request.form.get('codigo_nbs', '101010000'),
+'codigo_nbs': request.form.get('codigo_nbs', '101010000'),  # aceita entrada pontuada e normaliza
 'percentual_total_tributos_federais': float(request.form.get('percentual_total_tributos_federais', 0) or 0),
 'percentual_total_tributos_estaduais': float(request.form.get('percentual_total_tributos_estaduais', 0) or 0),
 'percentual_total_tributos_municipais': float(request.form.get('percentual_total_tributos_municipais', 5) or 5),
@@ -202,7 +202,7 @@ INSERT INTO nfse (
 ### IBS/CBS - Reforma Tributária (9 campos)
 | # | Campo | Tipo | Default | Obrigatório |
 |---|-------|------|---------|-------------|
-| 1 | codigo_nbs | VARCHAR(9) | '101010000' | ✅ |
+| 1 | codigo_nbs | VARCHAR(9) | fallback interno `101010000` | ✅ |
 | 2 | finalidade_nfse | VARCHAR(1) | '0' | ✅ |
 | 3 | indicador_consumidor_final | VARCHAR(1) | '0' | ✅ |
 | 4 | codigo_indicador_operacao | VARCHAR(6) | '000001' | ✅ |

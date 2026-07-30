@@ -51,6 +51,15 @@ def _resolver_xml_nfe_para_envio(json_nfe, status_nfe='', protocolo_sefaz='', da
     xml_content = json_nfe.get('xml_autorizado') or json_nfe.get('xml_content') or ''
     if xml_content and status_nfe == 'AUTORIZADA' and protocolo_sefaz and '<protNFe' not in xml_content:
         try:
+            # Não montar protocolo "fake" em produção. O backfill deve preencher
+            # com dados reais da SEFAZ (incluindo digVal).
+            if '<tpAmb>1</tpAmb>' in xml_content:
+                logger.warning(
+                    "[XML-ENVIO] NF-e de produção autorizada sem protNFe no XML; "
+                    "mantendo XML original para evitar protocolo artificial"
+                )
+                return xml_content
+
             nfe_service = NFeService()
             resultado_fake = {
                 'protocolo': protocolo_sefaz,

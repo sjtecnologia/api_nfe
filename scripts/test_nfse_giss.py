@@ -40,7 +40,7 @@ def main():
     # Criar serviço
     servico = ServicoNFSe(
         codigo_tributacao_nacional='01.01',
-        codigo_nbs='101010000',  # NBS sem pontos, máximo 9 dígitos
+        codigo_nbs='1.01.01.00.00',  # entrada aceita; o serviço normaliza para 9 dígitos
         discriminacao='Análise e desenvolvimento de sistemas',
         valor_servicos=1000.00,
         aliquota_iss=5.0,

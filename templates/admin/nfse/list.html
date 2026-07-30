@@ -109,6 +109,22 @@
                                 {% else %}
                                     <span class="badge bg-secondary">{{ nfse.status or 'N/D' }}</span>
                                 {% endif %}
+
+                                {% set retorno = (nfse.mensagem_retorno or '') %}
+                                {% set retorno_lower = retorno|lower %}
+                                {% if 'reenvio automático agendado' in retorno_lower %}
+                                    <div class="small text-info mt-1">
+                                        <i class="fas fa-calendar-check"></i> Reenvio agendado
+                                    </div>
+                                {% elif 'reenvio automático (tentativa' in retorno_lower %}
+                                    <div class="small text-warning mt-1">
+                                        <i class="fas fa-sync-alt fa-spin"></i> Reenvio em andamento
+                                    </div>
+                                {% elif 'reenvio automático concluído com sucesso' in retorno_lower %}
+                                    <div class="small text-success mt-1">
+                                        <i class="fas fa-check-circle"></i> Reenvio concluído
+                                    </div>
+                                {% endif %}
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">

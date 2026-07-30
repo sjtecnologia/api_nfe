@@ -473,26 +473,30 @@ class SefazService:
                 }
 
             tp_amb = '1' if self.ambiente == 'producao' else '2'
-            envelope = f'''<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-                xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Header>
-    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
-      <cUF>35</cUF>
-      <versaoDados>4.00</versaoDados>
-    </nfeCabecMsg>
-  </soap12:Header>
-  <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
-      <consSitNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-        <tpAmb>{tp_amb}</tpAmb>
-        <xServ>CONSULTAR</xServ>
-        <chNFe>{chave_acesso}</chNFe>
-      </consSitNFe>
-    </nfeDadosMsg>
-  </soap12:Body>
-</soap12:Envelope>'''
+            cons_xml = (
+                f'<consSitNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">'
+                f'<tpAmb>{tp_amb}</tpAmb>'
+                f'<xServ>CONSULTAR</xServ>'
+                f'<chNFe>{chave_acesso}</chNFe>'
+                f'</consSitNFe>'
+            )
+            envelope = (
+                '<?xml version="1.0" encoding="utf-8"?>'
+                '<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+                'xmlns:xsd="http://www.w3.org/2001/XMLSchema" '
+                'xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">'
+                '<soap12:Header>'
+                '<nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">'
+                '<cUF>35</cUF><versaoDados>4.00</versaoDados>'
+                '</nfeCabecMsg>'
+                '</soap12:Header>'
+                '<soap12:Body>'
+                '<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">'
+                f'{cons_xml}'
+                '</nfeDadosMsg>'
+                '</soap12:Body>'
+                '</soap12:Envelope>'
+            )
 
             headers = {
                 'Content-Type': 'application/soap+xml; charset=utf-8',

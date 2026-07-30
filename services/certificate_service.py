@@ -2,7 +2,7 @@ import base64
 import tempfile
 import os
 import binascii
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app, flash
 from flask_login import current_user
 from cryptography import x509
@@ -85,6 +85,27 @@ def _decrypt_password_fallback(encrypted_password):
         pass
     # Último recurso: assumir texto plano (senhas muito antigas)
     return encrypted_password
+
+
+def _certificado_esta_vigente(certificado):
+    """Verifica se o certificado está dentro do período de validade atual."""
+    validade_inicio = getattr(certificado, 'validade_inicio', None)
+    validade_fim = getattr(certificado, 'validade_fim', None)
+    agora = datetime.now(timezone.utc)
+
+    if validade_inicio is not None:
+        if validade_inicio.tzinfo is None:
+            validade_inicio = validade_inicio.replace(tzinfo=timezone.utc)
+        if validade_inicio > agora:
+            return False
+
+    if validade_fim is not None:
+        if validade_fim.tzinfo is None:
+            validade_fim = validade_fim.replace(tzinfo=timezone.utc)
+        if validade_fim < agora:
+            return False
+
+    return True
 
 def process_certificate_a3_registration(db_session, cliente_id, a3_data):
     """
@@ -314,14 +335,20 @@ def get_active_certificate_for_client(db, cliente_id):
     try:
         print(f"[AUTH] get_active_certificate_for_client: Buscando certificado para cliente {cliente_id}")
         
-        # Buscar certificado ativo
-        certificado = db.query(CertificadoDigital).filter_by(
+        # Buscar certificados do cliente, priorizando os ativos e os mais recentes.
+        # Depois filtramos pelo período de validade para não cair em certificado vencido.
+        certificados = db.query(CertificadoDigital).filter_by(
             cliente_id=cliente_id,
-            ativo=True
-        ).first()
-        
+        ).order_by(
+            CertificadoDigital.ativo.desc(),
+            CertificadoDigital.validade_fim.desc(),
+            CertificadoDigital.certificado_digital_id.desc()
+        ).all()
+
+        certificado = next((cert for cert in certificados if _certificado_esta_vigente(cert)), None)
+
         if not certificado:
-            print(f"[X] get_active_certificate_for_client: Nenhum certificado ativo encontrado")
+            print(f"[X] get_active_certificate_for_client: Nenhum certificado vigente encontrado")
             return None
         
         print(f"[OK] get_active_certificate_for_client: Certificado encontrado: ID {certificado.certificado_digital_id}")

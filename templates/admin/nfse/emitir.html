@@ -563,7 +563,7 @@ input[readonly] {
                 <button type="button" class="btn btn-outline-secondary btn-lg me-2" onclick="previewDanfeNfse()" id="btnPreviewDanfeNfse">
                     <i class="fas fa-file-pdf"></i> Preview DANFE
                 </button>
-                <button type="submit" class="btn btn-primary btn-lg me-2">
+                <button type="submit" class="btn btn-primary btn-lg me-2" id="btnEmitirNfse">
                     <i class="fas fa-paper-plane"></i> Emitir NFS-e
                 </button>
                 <button type="button" class="btn btn-secondary btn-lg" onclick="window.history.back()">
@@ -1603,5 +1603,49 @@ function fecharModalXMLNfse() {
         modal.remove();
     }
 }
+
+// ========== ESTADO DE PROGRESSO NA EMISSAO ==========
+let emissaoNfseEmAndamento = false;
+
+function ativarEstadoEmissaoNfse() {
+    if (emissaoNfseEmAndamento) {
+        return;
+    }
+    emissaoNfseEmAndamento = true;
+
+    const btnEmitir = document.getElementById('btnEmitirNfse');
+    const btnValidarIA = document.getElementById('btnValidarIA');
+    const btnPreviewXml = document.getElementById('btnPreviewXmlNfse');
+    const btnPreviewDanfe = document.getElementById('btnPreviewDanfeNfse');
+
+    if (btnEmitir) {
+        btnEmitir.disabled = true;
+        btnEmitir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo NFS-e...';
+    }
+    if (btnValidarIA) btnValidarIA.disabled = true;
+    if (btnPreviewXml) btnPreviewXml.disabled = true;
+    if (btnPreviewDanfe) btnPreviewDanfe.disabled = true;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('nfseForm');
+    const btnContinuarEmissao = document.getElementById('btnContinuarEmissao');
+
+    if (form) {
+        form.addEventListener('submit', function() {
+            ativarEstadoEmissaoNfse();
+        });
+    }
+
+    if (btnContinuarEmissao && form) {
+        btnContinuarEmissao.addEventListener('click', function() {
+            if (emissaoNfseEmAndamento) {
+                return;
+            }
+            ativarEstadoEmissaoNfse();
+            form.requestSubmit();
+        });
+    }
+});
 </script>
 {% endblock %}

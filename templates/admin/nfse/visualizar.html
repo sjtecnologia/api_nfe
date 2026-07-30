@@ -28,6 +28,26 @@
                        title="Disponível apenas após confirmação da NFS-e no ADN (ChaveNotaNacional)">
                         <i class="fas fa-file-pdf"></i> DANFSe (PDF)
                     </a>
+                    <form method="POST" action="{{ url_for('nfse.reenviar_para_provedor', nfse_id=nfse.id) }}" class="d-inline" id="formReenviarProvedor">
+                        <button
+                            type="submit"
+                            class="btn btn-warning"
+                            id="btnReenviarProvedor"
+                            {% if nfse.protocolo %}disabled title="NFS-e já possui protocolo"{% endif %}
+                            onclick="return confirm('Confirma o reenvio desta NFS-e para o provedor?');"
+                        >
+                            <i class="fas fa-paper-plane"></i> Reenviar Provedor
+                        </button>
+                    </form>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalEnviarDanfseEmail"
+                        {% if not nfse.xml_nfse %}disabled title="XML da NFS-e indisponível"{% endif %}
+                    >
+                        <i class="fas fa-envelope"></i> Enviar DANFSe Email
+                    </button>
                     {% if nfse.status == '1' %}
                     <a href="{{ url_for('nfse.cancelar', nfse_id=nfse.id) }}" class="btn btn-danger">
                         <i class="fas fa-times"></i> Cancelar
@@ -64,6 +84,31 @@
                 </h5>
                 {% if nfse.protocolo %}
                 <p class="mb-0">Protocolo: <strong>{{ nfse.protocolo }}</strong></p>
+                {% endif %}
+
+                {% set retorno = (nfse.mensagem_retorno or '') %}
+                {% set retorno_lower = retorno|lower %}
+                {% if 'reenvio automático agendado' in retorno_lower %}
+                <p class="mb-0 mt-2 text-info">
+                    <i class="fas fa-calendar-check"></i>
+                    Reenvio automático agendado
+                </p>
+                {% elif 'reenvio automático (tentativa' in retorno_lower %}
+                <p class="mb-0 mt-2 text-warning">
+                    <i class="fas fa-sync-alt fa-spin"></i>
+                    Reenvio automático em andamento
+                </p>
+                {% elif 'reenvio automático concluído com sucesso' in retorno_lower %}
+                <p class="mb-0 mt-2 text-success">
+                    <i class="fas fa-check-circle"></i>
+                    Reenvio automático concluído
+                </p>
+                {% endif %}
+
+                {% if nfse.mensagem_retorno %}
+                <p class="mb-0 mt-2 small text-muted">
+                    Detalhe: {{ nfse.mensagem_retorno }}
+                </p>
                 {% endif %}
             </div>
         </div>
@@ -348,4 +393,80 @@
     </div>
     {% endif %}
 </div>
+
+<div class="modal fade" id="modalEnviarDanfseEmail" tabindex="-1" aria-labelledby="modalEnviarDanfseEmailLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('nfse.enviar_danfse_email', nfse_id=nfse.id) }}" id="formEnviarDanfseEmail">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEnviarDanfseEmailLabel">Enviar DANFSe por Email</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Informe o email do tomador. Se deixar em branco, será usado o email cadastrado.</p>
+                    <div class="mb-3">
+                        <label for="email_destinatario" class="form-label">Email do tomador</label>
+                        <input
+                            type="email"
+                            class="form-control"
+                            id="email_destinatario"
+                            name="email_destinatario"
+                            placeholder="tomador@empresa.com.br"
+                        >
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnEnviarDanfseEmail">
+                        <i class="fas fa-paper-plane"></i> Enviar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formReenviar = document.getElementById('formReenviarProvedor');
+    const btnReenviar = document.getElementById('btnReenviarProvedor');
+
+    if (formReenviar && btnReenviar) {
+        const htmlOriginalReenviar = btnReenviar.innerHTML;
+        formReenviar.addEventListener('submit', function() {
+            btnReenviar.disabled = true;
+            btnReenviar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reenviando...';
+            btnReenviar.dataset.loading = '1';
+
+            const btnAbrirModal = document.querySelector('[data-bs-target="#modalEnviarDanfseEmail"]');
+            if (btnAbrirModal) {
+                btnAbrirModal.disabled = true;
+            }
+
+            setTimeout(function() {
+                if (btnReenviar.dataset.loading === '1') {
+                    btnReenviar.disabled = false;
+                    btnReenviar.innerHTML = htmlOriginalReenviar;
+                    btnReenviar.dataset.loading = '0';
+                    if (btnAbrirModal) {
+                        btnAbrirModal.disabled = false;
+                    }
+                }
+            }, 60000);
+        });
+    }
+
+    const formEmail = document.getElementById('formEnviarDanfseEmail');
+    const btnEmail = document.getElementById('btnEnviarDanfseEmail');
+
+    if (formEmail && btnEmail) {
+        formEmail.addEventListener('submit', function() {
+            btnEmail.disabled = true;
+            btnEmail.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+        });
+    }
+});
+</script>
 {% endblock %}

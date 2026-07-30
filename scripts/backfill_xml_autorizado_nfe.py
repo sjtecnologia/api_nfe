@@ -47,15 +47,17 @@ def _parse_json_nfe(value: Any) -> Dict[str, Any]:
     return {}
 
 
-def _extract_digest_value(xml_content: str) -> Optional[str]:
+def _extract_digval_infprot(xml_content: str) -> Optional[str]:
     if not xml_content:
         return None
 
     import re
 
-    match = re.search(r'<DigestValue>([^<]+)</DigestValue>', xml_content)
+    match = re.search(r'<digVal>([^<]+)</digVal>', xml_content, flags=re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        valor = match.group(1).strip()
+        if valor and valor.upper() != 'SIMULADO':
+            return valor
     return None
 
 
@@ -96,7 +98,13 @@ def _consulta_sefaz_por_chave(db, nfe) -> Optional[Dict[str, Any]]:
     )
 
 
-def backfill_xmls(cliente_id: Optional[int] = None, dry_run: bool = False, limit: Optional[int] = None) -> int:
+def backfill_xmls(
+    cliente_id: Optional[int] = None,
+    dry_run: bool = False,
+    limit: Optional[int] = None,
+    apenas_producao: bool = True,
+    exigir_digval_real: bool = True,
+) -> int:
     db = SessionLocal()
     atualizados = 0
 
@@ -119,7 +127,13 @@ def backfill_xmls(cliente_id: Optional[int] = None, dry_run: bool = False, limit
                 print(f'[SKIP] NFe {nfe.nfe_emitida_id} sem XML base no JSON')
                 continue
 
-            if _has_protocolo(xml_base):
+            ambiente_xml = 'producao' if '<tpAmb>1</tpAmb>' in xml_base else 'homologacao'
+            if apenas_producao and ambiente_xml != 'producao':
+                print(f'[SKIP] NFe {nfe.nfe_emitida_id} em homologação')
+                continue
+
+            digval_existente = _extract_digval_infprot(xml_base)
+            if _has_protocolo(xml_base) and digval_existente:
                 if json_nfe.get('xml_autorizado') != xml_base or json_nfe.get('xml_content') != xml_base:
                     json_nfe['xml_autorizado'] = xml_base
                     json_nfe['xml_content'] = xml_base
@@ -129,35 +143,40 @@ def backfill_xmls(cliente_id: Optional[int] = None, dry_run: bool = False, limit
                         db.add(nfe)
                         db.commit()
                     atualizados += 1
-                    print(f'[OK] NFe {nfe.nfe_emitida_id} já tinha protocolo; normalizado no JSON')
+                    print(f'[OK] NFe {nfe.nfe_emitida_id} já tinha protocolo real; normalizado no JSON')
                 else:
-                    print(f'[OK] NFe {nfe.nfe_emitida_id} já contém XML autorizado')
+                    print(f'[OK] NFe {nfe.nfe_emitida_id} já contém XML autorizado com digVal real')
                 continue
 
             protocolo = getattr(nfe, 'protocolo_sefaz', None) or json_nfe.get('protocolo_sefaz') or json_nfe.get('protocolo_autorizacao')
             xml_final = None
 
-            if protocolo:
+            print(f'[CONSULTA] NFe {nfe.nfe_emitida_id} consultando SEFAZ para obter digVal real...')
+            consulta = _consulta_sefaz_por_chave(db, nfe)
+            if consulta and consulta.get('success') and consulta.get('protocolo'):
+                digval_real = (consulta.get('digVal') or '').strip()
+                if exigir_digval_real and not digval_real:
+                    print(f"[FAIL] NFe {nfe.nfe_emitida_id} sem digVal no retorno da SEFAZ; não atualizada")
+                    continue
+
                 xml_final = _build_xml_autorizado(
                     xml_base,
-                    protocolo,
-                    nfe.data_autorizacao,
-                    _extract_digest_value(xml_base)
+                    consulta['protocolo'],
+                    consulta.get('dhRecbto') or nfe.data_autorizacao,
+                    digval_real
                 )
-                print(f'[OK] NFe {nfe.nfe_emitida_id} reconstruída com protocolo salvo')
+                if not getattr(nfe, 'protocolo_sefaz', None):
+                    nfe.protocolo_sefaz = consulta['protocolo']
+                print(f"[OK] NFe {nfe.nfe_emitida_id} atualizada com dados reais da SEFAZ")
             else:
-                print(f'[CONSULTA] NFe {nfe.nfe_emitida_id} sem protocolo salvo; consultando SEFAZ...')
-                consulta = _consulta_sefaz_por_chave(db, nfe)
-                if consulta and consulta.get('success') and consulta.get('protocolo'):
+                if protocolo and not exigir_digval_real:
                     xml_final = _build_xml_autorizado(
                         xml_base,
-                        consulta['protocolo'],
-                        consulta.get('dhRecbto') or nfe.data_autorizacao,
-                        consulta.get('digVal') or _extract_digest_value(xml_base)
+                        protocolo,
+                        nfe.data_autorizacao,
+                        _extract_digval_infprot(xml_base) or ''
                     )
-                    if not getattr(nfe, 'protocolo_sefaz', None):
-                        nfe.protocolo_sefaz = consulta['protocolo']
-                    print(f"[OK] NFe {nfe.nfe_emitida_id} autorizada consultando SEFAZ")
+                    print(f'[WARN] NFe {nfe.nfe_emitida_id} sem consulta SEFAZ; reconstruída sem garantia de digVal real')
                 else:
                     print(f'[FAIL] NFe {nfe.nfe_emitida_id} não pôde ser consultada na SEFAZ')
 
@@ -191,9 +210,17 @@ def main() -> int:
     parser.add_argument('--cliente-id', type=int, help='Filtrar por cliente específico')
     parser.add_argument('--limit', type=int, help='Limitar quantidade de registros')
     parser.add_argument('--dry-run', action='store_true', help='Não grava alterações')
+    parser.add_argument('--incluir-homologacao', action='store_true', help='Inclui NF-e de homologação (padrão: apenas produção)')
+    parser.add_argument('--permitir-sem-digval-real', action='store_true', help='Permite atualizar sem digVal real de retorno da SEFAZ')
     args = parser.parse_args()
 
-    total = backfill_xmls(cliente_id=args.cliente_id, dry_run=args.dry_run, limit=args.limit)
+    total = backfill_xmls(
+        cliente_id=args.cliente_id,
+        dry_run=args.dry_run,
+        limit=args.limit,
+        apenas_producao=not args.incluir_homologacao,
+        exigir_digval_real=not args.permitir_sem_digval_real,
+    )
     print(f'[DONE] Total de registros processados/atualizados: {total}')
     return 0
 

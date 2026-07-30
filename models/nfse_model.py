@@ -8,6 +8,18 @@ from typing import Optional, List
 from dataclasses import dataclass, field
 
 
+DEFAULT_CODIGO_NBS = "101010000"
+
+
+def normalizar_codigo_nbs(codigo: Optional[str]) -> str:
+    """Remove pontuação e garante até 9 dígitos para o código NBS."""
+    valor = str(codigo or DEFAULT_CODIGO_NBS)
+    codigo_limpo = ''.join(ch for ch in valor if ch.isdigit())
+    if not codigo_limpo or len(codigo_limpo) > 9:
+        raise ValueError(f"Código NBS inválido: '{codigo}'")
+    return codigo_limpo.zfill(9)
+
+
 @dataclass
 class PrestadorNFSe:
     """Dados do prestador de serviço (emitente)"""
@@ -54,7 +66,7 @@ class ServicoNFSe:
     # Código do serviço conforme LC 116/2003
     codigo_tributacao_nacional: str  # Código LC 116 (ex: "01.01", "07.02")
     codigo_cnae: Optional[str] = None
-    codigo_nbs: str = "101010000"  # Código NBS obrigatório GISS (máximo 9 dígitos sem pontos)
+    codigo_nbs: str = DEFAULT_CODIGO_NBS  # Código NBS obrigatório GISS (máximo 9 dígitos sem pontos)
     discriminacao: str = ""  # Descrição detalhada do serviço
     
     # Valores

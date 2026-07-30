@@ -6,6 +6,7 @@ Geração de XML, comunicação com webservice e processamento
 import os
 import json
 import re
+import time
 import requests
 import hashlib
 import uuid
@@ -13,7 +14,7 @@ import base64
 import tempfile
 import unicodedata
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from lxml import etree
 from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
 from services.certificate_service import _decrypt_password
@@ -24,8 +25,23 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.nfse_model import (
     NFSeNacional, PrestadorNFSe, TomadoresNFSe, ServicoNFSe,
-    CODIGOS_SERVICO_LC116, CODIGOS_MUNICIPIO_SP, ALIQUOTAS_ISS_SJRP
+    CODIGOS_SERVICO_LC116, CODIGOS_MUNICIPIO_SP, ALIQUOTAS_ISS_SJRP,
+    DEFAULT_CODIGO_NBS, normalizar_codigo_nbs
 )
+
+
+def _validar_periodo_certificado_x509(certificate):
+    """Garante que o certificado X509 esteja vigente para o envio mTLS."""
+    agora = datetime.now(certificate.not_valid_after_utc.tzinfo)
+    if certificate.not_valid_before_utc and certificate.not_valid_before_utc > agora:
+        raise ValueError(
+            f"Certificado digital ainda não está válido para uso: {certificate.not_valid_before_utc:%d/%m/%Y}"
+        )
+    if certificate.not_valid_after_utc and certificate.not_valid_after_utc < agora:
+        raise ValueError(
+            f"Certificado digital expirado em {certificate.not_valid_after_utc:%d/%m/%Y}. "
+            "Substitua o certificado ativo antes de emitir a NFS-e."
+        )
 
 
 class NFSeService:
@@ -42,6 +58,17 @@ class NFSeService:
         "sao-jose-do-rio-preto": "sjrp",
         "sao-jose-rio-preto": "sjrp",
         "sjrp": "sjrp",
+    }
+    # Apenas hosts testados para SOAP/mTLS devem ser usados como fallback.
+    # Obs.: ws-homologacao.giss.com.br serve portal HTML e retorna 405 no POST SOAP.
+    FALLBACK_HOST_WHITELIST = {
+        "homologacao": {
+            "ws-homologacao-rtc.giss.com.br",
+            "ws-sjrp.giss.com.br",
+        },
+        "producao": {
+            "ws-sjrp.giss.com.br",
+        },
     }
     
     # URLs do webservice - GISS Online (Atualizado conforme documentação oficial)
@@ -104,6 +131,85 @@ class NFSeService:
             "versao_layout_rtc": "1.03.00",
             "versao_anexo_vii": "1.01.00"
         }
+
+    def _montar_urls_custom_host(self, host_value: str) -> Optional[Dict[str, str]]:
+        """Monta URLs a partir de sufixo, hostname completo ou URL base."""
+        valor = (host_value or "").strip()
+        if not valor:
+            return None
+
+        if valor.startswith("https://") or valor.startswith("http://"):
+            base = valor
+        elif "." in valor:
+            base = f"https://{valor}"
+        else:
+            base = f"https://ws-{valor}.giss.com.br"
+
+        if not base.endswith("/"):
+            base += "/"
+
+        endpoint = "service-ws/nf/nfse-ws"
+        return {
+            "base": base,
+            "wsdl": f"{base}{endpoint}?wsdl",
+            "enviar_lote": endpoint,
+            "consultar_lote": endpoint,
+            "consultar_nfse": endpoint,
+            "cancelar": endpoint,
+            "versao_layout_rtc": "1.03.00",
+            "versao_anexo_vii": "1.01.00"
+        }
+
+    def _extrair_hostname_base(self, base_url: str) -> str:
+        """Extrai hostname de uma URL base para validações de segurança."""
+        valor = (base_url or "").strip().lower()
+        valor = re.sub(r"^https?://", "", valor)
+        return valor.split('/')[0].strip()
+
+    def _host_elegivel_para_fallback(self, base_url: str) -> bool:
+        """Valida se host pertence à whitelist da operação."""
+        host = self._extrair_hostname_base(base_url)
+        permitidos = self.FALLBACK_HOST_WHITELIST.get(self.ambiente, set())
+        if not permitidos:
+            # Sem whitelist explícita para ambiente, manter apenas host atual.
+            return host == self._extrair_hostname_base(self.urls.get("base", ""))
+        return host in permitidos
+
+    def _resolver_urls_envio_com_fallback(self) -> List[Dict[str, str]]:
+        """Lista URLs de envio: principal + hosts alternativos configurados."""
+        urls = [self.urls]
+        bases_vistas = {self.urls.get("base")}
+
+        fallback_raw = (
+            os.getenv(f"GISS_WS_FALLBACK_HOSTS_{self.ambiente.upper()}")
+            or os.getenv("GISS_WS_FALLBACK_HOSTS")
+            or ""
+        )
+
+        if not fallback_raw:
+            return urls
+
+        for item in re.split(r"[;,]", fallback_raw):
+            host = item.strip()
+            if not host:
+                continue
+
+            url_custom = self._montar_urls_custom_host(host)
+            if not url_custom:
+                continue
+
+            base = url_custom.get("base")
+            if not self._host_elegivel_para_fallback(base):
+                print(f"[NFSE] Ignorando host fallback fora da whitelist: {base}")
+                continue
+
+            if base in bases_vistas:
+                continue
+
+            bases_vistas.add(base)
+            urls.append(url_custom)
+
+        return urls
 
     def _resolver_urls(self, ambiente: str, municipio_slug: Optional[str] = None, ws_host: Optional[str] = None) -> Dict[str, str]:
         """Resolve URLs do webservice, priorizando host municipal e mantendo fallback legado."""
@@ -223,7 +329,8 @@ class NFSeService:
         
         # p:LoteRps
         lote_rps = etree.SubElement(root, "{%s}LoteRps" % self.NS_ENVIO)
-        lote_rps.set("Id", "1")  # GISS exige atributo Id
+        # Id alfanumérico evita falhas de resolução de URI (#Id) em alguns validadores XMLDSig.
+        lote_rps.set("Id", "lote1")
         lote_rps.set("versao", "2.04")
         
         # p1:NumeroLote
@@ -281,6 +388,15 @@ class NFSeService:
         if nfse.servico.outras_retencoes > 0:
             etree.SubElement(valores, "{%s}OutrasRetencoes" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.outras_retencoes)
         
+        percentual_total_tributos = (
+            nfse.servico.percentual_total_tributos_federais +
+            nfse.servico.percentual_total_tributos_estaduais +
+            nfse.servico.percentual_total_tributos_municipais
+        )
+        valor_total_tributos = nfse.servico.base_calculo * (percentual_total_tributos / 100)
+        if valor_total_tributos > 0:
+            etree.SubElement(valores, "{%s}ValTotTributos" % self.NS_TIPOS).text = self.formatar_valor(valor_total_tributos)
+
         if nfse.servico.valor_iss > 0:
             etree.SubElement(valores, "{%s}ValorIss" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_iss)
         
@@ -291,15 +407,6 @@ class NFSeService:
             etree.SubElement(valores, "{%s}DescontoIncondicionado" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.desconto_incondicionado)
         if nfse.servico.desconto_condicionado > 0:
             etree.SubElement(valores, "{%s}DescontoCondicionado" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.desconto_condicionado)
-
-        percentual_total_tributos = (
-            nfse.servico.percentual_total_tributos_federais +
-            nfse.servico.percentual_total_tributos_estaduais +
-            nfse.servico.percentual_total_tributos_municipais
-        )
-        valor_total_tributos = nfse.servico.base_calculo * (percentual_total_tributos / 100)
-        if valor_total_tributos > 0:
-            etree.SubElement(valores, "{%s}ValTotTributos" % self.NS_TIPOS).text = self.formatar_valor(valor_total_tributos)
         
         # =============================================================================================
         # REFORMA TRIBUTÁRIA (LC 214/2025) - NT007 v1.03.00
@@ -532,8 +639,8 @@ class NFSeService:
             
             # 4. Converter PFX para formato utilizável pela assinatura
             from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
-            from cryptography import x509
-            from signxml import XMLSigner
+            from cryptography.hazmat.primitives import hashes as crypto_hashes
+            from cryptography.hazmat.primitives.asymmetric import padding
             
             # Carregar PFX
             with open(cert_file_path, 'rb') as f:
@@ -544,127 +651,142 @@ class NFSeService:
                 cert_senha.encode('utf-8')
             )
             
-            # Converter certificado para formato PEM string (signxml precisa)
             from cryptography.hazmat.primitives import serialization
-            cert_pem = certificate.public_bytes(serialization.Encoding.PEM).decode('utf-8')
-            
-            print(f"[NFSE] Certificado carregado e convertido para PEM")
+            print(f"[NFSE] Certificado carregado")
             
             # 5. Parse do XML
+            parser = etree.XMLParser(remove_blank_text=True)
             if isinstance(xml, str):
-                xml_element = etree.fromstring(xml.encode('utf-8'))
+                xml_element = etree.fromstring(xml.encode('utf-8'), parser=parser)
             elif isinstance(xml, bytes):
-                xml_element = etree.fromstring(xml)
+                xml_element = etree.fromstring(xml, parser=parser)
             else:
                 xml_element = xml
             
-            # 6. Assinar SOMENTE o LoteRps (GISS exige assinatura no LoteRps com Id="1")
-            # Encontrar o elemento LoteRps
+            # 6. Assinar RPS e LoteRps (perfil legado GISS)
             namespaces = {
                 'p': 'http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd',
                 'p1': 'http://www.giss.com.br/tipos-v2_04.xsd',
                 'ds': 'http://www.w3.org/2000/09/xmldsig#'
             }
-            lote_rps = xml_element.find('.//p:LoteRps', namespaces)
-            
+            ds_ns = "http://www.w3.org/2000/09/xmldsig#"
+
+            cert_der = certificate.public_bytes(serialization.Encoding.DER)
+            cert_base64 = base64.b64encode(cert_der).decode('utf-8')
+
+            def _montar_assinatura(target_id: str, digest_value: str):
+                assinatura = etree.Element(f"{{{ds_ns}}}Signature", nsmap={None: ds_ns})
+                signed_info = etree.SubElement(assinatura, f"{{{ds_ns}}}SignedInfo")
+
+                canon_method = etree.SubElement(signed_info, f"{{{ds_ns}}}CanonicalizationMethod")
+                canon_method.set("Algorithm", "http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
+
+                sig_method = etree.SubElement(signed_info, f"{{{ds_ns}}}SignatureMethod")
+                sig_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#rsa-sha1")
+
+                reference = etree.SubElement(signed_info, f"{{{ds_ns}}}Reference")
+                reference.set("URI", f"#{target_id}")
+
+                transforms = etree.SubElement(reference, f"{{{ds_ns}}}Transforms")
+                transform_env = etree.SubElement(transforms, f"{{{ds_ns}}}Transform")
+                transform_env.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#enveloped-signature")
+
+                digest_method = etree.SubElement(reference, f"{{{ds_ns}}}DigestMethod")
+                digest_method.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#sha1")
+
+                digest_elem = etree.SubElement(reference, f"{{{ds_ns}}}DigestValue")
+                digest_elem.text = digest_value
+
+                return assinatura, signed_info
+
+            assinaturas_rps_ok = 0
+            lote_rps = xml_element.find('./p:LoteRps', namespaces)
             if lote_rps is not None:
-                lote_id = lote_rps.get('Id', '1')
-                print(f"[NFSE] Assinando LoteRps com Id='{lote_id}'...")
-                
-                # Usar signxml para assinar corretamente (API signxml 4.x)
-                # ⚠️ EXCLUSIVO PARA NFS-e - NÃO AFETA NF-e ⚠️
-                from signxml import methods, DigestAlgorithm, SignatureMethod
-                
-                # ==================================================================================
-                # JUSTIFICATIVA DO MONKEYPATCH (Documentado em 30/12/2024)
-                # ==================================================================================
-                # 
-                # Conforme solicitado: "lembre-se sempre consultar a documentação"
-                # Documentação consultada: https://xml-security.github.io/signxml/
-                # 
-                # PROBLEMA:
-                # - signxml v4.x bloqueia CRIAÇÃO de assinaturas SHA1 por segurança
-                #   (SHA1 tem vulnerabilidades conhecidas de colisão)
-                # - Documentação oficial apenas mostra como VERIFICAR SHA1, não como criar
-                # 
-                # REQUISITO GOVERNAMENTAL:
-                # - Webservice GISS de São José do Rio Preto EXIGE SHA1 (padrão legado)
-                # - Não há opção de usar SHA256 (webservice rejeita)
-                # 
-                # ALTERNATIVAS AVALIADAS:
-                # 1. Downgrade signxml v3.x: Mantém SHA1 mas perde correções de segurança
-                # 2. PyNFe: Não suporta assinatura de LoteRps (assina elemento errado)
-                # 3. xmlsec library: Dependência C++ complexa, dificuldade de deploy
-                # 4. Implementação manual: Alto risco, difícil manutenção
-                # 
-                # SOLUÇÃO ESCOLHIDA:
-                # - Monkeypatch XMLSigner.check_deprecated_methods() (linha 122 em signxml/signer.py)
-                # - Permite usar SHA1 apenas neste contexto específico
-                # - Mantém signxml v4.2.0 com todas as correções de segurança para outras operações
-                # 
-                # IMPACTO & SEGURANÇA:
-                # - SHA1 usado APENAS para assinatura NFS-e (exigência legal)
-                # - NF-e usa PyNFe (xml_signature_service.py) - NÃO AFETADO
-                # - Version pinning: signxml==4.2.0 em requirements.txt
-                # 
-                # REFERÊNCIAS:
-                # - signxml docs: "SHA1-based algorithms disabled by default"
-                # - GISS v2.04: Seção DigestMethod exige http://www.w3.org/2000/09/xmldsig#sha1
-                # ==================================================================================
-                XMLSigner.check_deprecated_methods = lambda self: None
-                
-                # Extrair apenas o LoteRps para assinar
-                # A assinatura será inserida como irmão do LoteRps no EnviarLoteRpsEnvio
-                signer = XMLSigner(
-                    method=methods.detached,  # Detached para assinar elemento específico
-                    signature_algorithm=SignatureMethod.RSA_SHA1,
-                    digest_algorithm=DigestAlgorithm.SHA1,
-                    c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
+                rps_nodes = lote_rps.findall('./p1:ListaRps/p1:Rps', namespaces)
+                for idx, rps_node in enumerate(rps_nodes, start=1):
+                    inf_rps = rps_node.find('./p1:InfDeclaracaoPrestacaoServico', namespaces)
+                    if inf_rps is None:
+                        print(f"[NFSE] ⚠️ Rps #{idx} sem InfDeclaracaoPrestacaoServico")
+                        continue
+
+                    inf_id = inf_rps.get('Id')
+                    if not inf_id:
+                        inf_id = f"rps{idx}"
+                        inf_rps.set('Id', inf_id)
+
+                    inf_c14n = etree.tostring(inf_rps, method='c14n', exclusive=False, with_comments=False)
+                    inf_digest = base64.b64encode(hashlib.sha1(inf_c14n).digest()).decode('utf-8')
+
+                    assinatura_rps, signed_info_rps = _montar_assinatura(inf_id, inf_digest)
+
+                    for assinatura_existente in rps_node.findall('./ds:Signature', namespaces):
+                        rps_node.remove(assinatura_existente)
+
+                    rps_node.append(assinatura_rps)
+
+                    signed_info_c14n = etree.tostring(signed_info_rps, method='c14n', exclusive=False, with_comments=False)
+                    assinatura_bytes = private_key.sign(
+                        signed_info_c14n,
+                        padding.PKCS1v15(),
+                        crypto_hashes.SHA1(),
+                    )
+
+                    sig_value = etree.SubElement(assinatura_rps, f"{{{ds_ns}}}SignatureValue")
+                    sig_value.text = base64.b64encode(assinatura_bytes).decode('utf-8')
+
+                    # Compatibilidade GISS: KeyInfo dispara E172 em homologação RTC.
+                    # Mantemos assinatura com SignedInfo + SignatureValue apenas.
+
+                    assinaturas_rps_ok += 1
+
+                print(f"[NFSE] Assinaturas RPS inseridas: {assinaturas_rps_ok}/{len(rps_nodes)}")
+
+            # Assinatura do lote é obrigatória para o GISS (E173 quando ausente).
+            assinatura_lote_ok = False
+            if lote_rps is not None:
+                lote_id = lote_rps.get('Id')
+                if not lote_id:
+                    lote_id = 'lote1'
+                    lote_rps.set('Id', lote_id)
+
+                # Calcula digest do lote com C14N inclusivo (padrão ABRASF/GISS legado).
+                lote_c14n = etree.tostring(lote_rps, method='c14n', exclusive=False, with_comments=False)
+                digest_value = base64.b64encode(hashlib.sha1(lote_c14n).digest()).decode('utf-8')
+
+                assinatura_lote, signed_info = _montar_assinatura(lote_id, digest_value)
+
+                # Remove assinatura de lote anterior no root para evitar duplicidade.
+                for assinatura_existente in xml_element.findall('./ds:Signature', namespaces):
+                    xml_element.remove(assinatura_existente)
+
+                # Anexa no documento antes de canonicalizar SignedInfo.
+                # Com C14N inclusivo, namespaces ancestrais entram no cálculo.
+                xml_element.append(assinatura_lote)
+
+                signed_info_c14n = etree.tostring(signed_info, method='c14n', exclusive=False, with_comments=False)
+                assinatura_bytes = private_key.sign(
+                    signed_info_c14n,
+                    padding.PKCS1v15(),
+                    crypto_hashes.SHA1(),
                 )
-                
-                # Salvar o LoteRps canonicalizado para debug
-                from lxml import etree as lxml_etree
-                lote_rps_canonicalizado = lxml_etree.tostring(
-                    lote_rps, 
-                    method='c14n', 
-                    exclusive=False, 
-                    with_comments=False
-                ).decode('utf-8')
-                
-                # Calcular digest manualmente para verificar
-                import hashlib
-                digest_calculado = hashlib.sha1(lote_rps_canonicalizado.encode('utf-8')).digest()
-                digest_base64 = base64.b64encode(digest_calculado).decode('utf-8')
-                
-                with open('/tmp/lote_rps_c14n.xml', 'w', encoding='utf-8') as f:
-                    f.write(lote_rps_canonicalizado)
-                
-                print(f"[NFSE] LoteRps canonicalizado salvo: {len(lote_rps_canonicalizado)} bytes")
-                print(f"[NFSE] DigestValue calculado manualmente: {digest_base64}")
-                
-                # Assinar APENAS o LoteRps (detached)
-                signature_element = signer.sign(
-                    lote_rps,
-                    key=private_key,
-                    cert=cert_pem,
-                    reference_uri=f"#{lote_id}"
-                )
-                
-                # Extrair DigestValue da assinatura para comparar
-                ns = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
-                digest_na_assinatura = signature_element.find('.//ds:DigestValue', ns)
-                if digest_na_assinatura is not None:
-                    print(f"[NFSE] DigestValue na assinatura: {digest_na_assinatura.text}")
-                
-                # Inserir a assinatura no documento original como irmão do LoteRps
-                # (após o LoteRps, dentro de EnviarLoteRpsEnvio)
-                xml_element.append(signature_element)
-                
-                xml_assinado = etree.tostring(xml_element, encoding='unicode', pretty_print=True)
-                # Adicionar declaração XML
+
+                sig_value = etree.SubElement(assinatura_lote, f"{{{ds_ns}}}SignatureValue")
+                sig_value.text = base64.b64encode(assinatura_bytes).decode('utf-8')
+
+                # Compatibilidade GISS: KeyInfo dispara E172 em homologação RTC.
+                # Mantemos assinatura com SignedInfo + SignatureValue apenas.
+
+                assinatura_lote_ok = True
+                print(f"[NFSE] Assinatura do LoteRps inserida com Reference URI '#{lote_id}'")
+            else:
+                print("[NFSE] ⚠️ LoteRps não encontrado para assinatura do lote")
+
+            if assinatura_lote_ok:
+                # Não usar pretty_print após assinar: reformatar pode invalidar digest.
+                xml_assinado = etree.tostring(xml_element, encoding='unicode', pretty_print=False)
                 xml_assinado = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_assinado
             else:
-                print("[NFSE] ⚠️ LoteRps não encontrado, retornando sem assinatura")
+                print("[NFSE] ⚠️ Nenhuma assinatura foi inserida; retornando XML original")
                 xml_assinado = xml
             
             # 7. Limpar arquivo temporário
@@ -709,10 +831,15 @@ class NFSeService:
             print(f"[NFSE] Ambiente: {self.ambiente}")
             print(f"[NFSE] Cliente ID: {nfse.cliente_id}")
             
-            # 1. Gerar XML RPS
-            xml_rps = self.gerar_xml_rps(nfse)
-            nfse.xml_rps = xml_rps
-            print(f"[NFSE] XML RPS gerado: {len(xml_rps)} caracteres")
+            # 1. Gerar XML RPS (ou reaproveitar XML já persistido)
+            xml_rps_existente = (getattr(nfse, 'xml_rps', None) or '').strip()
+            if xml_rps_existente:
+                xml_rps = xml_rps_existente
+                print(f"[NFSE] Reutilizando XML RPS existente: {len(xml_rps)} caracteres")
+            else:
+                xml_rps = self.gerar_xml_rps(nfse)
+                nfse.xml_rps = xml_rps
+                print(f"[NFSE] XML RPS gerado: {len(xml_rps)} caracteres")
             
             # 2. Obter certificado do banco para envio HTTPS
             certificado = None
@@ -755,16 +882,21 @@ class NFSeService:
                 cert_data,
                 cert_senha.encode('utf-8') if isinstance(cert_senha, str) else cert_senha
             )
+
+            if not private_key or not certificate:
+                return False, {"erro": "Certificado digital inválido", "mensagem": "Não foi possível extrair chave e certificado do arquivo do cliente"}
+
+            try:
+                _validar_periodo_certificado_x509(certificate)
+            except ValueError as e:
+                return False, {"erro": "Certificado digital vencido ou inválido", "mensagem": str(e)}
             
             # Salvar em arquivos temporários
-            # IMPORTANTE: incluir a cadeia de certificação intermediária (ICP-Brasil) junto do
-            # certificado do cliente no mesmo arquivo PEM. Sem a cadeia completa, o nginx do
-            # GISS pode rejeitar o handshake mTLS com "400 The SSL certificate error", mesmo
-            # com um certificado A1 válido e não expirado.
+            # O GISS historicamente aceita o certificado folha separado da chave privada.
+            # Mantemos apenas o certificado do cliente no PEM do mTLS para evitar
+            # rejeição do handshake por variação na cadeia enviada.
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
                 cert_file.write(certificate.public_bytes(Encoding.PEM))
-                for cert_intermediario in (additional_certs or []):
-                    cert_file.write(cert_intermediario.public_bytes(Encoding.PEM))
                 cert_file_path = cert_file.name
             
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
@@ -809,45 +941,160 @@ class NFSeService:
                 "Content-Type": "text/xml; charset=utf-8"
             }
             
-            # URL do webservice
-            url = self.urls["base"] + self.urls["enviar_lote"]
-            print(f"[NFSE] URL: {url}")
-            print(f"[NFSE] Usando certificado mTLS")
-            print(f"[NFSE] Enviando com envelope SOAP GISS (XML escapado)")
-            
-            # Fazer requisição HTTP POST com certificado cliente (mTLS)
-            print(f"[NFSE] Enviando requisição...")
-            
-            response = requests.post(
-                url,
-                data=soap_envelope.encode("utf-8"),
-                headers=headers,
-                cert=(cert_file_path, key_file_path),  # mTLS: certificado + chave privada
-                timeout=60,
-                verify=True  # Validar certificado SSL do servidor
-            )
-            
-            print(f"[NFSE] Status HTTP: {response.status_code}")
-            print(f"[NFSE] Resposta: {len(response.text)} caracteres")
-            
-            # DEBUG: Salvar resposta
-            try:
-                with open('/tmp/last_nfse_response.xml', 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-                print(f"[NFSE] Resposta salva em /tmp/last_nfse_response.xml")
-            except:
-                pass
-            
-            # 7. Processar resposta
-            if response.status_code == 200:
-                return self._processar_resposta_envio(response.text)
-            else:
-                print(f"[NFSE] ❌ Erro HTTP {response.status_code}")
+            # 7. Envio com retentativa para indisponibilidade temporária do provedor
+            # Configurável por ambiente para ajuste fino sem novo deploy.
+            max_tentativas = int(os.getenv("NFSE_RETRY_ATTEMPTS", "5"))
+            delays_env = os.getenv("NFSE_RETRY_DELAYS", "2,5,10,20")
+            esperas_segundos = []
+            for item in delays_env.split(','):
+                item = item.strip()
+                if item.isdigit():
+                    esperas_segundos.append(int(item))
+            if not esperas_segundos:
+                esperas_segundos = [2, 5, 10, 20]
+
+            urls_envio = self._resolver_urls_envio_com_fallback()
+            total_hosts = len(urls_envio)
+            ultima_indisponibilidade = None
+            if total_hosts > 1:
+                print(f"[NFSE] Fallback de host habilitado: {total_hosts} hosts candidatos")
+
+            for idx_host, urls_ativas in enumerate(urls_envio, start=1):
+                url = urls_ativas["base"] + urls_ativas["enviar_lote"]
+                print(f"[NFSE] URL ({idx_host}/{total_hosts}): {url}")
+                print(f"[NFSE] Usando certificado mTLS")
+                print(f"[NFSE] Enviando com envelope SOAP GISS (XML escapado)")
+
+                trocar_host = False
+
+                for tentativa in range(1, max_tentativas + 1):
+                    print(
+                        f"[NFSE] Enviando requisição... tentativa {tentativa}/{max_tentativas} "
+                        f"(host {idx_host}/{total_hosts})"
+                    )
+
+                    response = requests.post(
+                        url,
+                        data=soap_envelope.encode("utf-8"),
+                        headers=headers,
+                        cert=(cert_file_path, key_file_path),  # mTLS: certificado + chave privada
+                        timeout=60,
+                        verify=True  # Validar certificado SSL do servidor
+                    )
+
+                    print(f"[NFSE] Status HTTP: {response.status_code}")
+                    print(f"[NFSE] Resposta: {len(response.text)} caracteres")
+
+                    # DEBUG: Salvar última resposta
+                    try:
+                        with open('/tmp/last_nfse_response.xml', 'w', encoding='utf-8') as f:
+                            f.write(response.text)
+                        print(f"[NFSE] Resposta salva em /tmp/last_nfse_response.xml")
+                    except:
+                        pass
+
+                    if response.status_code == 200:
+                        sucesso, dados_resposta = self._processar_resposta_envio(response.text)
+                        if sucesso:
+                            dados_resposta["host_utilizado"] = urls_ativas.get("base")
+                            return True, dados_resposta
+
+                        if self._resposta_indisponivel_temporaria(dados_resposta):
+                            ultima_indisponibilidade = dados_resposta
+                            if tentativa < max_tentativas:
+                                espera = esperas_segundos[min(tentativa - 1, len(esperas_segundos) - 1)]
+                                print(f"[NFSE] ⏳ Provedor indisponível temporariamente; nova tentativa em {espera}s")
+                                time.sleep(espera)
+                                continue
+
+                            if idx_host < total_hosts:
+                                print("[NFSE] ⚠️ Host atual indisponível após retentativas; alternando para host fallback")
+                                trocar_host = True
+                                break
+
+                            return False, {
+                                "erro": "Provedor indisponível após retentativas",
+                                "mensagem": (
+                                    f"Provedor indisponível após {max_tentativas * total_hosts} tentativas "
+                                    f"em {total_hosts} host(s). Tente novamente em alguns minutos."
+                                ),
+                                "retriavel": True,
+                                "tentativas": max_tentativas * total_hosts,
+                                "detalhe": dados_resposta.get("mensagem") or dados_resposta.get("erro"),
+                                "hosts_testados": [u.get("base") for u in urls_envio]
+                            }
+
+                        return False, dados_resposta
+
+                    if response.status_code in (502, 503, 504):
+                        if tentativa < max_tentativas:
+                            espera = esperas_segundos[min(tentativa - 1, len(esperas_segundos) - 1)]
+                            print(f"[NFSE] ⏳ HTTP {response.status_code} temporário; nova tentativa em {espera}s")
+                            time.sleep(espera)
+                            continue
+
+                        if idx_host < total_hosts:
+                            print(
+                                f"[NFSE] ⚠️ HTTP {response.status_code} persistente no host atual; "
+                                "alternando para host fallback"
+                            )
+                            trocar_host = True
+                            break
+
+                    if response.status_code in (400, 404, 405) and idx_host < total_hosts:
+                        print(
+                            f"[NFSE] ⚠️ HTTP {response.status_code} no host atual; "
+                            "alternando para próximo host fallback"
+                        )
+                        trocar_host = True
+                        break
+
+                    if response.status_code in (400, 404, 405) and ultima_indisponibilidade:
+                        print(
+                            f"[NFSE] ⚠️ Host fallback retornou HTTP {response.status_code}; "
+                            "mantendo diagnóstico de indisponibilidade do provedor"
+                        )
+                        return False, {
+                            "erro": "Provedor indisponível após retentativas",
+                            "mensagem": (
+                                f"Provedor indisponível após {max_tentativas * total_hosts} tentativas "
+                                f"em {total_hosts} host(s). Tente novamente em alguns minutos."
+                            ),
+                            "retriavel": True,
+                            "tentativas": max_tentativas * total_hosts,
+                            "detalhe": ultima_indisponibilidade.get("mensagem") or ultima_indisponibilidade.get("erro"),
+                            "hosts_testados": [u.get("base") for u in urls_envio],
+                            "ultimo_status_http": response.status_code
+                        }
+
+                    print(f"[NFSE] ❌ Erro HTTP {response.status_code}")
+                    return False, {
+                        "erro": f"Erro HTTP {response.status_code}",
+                        "mensagem": response.text[:500],
+                        "status_code": response.status_code,
+                        "host_utilizado": urls_ativas.get("base")
+                    }
+
+                if trocar_host:
+                    continue
+
+            if ultima_indisponibilidade:
                 return False, {
-                    "erro": f"Erro HTTP {response.status_code}",
-                    "mensagem": response.text[:500],
-                    "status_code": response.status_code
+                    "erro": "Provedor indisponível após retentativas",
+                    "mensagem": (
+                        f"Provedor indisponível após {max_tentativas * total_hosts} tentativas "
+                        f"em {total_hosts} host(s). Tente novamente em alguns minutos."
+                    ),
+                    "retriavel": True,
+                    "tentativas": max_tentativas * total_hosts,
+                    "detalhe": ultima_indisponibilidade.get("mensagem") or ultima_indisponibilidade.get("erro"),
+                    "hosts_testados": [u.get("base") for u in urls_envio]
                 }
+
+            return False, {
+                "erro": "Falha no envio após retentativas",
+                "mensagem": "Não foi possível concluir o envio do lote após múltiplas tentativas"
+            }
                 
         except Exception as e:
             print(f"[NFSE] ❌ Erro ao enviar lote: {e}")
@@ -910,10 +1157,13 @@ class NFSeService:
             cert_senha.encode('utf-8') if isinstance(cert_senha, str) else cert_senha
         )
 
+        if not private_key or not certificate:
+            raise ValueError("Não foi possível extrair chave e certificado do PFX do cliente")
+
+        _validar_periodo_certificado_x509(certificate)
+
         with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
             cert_file.write(certificate.public_bytes(Encoding.PEM))
-            for cert_intermediario in (additional_certs or []):
-                cert_file.write(cert_intermediario.public_bytes(Encoding.PEM))
             cert_file_path = cert_file.name
 
         with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
@@ -1213,6 +1463,25 @@ class NFSeService:
                 "tipo_erro": type(e).__name__,
                 "xml_resposta_sample": xml_resposta[:500] if xml_resposta else ""
             }
+
+    def _resposta_indisponivel_temporaria(self, dados_resposta: Optional[Dict[str, Any]]) -> bool:
+        """Detecta mensagem transitória de indisponibilidade do provedor GISS."""
+        if not dados_resposta:
+            return False
+
+        texto = " ".join([
+            str(dados_resposta.get("mensagem", "")),
+            str(dados_resposta.get("erro", "")),
+        ]).strip()
+
+        if not texto:
+            return False
+
+        texto_normalizado = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii").lower()
+        return (
+            "sistema esta indisponivel" in texto_normalizado
+            and "tente novamente mais tarde" in texto_normalizado
+        )
     
     def _processar_resposta_consulta(self, xml_resposta: str) -> Tuple[bool, Dict[str, Any]]:
         """
@@ -1318,6 +1587,8 @@ def criar_nfse_de_formulario(dados: Dict[str, Any], prestador_data: Dict[str, An
     Returns:
         Objeto NFSeNacional preenchido
     """
+
+    dados["codigo_nbs"] = normalizar_codigo_nbs(dados.get("codigo_nbs", DEFAULT_CODIGO_NBS))
     
     # Prestador
     prestador = PrestadorNFSe(
@@ -1386,7 +1657,7 @@ def criar_nfse_de_formulario(dados: Dict[str, Any], prestador_data: Dict[str, An
         base_calculo_pis_cofins=float(dados.get("base_calculo_pis_cofins", 0)),
         
         # Campos Reforma Tributária (LC 214/2025) - Obrigatórios GISS Online
-        codigo_nbs=dados.get("codigo_nbs", "101010000"),
+        codigo_nbs=dados.get("codigo_nbs", DEFAULT_CODIGO_NBS),
         percentual_total_tributos_federais=float(dados.get("percentual_total_tributos_federais", 0)),
         percentual_total_tributos_estaduais=float(dados.get("percentual_total_tributos_estaduais", 0)),
         percentual_total_tributos_municipais=float(dados.get("percentual_total_tributos_municipais", 5)),

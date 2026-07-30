@@ -208,7 +208,8 @@ Ação: http://www.giss.com.br/RecepcionarLoteRps
 ### 1. Código NBS (Obrigatório)
 - **Campo:** `codigo_nbs`
 - **Formato:** 9 dígitos numéricos (sem pontos)
-- **Exemplo:** `101010000` = 1.01.01.00.00 - Análise e desenvolvimento
+- **Exemplo interno normalizado:** `101010000` = 1.01.01.00.00 - Análise e desenvolvimento
+- **Entrada aceita:** `1.01.01.00.00` ou `101010000`
 - **Tag XML:** `<p1:CodigoNbs>`
 
 ### 2. Tributos Totais (Obrigatório)

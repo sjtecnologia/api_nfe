@@ -7,6 +7,7 @@ from sqlalchemy import text
 from database.connection import get_db
 from auth.decorators import permission_required, admin_required
 from decimal import Decimal
+from models.nfse_model import DEFAULT_CODIGO_NBS, normalizar_codigo_nbs
 
 regras_servicos_bp = Blueprint('regras_servicos', __name__, url_prefix='/admin/regras-servicos')
 
@@ -209,7 +210,7 @@ def salvar_regra_servico():
             # Alguns selects carregam o código no formato "1.0101.10.00" (tabela
             # codigos_nbs); removemos pontos/traços e truncamos por segurança
             # para nunca estourar o limite da coluna (StringDataRightTruncation).
-            'codigo_nbs': (request.form.get('codigo_nbs', '101010000') or '101010000').replace('.', '').replace('-', '')[:9],
+            'codigo_nbs': normalizar_codigo_nbs(request.form.get('codigo_nbs', DEFAULT_CODIGO_NBS)),
             'descricao_servico': request.form.get('descricao_servico', ''),
             'aliquota_iss': Decimal(request.form.get('aliquota_iss', '5.00')),
             'iss_retido': request.form.get('iss_retido') == 'on',

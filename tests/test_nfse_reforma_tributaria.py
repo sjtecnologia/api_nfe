@@ -8,9 +8,10 @@ import os
 # Adicionar o diretório raiz ao path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from datetime import datetime
+from datetime import datetime, timezone
 from services.nfse_service import NFSeService, criar_nfse_de_formulario
 from models.nfse_model import NFSeNacional
+from services.certificate_service import get_active_certificate_for_client
 
 
 def test_criar_nfse_com_campos_reforma():
@@ -145,6 +146,106 @@ def test_validacao_codigo_nbs():
     assert nfse.servico.codigo_nbs == '101010000'
     
     print("✅ Teste de validação de código NBS passou!")
+
+
+def test_normaliza_codigo_nbs_com_pontuacao():
+    """Aceita formato documentado com pontos e normaliza para 9 dígitos."""
+
+    prestador_data = {
+        'cnpj': '12345678000190',
+        'inscricao_municipal': '12345',
+        'razao_social': 'Empresa Teste',
+        'optante_simples': True
+    }
+
+    dados = {
+        'cliente_id': 1,
+        'numero_rps': 1,
+        'data_competencia': '2026-01-30',
+        'tomador_cpf_cnpj': '12345678000190',
+        'tomador_razao_social': 'Cliente',
+        'tomador_logradouro': 'Rua',
+        'tomador_numero': '1',
+        'tomador_bairro': 'Centro',
+        'tomador_codigo_municipio': '3549805',
+        'tomador_uf': 'SP',
+        'tomador_cep': '15015000',
+        'codigo_servico': '01.07',
+        'codigo_nbs': '1.0107.10.00',
+        'discriminacao': 'Teste NBS formatado',
+        'valor_servico': 100.00,
+        'aliquota_iss': 5.0,
+    }
+
+    nfse = criar_nfse_de_formulario(dados, prestador_data)
+
+    assert nfse.servico.codigo_nbs == '101071000'
+    assert dados['codigo_nbs'] == '101071000'
+
+
+def test_get_active_certificate_prioriza_vigente(monkeypatch):
+    """Garante que um certificado vencido não é escolhido quando há um vigente."""
+
+    class FakeCertificate:
+        def __init__(self, certificado_digital_id, ativo, validade_inicio, validade_fim, nome_arquivo_original):
+            self.certificado_digital_id = certificado_digital_id
+            self.cliente_id = 11
+            self.common_name = None
+            self.validade_inicio = validade_inicio
+            self.validade_fim = validade_fim
+            self.conteudo_certificado = 'Y2VydA=='
+            self.senha_certificado = 'c2VuaGE='
+            self.ativo = ativo
+            self.tipo_certificado = 'A1'
+            self.data_upload = datetime(2026, 1, 1)
+            self.fingerprint = f'fp-{certificado_digital_id}'
+            self.nome_arquivo_original = nome_arquivo_original
+
+    class FakeQuery:
+        def __init__(self, certificados):
+            self._certificados = certificados
+
+        def filter_by(self, **kwargs):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def all(self):
+            return self._certificados
+
+    class FakeDB:
+        def __init__(self, certificados):
+            self._certificados = certificados
+
+        def query(self, model):
+            return FakeQuery(self._certificados)
+
+    certificado_vencido = FakeCertificate(
+        certificado_digital_id=27,
+        ativo=True,
+        validade_inicio=datetime(2025, 2, 5, tzinfo=timezone.utc),
+        validade_fim=datetime(2026, 2, 5, tzinfo=timezone.utc),
+        nome_arquivo_original='vencido.pfx',
+    )
+    certificado_vigente = FakeCertificate(
+        certificado_digital_id=37,
+        ativo=True,
+        validade_inicio=datetime(2026, 2, 5, tzinfo=timezone.utc),
+        validade_fim=datetime(2027, 2, 5, tzinfo=timezone.utc),
+        nome_arquivo_original='vigente.pfx',
+    )
+
+    monkeypatch.setattr('services.certificate_service._decode_certificate_data', lambda data: b'cert')
+    monkeypatch.setattr('services.certificate_service._decrypt_password', lambda senha: 'senha')
+    monkeypatch.setattr('services.certificate_service._validate_pkcs12_simple', lambda cert_data, password: ('pk', 'cert', []))
+
+    resultado = get_active_certificate_for_client(FakeDB([certificado_vencido, certificado_vigente]), 11)
+
+    assert resultado is not None
+    assert resultado['certificado_id'] == 37
+    assert resultado['nome_arquivo_original'] == 'vigente.pfx'
+    assert resultado['modo_simulado'] is False
 
 
 def test_calcular_valores():

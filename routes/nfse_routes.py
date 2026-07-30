@@ -6,6 +6,10 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_required, current_user
 from datetime import datetime
 from sqlalchemy import text
+import os
+import time
+import threading
+import re
 import traceback
 
 # Importar dependências do projeto
@@ -13,13 +17,110 @@ from database.connection import get_db
 from database.models import Cliente
 from services.nfse_service import NFSeService, criar_nfse_de_formulario
 from models.nfse_model import (
-    NFSeNacional, CODIGOS_SERVICO_LC116, CODIGOS_MUNICIPIO_SP, ALIQUOTAS_ISS_SJRP
+    NFSeNacional, CODIGOS_SERVICO_LC116, CODIGOS_MUNICIPIO_SP, ALIQUOTAS_ISS_SJRP,
+    DEFAULT_CODIGO_NBS, normalizar_codigo_nbs
 )
 from auth.decorators import editor_or_admin_required, viewer_or_higher_required
 from auth.permissions import get_accessible_client_ids
 
 # Blueprint
 nfse_bp = Blueprint('nfse', __name__, url_prefix='/admin/nfse')
+
+
+def _agendar_reenvio_nfse_background(nfse_id: int, dados: dict, prestador_dict: dict):
+    """Agenda reenvio assíncrono para NFSe salva localmente.
+
+    Estratégia:
+    - só tenta se a NFSe ainda estiver sem protocolo;
+    - faz algumas tentativas espaçadas;
+    - ao sucesso, persiste protocolo/status.
+    """
+    intervalos_env = os.getenv('NFSE_ASYNC_RETRY_DELAYS', '60,180,300')
+    intervalos = []
+    for item in intervalos_env.split(','):
+        item = item.strip()
+        if item.isdigit():
+            intervalos.append(int(item))
+    if not intervalos:
+        intervalos = [60, 180, 300]
+
+    max_tentativas_bg = int(os.getenv('NFSE_ASYNC_RETRY_ATTEMPTS', str(len(intervalos))))
+
+    def _worker():
+        db = next(get_db())
+        try:
+            for tentativa in range(1, max_tentativas_bg + 1):
+                row = db.execute(text("""
+                    SELECT id, status, protocolo, ambiente
+                    FROM nfse
+                    WHERE id = :nfse_id
+                """), {"nfse_id": nfse_id}).mappings().first()
+
+                if not row:
+                    print(f"[NFSE-BG] NFSe {nfse_id} não encontrada para reenvio")
+                    return
+
+                if row.get('protocolo'):
+                    print(f"[NFSE-BG] NFSe {nfse_id} já possui protocolo ({row.get('protocolo')}); encerrando worker")
+                    return
+
+                if tentativa > 1:
+                    espera = intervalos[min(tentativa - 2, len(intervalos) - 1)]
+                    print(f"[NFSE-BG] Aguardando {espera}s para nova tentativa de reenvio da NFSe {nfse_id}")
+                    time.sleep(espera)
+
+                print(f"[NFSE-BG] Tentativa {tentativa}/{max_tentativas_bg} de reenvio da NFSe {nfse_id}")
+
+                service = NFSeService(
+                    ambiente=dados.get('ambiente', row.get('ambiente') or 'homologacao'),
+                    municipio_slug=dados.get('giss_municipio_slug') or None,
+                    ws_host=dados.get('giss_ws_host') or None,
+                )
+                nfse = criar_nfse_de_formulario(dados, prestador_dict)
+
+                sucesso, resposta = service.enviar_lote_rps(nfse, db_session=db)
+
+                if sucesso:
+                    protocolo = resposta.get('protocolo')
+                    db.execute(text("""
+                        UPDATE nfse
+                        SET status = '2',
+                            protocolo = :protocolo,
+                            mensagem_retorno = :mensagem,
+                            updated_at = :updated_at
+                        WHERE id = :nfse_id
+                    """), {
+                        "protocolo": protocolo,
+                        "mensagem": "Reenvio automático concluído com sucesso.",
+                        "updated_at": datetime.now(),
+                        "nfse_id": nfse_id,
+                    })
+                    db.commit()
+                    print(f"[NFSE-BG] ✅ Reenvio concluído para NFSe {nfse_id}. Protocolo: {protocolo}")
+                    return
+
+                mensagem_erro = resposta.get('mensagem') or resposta.get('erro') or 'Erro desconhecido no reenvio automático'
+                db.execute(text("""
+                    UPDATE nfse
+                    SET mensagem_retorno = :mensagem,
+                        updated_at = :updated_at
+                    WHERE id = :nfse_id
+                """), {
+                    "mensagem": f"Reenvio automático (tentativa {tentativa}/{max_tentativas_bg}): {mensagem_erro}",
+                    "updated_at": datetime.now(),
+                    "nfse_id": nfse_id,
+                })
+                db.commit()
+
+            print(f"[NFSE-BG] ⚠️ Reenvio automático esgotado para NFSe {nfse_id}")
+        except Exception as e:
+            db.rollback()
+            print(f"[NFSE-BG] ❌ Erro no worker de reenvio da NFSe {nfse_id}: {e}")
+            traceback.print_exc()
+        finally:
+            db.close()
+
+    threading.Thread(target=_worker, daemon=True, name=f"nfse-reenvio-{nfse_id}").start()
 
 
 def br_to_float(valor_str):
@@ -95,7 +196,7 @@ def _coletar_dados_prestador_nfse(form, prestador_data):
         'giss_ws_host': form.get('giss_ws_host', '').strip(),
 
         # Campos obrigatórios Reforma Tributária (LC 214/2025)
-        'codigo_nbs': form.get('codigo_nbs', '101010000'),
+        'codigo_nbs': normalizar_codigo_nbs(form.get('codigo_nbs', DEFAULT_CODIGO_NBS)),
         'percentual_total_tributos_federais': br_to_float(form.get('percentual_total_tributos_federais', 0)),
         'percentual_total_tributos_estaduais': br_to_float(form.get('percentual_total_tributos_estaduais', 0)),
         'percentual_total_tributos_municipais': br_to_float(form.get('percentual_total_tributos_municipais', 5)),
@@ -350,6 +451,9 @@ def emitir():
                 flash(f"RPS enviado para processamento! Protocolo: {protocolo}", "success")
             else:
                 mensagem_erro = resposta.get('mensagem', 'Erro desconhecido')
+                detalhe_erro = resposta.get('detalhe')
+                if detalhe_erro and detalhe_erro not in mensagem_erro:
+                    mensagem_erro = f"{mensagem_erro} Detalhe do provedor: {detalhe_erro}"
                 print(f"[NFSE] ⚠️ Erro no envio: {mensagem_erro}")
                 flash(f"RPS salvo, mas houve erro no envio: {mensagem_erro}", "warning")
                 
@@ -418,7 +522,7 @@ def emitir():
             'valor_iss': valor_iss,
             'valor_liquido': valor_liquido,
             # Campos Reforma Tributária (LC 214/2025)
-            'codigo_nbs': dados.get('codigo_nbs', '101010000'),
+            'codigo_nbs': dados.get('codigo_nbs', DEFAULT_CODIGO_NBS),
             'finalidade_nfse': dados.get('finalidade_nfse', '0'),
             'indicador_consumidor_final': dados.get('indicador_consumidor_final', '0'),
             'codigo_indicador_operacao': dados.get('codigo_indicador_operacao', '000001'),
@@ -448,6 +552,29 @@ def emitir():
         
         if not nfse_id:
             raise Exception("Erro ao obter ID da NFS-e inserida")
+
+        # Se o provedor estiver indisponível, agenda reenvio automático em background.
+        if not protocolo and mensagem_erro:
+            mensagem_norm = mensagem_erro.lower()
+            if (
+                'provedor indisponível' in mensagem_norm
+                or 'sistema está indisponível' in mensagem_norm
+                or 'sistema esta indisponivel' in mensagem_norm
+            ):
+                db.execute(text("""
+                    UPDATE nfse
+                    SET mensagem_retorno = :mensagem,
+                        updated_at = :updated_at
+                    WHERE id = :nfse_id
+                """), {
+                    "mensagem": "Reenvio automático agendado após indisponibilidade do provedor.",
+                    "updated_at": datetime.now(),
+                    "nfse_id": nfse_id,
+                })
+                db.commit()
+                print(f"[NFSE] Agendando reenvio automático para NFSe {nfse_id}")
+                _agendar_reenvio_nfse_background(nfse_id, dados, prestador_dict)
+                flash("Reenvio automático foi agendado em segundo plano.", "info")
         
         return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
         
@@ -939,6 +1066,337 @@ def download_danfse(nfse_id):
         flash(f"Erro ao gerar DANFSe: {str(e)}", "danger")
         return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
     finally:
+        db.close()
+
+
+@nfse_bp.route('/<int:nfse_id>/reenviar-provedor', methods=['POST'])
+@login_required
+@editor_or_admin_required()
+def reenviar_para_provedor(nfse_id):
+    """Reenvia manualmente uma NFS-e para o provedor GISS."""
+    db = next(get_db())
+    try:
+        accessible_clients = get_accessible_client_ids(db)
+        if not accessible_clients:
+            flash('Você não tem acesso a nenhum cliente.', 'danger')
+            return redirect(url_for('home.home'))
+
+        cliente_id = session.get('current_client_id', accessible_clients[0])
+        if cliente_id not in accessible_clients:
+            cliente_id = accessible_clients[0]
+
+        nfse_row = db.execute(text("""
+            SELECT *
+            FROM nfse
+            WHERE id = :nfse_id AND cliente_id = :cliente_id
+        """), {"nfse_id": nfse_id, "cliente_id": cliente_id}).mappings().first()
+
+        if not nfse_row:
+            flash('NFS-e não encontrada.', 'danger')
+            return redirect(url_for('nfse.list_nfse'))
+
+        if nfse_row.get('protocolo'):
+            flash(f"NFS-e já possui protocolo ({nfse_row.get('protocolo')}).", 'info')
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        prestador = db.query(Cliente).filter(Cliente.cliente_id == cliente_id).first()
+        if not prestador:
+            flash('Dados do prestador não encontrados.', 'danger')
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        tomador_endereco = (nfse_row.get('tomador_endereco') or '').strip()
+        tomador_logradouro = tomador_endereco
+        tomador_numero = ''
+        if ',' in tomador_endereco:
+            partes = tomador_endereco.split(',', 1)
+            tomador_logradouro = partes[0].strip()
+            tomador_numero = partes[1].strip()
+
+        data_comp = nfse_row.get('data_competencia')
+        if data_comp and hasattr(data_comp, 'strftime'):
+            data_comp = data_comp.strftime('%Y-%m-%d')
+        elif data_comp:
+            data_comp = str(data_comp)
+        else:
+            data_comp = None
+
+        dados = {
+            'cliente_id': cliente_id,
+            'numero_rps': nfse_row.get('numero_rps') or 1,
+            'serie_rps': nfse_row.get('serie_rps') or '1',
+            'tipo_rps': nfse_row.get('tipo_rps') or '1',
+            'data_competencia': data_comp,
+            'natureza_operacao': nfse_row.get('natureza_operacao') or '1',
+            'ambiente': nfse_row.get('ambiente') or 'homologacao',
+            'tomador_cpf_cnpj': nfse_row.get('tomador_cpf_cnpj') or '',
+            'tomador_razao_social': nfse_row.get('tomador_razao_social') or '',
+            'tomador_logradouro': tomador_logradouro,
+            'tomador_numero': tomador_numero,
+            'tomador_complemento': '',
+            'tomador_bairro': '',
+            'tomador_codigo_municipio': '',
+            'tomador_uf': 'SP',
+            'tomador_cep': '',
+            'tomador_telefone': '',
+            'tomador_email': '',
+            'codigo_servico': nfse_row.get('codigo_servico') or '17.01',
+            'codigo_cnae': None,
+            'discriminacao': nfse_row.get('discriminacao') or '',
+            'valor_servico': float(nfse_row.get('valor_servicos') or 0),
+            'valor_deducoes': 0.0,
+            'valor_pis': 0.0,
+            'valor_cofins': 0.0,
+            'valor_inss': 0.0,
+            'valor_ir': 0.0,
+            'valor_csll': 0.0,
+            'valor_pis_operacao': 0.0,
+            'valor_cofins_operacao': 0.0,
+            'base_calculo_pis_cofins': 0.0,
+            'outras_retencoes': 0.0,
+            'desconto_incondicionado': 0.0,
+            'desconto_condicionado': 0.0,
+            'aliquota_iss': float(nfse_row.get('aliquota_iss') or 0),
+            'aliquota_pis': 0.0,
+            'aliquota_cofins': 0.0,
+            'cst_pis_cofins': '00',
+            'tipo_retencao_pis_cofins': '2',
+            'iss_retido': False,
+            'csll_retida': False,
+            'codigo_municipio_prestacao': nfse_row.get('codigo_localidade_incidencia') or '3549805',
+            'codigo_nbs': nfse_row.get('codigo_nbs') or DEFAULT_CODIGO_NBS,
+            'percentual_total_tributos_federais': float(nfse_row.get('percentual_total_tributos_federais') or 0),
+            'percentual_total_tributos_estaduais': float(nfse_row.get('percentual_total_tributos_estaduais') or 0),
+            'percentual_total_tributos_municipais': float(nfse_row.get('percentual_total_tributos_municipais') or 0),
+            'finalidade_nfse': nfse_row.get('finalidade_nfse') or '0',
+            'indicador_consumidor_final': nfse_row.get('indicador_consumidor_final') or '0',
+            'codigo_indicador_operacao': nfse_row.get('codigo_indicador_operacao') or '000001',
+            'indicador_destinatario': nfse_row.get('indicador_destinatario') or '0',
+            'cst_ibs_cbs': nfse_row.get('cst_ibs_cbs') or '001',
+            'codigo_classificacao_tributaria': nfse_row.get('codigo_classificacao_tributaria') or '000001',
+            'codigo_localidade_incidencia': nfse_row.get('codigo_localidade_incidencia') or '3549805',
+            'percentual_redutor': float(nfse_row.get('percentual_redutor') or 0),
+            'regime_especial_tributacao': nfse_row.get('regime_especial_tributacao'),
+            'optante_simples_nacional': bool(nfse_row.get('optante_simples_nacional')),
+            'incentivador_cultural': bool(nfse_row.get('incentivador_cultural')),
+            'informacoes_complementares': nfse_row.get('informacoes_complementares') or ''
+        }
+
+        prestador_dict = {
+            'cnpj': prestador.cnpj or '',
+            'inscricao_municipal': prestador.inscricao_municipal or '',
+            'razao_social': prestador.razao_social or '',
+            'nome_fantasia': prestador.nome_fantasia or '',
+            'logradouro': prestador.logradouro or '',
+            'numero': prestador.numero or '',
+            'complemento': prestador.complemento or '',
+            'bairro': prestador.bairro or '',
+            'codigo_municipio': '3549805',
+            'uf': prestador.uf or 'SP',
+            'cep': prestador.cep or '',
+            'telefone': getattr(prestador, 'telefone_contato', '') or '',
+            'email': getattr(prestador, 'email_contato', '') or '',
+            'optante_simples': bool(getattr(prestador, 'optante_simples', True)),
+        }
+
+        xml_rps_salvo = (nfse_row.get('xml_rps') or '').strip()
+        if not xml_rps_salvo:
+            flash('Esta NFS-e não possui XML RPS salvo para reenvio seguro. Gere uma nova emissão para reenviar ao provedor.', 'warning')
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        nfse = criar_nfse_de_formulario(dados, prestador_dict)
+        nfse.xml_rps = xml_rps_salvo
+        service = NFSeService(ambiente=dados.get('ambiente', 'homologacao'))
+        sucesso, resposta = service.enviar_lote_rps(nfse, db_session=db)
+
+        if sucesso:
+            protocolo = resposta.get('protocolo')
+            db.execute(text("""
+                UPDATE nfse
+                SET status = '2', protocolo = :protocolo,
+                    mensagem_retorno = :mensagem, updated_at = :updated_at
+                WHERE id = :nfse_id
+            """), {
+                'protocolo': protocolo,
+                'mensagem': 'Reenviado manualmente para o provedor com sucesso.',
+                'updated_at': datetime.now(),
+                'nfse_id': nfse_id
+            })
+            db.commit()
+            flash(f'Reenvio concluído com sucesso. Protocolo: {protocolo}', 'success')
+        else:
+            mensagem_erro = resposta.get('mensagem') or resposta.get('erro') or 'Erro no reenvio para o provedor.'
+            detalhe_erro = resposta.get('detalhe')
+            if detalhe_erro and detalhe_erro not in mensagem_erro:
+                mensagem_erro = f"{mensagem_erro} Detalhe do provedor: {detalhe_erro}"
+            retriavel = bool(resposta.get('retriavel'))
+            db.execute(text("""
+                UPDATE nfse
+                SET mensagem_retorno = :mensagem, updated_at = :updated_at
+                WHERE id = :nfse_id
+            """), {
+                'mensagem': mensagem_erro,
+                'updated_at': datetime.now(),
+                'nfse_id': nfse_id
+            })
+            db.commit()
+
+            if retriavel:
+                db.execute(text("""
+                    UPDATE nfse
+                    SET mensagem_retorno = :mensagem, updated_at = :updated_at
+                    WHERE id = :nfse_id
+                """), {
+                    'mensagem': (
+                        'Reenvio automático agendado após indisponibilidade do provedor '
+                        '(acionado pelo reenvio manual).'
+                    ),
+                    'updated_at': datetime.now(),
+                    'nfse_id': nfse_id
+                })
+                db.commit()
+                _agendar_reenvio_nfse_background(nfse_id, dados, prestador_dict)
+                flash(
+                    'Falha por indisponibilidade do provedor. '
+                    'Novo reenvio automático foi agendado em segundo plano.',
+                    'info'
+                )
+            else:
+                flash(f'Falha no reenvio: {mensagem_erro}', 'warning')
+
+        return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+    except Exception as e:
+        db.rollback()
+        flash(f'Erro ao reenviar para o provedor: {str(e)}', 'danger')
+        return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+    finally:
+        db.close()
+
+
+@nfse_bp.route('/<int:nfse_id>/enviar-danfse-email', methods=['POST'])
+@login_required
+@viewer_or_higher_required()
+def enviar_danfse_email(nfse_id):
+    """Envia DANFSe (PDF) e XML da NFS-e para o email do tomador."""
+    import tempfile
+    from services.danfse_service import gerar_danfse_pdf, XmlNaoENacionalError
+    from services.email_service import EmailService
+
+    db = next(get_db())
+    try:
+        accessible_clients = get_accessible_client_ids(db)
+        if not accessible_clients:
+            flash('Você não tem acesso a nenhum cliente.', 'danger')
+            return redirect(url_for('home.home'))
+
+        cliente_id = session.get('current_client_id', accessible_clients[0])
+        if cliente_id not in accessible_clients:
+            cliente_id = accessible_clients[0]
+
+        nfse_data = db.execute(text("""
+            SELECT n.*, c.razao_social AS emitente_razao_social, c.nome_fantasia AS emitente_nome_fantasia
+            FROM nfse n
+            JOIN clientes c ON c.cliente_id = n.cliente_id
+            WHERE n.id = :nfse_id AND n.cliente_id = :cliente_id
+        """), {'nfse_id': nfse_id, 'cliente_id': cliente_id}).mappings().first()
+
+        if not nfse_data:
+            flash('NFS-e não encontrada.', 'danger')
+            return redirect(url_for('nfse.list_nfse'))
+
+        if not nfse_data.get('xml_nfse'):
+            flash('XML da NFS-e não disponível. Consulte o status do lote antes de enviar o DANFSe por email.', 'warning')
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        email_destinatario = (request.form.get('email_destinatario') or '').strip()
+        if not email_destinatario:
+            tomador_doc = (nfse_data.get('tomador_cpf_cnpj') or '').strip()
+            if tomador_doc:
+                row_email = db.execute(text("""
+                    SELECT email
+                    FROM destinatarios_nfe
+                    WHERE cliente_id = :cliente_id
+                      AND cpf_cnpj = :cpf_cnpj
+                      AND email IS NOT NULL
+                      AND email != ''
+                    LIMIT 1
+                """), {
+                    'cliente_id': cliente_id,
+                    'cpf_cnpj': tomador_doc
+                }).first()
+                if row_email and row_email[0]:
+                    email_destinatario = str(row_email[0]).strip()
+
+        if not email_destinatario:
+            flash('Tomador sem email cadastrado. Atualize o cadastro do tomador para enviar o DANFSe.', 'warning')
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        if not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_destinatario):
+            flash('Email do tomador inválido.', 'danger')
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        numero_nfse = nfse_data.get('numero_nfse') or nfse_data.get('numero_rps') or nfse_id
+        emitente_nome = (nfse_data.get('emitente_nome_fantasia') or '').strip() or (nfse_data.get('emitente_razao_social') or '').strip() or 'Emissor'
+        tomador_nome = nfse_data.get('tomador_razao_social') or 'Tomador'
+
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+            tmp_pdf_path = tmp.name
+
+        try:
+            gerar_danfse_pdf(
+                nfse_data.get('xml_nfse'),
+                tmp_pdf_path,
+                ambiente=nfse_data.get('ambiente') or 'producao',
+            )
+        except XmlNaoENacionalError as e:
+            flash(
+                'Não foi possível gerar o DANFSe porque esta NFS-e ainda não possui chave nacional no XML. '
+                f'Detalhe: {e}',
+                'warning'
+            )
+            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+        with open(tmp_pdf_path, 'rb') as f:
+            danfse_pdf = f.read()
+
+        anexos = [
+            {'nome': f'DANFSe_{numero_nfse}.pdf', 'conteudo': danfse_pdf},
+            {'nome': f'NFSe_{numero_nfse}.xml', 'conteudo': (nfse_data.get('xml_nfse') or '').encode('utf-8')},
+        ]
+
+        assunto = f'NFS-e #{numero_nfse} - {emitente_nome}'
+        corpo_html = f"""
+            <p>Olá, {tomador_nome}.</p>
+            <p>Segue em anexo o DANFSe (PDF) e o XML da NFS-e <strong>#{numero_nfse}</strong>.</p>
+            <p>Emitente: <strong>{emitente_nome}</strong></p>
+            <p>Este é um email automático. Por favor, não responda.</p>
+        """
+
+        email_service = EmailService()
+        resultado = email_service.enviar_email(
+            destinatario=email_destinatario,
+            assunto=assunto,
+            corpo_html=corpo_html,
+            anexos=anexos,
+            from_name=emitente_nome,
+        )
+
+        if resultado.get('success'):
+            flash(f'DANFSe enviado com sucesso para {email_destinatario}.', 'success')
+        else:
+            flash(f"Falha ao enviar DANFSe por email: {resultado.get('message')}", 'danger')
+
+        return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+
+    except Exception as e:
+        flash(f'Erro ao enviar DANFSe por email: {str(e)}', 'danger')
+        return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
+    finally:
+        try:
+            if 'tmp_pdf_path' in locals() and tmp_pdf_path and os.path.exists(tmp_pdf_path):
+                os.unlink(tmp_pdf_path)
+        except Exception:
+            pass
         db.close()
 
 
