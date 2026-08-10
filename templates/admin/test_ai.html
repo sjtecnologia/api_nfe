@@ -61,6 +61,19 @@
     </div>
 
     <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-chart-line"></i> Analytics IA (14 dias)</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiAnalytics()">
+                Atualizar analytics
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="ai-analytics-loading" class="text-muted">Carregando analytics...</div>
+            <div id="ai-analytics-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
         <div class="card-header">
             <h5 class="mb-0"><i class="fas fa-flask"></i> Prévia de Prompt</h5>
         </div>
@@ -351,6 +364,132 @@ async function loadAiHealth() {
     }
 }
 
+async function loadAiAnalytics() {
+    const loading = document.getElementById('ai-analytics-loading');
+    const content = document.getElementById('ai-analytics-content');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_analytics') }}?days=14');
+        const payload = await response.json();
+
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Falha ao carregar analytics');
+        }
+
+        const data = payload.data || {};
+        const summary = data.summary || {};
+        const history = data.daily_history || [];
+        const byFunc = data.by_functionality || [];
+
+        const dailyRows = history.map(item => `
+            <tr>
+                <td>${item.date}</td>
+                <td>${item.requests}</td>
+                <td>${item.success}</td>
+                <td>${item.errors}</td>
+                <td>${item.feedback_positive}</td>
+                <td>${item.feedback_negative}</td>
+            </tr>
+        `).join('');
+
+        const byFuncRows = byFunc.length
+            ? byFunc.map(item => `
+                <tr>
+                    <td>${item.funcionalidade}</td>
+                    <td>${item.requests}</td>
+                    <td>${item.success_rate}%</td>
+                    <td>${item.tokens}</td>
+                    <td>R$ ${(Number(item.cost || 0)).toFixed(4)}</td>
+                    <td>${item.avg_response_time_ms} ms</td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="6" class="text-muted">Sem dados no período.</td></tr>';
+
+        content.innerHTML = `
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Score de confiança estimado</div>
+                        <div class="fs-3 fw-bold">${summary.confidence_score ?? 0}%</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Sucesso das chamadas</div>
+                        <div class="fs-5 fw-bold">${summary.success_rate ?? 0}%</div>
+                        <div class="small text-muted">${summary.success_requests ?? 0}/${summary.total_requests ?? 0}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Feedback positivo</div>
+                        <div class="fs-5 fw-bold">${summary.feedback_positive_rate ?? 0}%</div>
+                        <div class="small text-muted">${summary.feedback_positive ?? 0}/${summary.feedback_total ?? 0}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Custo no período</div>
+                        <div class="fs-5 fw-bold">R$ ${(Number(summary.total_cost || 0)).toFixed(4)}</div>
+                        <div class="small text-muted">Tokens: ${summary.total_tokens ?? 0}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <h6 class="mb-2">Histórico diário</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Req.</th>
+                                    <th>OK</th>
+                                    <th>Erro</th>
+                                    <th>FB+</th>
+                                    <th>FB-</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${dailyRows || '<tr><td colspan="6" class="text-muted">Sem histórico.</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <h6 class="mb-2">Funcionalidades mais usadas</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Funcionalidade</th>
+                                    <th>Req.</th>
+                                    <th>Sucesso</th>
+                                    <th>Tokens</th>
+                                    <th>Custo</th>
+                                    <th>Tempo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${byFuncRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar analytics: ' + error;
+    }
+}
+
 async function loadAiLogs() {
     const loading = document.getElementById('ai-logs-loading');
     const content = document.getElementById('ai-logs-content');
@@ -539,6 +678,7 @@ document.getElementById('ai-preview-form').addEventListener('submit', async func
 loadAiStatus();
 loadAiLogs();
 loadAiHealth();
+loadAiAnalytics();
 
 document.getElementById('ai-classify-form').addEventListener('submit', async function(event) {
     event.preventDefault();

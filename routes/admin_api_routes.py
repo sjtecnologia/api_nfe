@@ -8,6 +8,7 @@ mantendo as URLs inalteradas (/admin/api/...).
 Registrado em app.py com url_prefix='/admin'.
 """
 import logging
+from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 import requests
@@ -387,6 +388,181 @@ def api_ia_feedbacks():
         })
     except Exception as exc:
         logger.error('Erro ao buscar feedbacks da IA: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/ia/analytics', methods=['GET'])
+@login_required
+def api_ia_analytics():
+    """Retorna métricas consolidadas da IA para dashboard administrativo."""
+    raw_days = request.args.get('days', 14)
+    try:
+        days = max(1, min(int(raw_days), 90))
+    except (TypeError, ValueError):
+        days = 14
+
+    start_date = datetime.now() - timedelta(days=days - 1)
+
+    if AiUsageLog is None:
+        return jsonify({
+            'success': True,
+            'data': {
+                'period_days': days,
+                'summary': {
+                    'total_requests': 0,
+                    'success_requests': 0,
+                    'error_requests': 0,
+                    'success_rate': 0,
+                    'avg_response_time_ms': 0,
+                    'total_tokens': 0,
+                    'total_cost': 0,
+                    'feedback_total': 0,
+                    'feedback_positive': 0,
+                    'feedback_negative': 0,
+                    'feedback_positive_rate': 0,
+                    'confidence_score': 0,
+                },
+                'daily_history': [],
+                'by_functionality': [],
+            },
+            'warning': 'Modelo AiUsageLog indisponivel neste ambiente',
+        })
+
+    db = next(get_db())
+    try:
+        logs = (
+            db.query(AiUsageLog)
+            .filter(AiUsageLog.created_at >= start_date)
+            .all()
+        )
+
+        feedbacks = []
+        if AiFeedback is not None:
+            feedbacks = (
+                db.query(AiFeedback)
+                .filter(AiFeedback.created_at >= start_date)
+                .all()
+            )
+
+        total_requests = len(logs)
+        success_requests = sum(1 for row in logs if (row.status or '').upper() == 'SUCCESS')
+        error_requests = max(total_requests - success_requests, 0)
+        total_tokens = int(sum(int(row.total_tokens or 0) for row in logs))
+        total_cost = float(sum(float(row.cost_estimated or 0) for row in logs))
+        total_response_time = int(sum(int(row.response_time_ms or 0) for row in logs))
+
+        success_rate = round((success_requests / total_requests) * 100, 1) if total_requests else 0
+        avg_response_time_ms = round(total_response_time / total_requests, 1) if total_requests else 0
+
+        feedback_total = len(feedbacks)
+        feedback_positive = sum(1 for row in feedbacks if (row.feedback or '').upper() == 'POSITIVO')
+        feedback_negative = sum(1 for row in feedbacks if (row.feedback or '').upper() == 'NEGATIVO')
+        feedback_positive_rate = round((feedback_positive / feedback_total) * 100, 1) if feedback_total else 0
+
+        # Score composto para leitura executiva rápida.
+        confidence_score = round((success_rate * 0.6) + (feedback_positive_rate * 0.4), 1)
+
+        by_functionality = {}
+        for row in logs:
+            key = row.funcionalidade or 'sem_funcionalidade'
+            item = by_functionality.setdefault(key, {
+                'funcionalidade': key,
+                'requests': 0,
+                'success': 0,
+                'errors': 0,
+                'tokens': 0,
+                'cost': 0.0,
+                'response_time_total_ms': 0,
+            })
+            item['requests'] += 1
+            if (row.status or '').upper() == 'SUCCESS':
+                item['success'] += 1
+            else:
+                item['errors'] += 1
+            item['tokens'] += int(row.total_tokens or 0)
+            item['cost'] += float(row.cost_estimated or 0)
+            item['response_time_total_ms'] += int(row.response_time_ms or 0)
+
+        by_functionality_rows = []
+        for value in by_functionality.values():
+            requests_count = value['requests']
+            by_functionality_rows.append({
+                'funcionalidade': value['funcionalidade'],
+                'requests': requests_count,
+                'success': value['success'],
+                'errors': value['errors'],
+                'success_rate': round((value['success'] / requests_count) * 100, 1) if requests_count else 0,
+                'tokens': value['tokens'],
+                'cost': round(value['cost'], 6),
+                'avg_response_time_ms': round(value['response_time_total_ms'] / requests_count, 1) if requests_count else 0,
+            })
+
+        by_functionality_rows.sort(key=lambda row: row['requests'], reverse=True)
+
+        daily_index = {}
+        for offset in range(days):
+            day = (start_date + timedelta(days=offset)).date()
+            day_key = day.isoformat()
+            daily_index[day_key] = {
+                'date': day_key,
+                'requests': 0,
+                'success': 0,
+                'errors': 0,
+                'feedback_positive': 0,
+                'feedback_negative': 0,
+            }
+
+        for row in logs:
+            if not row.created_at:
+                continue
+            day_key = row.created_at.date().isoformat()
+            if day_key not in daily_index:
+                continue
+            daily_index[day_key]['requests'] += 1
+            if (row.status or '').upper() == 'SUCCESS':
+                daily_index[day_key]['success'] += 1
+            else:
+                daily_index[day_key]['errors'] += 1
+
+        for row in feedbacks:
+            if not row.created_at:
+                continue
+            day_key = row.created_at.date().isoformat()
+            if day_key not in daily_index:
+                continue
+            if (row.feedback or '').upper() == 'POSITIVO':
+                daily_index[day_key]['feedback_positive'] += 1
+            elif (row.feedback or '').upper() == 'NEGATIVO':
+                daily_index[day_key]['feedback_negative'] += 1
+
+        daily_history = [daily_index[key] for key in sorted(daily_index.keys())]
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'period_days': days,
+                'summary': {
+                    'total_requests': total_requests,
+                    'success_requests': success_requests,
+                    'error_requests': error_requests,
+                    'success_rate': success_rate,
+                    'avg_response_time_ms': avg_response_time_ms,
+                    'total_tokens': total_tokens,
+                    'total_cost': round(total_cost, 6),
+                    'feedback_total': feedback_total,
+                    'feedback_positive': feedback_positive,
+                    'feedback_negative': feedback_negative,
+                    'feedback_positive_rate': feedback_positive_rate,
+                    'confidence_score': confidence_score,
+                },
+                'daily_history': daily_history,
+                'by_functionality': by_functionality_rows,
+            },
+        })
+    except Exception as exc:
+        logger.error('Erro ao gerar analytics da IA: %s', exc, exc_info=True)
         return jsonify({'success': False, 'error': str(exc)}), 500
     finally:
         db.close()

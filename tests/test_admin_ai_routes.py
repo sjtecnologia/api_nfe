@@ -2,7 +2,11 @@
 
 Cobrem a página de teste e os endpoints JSON sem depender de banco real.
 """
+from datetime import datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+from routes import admin_api_routes
 
 
 def _mock_admin_user():
@@ -260,3 +264,103 @@ class TestAdminAiRoutes:
         assert payload["success"] is True
         assert payload["data"]["operational"] is True
         assert len(payload["data"]["checks"]) == 2
+
+    def test_ai_analytics_endpoint_aggregates_metrics(self, client):
+        mock_user = _mock_admin_user()
+        now = datetime.now()
+
+        logs = [
+            SimpleNamespace(
+                created_at=now - timedelta(days=1),
+                funcionalidade='classificacao_produto',
+                status='SUCCESS',
+                total_tokens=120,
+                cost_estimated=0.0123,
+                response_time_ms=400,
+            ),
+            SimpleNamespace(
+                created_at=now,
+                funcionalidade='classificacao_produto',
+                status='ERROR',
+                total_tokens=30,
+                cost_estimated=0.0010,
+                response_time_ms=250,
+            ),
+            SimpleNamespace(
+                created_at=now,
+                funcionalidade='assistente_business',
+                status='SUCCESS',
+                total_tokens=200,
+                cost_estimated=0.0200,
+                response_time_ms=800,
+            ),
+        ]
+
+        feedbacks = [
+            SimpleNamespace(created_at=now, feedback='POSITIVO'),
+            SimpleNamespace(created_at=now, feedback='NEGATIVO'),
+            SimpleNamespace(created_at=now - timedelta(days=1), feedback='POSITIVO'),
+        ]
+
+        class _MockQuery:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def filter(self, *_args, **_kwargs):
+                return self
+
+            def all(self):
+                return self._rows
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.get_db") as mock_get_db:
+            mock_db = MagicMock()
+
+            def _query_side_effect(model):
+                if model is admin_api_routes.AiUsageLog:
+                    return _MockQuery(logs)
+                if model is admin_api_routes.AiFeedback:
+                    return _MockQuery(feedbacks)
+                raise AssertionError(f'Modelo inesperado: {model}')
+
+            mock_db.query.side_effect = _query_side_effect
+            mock_get_db.return_value = iter([mock_db])
+
+            response = client.get('/admin/api/ia/analytics?days=14')
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload['success'] is True
+        summary = payload['data']['summary']
+        assert summary['total_requests'] == 3
+        assert summary['success_requests'] == 2
+        assert summary['error_requests'] == 1
+        assert summary['feedback_total'] == 3
+        assert summary['feedback_positive'] == 2
+        assert len(payload['data']['by_functionality']) == 2
+        assert len(payload['data']['daily_history']) == 14
+
+    def test_ai_analytics_endpoint_handles_empty_data(self, client):
+        mock_user = _mock_admin_user()
+
+        class _MockQuery:
+            def filter(self, *_args, **_kwargs):
+                return self
+
+            def all(self):
+                return []
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.get_db") as mock_get_db:
+            mock_db = MagicMock()
+            mock_db.query.return_value = _MockQuery()
+            mock_get_db.return_value = iter([mock_db])
+
+            response = client.get('/admin/api/ia/analytics?days=7')
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload['success'] is True
+        assert payload['data']['summary']['total_requests'] == 0
+        assert payload['data']['summary']['confidence_score'] == 0
+        assert len(payload['data']['daily_history']) == 7
