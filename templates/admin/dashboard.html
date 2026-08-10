@@ -43,6 +43,9 @@
                 </ul>
             </div>
             {% endif %}
+            <a href="{{ url_for('admin.test_ai') }}" class="btn btn-outline-dark">
+                <i class="fas fa-robot"></i> Testar IA
+            </a>
             <button class="btn btn-outline-primary" onclick="refreshDashboard()">
                 <i class="fas fa-sync-alt"></i> Atualizar
             </button>

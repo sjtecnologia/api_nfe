@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
-from flask_login import login_required
+from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import or_, text, func
 from database.connection import get_db
@@ -381,52 +381,47 @@ def validar_regra_ia():
 @login_required
 def sugestao_produto_ia():
     """
-    Proxy para sugestão de tributação de produto com IA.
-    Evita problemas de CORS ao fazer requisição server-side.
+    Sugestão de tributação de produto com IA com resolução de IDs locais.
+    Usa o mesmo serviço do fluxo admin para mapear NCM/CFOP/CST/CSOSN.
     """
-    import requests
+    from services.product_classification_service import (
+        ProductClassificationError,
+        ProductClassificationService,
+        ProductClassificationUnavailable,
+    )
     
     try:
         data = request.get_json()
         
         if not data:
             return jsonify({"error": "Dados não fornecidos"}), 400
-        
-        print(f"[IA SUGESTÃO] Proxy recebeu dados: {data}")
-        
-        # Chamar serviço de IA internamente (server-side)
-        response = requests.post(
-            'http://localhost:8081/sugestao',
-            json=data,
-            timeout=30
-        )
-        
-        print(f"[IA SUGESTÃO] Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            resultado = response.json()
-            print(f"[IA SUGESTÃO] Resultado: {resultado}")
+
+        db = next(get_db())
+        try:
+            svc = ProductClassificationService(db)
+            resultado = svc.classify(
+                descricao=data.get('descricao', ''),
+                cliente_id=data.get('cliente_id'),
+                tipo_item=data.get('tipo_item', 'Produto'),
+                unidade_comercial=data.get('unidade_comercial', 'UN'),
+                codigo_interno=data.get('codigo_interno', ''),
+                user_id=getattr(current_user, 'id', None),
+            )
             return jsonify(resultado), 200
-        else:
-            print(f"[IA SUGESTÃO] Erro: {response.text}")
-            return jsonify({
-                "error": "Erro ao obter sugestão da IA",
-                "details": response.text
-            }), response.status_code
-            
-    except requests.exceptions.Timeout:
-        print(f"[IA SUGESTÃO] Timeout ao conectar serviço IA")
+        finally:
+            db.close()
+
+    except ProductClassificationUnavailable as e:
         return jsonify({
-            "error": "Timeout ao obter sugestão da IA",
-            "details": "Serviço demorou mais de 30 segundos"
-        }), 504
-        
-    except requests.exceptions.ConnectionError:
-        print(f"[IA SUGESTÃO] Erro de conexão com serviço IA")
-        return jsonify({
-            "error": "Serviço de IA indisponível",
-            "details": "Não foi possível conectar ao serviço de IA na porta 8081"
+            "error": str(e),
+            "details": "Serviço de IA indisponível na porta 8081"
         }), 503
+
+    except ProductClassificationError as e:
+        return jsonify({
+            "error": str(e),
+            "details": "Falha ao processar resposta de classificação"
+        }), 500
         
     except Exception as e:
         print(f"[IA SUGESTÃO] Erro inesperado: {e}")

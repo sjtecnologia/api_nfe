@@ -1254,3 +1254,198 @@ class NomenclaturaBrasileiraServicos(Base):
     
     def __repr__(self):
         return f"<NomenclaturaBrasileiraServicos(codigo='{self.codigo_nbs}', lc116='{self.codigo_lc116}')>"
+
+
+# --- SISTEMA DE INTELIGÊNCIA ARTIFICIAL ---
+
+class AiPrompt(Base):
+    __tablename__ = 'ai_prompts'
+
+    prompt_id = Column(Integer, primary_key=True)
+    nome = Column(String(100), unique=True, nullable=False)
+    funcionalidade = Column(String(100), nullable=False)
+    versao = Column(String(20), nullable=False, default='1.0.0')
+    modelo = Column(String(100), nullable=True)
+    temperatura = Column(Numeric(4, 2), nullable=True)
+    status = Column(String(20), nullable=False, default='ATIVO')
+    prompt = Column(Text, nullable=False)
+    parametros = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        if isinstance(self.parametros, str):
+            try:
+                import json
+                data['parametros'] = json.loads(self.parametros)
+            except Exception:
+                data['parametros'] = self.parametros
+        return data
+
+    def __repr__(self):
+        return f"<AiPrompt(id={self.prompt_id}, nome='{self.nome}', funcionalidade='{self.funcionalidade}')>"
+
+
+class AiConversation(Base):
+    __tablename__ = 'ai_conversations'
+
+    conversation_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    funcionalidade = Column(String(100), nullable=False)
+    titulo = Column(String(255), nullable=True)
+    status = Column(String(20), nullable=False, default='ATIVA')
+    contexto = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+    last_message_at = Column(DateTime, nullable=True)
+
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        if isinstance(self.contexto, str):
+            try:
+                import json
+                data['contexto'] = json.loads(self.contexto)
+            except Exception:
+                data['contexto'] = self.contexto
+        return data
+
+    def __repr__(self):
+        return f"<AiConversation(id={self.conversation_id}, cliente_id={self.cliente_id}, funcionalidade='{self.funcionalidade}')>"
+
+
+class AiMessage(Base):
+    __tablename__ = 'ai_messages'
+
+    message_id = Column(BigInteger, primary_key=True)
+    conversation_id = Column(BigInteger, ForeignKey('ai_conversations.conversation_id', ondelete='CASCADE'), nullable=False)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    role = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    funcionalidade = Column(String(100), nullable=False)
+    model = Column(String(100), nullable=True)
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    cost_estimated = Column(Numeric(12, 6), default=0)
+    tool_calls = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        if isinstance(self.tool_calls, str):
+            try:
+                import json
+                data['tool_calls'] = json.loads(self.tool_calls)
+            except Exception:
+                data['tool_calls'] = self.tool_calls
+        return data
+
+    def __repr__(self):
+        return f"<AiMessage(id={self.message_id}, conversation_id={self.conversation_id}, role='{self.role}')>"
+
+
+class AiUsageLog(Base):
+    __tablename__ = 'ai_usage_logs'
+
+    usage_id = Column(BigInteger, primary_key=True)
+    conversation_id = Column(BigInteger, ForeignKey('ai_conversations.conversation_id', ondelete='SET NULL'), nullable=True)
+    prompt_id = Column(Integer, ForeignKey('ai_prompts.prompt_id', ondelete='SET NULL'), nullable=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    funcionalidade = Column(String(100), nullable=False)
+    provider = Column(String(100), nullable=False)
+    model = Column(String(100), nullable=False)
+    request_type = Column(String(50), nullable=True)
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    cost_estimated = Column(Numeric(12, 6), default=0)
+    response_time_ms = Column(Integer, default=0)
+    status = Column(String(20), nullable=False, default='SUCCESS')
+    error_message = Column(Text, nullable=True)
+    metadata_json = Column('metadata', JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        if isinstance(self.metadata_json, str):
+            try:
+                import json
+                data['metadata'] = json.loads(self.metadata_json)
+            except Exception:
+                data['metadata'] = self.metadata_json
+        return data
+
+    def __repr__(self):
+        return f"<AiUsageLog(id={self.usage_id}, cliente_id={self.cliente_id}, model='{self.model}')>"
+
+
+class AiUsageLimit(Base):
+    __tablename__ = 'ai_user_limits'
+
+    limit_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
+    plano_id = Column(Integer, ForeignKey('planos_nfe.plano_id', ondelete='SET NULL'), nullable=True)
+    funcionalidade = Column(String(100), nullable=False)
+    limite_mensal = Column(Integer, nullable=False, default=100)
+    limite_diario = Column(Integer, nullable=True)
+    ativo = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+    def to_dict(self):
+        return serialize_sqla_object(self)
+
+    def __repr__(self):
+        return f"<AiUsageLimit(id={self.limit_id}, funcionalidade='{self.funcionalidade}', limite_mensal={self.limite_mensal})>"
+
+
+class AiFeedback(Base):
+    __tablename__ = 'ai_feedback'
+
+    feedback_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    conversation_id = Column(BigInteger, ForeignKey('ai_conversations.conversation_id', ondelete='SET NULL'), nullable=True)
+    message_id = Column(BigInteger, ForeignKey('ai_messages.message_id', ondelete='SET NULL'), nullable=True)
+    funcionalidade = Column(String(100), nullable=False)
+    feedback = Column(String(20), nullable=False)
+    comentario = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+
+    def to_dict(self):
+        return serialize_sqla_object(self)
+
+    def __repr__(self):
+        return f"<AiFeedback(id={self.feedback_id}, feedback='{self.feedback}', funcionalidade='{self.funcionalidade}')>"
+
+
+class AiGeneratedContent(Base):
+    __tablename__ = 'ai_generated_content'
+
+    generated_content_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    funcionalidade = Column(String(100), nullable=False)
+    canal = Column(String(50), nullable=True)
+    input_data = Column(JSONB if os.getenv('DB_TYPE') == 'postgresql' else Text, nullable=True)
+    output_content = Column(Text, nullable=False)
+    model = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+
+    def to_dict(self):
+        data = serialize_sqla_object(self)
+        if isinstance(self.input_data, str):
+            try:
+                import json
+                data['input_data'] = json.loads(self.input_data)
+            except Exception:
+                data['input_data'] = self.input_data
+        return data
+
+    def __repr__(self):
+        return f"<AiGeneratedContent(id={self.generated_content_id}, funcionalidade='{self.funcionalidade}', canal='{self.canal}')>"

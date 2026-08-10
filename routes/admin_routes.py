@@ -6477,6 +6477,14 @@ def test_email():
     return render_template('admin/test_email.html')
 
 
+@admin_bp.route('/test-ai', methods=['GET'])
+@login_required
+@admin_required()
+def test_ai():
+    """Página administrativa para testar prompts e status da IA centralizada."""
+    return render_template('admin/test_ai.html')
+
+
 # =============================================================================
 # cBenef-SP – Tabela oficial v20260626
 # =============================================================================

@@ -23,6 +23,7 @@ backups/
 # Arquivos de ambiente
 .env.bak*
 .env.bak_*
+.env.local
 
 # Arquivos do sistema
 .DS_Store

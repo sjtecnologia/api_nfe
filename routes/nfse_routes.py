@@ -137,6 +137,48 @@ def br_to_float(valor_str):
         return 0.0
 
 
+def _montar_resumo_falha_envio_nfse(resposta: dict, ambiente: str) -> str:
+    """Monta mensagem de erro amigável com diagnóstico técnico resumido."""
+    if not isinstance(resposta, dict):
+        return "Erro desconhecido no envio para o provedor."
+
+    mensagem = (resposta.get('mensagem') or resposta.get('erro') or 'Erro desconhecido no envio para o provedor.').strip()
+    detalhe = (resposta.get('detalhe') or '').strip()
+
+    if detalhe and detalhe not in mensagem:
+        mensagem = f"{mensagem} Detalhe do provedor: {detalhe}"
+
+    diagnostico = [f"Ambiente: {ambiente}"]
+
+    tentativas = resposta.get('tentativas')
+    if tentativas:
+        diagnostico.append(f"Tentativas: {tentativas}")
+
+    hosts_testados = resposta.get('hosts_testados')
+    if isinstance(hosts_testados, list) and hosts_testados:
+        hosts_limpos = [str(host).strip() for host in hosts_testados if str(host).strip()]
+        if hosts_limpos:
+            diagnostico.append(f"Hosts testados: {', '.join(hosts_limpos)}")
+
+    ultimo_status_http = resposta.get('ultimo_status_http') or resposta.get('status_code')
+    if ultimo_status_http:
+        diagnostico.append(f"Último HTTP: {ultimo_status_http}")
+
+    endpoint_online = resposta.get('endpoint_online')
+    if endpoint_online is True:
+        diagnostico.append("Endpoint provedor: online")
+    elif endpoint_online is False:
+        diagnostico.append("Endpoint provedor: sem resposta estável")
+
+    diagnostico_endpoint = (resposta.get('diagnostico_endpoint') or '').strip()
+    if diagnostico_endpoint:
+        diagnostico.append(f"Diagnóstico endpoint: {diagnostico_endpoint}")
+
+    if diagnostico:
+        return f"{mensagem} Diagnóstico: {' | '.join(diagnostico)}"
+    return mensagem
+
+
 def _coletar_dados_prestador_nfse(form, prestador_data):
     """Monta os dicts `dados` (campos do formulário de emissão) e `prestador_dict`
     a partir do form da tela de emissão de NFS-e e do Cliente (prestador).
@@ -450,10 +492,7 @@ def emitir():
                 print(f"[NFSE] ✅ Enviado com sucesso! Protocolo: {protocolo}")
                 flash(f"RPS enviado para processamento! Protocolo: {protocolo}", "success")
             else:
-                mensagem_erro = resposta.get('mensagem', 'Erro desconhecido')
-                detalhe_erro = resposta.get('detalhe')
-                if detalhe_erro and detalhe_erro not in mensagem_erro:
-                    mensagem_erro = f"{mensagem_erro} Detalhe do provedor: {detalhe_erro}"
+                mensagem_erro = _montar_resumo_falha_envio_nfse(resposta, ambiente)
                 print(f"[NFSE] ⚠️ Erro no envio: {mensagem_erro}")
                 flash(f"RPS salvo, mas houve erro no envio: {mensagem_erro}", "warning")
                 
@@ -567,7 +606,10 @@ def emitir():
                         updated_at = :updated_at
                     WHERE id = :nfse_id
                 """), {
-                    "mensagem": "Reenvio automático agendado após indisponibilidade do provedor.",
+                    "mensagem": (
+                        "Reenvio automático agendado após indisponibilidade do provedor. "
+                        f"Diagnóstico inicial: {mensagem_erro}"
+                    ),
                     "updated_at": datetime.now(),
                     "nfse_id": nfse_id,
                 })
@@ -1198,13 +1240,9 @@ def reenviar_para_provedor(nfse_id):
             'optante_simples': bool(getattr(prestador, 'optante_simples', True)),
         }
 
-        xml_rps_salvo = (nfse_row.get('xml_rps') or '').strip()
-        if not xml_rps_salvo:
-            flash('Esta NFS-e não possui XML RPS salvo para reenvio seguro. Gere uma nova emissão para reenviar ao provedor.', 'warning')
-            return redirect(url_for('nfse.visualizar', nfse_id=nfse_id))
-
         nfse = criar_nfse_de_formulario(dados, prestador_dict)
-        nfse.xml_rps = xml_rps_salvo
+        # Reenvio manual deve regenerar o XML com a estrutura mais atual
+        # para evitar reaproveitar payload legado rejeitado por schema (E160).
         service = NFSeService(ambiente=dados.get('ambiente', 'homologacao'))
         sucesso, resposta = service.enviar_lote_rps(nfse, db_session=db)
 
@@ -1224,10 +1262,7 @@ def reenviar_para_provedor(nfse_id):
             db.commit()
             flash(f'Reenvio concluído com sucesso. Protocolo: {protocolo}', 'success')
         else:
-            mensagem_erro = resposta.get('mensagem') or resposta.get('erro') or 'Erro no reenvio para o provedor.'
-            detalhe_erro = resposta.get('detalhe')
-            if detalhe_erro and detalhe_erro not in mensagem_erro:
-                mensagem_erro = f"{mensagem_erro} Detalhe do provedor: {detalhe_erro}"
+            mensagem_erro = _montar_resumo_falha_envio_nfse(resposta, dados.get('ambiente', 'homologacao'))
             retriavel = bool(resposta.get('retriavel'))
             db.execute(text("""
                 UPDATE nfse
@@ -1248,7 +1283,7 @@ def reenviar_para_provedor(nfse_id):
                 """), {
                     'mensagem': (
                         'Reenvio automático agendado após indisponibilidade do provedor '
-                        '(acionado pelo reenvio manual).'
+                        f'(acionado pelo reenvio manual). Diagnóstico inicial: {mensagem_erro}'
                     ),
                     'updated_at': datetime.now(),
                     'nfse_id': nfse_id

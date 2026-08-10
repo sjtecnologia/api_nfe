@@ -64,9 +64,9 @@ class NFSeService:
     FALLBACK_HOST_WHITELIST = {
         "homologacao": {
             "ws-homologacao-rtc.giss.com.br",
-            "ws-sjrp.giss.com.br",
         },
         "producao": {
+            "ws-rtc.giss.com.br",
             "ws-sjrp.giss.com.br",
         },
     }
@@ -86,8 +86,8 @@ class NFSeService:
             "versao_anexo_vii": "1.01.00"    # AnexoVII - IndOp_IBSCBS
         },
         "producao": {
-            "base": "https://ws-sjrp.giss.com.br/",
-            "wsdl": "https://ws-sjrp.giss.com.br/service-ws/nf/nfse-ws?wsdl",
+            "base": "https://ws-rtc.giss.com.br/",
+            "wsdl": "https://ws-rtc.giss.com.br/service-ws/nf/nfse-ws?wsdl",
             "enviar_lote": "service-ws/nf/nfse-ws",
             "consultar_lote": "service-ws/nf/nfse-ws",
             "consultar_nfse": "service-ws/nf/nfse-ws",
@@ -174,6 +174,20 @@ class NFSeService:
             # Sem whitelist explícita para ambiente, manter apenas host atual.
             return host == self._extrair_hostname_base(self.urls.get("base", ""))
         return host in permitidos
+
+    def _soap_action(self, operacao: str) -> str:
+        """Resolve SOAPAction com suporte a override por variável de ambiente."""
+        env_key = f"GISS_SOAP_ACTION_{operacao.upper()}"
+        return os.getenv(env_key, f"http://nfse.abrasf.org.br/{operacao}")
+
+    def _usar_schema_rtc(self) -> bool:
+        """Define se o XML deve incluir blocos RTC (IBS/CBS e trib)."""
+        valor = (
+            os.getenv(f"GISS_SCHEMA_RTC_{self.ambiente.upper()}")
+            or os.getenv("GISS_SCHEMA_RTC")
+            or "false"
+        )
+        return str(valor).strip().lower() in {"1", "true", "yes", "on", "sim"}
 
     def _resolver_urls_envio_com_fallback(self) -> List[Dict[str, str]]:
         """Lista URLs de envio: principal + hosts alternativos configurados."""
@@ -365,7 +379,7 @@ class NFSeService:
         etree.SubElement(ident_rps, "{%s}Serie" % self.NS_TIPOS).text = nfse.serie_rps
         etree.SubElement(ident_rps, "{%s}Tipo" % self.NS_TIPOS).text = nfse.tipo_rps
         
-        # Data de emissão
+        # Data de emissão (schema GISS v2.04 define xs:date)
         etree.SubElement(rps_ident, "{%s}DataEmissao" % self.NS_TIPOS).text = nfse.data_emissao.strftime("%Y-%m-%d")
         etree.SubElement(rps_ident, "{%s}Status" % self.NS_TIPOS).text = "1"  # Normal
         
@@ -375,6 +389,8 @@ class NFSeService:
         # p1:Servico
         servico_el = etree.SubElement(inf_rps, "{%s}Servico" % self.NS_TIPOS)
         
+        usar_schema_rtc = self._usar_schema_rtc()
+
         # p1:Valores do serviço - GISS exige valores zerados explícitos
         valores = etree.SubElement(servico_el, "{%s}Valores" % self.NS_TIPOS)
         etree.SubElement(valores, "{%s}ValorServicos" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.valor_servicos)
@@ -429,7 +445,7 @@ class NFSeService:
             nfse.servico.percentual_total_tributos_municipais > 0,
         ])
 
-        if incluir_piscofins or incluir_totais:
+        if usar_schema_rtc and (incluir_piscofins or incluir_totais):
             trib = etree.SubElement(valores, "{%s}trib" % self.NS_TIPOS)
 
             if incluir_piscofins:
@@ -456,20 +472,21 @@ class NFSeService:
                 etree.SubElement(percentuais, "{%s}pTotTribEst" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_total_tributos_estaduais)
                 etree.SubElement(percentuais, "{%s}pTotTribMun" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_total_tributos_municipais)
 
-        ibscbs = etree.SubElement(valores, "{%s}IBSCBS" % self.NS_TIPOS)
-        etree.SubElement(ibscbs, "{%s}finNFSe" % self.NS_TIPOS).text = nfse.servico.finalidade_nfse
-        etree.SubElement(ibscbs, "{%s}indFinal" % self.NS_TIPOS).text = nfse.servico.indicador_consumidor_final
-        etree.SubElement(ibscbs, "{%s}cIndOp" % self.NS_TIPOS).text = nfse.servico.codigo_indicador_operacao
-        etree.SubElement(ibscbs, "{%s}indDest" % self.NS_TIPOS).text = nfse.servico.indicador_destinatario
+        if usar_schema_rtc:
+            ibscbs = etree.SubElement(valores, "{%s}IBSCBS" % self.NS_TIPOS)
+            etree.SubElement(ibscbs, "{%s}finNFSe" % self.NS_TIPOS).text = nfse.servico.finalidade_nfse
+            etree.SubElement(ibscbs, "{%s}indFinal" % self.NS_TIPOS).text = nfse.servico.indicador_consumidor_final
+            etree.SubElement(ibscbs, "{%s}cIndOp" % self.NS_TIPOS).text = nfse.servico.codigo_indicador_operacao
+            etree.SubElement(ibscbs, "{%s}indDest" % self.NS_TIPOS).text = nfse.servico.indicador_destinatario
 
-        ibscbs_valores = etree.SubElement(ibscbs, "{%s}valores" % self.NS_TIPOS)
-        ibscbs_trib = etree.SubElement(ibscbs_valores, "{%s}trib" % self.NS_TIPOS)
-        grupo_ibscbs = etree.SubElement(ibscbs_trib, "{%s}gIBSCBS" % self.NS_TIPOS)
-        etree.SubElement(grupo_ibscbs, "{%s}CST" % self.NS_TIPOS).text = nfse.servico.cst_ibs_cbs
-        etree.SubElement(grupo_ibscbs, "{%s}cClassTrib" % self.NS_TIPOS).text = nfse.servico.codigo_classificacao_tributaria
-        etree.SubElement(ibscbs_valores, "{%s}cLocalidadeIncid" % self.NS_TIPOS).text = nfse.servico.codigo_localidade_incidencia
-        etree.SubElement(ibscbs_valores, "{%s}pRedutor" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_redutor)
-        etree.SubElement(ibscbs_valores, "{%s}vBC" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.base_calculo)
+            ibscbs_valores = etree.SubElement(ibscbs, "{%s}valores" % self.NS_TIPOS)
+            ibscbs_trib = etree.SubElement(ibscbs_valores, "{%s}trib" % self.NS_TIPOS)
+            grupo_ibscbs = etree.SubElement(ibscbs_trib, "{%s}gIBSCBS" % self.NS_TIPOS)
+            etree.SubElement(grupo_ibscbs, "{%s}CST" % self.NS_TIPOS).text = nfse.servico.cst_ibs_cbs
+            etree.SubElement(grupo_ibscbs, "{%s}cClassTrib" % self.NS_TIPOS).text = nfse.servico.codigo_classificacao_tributaria
+            etree.SubElement(ibscbs_valores, "{%s}cLocalidadeIncid" % self.NS_TIPOS).text = nfse.servico.codigo_localidade_incidencia
+            etree.SubElement(ibscbs_valores, "{%s}pRedutor" % self.NS_TIPOS).text = self.formatar_percentual(nfse.servico.percentual_redutor)
+            etree.SubElement(ibscbs_valores, "{%s}vBC" % self.NS_TIPOS).text = self.formatar_valor(nfse.servico.base_calculo)
         
         # p1:IssRetido
         etree.SubElement(servico_el, "{%s}IssRetido" % self.NS_TIPOS).text = "1" if nfse.servico.iss_retido else "2"
@@ -514,10 +531,13 @@ class NFSeService:
         inscricao = nfse.prestador.inscricao_municipal or "0"
         etree.SubElement(prestador_el, "{%s}InscricaoMunicipal" % self.NS_TIPOS).text = inscricao
         
-        # p1:TomadorServico (SINGULAR conforme exemplo GISS)
+        # Tomador: schema RTC usa plural; schema legado usa singular.
         if nfse.Tomadores:
-            tomador_el = etree.SubElement(inf_rps, "{%s}TomadorServico" % self.NS_TIPOS)
-            ident_Tomadores = etree.SubElement(tomador_el, "{%s}IdentificacaoTomador" % self.NS_TIPOS)
+            tag_tomador = "TomadoresServico" if usar_schema_rtc else "TomadorServico"
+            tag_ident_tomador = "IdentificacaoTomadores" if usar_schema_rtc else "IdentificacaoTomador"
+
+            tomador_el = etree.SubElement(inf_rps, "{%s}%s" % (self.NS_TIPOS, tag_tomador))
+            ident_Tomadores = etree.SubElement(tomador_el, "{%s}%s" % (self.NS_TIPOS, tag_ident_tomador))
             cpf_cnpj_Tomadores = etree.SubElement(ident_Tomadores, "{%s}CpfCnpj" % self.NS_TIPOS)
             
             if nfse.Tomadores.tipo_documento == "CPF":
@@ -535,18 +555,19 @@ class NFSeService:
             if nfse.Tomadores.endereco_logradouro:
                 endereco_Tomadores = etree.SubElement(tomador_el, "{%s}Endereco" % self.NS_TIPOS)
                 etree.SubElement(endereco_Tomadores, "{%s}Endereco" % self.NS_TIPOS).text = self.limpar_texto(nfse.Tomadores.endereco_logradouro, 125)
-                if nfse.Tomadores.endereco_numero:
-                    etree.SubElement(endereco_Tomadores, "{%s}Numero" % self.NS_TIPOS).text = nfse.Tomadores.endereco_numero[:10]
+                numero_endereco = (nfse.Tomadores.endereco_numero or "S/N")[:10]
+                etree.SubElement(endereco_Tomadores, "{%s}Numero" % self.NS_TIPOS).text = numero_endereco
                 if nfse.Tomadores.endereco_complemento:
                     etree.SubElement(endereco_Tomadores, "{%s}Complemento" % self.NS_TIPOS).text = nfse.Tomadores.endereco_complemento[:60]
-                if nfse.Tomadores.endereco_bairro:
-                    etree.SubElement(endereco_Tomadores, "{%s}Bairro" % self.NS_TIPOS).text = nfse.Tomadores.endereco_bairro[:60]
-                if nfse.Tomadores.endereco_codigo_municipio:
-                    etree.SubElement(endereco_Tomadores, "{%s}CodigoMunicipio" % self.NS_TIPOS).text = nfse.Tomadores.endereco_codigo_municipio
-                if nfse.Tomadores.endereco_uf:
-                    etree.SubElement(endereco_Tomadores, "{%s}Uf" % self.NS_TIPOS).text = nfse.Tomadores.endereco_uf
-                if nfse.Tomadores.endereco_cep:
-                    etree.SubElement(endereco_Tomadores, "{%s}Cep" % self.NS_TIPOS).text = nfse.Tomadores.endereco_cep.replace("-", "")[:8]
+                bairro = self.limpar_texto(nfse.Tomadores.endereco_bairro or "NAO INFORMADO", 60)
+                etree.SubElement(endereco_Tomadores, "{%s}Bairro" % self.NS_TIPOS).text = bairro
+                codigo_municipio_tomador = nfse.Tomadores.endereco_codigo_municipio or "3549805"
+                etree.SubElement(endereco_Tomadores, "{%s}CodigoMunicipio" % self.NS_TIPOS).text = codigo_municipio_tomador
+                uf_tomador = (nfse.Tomadores.endereco_uf or "SP")[:2]
+                etree.SubElement(endereco_Tomadores, "{%s}Uf" % self.NS_TIPOS).text = uf_tomador
+                cep_tomador = (nfse.Tomadores.endereco_cep or "00000000").replace("-", "")[:8]
+                cep_tomador = cep_tomador.ljust(8, "0")
+                etree.SubElement(endereco_Tomadores, "{%s}Cep" % self.NS_TIPOS).text = cep_tomador
             
             # Contato do Tomadores - GISS v2.04 suporta apenas Telefone
             if nfse.Tomadores.telefone:
@@ -825,11 +846,26 @@ class NFSeService:
         """
         cert_file_path = None
         key_file_path = None
+        envio_lock_path = None
         
         try:
             print(f"[NFSE] === ENVIANDO RPS PARA GISS ONLINE ===")
             print(f"[NFSE] Ambiente: {self.ambiente}")
             print(f"[NFSE] Cliente ID: {nfse.cliente_id}")
+
+            # Marca de envio em andamento para evitar restart/reload no meio da transação.
+            envio_lock_path = f"/tmp/nfse_envio_{os.getpid()}_{uuid.uuid4().hex}.lock"
+            try:
+                with open(envio_lock_path, "w", encoding="utf-8") as lock_file:
+                    lock_file.write(
+                        f"cliente_id={nfse.cliente_id}\n"
+                        f"ambiente={self.ambiente}\n"
+                        f"inicio={datetime.now().isoformat()}\n"
+                    )
+                print(f"[NFSE] Lock de envio criado: {envio_lock_path}")
+            except Exception as lock_error:
+                envio_lock_path = None
+                print(f"[NFSE] ⚠️ Não foi possível criar lock de envio: {lock_error}")
             
             # 1. Gerar XML RPS (ou reaproveitar XML já persistido)
             xml_rps_existente = (getattr(nfse, 'xml_rps', None) or '').strip()
@@ -938,24 +974,18 @@ class NFSeService:
             
             # Headers HTTP para SOAP
             headers = {
-                "Content-Type": "text/xml; charset=utf-8"
+                "Content-Type": "text/xml; charset=utf-8",
+                "SOAPAction": self._soap_action("RecepcionarLoteRps"),
             }
             
             # 7. Envio com retentativa para indisponibilidade temporária do provedor
             # Configurável por ambiente para ajuste fino sem novo deploy.
-            max_tentativas = int(os.getenv("NFSE_RETRY_ATTEMPTS", "5"))
-            delays_env = os.getenv("NFSE_RETRY_DELAYS", "2,5,10,20")
-            esperas_segundos = []
-            for item in delays_env.split(','):
-                item = item.strip()
-                if item.isdigit():
-                    esperas_segundos.append(int(item))
-            if not esperas_segundos:
-                esperas_segundos = [2, 5, 10, 20]
+            max_tentativas, esperas_segundos = self._config_retry_envio()
 
             urls_envio = self._resolver_urls_envio_com_fallback()
             total_hosts = len(urls_envio)
             ultima_indisponibilidade = None
+            ultimo_diagnostico_endpoint: Optional[Dict[str, Any]] = None
             if total_hosts > 1:
                 print(f"[NFSE] Fallback de host habilitado: {total_hosts} hosts candidatos")
 
@@ -1001,6 +1031,17 @@ class NFSeService:
 
                         if self._resposta_indisponivel_temporaria(dados_resposta):
                             ultima_indisponibilidade = dados_resposta
+                            if not ultimo_diagnostico_endpoint:
+                                ultimo_diagnostico_endpoint = self._diagnosticar_endpoint_ws(cert_file_path, key_file_path)
+
+                            endpoint_online = bool((ultimo_diagnostico_endpoint or {}).get("endpoint_online"))
+                            status_wsdl = (ultimo_diagnostico_endpoint or {}).get("status_http_wsdl")
+                            diagnostico_endpoint = (
+                                "Endpoint do provedor online; indisponibilidade operacional retornada no conteúdo"
+                                if endpoint_online
+                                else "Endpoint do provedor sem resposta estável"
+                            )
+
                             if tentativa < max_tentativas:
                                 espera = esperas_segundos[min(tentativa - 1, len(esperas_segundos) - 1)]
                                 print(f"[NFSE] ⏳ Provedor indisponível temporariamente; nova tentativa em {espera}s")
@@ -1013,15 +1054,18 @@ class NFSeService:
                                 break
 
                             return False, {
-                                "erro": "Provedor indisponível após retentativas",
+                                "erro": "Indisponibilidade operacional retornada pelo provedor",
                                 "mensagem": (
-                                    f"Provedor indisponível após {max_tentativas * total_hosts} tentativas "
+                                    f"Provedor retornou indisponibilidade após {max_tentativas * total_hosts} tentativas "
                                     f"em {total_hosts} host(s). Tente novamente em alguns minutos."
                                 ),
                                 "retriavel": True,
                                 "tentativas": max_tentativas * total_hosts,
                                 "detalhe": dados_resposta.get("mensagem") or dados_resposta.get("erro"),
-                                "hosts_testados": [u.get("base") for u in urls_envio]
+                                "hosts_testados": [u.get("base") for u in urls_envio],
+                                "diagnostico_endpoint": diagnostico_endpoint,
+                                "endpoint_online": endpoint_online,
+                                "status_http_wsdl": status_wsdl,
                             }
 
                         return False, dados_resposta
@@ -1055,16 +1099,18 @@ class NFSeService:
                             "mantendo diagnóstico de indisponibilidade do provedor"
                         )
                         return False, {
-                            "erro": "Provedor indisponível após retentativas",
+                            "erro": "Indisponibilidade operacional retornada pelo provedor",
                             "mensagem": (
-                                f"Provedor indisponível após {max_tentativas * total_hosts} tentativas "
+                                f"Provedor retornou indisponibilidade após {max_tentativas * total_hosts} tentativas "
                                 f"em {total_hosts} host(s). Tente novamente em alguns minutos."
                             ),
                             "retriavel": True,
                             "tentativas": max_tentativas * total_hosts,
                             "detalhe": ultima_indisponibilidade.get("mensagem") or ultima_indisponibilidade.get("erro"),
                             "hosts_testados": [u.get("base") for u in urls_envio],
-                            "ultimo_status_http": response.status_code
+                            "ultimo_status_http": response.status_code,
+                            "endpoint_online": bool((ultimo_diagnostico_endpoint or {}).get("endpoint_online")),
+                            "status_http_wsdl": (ultimo_diagnostico_endpoint or {}).get("status_http_wsdl"),
                         }
 
                     print(f"[NFSE] ❌ Erro HTTP {response.status_code}")
@@ -1080,15 +1126,17 @@ class NFSeService:
 
             if ultima_indisponibilidade:
                 return False, {
-                    "erro": "Provedor indisponível após retentativas",
+                    "erro": "Indisponibilidade operacional retornada pelo provedor",
                     "mensagem": (
-                        f"Provedor indisponível após {max_tentativas * total_hosts} tentativas "
+                        f"Provedor retornou indisponibilidade após {max_tentativas * total_hosts} tentativas "
                         f"em {total_hosts} host(s). Tente novamente em alguns minutos."
                     ),
                     "retriavel": True,
                     "tentativas": max_tentativas * total_hosts,
                     "detalhe": ultima_indisponibilidade.get("mensagem") or ultima_indisponibilidade.get("erro"),
-                    "hosts_testados": [u.get("base") for u in urls_envio]
+                    "hosts_testados": [u.get("base") for u in urls_envio],
+                    "endpoint_online": bool((ultimo_diagnostico_endpoint or {}).get("endpoint_online")),
+                    "status_http_wsdl": (ultimo_diagnostico_endpoint or {}).get("status_http_wsdl"),
                 }
 
             return False, {
@@ -1106,6 +1154,13 @@ class NFSeService:
                 "tipo": type(e).__name__
             }
         finally:
+            if envio_lock_path and os.path.exists(envio_lock_path):
+                try:
+                    os.unlink(envio_lock_path)
+                    print(f"[NFSE] Lock de envio removido: {envio_lock_path}")
+                except Exception:
+                    pass
+
             # Limpar arquivos temporários de certificado
             if cert_file_path and os.path.exists(cert_file_path):
                 try:
@@ -1237,7 +1292,10 @@ class NFSeService:
     </soapenv:Body>
 </soapenv:Envelope>'''
 
-            headers = {"Content-Type": "text/xml; charset=utf-8"}
+            headers = {
+                "Content-Type": "text/xml; charset=utf-8",
+                "SOAPAction": self._soap_action("ConsultarLoteRps"),
+            }
             url = self.urls["base"] + self.urls["consultar_lote"]
 
             cert_param = None
@@ -1422,6 +1480,23 @@ class NFSeService:
                         "erro": erro_msg or "Erro no processamento",
                         "mensagem": erro_msg
                     }
+
+            fault_string_elem = root.find(".//{*}faultstring")
+            if fault_string_elem is not None and fault_string_elem.text:
+                fault_text = fault_string_elem.text.strip()
+                print(f"[NFSE] ❌ SOAP Fault: {fault_text}")
+                return False, {
+                    "sucesso": False,
+                    "erro": "SOAP Fault",
+                    "mensagem": fault_text
+                }
+
+            mensagem_erro_elem = (
+                root.find(".//Mensagem")
+                or root.find(".//MensagemErro")
+                or root.find(".//{*}Mensagem")
+                or root.find(".//{*}MensagemErro")
+            )
             
             codigo_erro_elem = (
                 root.find(".//Codigo") or 
@@ -1482,6 +1557,56 @@ class NFSeService:
             "sistema esta indisponivel" in texto_normalizado
             and "tente novamente mais tarde" in texto_normalizado
         )
+
+    def _diagnosticar_endpoint_ws(self, cert_file_path: str, key_file_path: str) -> Dict[str, Any]:
+        """Sonda o WSDL com mTLS para separar indisponibilidade operacional de queda de endpoint."""
+        wsdl_url = self.urls.get("wsdl")
+        if not wsdl_url:
+            return {"endpoint_online": False, "motivo": "wsdl_nao_configurado"}
+
+        try:
+            resp = requests.get(
+                wsdl_url,
+                cert=(cert_file_path, key_file_path),
+                timeout=20,
+                verify=True,
+            )
+            return {
+                "endpoint_online": resp.status_code == 200,
+                "status_http_wsdl": resp.status_code,
+            }
+        except Exception as e:
+            return {
+                "endpoint_online": False,
+                "erro_wsdl": str(e),
+            }
+
+    def _config_retry_envio(self) -> Tuple[int, List[int]]:
+        """Resolve retentativas por ambiente com defaults mais curtos em homologação."""
+        max_tentativas = int(
+            os.getenv(
+                f"NFSE_RETRY_ATTEMPTS_{self.ambiente.upper()}",
+                os.getenv("NFSE_RETRY_ATTEMPTS", "2" if self.ambiente == "homologacao" else "5")
+            )
+        )
+
+        delays_env = os.getenv(
+            f"NFSE_RETRY_DELAYS_{self.ambiente.upper()}",
+            os.getenv("NFSE_RETRY_DELAYS", "1,2" if self.ambiente == "homologacao" else "2,5,10,20")
+        )
+        esperas_segundos: List[int] = []
+        for item in delays_env.split(','):
+            item = item.strip()
+            if item.isdigit():
+                esperas_segundos.append(int(item))
+
+        if not esperas_segundos:
+            esperas_segundos = [1, 2] if self.ambiente == "homologacao" else [2, 5, 10, 20]
+
+        if max_tentativas < 1:
+            max_tentativas = 1
+
+        return max_tentativas, esperas_segundos
     
     def _processar_resposta_consulta(self, xml_resposta: str) -> Tuple[bool, Dict[str, Any]]:
         """

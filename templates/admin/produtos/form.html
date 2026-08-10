@@ -97,6 +97,7 @@
                 
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('admin.editar_produto', produto_id=produto.produto_id) if produto else url_for('admin.store_produto') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         
                         <!-- Campo oculto para cliente_id -->
                         <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
@@ -438,6 +439,8 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {
+    const NCM_SEARCH_URL = '{{ url_for("admin.api_search_ncms") }}';
+
     // Select2 padrão para outros campos
     $('.js-select2').select2({
         width: '100%',
@@ -520,6 +523,342 @@ $(document).ready(function() {
         $('#btn-ia-sugestao').prop('disabled', false);
     }
 
+    let autoSuggestionTimer = null;
+    let autoValidationTimer = null;
+    let autoSuggestionInProgress = false;
+    let lastSuggestionFingerprint = '';
+
+    function criarFingerprintIA(dados) {
+        return [
+            dados.descricao || '',
+            dados.tipo_item || '',
+            dados.cliente_id || '',
+            dados.unidade_comercial || '',
+            dados.codigo_interno || ''
+        ].join('|').toLowerCase();
+    }
+
+    function podeSolicitarSugestaoIA(dados) {
+        return !!(dados.descricao && dados.tipo_item && dados.cliente_id);
+    }
+
+    function agendarSugestaoIA() {
+        const dados = coletarDadosIA();
+        if (!podeSolicitarSugestaoIA(dados)) {
+            return;
+        }
+
+        const fingerprint = criarFingerprintIA(dados);
+        if (fingerprint === lastSuggestionFingerprint || autoSuggestionInProgress) {
+            return;
+        }
+
+        clearTimeout(autoSuggestionTimer);
+        autoSuggestionTimer = setTimeout(function() {
+            const dadosAtuais = coletarDadosIA();
+            if (!podeSolicitarSugestaoIA(dadosAtuais)) {
+                return;
+            }
+
+            const fingerprintAtual = criarFingerprintIA(dadosAtuais);
+            if (fingerprintAtual === lastSuggestionFingerprint || autoSuggestionInProgress) {
+                return;
+            }
+
+            $('#btn-ia-sugestao').trigger('click');
+        }, 2000);
+    }
+
+    function agendarValidacaoIA() {
+        if (!$('#resultado-validacao').length) {
+            return;
+        }
+
+        clearTimeout(autoValidationTimer);
+        autoValidationTimer = setTimeout(function() {
+            if (typeof validarProdutoManual === 'function') {
+                validarProdutoManual();
+            }
+        }, 1200);
+    }
+
+    function normalizarRespostaSugestaoIA(resp) {
+        if (!resp) {
+            return { sucesso: false, erro: 'Resposta vazia da IA' };
+        }
+
+        if (resp.sucesso || resp.classificacao || resp.ids) {
+            return resp;
+        }
+
+        if (resp.ncm || resp.cfop || resp.cst || resp.csosn || resp.cest || resp.explicacao) {
+            return {
+                sucesso: true,
+                classificacao: resp,
+                ids: resp.ids || {},
+                avisos: resp.avisos || [],
+            };
+        }
+
+        return {
+            sucesso: false,
+            erro: resp.erro || resp.error || 'Resposta inesperada da IA',
+            detalhes: resp.detalhes || resp.details || null,
+        };
+    }
+
+    function renderizarSugestaoIA(resp) {
+        const payload = normalizarRespostaSugestaoIA(resp);
+
+        if (payload.erro || !payload.sucesso) {
+            var mensagemErro = payload.erro || 'Erro desconhecido ao obter sugestão';
+            if (payload.detalhes) {
+                mensagemErro += ' - ' + payload.detalhes;
+            }
+            $('#descricao').after('<div id="explicacao-ia" class="alert alert-warning mt-2"><i class="fas fa-exclamation-triangle"></i> ' + mensagemErro + '</div>');
+            autoSuggestionInProgress = false;
+            return false;
+        }
+
+        var sucessos = [];
+        var falhas = [];
+        var ids = payload.ids || {};
+        var classificacao = payload.classificacao || {};
+
+        console.log('[IA] 📊 IDs recebidos:', ids);
+        console.log('[IA] 📋 Classificação:', classificacao);
+
+        // Preenche NCM usando ID do banco ou código bruto como fallback
+        if (ids.ncm_id) {
+            console.log('[IA] 🔧 Preenchendo NCM com ID:', ids.ncm_id);
+            var ncmText = classificacao.ncm + ' - ' + (payload.ncm_descricao || 'NCM');
+            var $ncmSelect = $('#ncm_id');
+            if ($ncmSelect.find("option[value='" + ids.ncm_id + "']").length === 0) {
+                var newOption = new Option(ncmText, ids.ncm_id, true, true);
+                $ncmSelect.append(newOption);
+            } else {
+                $ncmSelect.val(ids.ncm_id);
+            }
+            $ncmSelect.trigger('change');
+            sucessos.push('NCM (' + classificacao.ncm + ')');
+        } else if (classificacao.ncm) {
+            if (selectByCodeOrId('#ncm_id', classificacao.ncm)) {
+                sucessos.push('NCM (' + classificacao.ncm + ')');
+            } else {
+                falhas.push('NCM: ' + classificacao.ncm + ' (não encontrado no banco)');
+            }
+        }
+
+        if (ids.cfop_id) {
+            console.log('[IA] 🔧 Preenchendo CFOP com ID:', ids.cfop_id);
+            var cfopText = classificacao.cfop + ' - ' + (payload.cfop_descricao || 'CFOP');
+            var $cfopSelect = $('#cfop_id');
+            if ($cfopSelect.find("option[value='" + ids.cfop_id + "']").length === 0) {
+                var newOption = new Option(cfopText, ids.cfop_id, true, true);
+                $cfopSelect.append(newOption);
+            } else {
+                $cfopSelect.val(ids.cfop_id);
+            }
+            $cfopSelect.trigger('change');
+            sucessos.push('CFOP (' + classificacao.cfop + ')');
+        } else if (classificacao.cfop) {
+            if (selectByCodeOrId('#cfop_id', classificacao.cfop)) {
+                sucessos.push('CFOP (' + classificacao.cfop + ')');
+            } else {
+                falhas.push('CFOP: ' + classificacao.cfop + ' (não encontrado no banco)');
+            }
+        }
+
+        if (ids.cst_id) {
+            console.log('[IA] 🔧 Preenchendo CST com ID:', ids.cst_id);
+            var cstText = classificacao.cst + ' - ' + (payload.cst_descricao || 'CST');
+            var $cstSelect = $('#cst_id');
+            if ($cstSelect.find("option[value='" + ids.cst_id + "']").length === 0) {
+                var newOption = new Option(cstText, ids.cst_id, true, true);
+                $cstSelect.append(newOption);
+            } else {
+                $cstSelect.val(ids.cst_id);
+            }
+            $cstSelect.trigger('change');
+            sucessos.push('CST (' + classificacao.cst + ')');
+        } else if (classificacao.cst) {
+            if (selectByCodeOrId('#cst_id', classificacao.cst)) {
+                sucessos.push('CST (' + classificacao.cst + ')');
+            } else {
+                const csosnSelecionado = String($('#csosn_id').val() || '').trim();
+                const cstVisivel = $('#cst_id').closest('.col-md-6').is(':visible');
+                if (csosnSelecionado && !cstVisivel) {
+                    console.log('[IA] CST ignorado no fluxo Simples (CSOSN ativo).');
+                } else {
+                    falhas.push('CST: ' + classificacao.cst + ' (não encontrado no banco)');
+                }
+            }
+        }
+
+        if (ids.csosn_id) {
+            console.log('[IA] 🔧 Preenchendo CSOSN com ID:', ids.csosn_id);
+            var csosnText = classificacao.csosn + ' - ' + (payload.csosn_descricao || 'CSOSN');
+            var $csosnSelect = $('#csosn_id');
+            if ($csosnSelect.find("option[value='" + ids.csosn_id + "']").length === 0) {
+                var newOption = new Option(csosnText, ids.csosn_id, true, true);
+                $csosnSelect.append(newOption);
+            } else {
+                $csosnSelect.val(ids.csosn_id);
+            }
+            $csosnSelect.trigger('change');
+            sucessos.push('CSOSN (' + classificacao.csosn + ')');
+        } else if (classificacao.csosn) {
+            if (selectByCodeOrId('#csosn_id', classificacao.csosn)) {
+                sucessos.push('CSOSN (' + classificacao.csosn + ')');
+            } else {
+                falhas.push('CSOSN: ' + classificacao.csosn + ' (não encontrado no banco)');
+            }
+        }
+
+        if (ids.cest || classificacao.cest) {
+            var cestValue = ids.cest || classificacao.cest;
+            if (cestValue && cestValue !== 'null' && cestValue !== 'None') {
+                console.log('[IA] 🔧 Preenchendo CEST:', cestValue);
+                $('#cest').val(cestValue);
+                sucessos.push('CEST (' + cestValue + ')');
+            }
+        }
+
+        var tipoAlerta = falhas.length > 0 ? 'alert-warning' : 'alert-success';
+        var icone = falhas.length > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle';
+
+        var mensagem = '<div id="explicacao-ia" class="alert ' + tipoAlerta + ' mt-2">';
+        mensagem += '<i class="fas ' + icone + '"></i> <strong>Sugestão da IA processada!</strong><br>';
+
+        if (sucessos.length > 0) {
+            mensagem += '<small>✅ <strong>Campos preenchidos:</strong> ' + sucessos.join(', ') + '</small><br>';
+        }
+
+        if (falhas.length > 0) {
+            mensagem += '<small>⚠️ <strong>Não encontrados no banco:</strong> ' + falhas.join(', ') + '</small><br>';
+        }
+
+        if (classificacao.explicacao) {
+            mensagem += '<small><strong>💡 Explicação:</strong> ' + classificacao.explicacao + '</small>';
+        }
+
+        mensagem += '</div>';
+        $('#descricao').after(mensagem);
+
+        setTimeout(function() {
+            $('#explicacao-ia').fadeOut(500, function() {
+                $(this).remove();
+            });
+        }, 15000);
+
+        lastSuggestionFingerprint = criarFingerprintIA(coletarDadosIA());
+        autoSuggestionInProgress = false;
+        agendarValidacaoIA();
+        return true;
+    }
+
+    function extrairMensagemErroAjax(xhr, fallbackMessage) {
+        if (xhr && xhr.responseJSON) {
+            return xhr.responseJSON.erro || xhr.responseJSON.error || xhr.responseJSON.details || xhr.responseJSON.detalhes || fallbackMessage;
+        }
+
+        if (xhr && xhr.status === 401) {
+            return 'Sessão expirada. Faça login novamente e tente outra vez.';
+        }
+
+        if (xhr && xhr.status === 403) {
+            return 'Sem permissão para acionar a IA neste cadastro.';
+        }
+
+        if (xhr && xhr.responseText) {
+            if (xhr.responseText.indexOf('Você precisa fazer login') !== -1 || xhr.responseText.indexOf('Login - EmiteMax') !== -1) {
+                return 'Sessão expirada. Faça login novamente e tente outra vez.';
+            }
+            return xhr.responseText;
+        }
+
+        return fallbackMessage;
+    }
+
+    function solicitarSugestaoIA(endpoint, dados, onSuccess, onError) {
+        const csrfToken = $('input[name="csrf_token"]').first().val() || '';
+        $.ajax({
+            url: endpoint,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {},
+            data: JSON.stringify(dados),
+            timeout: 180000,
+            success: onSuccess,
+            error: onError,
+        });
+    }
+
+    function aplicarSugestaoComFallback(dados) {
+        let erroPublico = null;
+        let statusPublico = null;
+
+        function finalizarComErro(xhrAdmin, statusAdmin) {
+            autoSuggestionInProgress = false;
+
+            var mensagemErro = 'Não foi possível obter sugestão automática.';
+            if (statusPublico === 'timeout' || statusAdmin === 'timeout') {
+                mensagemErro = 'Tempo limite excedido. Tente novamente.';
+            } else {
+                mensagemErro = extrairMensagemErroAjax(erroPublico, extrairMensagemErroAjax(xhrAdmin, mensagemErro));
+            }
+
+            var detalhesErro = [];
+            if (erroPublico && erroPublico.status) {
+                detalhesErro.push('proxy público HTTP ' + erroPublico.status);
+            }
+            if (xhrAdmin && xhrAdmin.status) {
+                detalhesErro.push('admin HTTP ' + xhrAdmin.status);
+            }
+            if (detalhesErro.length) {
+                mensagemErro += ' (' + detalhesErro.join(' | ') + ')';
+            }
+
+            $('#descricao').after('<div id="explicacao-ia" class="alert alert-warning mt-2"><i class="fas fa-exclamation-triangle"></i> ' + mensagemErro + '</div>');
+            setTimeout(function() {
+                $('#explicacao-ia').fadeOut(500, function() {
+                    $(this).remove();
+                });
+            }, 8000);
+        }
+
+        function tentarAdmin() {
+            solicitarSugestaoIA('/admin/api/sugestao_tributaria', dados,
+                function(respAdmin) {
+                    console.log('[IA] ✅ Resposta do endpoint admin:', respAdmin);
+                    hideLoading();
+                    renderizarSugestaoIA(respAdmin);
+                },
+                function(xhrAdmin, statusAdmin) {
+                    console.log('[IA] Endpoint admin também falhou:', xhrAdmin, statusAdmin);
+                    hideLoading();
+                    finalizarComErro(xhrAdmin, statusAdmin);
+                }
+            );
+        }
+
+        solicitarSugestaoIA('/api/sugestao-produto-ia', dados,
+            function(respPublico) {
+                console.log('[IA] ✅ Resposta do proxy público:', respPublico);
+                hideLoading();
+                if (!renderizarSugestaoIA(respPublico)) {
+                    tentarAdmin();
+                }
+            },
+            function(xhrPublico, status) {
+                console.log('[IA] Proxy público falhou:', xhrPublico, status);
+                erroPublico = xhrPublico;
+                statusPublico = status;
+                tentarAdmin();
+            }
+        );
+    }
+
     // Função para selecionar option por código ou ID (melhorada para NCM)
     function selectByCodeOrId(selectId, value, codeAttr) {
         var $select = $(selectId);
@@ -545,6 +884,71 @@ $(document).ready(function() {
             });
             
             if (found) return true;
+
+            // Fallback remoto: o select de NCM carrega opções via AJAX e pode iniciar vazio.
+            try {
+                $.ajax({
+                    url: NCM_SEARCH_URL,
+                    method: 'GET',
+                    dataType: 'json',
+                    data: {
+                        q: String(value),
+                        limit: 20,
+                    },
+                    async: false,
+                    success: function(data) {
+                        const results = (data && data.results) ? data.results : [];
+                        let melhor = null;
+                        for (let i = 0; i < results.length; i++) {
+                            const item = results[i] || {};
+                            const codigo = String(item.codigo || item.text || '').split(' - ')[0].replace(/[^\d]/g, '');
+                            if (!codigo) {
+                                continue;
+                            }
+                            if (codigo === normalizedValue) {
+                                melhor = item;
+                                break;
+                            }
+                            if (!melhor && normalizedValue.length >= 6 && codigo.indexOf(normalizedValue.slice(0, 6)) === 0) {
+                                melhor = item;
+                            }
+                        }
+
+                        if (melhor) {
+                            const optionText = melhor.text || `${melhor.codigo || value} - ${melhor.descricao || 'NCM'}`;
+                            if ($select.find("option[value='" + melhor.id + "']").length === 0) {
+                                const newOption = new Option(optionText, melhor.id, true, true);
+                                $select.append(newOption);
+                            } else {
+                                $select.val(melhor.id);
+                            }
+                            $select.trigger('change');
+                            found = true;
+                            console.log(`[IA] NCM selecionado via busca remota: ${optionText}`);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.warn('[IA] Falha na busca remota de NCM:', error);
+            }
+
+            if (found) return true;
+
+            // Fallback: tenta compatibilidade por prefixo de 6 dígitos
+            if (normalizedValue.length >= 6) {
+                var prefix = normalizedValue.slice(0, 6);
+                $select.find('option').each(function() {
+                    var text = $(this).text();
+                    var code = text.split(' - ')[0].replace(/[^\d]/g, '');
+                    if (code.indexOf(prefix) === 0) {
+                        $select.val($(this).val()).trigger('change');
+                        console.log(`[IA] NCM selecionado por prefixo: ${$(this).text()}`);
+                        found = true;
+                        return false;
+                    }
+                });
+                if (found) return true;
+            }
             
             // Se não encontrou por código exato, tenta por substring
             $select.find('option').each(function() {
@@ -552,10 +956,11 @@ $(document).ready(function() {
                 if (text.indexOf(String(value).toLowerCase()) !== -1) {
                     $select.val($(this).val()).trigger('change');
                     console.log(`[IA] NCM selecionado por substring: ${$(this).text()}`);
+                    found = true;
                     return false;
                 }
             });
-            return true;
+            return found;
         }
         
         // Para outros selects (CFOP, CST, CSOSN)
@@ -571,8 +976,26 @@ $(document).ready(function() {
             var text = $(this).text();
             var normalizedText = text.replace(/\D/g, '');
             var normalizedValue = String(value).replace(/\D/g, '');
-            
-            if (normalizedText.indexOf(normalizedValue) === 0) { // Código no início
+
+            // Match exato de prefixo
+            if (normalizedText.indexOf(normalizedValue) === 0) {
+                $select.val($(this).val()).trigger('change');
+                found = true;
+                return false;
+            }
+
+            // Fallback para códigos com zeros à esquerda (ex.: 00 vs 000)
+            if (normalizedValue && normalizedText) {
+                const candidate = normalizedText.slice(0, normalizedValue.length).replace(/^0+/, '');
+                const target = normalizedValue.replace(/^0+/, '');
+                if (candidate && target && candidate === target) {
+                    $select.val($(this).val()).trigger('change');
+                    found = true;
+                    return false;
+                }
+            }
+
+            if (normalizedText.slice(0, 3).replace(/^0+/, '') === normalizedValue.slice(0, 3).replace(/^0+/, '') && normalizedValue.length <= 3) {
                 $select.val($(this).val()).trigger('change');
                 found = true;
                 return false;
@@ -589,180 +1012,14 @@ $(document).ready(function() {
         console.log('[IA] Dados coletados para IA:', dados);
         
         if (dados.descricao && dados.tipo_item && dados.cliente_id) {
+            autoSuggestionInProgress = true;
             // Mostra indicador de carregamento
             showLoading();
             
             // Remove mensagens anteriores
             $('#explicacao-ia').remove();
-            
-            $.ajax({
-                url: '/admin/api/sugestao_tributaria',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(dados),
-                timeout: 180000, // 180 segundos (3 minutos) para LLM lenta
-                success: function(resp) {
-                    console.log('[IA] ✅ Resposta da API IA Unificada:', resp);
-                    hideLoading();
-                    
-                    // Verifica erro
-                    if (resp.erro || !resp.sucesso) {
-                        var mensagemErro = resp.erro || 'Erro desconhecido ao obter sugestão';
-                        $('#descricao').after('<div id="explicacao-ia" class="alert alert-warning mt-2"><i class="fas fa-exclamation-triangle"></i> '+mensagemErro+'</div>');
-                        return;
-                    }
-                    
-                    var sucessos = [];
-                    var falhas = [];
-                    var ids = resp.ids || {};
-                    var classificacao = resp.classificacao || {};
-                    
-                    console.log('[IA] 📊 IDs recebidos:', ids);
-                    console.log('[IA] 📋 Classificação:', classificacao);
-                    
-                    // Preenche NCM usando ID do banco
-                    if (ids.ncm_id) {
-                        console.log('[IA] 🔧 Preenchendo NCM com ID:', ids.ncm_id);
-                        var ncmText = classificacao.ncm + ' - ' + (resp.ncm_descricao || 'NCM');
-                        
-                        // Cria a opção se não existir
-                        var $ncmSelect = $('#ncm_id');
-                        if ($ncmSelect.find("option[value='" + ids.ncm_id + "']").length === 0) {
-                            var newOption = new Option(ncmText, ids.ncm_id, true, true);
-                            $ncmSelect.append(newOption);
-                        } else {
-                            $ncmSelect.val(ids.ncm_id);
-                        }
-                        $ncmSelect.trigger('change');
-                        
-                        sucessos.push('NCM (' + classificacao.ncm + ')');
-                    } else if (classificacao.ncm) {
-                        falhas.push('NCM: ' + classificacao.ncm + ' (não encontrado no banco)');
-                    }
-                    
-                    // Preenche CFOP usando ID do banco
-                    if (ids.cfop_id) {
-                        console.log('[IA] 🔧 Preenchendo CFOP com ID:', ids.cfop_id);
-                        var cfopText = classificacao.cfop + ' - ' + (resp.cfop_descricao || 'CFOP');
-                        
-                        // Cria a opção se não existir
-                        var $cfopSelect = $('#cfop_id');
-                        if ($cfopSelect.find("option[value='" + ids.cfop_id + "']").length === 0) {
-                            var newOption = new Option(cfopText, ids.cfop_id, true, true);
-                            $cfopSelect.append(newOption);
-                        } else {
-                            $cfopSelect.val(ids.cfop_id);
-                        }
-                        $cfopSelect.trigger('change');
-                        
-                        sucessos.push('CFOP (' + classificacao.cfop + ')');
-                    } else if (classificacao.cfop) {
-                        falhas.push('CFOP: ' + classificacao.cfop + ' (não encontrado no banco)');
-                    }
-                    
-                    // Preenche CST usando ID do banco (se aplicável)
-                    if (ids.cst_id) {
-                        console.log('[IA] 🔧 Preenchendo CST com ID:', ids.cst_id);
-                        var cstText = classificacao.cst + ' - ' + (resp.cst_descricao || 'CST');
-                        
-                        // Cria a opção se não existir
-                        var $cstSelect = $('#cst_id');
-                        if ($cstSelect.find("option[value='" + ids.cst_id + "']").length === 0) {
-                            var newOption = new Option(cstText, ids.cst_id, true, true);
-                            $cstSelect.append(newOption);
-                        } else {
-                            $cstSelect.val(ids.cst_id);
-                        }
-                        $cstSelect.trigger('change');
-                        
-                        sucessos.push('CST (' + classificacao.cst + ')');
-                    } else if (classificacao.cst) {
-                        falhas.push('CST: ' + classificacao.cst + ' (não encontrado no banco)');
-                    }
-                    
-                    // Preenche CSOSN usando ID do banco (se aplicável)
-                    if (ids.csosn_id) {
-                        console.log('[IA] 🔧 Preenchendo CSOSN com ID:', ids.csosn_id);
-                        var csosnText = classificacao.csosn + ' - ' + (resp.csosn_descricao || 'CSOSN');
-                        
-                        // Cria a opção se não existir
-                        var $csosnSelect = $('#csosn_id');
-                        if ($csosnSelect.find("option[value='" + ids.csosn_id + "']").length === 0) {
-                            var newOption = new Option(csosnText, ids.csosn_id, true, true);
-                            $csosnSelect.append(newOption);
-                        } else {
-                            $csosnSelect.val(ids.csosn_id);
-                        }
-                        $csosnSelect.trigger('change');
-                        
-                        sucessos.push('CSOSN (' + classificacao.csosn + ')');
-                    } else if (classificacao.csosn) {
-                        falhas.push('CSOSN: ' + classificacao.csosn + ' (não encontrado no banco)');
-                    }
-                    
-                    // Preenche CEST (campo de texto direto)
-                    if (ids.cest || classificacao.cest) {
-                        var cestValue = ids.cest || classificacao.cest;
-                        // Só preenche se não for null ou 'null' (string)
-                        if (cestValue && cestValue !== 'null' && cestValue !== 'None') {
-                            console.log('[IA] 🔧 Preenchendo CEST:', cestValue);
-                            $('#cest').val(cestValue);
-                            sucessos.push('CEST (' + cestValue + ')');
-                        } else {
-                            console.log('[IA] ℹ️  CEST não informado (opcional)');
-                        }
-                    }
-                    
-                    // Monta mensagem de feedback
-                    var tipoAlerta = falhas.length > 0 ? 'alert-warning' : 'alert-success';
-                    var icone = falhas.length > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle';
-                    
-                    var mensagem = '<div id="explicacao-ia" class="alert ' + tipoAlerta + ' mt-2">';
-                    mensagem += '<i class="fas ' + icone + '"></i> <strong>Sugestão da IA processada!</strong><br>';
-                    
-                    if (sucessos.length > 0) {
-                        mensagem += '<small>✅ <strong>Campos preenchidos:</strong> ' + sucessos.join(', ') + '</small><br>';
-                    }
-                    
-                    if (falhas.length > 0) {
-                        mensagem += '<small>⚠️ <strong>Não encontrados no banco:</strong> ' + falhas.join(', ') + '</small><br>';
-                    }
-                    
-                    if (classificacao.explicacao) {
-                        mensagem += '<small><strong>💡 Explicação:</strong> ' + classificacao.explicacao + '</small>';
-                    }
-                    
-                    mensagem += '</div>';
-                    $('#descricao').after(mensagem);
-                    
-                    // Remove a mensagem após 15 segundos
-                    setTimeout(function() {
-                        $('#explicacao-ia').fadeOut(500, function() {
-                            $(this).remove();
-                        });
-                    }, 15000);
-                },
-                error: function(xhr, status, error) {
-                    console.log('[IA] Erro na chamada AJAX:', xhr, status, error);
-                    hideLoading();
-                    
-                    var mensagemErro = 'Não foi possível obter sugestão automática.';
-                    if (status === 'timeout') {
-                        mensagemErro = 'Tempo limite excedido. Tente novamente.';
-                    } else if (xhr.responseJSON && xhr.responseJSON.erro) {
-                        mensagemErro = xhr.responseJSON.erro;
-                    }
-                    
-                    $('#descricao').after('<div id="explicacao-ia" class="alert alert-warning mt-2"><i class="fas fa-exclamation-triangle"></i> '+mensagemErro+'</div>');
-                    
-                    // Remove a mensagem de erro após 8 segundos
-                    setTimeout(function() {
-                        $('#explicacao-ia').fadeOut(500, function() {
-                            $(this).remove();
-                        });
-                    }, 8000);
-                }
-            });
+
+            aplicarSugestaoComFallback(dados);
         } else {
             var camposFaltando = [];
             if (!dados.descricao) camposFaltando.push('Descrição');
@@ -772,6 +1029,10 @@ $(document).ready(function() {
             alert('Preencha os seguintes campos antes de solicitar a sugestão automática:\n• ' + camposFaltando.join('\n• '));
             console.log('[IA] Campos obrigatórios faltando:', dados);
         }
+    });
+
+    $('#descricao, #tipo_item, input[name="cliente_id"]').on('input change', function() {
+        agendarSugestaoIA();
     });
 
     // Função para ajustar campos CST/CSOSN baseado no regime tributário do cliente
@@ -830,6 +1091,7 @@ $(document).ready(function() {
         const clienteId = $('input[name="cliente_id"]').val();
         if (clienteId) {
             ajustarCamposTributarios(clienteId);
+            agendarSugestaoIA();
         }
     });
 
@@ -875,6 +1137,9 @@ function validarProdutoManual() {
             url: '/api/validar-produto-ia',
             method: 'POST',
             contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': $('input[name="csrf_token"]').first().val() || ''
+            },
             data: JSON.stringify(dados),
             success: function(resp) {
                 console.log('[VALIDAÇÃO] Resposta:', resp);

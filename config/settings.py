@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 
 # Carregar .env antes de qualquer leitura de variável de ambiente
 load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env.local'), override=True)
 
 # Configurações do Flask
 _secret_key = os.getenv('FLASK_SECRET_KEY')
@@ -42,3 +43,16 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 # IBS/CBS - Reforma Tributária (LC 214/2024)
 # False = desabilitado (padrão até implementação completa)
 HABILITAR_IBS_CBS = os.getenv('HABILITAR_IBS_CBS', 'True').lower() == 'true'
+
+# Configurações base da IA
+AI_PROVIDER_URL = os.getenv(
+    'AI_PROVIDER_URL',
+    os.getenv('LLM_FALLBACK_URL', 'http://localhost:1234/v1/chat/completions'),
+)
+AI_PROVIDER_MODEL = os.getenv('AI_PROVIDER_MODEL', os.getenv('LLM_MODEL', 'gpt-4o-mini'))
+AI_PROVIDER_API_KEY = os.getenv('AI_PROVIDER_API_KEY', '')
+AI_PROVIDER_TIMEOUT_SECONDS = int(os.getenv('AI_PROVIDER_TIMEOUT_SECONDS', '60'))
+AI_DEFAULT_TEMPERATURE = float(os.getenv('AI_DEFAULT_TEMPERATURE', '0.2'))
+AI_DEFAULT_MAX_TOKENS = int(os.getenv('AI_DEFAULT_MAX_TOKENS', '1024'))
+AI_DEFAULT_MONTHLY_LIMIT = int(os.getenv('AI_DEFAULT_MONTHLY_LIMIT', '100'))
+AI_DEFAULT_DAILY_LIMIT = int(os.getenv('AI_DEFAULT_DAILY_LIMIT', '20'))

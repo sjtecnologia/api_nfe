@@ -1,13 +1,25 @@
 import os
 import requests
 import json
+from pathlib import Path
+from dotenv import load_dotenv
 ## Removido: função duplicada gerar_prompt_sugestao
 from fastapi import Body
 
+# Carrega variáveis de ambiente tanto do diretório atual quanto da raiz do projeto.
+_CURRENT_DIR = Path(__file__).resolve().parent
+load_dotenv(_CURRENT_DIR / ".env")
+load_dotenv(_CURRENT_DIR.parent / ".env")
+load_dotenv(_CURRENT_DIR.parent / ".env.local", override=True)
+
+_AI_PROVIDER_URL = os.getenv("AI_PROVIDER_URL", "").strip()
+_AI_PROVIDER_MODEL = os.getenv("AI_PROVIDER_MODEL", "").strip()
+_AI_PROVIDER_API_KEY = os.getenv("AI_PROVIDER_API_KEY", "").strip()
 _LLM_FALLBACK_URL = os.getenv(
     "LLM_FALLBACK_URL",
-    "http://localhost:1234/v1/chat/completions",
+    os.getenv("LLM_URL", "http://localhost:1234/v1/chat/completions"),
 )
+_LLM_FALLBACK_MODEL = os.getenv("LLM_MODEL", "codellama-7b-instruct").strip()
 
 from fastapi import FastAPI, Request, Body
 from fastapi.responses import JSONResponse
@@ -16,6 +28,54 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional
 
 app = FastAPI()
+
+
+def _resolve_llm_config(default_model: str, allow_fallback: bool = True) -> tuple[Optional[str], dict[str, str], Optional[str], str]:
+    """Resolve provider principal por ambiente e fallback opcional."""
+    if _AI_PROVIDER_URL:
+        headers = {"Content-Type": "application/json"}
+        if _AI_PROVIDER_API_KEY:
+            headers["Authorization"] = f"Bearer {_AI_PROVIDER_API_KEY}"
+        return _AI_PROVIDER_URL, headers, (_AI_PROVIDER_MODEL or default_model), "provider"
+
+    if allow_fallback and _LLM_FALLBACK_URL:
+        return _LLM_FALLBACK_URL, {"Content-Type": "application/json"}, (_LLM_FALLBACK_MODEL or default_model), "fallback"
+
+    return None, {}, None, "unconfigured"
+
+
+def _post_chat_completion(
+    *,
+    system_message: Optional[str],
+    user_message: str,
+    default_model: str,
+    max_tokens: int,
+    temperature: float,
+    timeout: int,
+    allow_fallback: bool = True,
+) -> requests.Response:
+    llm_url, headers, model_name, source = _resolve_llm_config(default_model=default_model, allow_fallback=allow_fallback)
+
+    if not llm_url or not model_name:
+        raise RuntimeError("Nenhum provider de IA configurado. Defina AI_PROVIDER_URL ou LLM_FALLBACK_URL.")
+
+    messages = []
+    if system_message:
+        messages.append({"role": "system", "content": system_message})
+    messages.append({"role": "user", "content": user_message})
+
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+
+    response = requests.post(llm_url, json=payload, headers=headers, timeout=timeout)
+    response.llm_source = source
+    response.llm_url = llm_url
+    response.llm_model = model_name
+    return response
 
 # Armazenamento simples em memória para NCMs recebidos
 ncm_db: list = []
@@ -119,38 +179,15 @@ def gerar_prompt_sugestao(req: SugestaoTributariaRequest) -> str:
 async def sugestao_tributaria(req: SugestaoTributariaRequest):
     prompt = gerar_prompt_sugestao(req)
     try:
-        # Usar GitHub Models API (muito mais rápido!)
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        
-        if github_token:
-            # GitHub Models API (GPT-4o mini - rápido e preciso)
-            llm_url = "https://models.inference.ai.azure.com/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {github_token}"
-            }
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "Especialista em classificação fiscal brasileira. Responda APENAS JSON puro, sem markdown."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 512,
-                "temperature": 0.2
-            }
-            resp = requests.post(llm_url, json=payload, headers=headers, timeout=15)
-        else:
-            # Fallback: LM Studio local
-            llm_url = _LLM_FALLBACK_URL
-            payload = {
-                "model": "codellama-7b-instruct",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 512,
-                "temperature": 0.2
-            }   
-            resp = requests.post(llm_url, json=payload, timeout=60)
+        resp = _post_chat_completion(
+            system_message="Especialista em classificação fiscal brasileira. Responda APENAS JSON puro, sem markdown.",
+            user_message=prompt,
+            default_model="gpt-4o-mini",
+            max_tokens=512,
+            temperature=0.2,
+            timeout=60,
+            allow_fallback=True,
+        )
             
         if resp.status_code == 200:
             # Para /v1/chat/completions, a resposta vem em choices[0].message.content
@@ -191,8 +228,6 @@ async def validar_xml_completo(req: ValidacaoXMLRequest):
     """Valida XML completo da NFe antes de enviar para SEFAZ"""
     
     try:
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        
         prompt = f"""Você é um especialista em NFe 4.0. Analise o XML abaixo e identifique problemas que causariam rejeição no SEFAZ.
 
 AMBIENTE: {req.ambiente}
@@ -219,29 +254,23 @@ RESPONDA JSON:
 
 SEM markdown, APENAS JSON."""
 
-        if github_token:
-            llm_url = "https://models.inference.ai.azure.com/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {github_token}"
-            }
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "Especialista NFe 4.0 Brasil. Responda JSON puro."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 1024,
-                "temperature": 0.1
-            }
-            resp = requests.post(llm_url, json=payload, headers=headers, timeout=20)
-        else:
+        llm_url, _headers, _model, _source = _resolve_llm_config(default_model="gpt-4o-mini", allow_fallback=False)
+        if not llm_url:
             return JSONResponse(content={
                 "valido": True,
                 "erros": [],
-                "avisos": ["Validação IA não disponível - token GitHub não configurado"],
+                "avisos": ["Validação IA não disponível - provider não configurado"],
                 "score_confianca": 0
             })
+        resp = _post_chat_completion(
+            system_message="Especialista NFe 4.0 Brasil. Responda JSON puro.",
+            user_message=prompt,
+            default_model="gpt-4o-mini",
+            max_tokens=1024,
+            temperature=0.1,
+            timeout=20,
+            allow_fallback=False,
+        )
         
         if resp.status_code == 200:
             resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -340,23 +369,8 @@ Responda em JSON puro:
 
 IMPORTANTE: Se a combinação CFOP + CST/CSOSN estiver CORRETA segundo as regras acima, retorne "valido": true."""
 
-        if github_token:
-            llm_url = "https://models.inference.ai.azure.com/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {github_token}"
-            }
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "Especialista tributação brasileira. Responda APENAS JSON puro, sem markdown."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 800,
-                "temperature": 0.1
-            }
-            resp = requests.post(llm_url, json=payload, headers=headers, timeout=20)
-        else:
+        llm_url, _headers, _model, _source = _resolve_llm_config(default_model="gpt-4o-mini", allow_fallback=False)
+        if not llm_url:
             # Validação básica por regras sem IA (fallback)
             erros = []
             sugestoes = []
@@ -398,6 +412,16 @@ IMPORTANTE: Se a combinação CFOP + CST/CSOSN estiver CORRETA segundo as regras
                 "sugestoes": sugestoes,
                 "explicacao": f"Validação por regras (IA não disponível). {len(erros)} erro(s) encontrado(s)." if erros else "Regra válida conforme legislação tributária."
             })
+
+        resp = _post_chat_completion(
+            system_message="Especialista em tributação brasileira. Responda APENAS JSON puro.",
+            user_message=prompt,
+            default_model="gpt-4o-mini",
+            max_tokens=512,
+            temperature=0.1,
+            timeout=30,
+            allow_fallback=False,
+        )
         
         if resp.status_code == 200:
             resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -489,43 +513,15 @@ async def validar_tributacao_ia(req: ValidacaoTributariaRequest):
     prompt = gerar_prompt_validacao_tributaria(req)
     
     try:
-        # Usar GitHub Models API (muito mais rápido!)
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        
-        print(f"[DEBUG] GitHub Token presente: {'Sim' if github_token else 'Não'}")
-        
-        if github_token:
-            # GitHub Models API (GPT-4o mini - rápido e preciso)
-            print("[DEBUG] Usando GitHub Models API")
-            llm_url = "https://models.inference.ai.azure.com/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {github_token}"
-            }
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "Especialista tributação BR. Responda JSON puro."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 512,
-                "temperature": 0.1
-            }
-            resp = requests.post(llm_url, json=payload, headers=headers, timeout=15)
-            print(f"[DEBUG] GitHub Models resposta: {resp.status_code}")
-        else:
-            # Fallback: LM Studio local
-            llm_url = _LLM_FALLBACK_URL
-            payload = {
-                "model": "codellama-7b-instruct",
-                "messages": [
-                    {"role": "system", "content": "Especialista tributação BR. Responda JSON puro."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 512,
-                "temperature": 0.1
-            }
-            resp = requests.post(llm_url, json=payload, timeout=60)
+        resp = _post_chat_completion(
+            system_message="Especialista tributação BR. Responda JSON puro.",
+            user_message=prompt,
+            default_model="gpt-4o-mini",
+            max_tokens=512,
+            temperature=0.1,
+            timeout=60,
+            allow_fallback=True,
+        )
         
         if resp.status_code == 200:
             resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -603,14 +599,13 @@ async def validar_nfe_pre_emissao(req: ValidacaoNFeRequest):
     """
     
     try:
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        
-        if not github_token:
+        llm_url, _headers, _model, _source = _resolve_llm_config(default_model="gpt-4o-mini", allow_fallback=False)
+        if not llm_url:
             return JSONResponse(content={
                 "sucesso": False,
                 "validacao_ok": True,
                 "erros_criticos": [],
-                "alertas": ["Token GitHub não configurado - validação IA indisponível"],
+                "alertas": ["Provider de IA não configurado - validação IA indisponível"],
                 "sugestoes": [],
                 "score_confianca": 0
             })
@@ -678,23 +673,16 @@ RESPONDA APENAS JSON:
   "resumo": "NFe válida para emissão"
 }}"""
 
-        llm_url = "https://models.inference.ai.azure.com/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {github_token}"
-        }
-        payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "Você é um especialista fiscal brasileiro. Analise NFe e identifique erros. Responda APENAS JSON válido, sem markdown."},
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 1500,
-            "temperature": 0.1
-        }
-        
-        print(f"[IA-VALIDACAO] Enviando requisição para GitHub Models...")
-        resp = requests.post(llm_url, json=payload, headers=headers, timeout=30)
+        print(f"[IA-VALIDACAO] Enviando requisição para provider configurado...")
+        resp = _post_chat_completion(
+            system_message="Você é um especialista fiscal brasileiro. Analise NFe e identifique erros. Responda APENAS JSON válido, sem markdown.",
+            user_message=prompt,
+            default_model="gpt-4o-mini",
+            max_tokens=1500,
+            temperature=0.1,
+            timeout=30,
+            allow_fallback=False,
+        )
         print(f"[IA-VALIDACAO] Resposta: {resp.status_code}")
         
         if resp.status_code == 200:
@@ -867,25 +855,18 @@ IMPORTANTE:
 - CST 001 é VÁLIDO para qualquer regime incluindo Simples Nacional
 - Se os valores estão dentro dos parâmetros legais, retorne "valido": true"""
 
-        if github_token:
-            # Usar IA do GitHub Models
-            llm_url = "https://models.inference.ai.azure.com/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {github_token}"
-            }
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "system", "content": "Especialista em tributação de serviços no Brasil. Responda APENAS JSON puro, sem markdown."},
-                    {"role": "user", "content": prompt}
-                ],
-                "max_tokens": 1000,
-                "temperature": 0.1
-            }
-            
-            resp = requests.post(llm_url, json=payload, headers=headers, timeout=20)
-            
+        llm_url, _headers, _model, _source = _resolve_llm_config(default_model="gpt-4o-mini", allow_fallback=False)
+        if llm_url:
+            resp = _post_chat_completion(
+                system_message="Especialista em tributação de serviços no Brasil. Responda APENAS JSON puro, sem markdown.",
+                user_message=prompt,
+                default_model="gpt-4o-mini",
+                max_tokens=1000,
+                temperature=0.1,
+                timeout=20,
+                allow_fallback=False,
+            )
+
             if resp.status_code == 200:
                 resposta = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
                 
@@ -995,14 +976,13 @@ async def validar_nfse_pre_emissao(req: ValidacaoNFSeRequest):
     """
     
     try:
-        github_token = os.getenv("GITHUB_TOKEN", "")
-        
-        if not github_token:
+        llm_url, _headers, _model, _source = _resolve_llm_config(default_model="gpt-4o-mini", allow_fallback=False)
+        if not llm_url:
             return JSONResponse(content={
                 "sucesso": False,
                 "validacao_ok": True,
                 "erros_criticos": [],
-                "alertas": [{"alerta": "Token GitHub não configurado - validação IA indisponível"}],
+            "alertas": [{"alerta": "Provider de IA não configurado - validação IA indisponível"}],
                 "sugestoes_melhoria": [],
                 "score_confianca": 0,
                 "resumo": "IA indisponível"
@@ -1077,23 +1057,16 @@ RESPONDA APENAS JSON válido (sem markdown):
   "resumo": "NFS-e válida para emissão"
 }}"""
 
-        llm_url = "https://models.inference.ai.azure.com/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {github_token}"
-        }
-        payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "Você é um especialista fiscal brasileiro em NFS-e. Analise os dados e identifique erros. Responda APENAS JSON válido, sem markdown."},
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 2000,
-            "temperature": 0.1
-        }
-        
-        print(f"[IA-VALIDACAO-NFSE] Enviando requisição para GitHub Models...")
-        resp = requests.post(llm_url, json=payload, headers=headers, timeout=30)
+        print(f"[IA-VALIDACAO-NFSE] Enviando requisição para provider configurado...")
+        resp = _post_chat_completion(
+            system_message="Você é um especialista fiscal brasileiro em NFS-e. Analise os dados e identifique erros. Responda APENAS JSON válido, sem markdown.",
+            user_message=prompt,
+            default_model="gpt-4o-mini",
+            max_tokens=2000,
+            temperature=0.1,
+            timeout=30,
+            allow_fallback=False,
+        )
         print(f"[IA-VALIDACAO-NFSE] Resposta: {resp.status_code}")
         
         if resp.status_code == 200:

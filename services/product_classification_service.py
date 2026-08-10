@@ -13,13 +13,14 @@ Uso:
     # result = {'sucesso': True, 'classificacao': {...}, 'ids': {...}}
 """
 import logging
-import requests as req_lib
+import json
+import re
 from sqlalchemy import text
 
-logger = logging.getLogger(__name__)
+from services.ai_providers import AIProviderError, LegacyNcmClassificationProvider
+from services.ai_service import AIResponseFormatError, AIService, AIServiceConfig, AIUsageLimitExceeded
 
-IA_SERVICE_URL = 'http://localhost:8081'
-IA_TIMEOUT_SECONDS = 150  # LLM pode ser lenta — 150 s + margem
+logger = logging.getLogger(__name__)
 
 
 class ProductClassificationService:
@@ -39,7 +40,8 @@ class ProductClassificationService:
     def classify(self, descricao: str, cliente_id=None,
                  tipo_item: str = 'Produto',
                  unidade_comercial: str = 'UN',
-                 codigo_interno: str = '') -> dict:
+                 codigo_interno: str = '',
+                 user_id=None) -> dict:
         """
         Classifica um produto via IA e enriquece com IDs do banco.
 
@@ -48,6 +50,7 @@ class ProductClassificationService:
         :param tipo_item:         'Produto' ou 'Serviço'
         :param unidade_comercial: Unidade de medida (default 'UN')
         :param codigo_interno:    Código interno do produto (opcional)
+        :param user_id:          Usuário autenticado (opcional, para log/limites)
         :returns: dict com chaves 'sucesso', 'classificacao', 'ids' e descrições opcionais.
         :raises ValueError: se descricao for vazia.
         :raises ProductClassificationUnavailable: se serviço de IA não responder.
@@ -67,7 +70,7 @@ class ProductClassificationService:
         if cliente_id:
             payload.update(self._enrich_from_client(cliente_id))
 
-        classificacao = self._call_ia(payload)
+        classificacao = self._call_ia(payload, cliente_id=cliente_id, user_id=user_id)
         resultado = self._resolve_ids(classificacao)
         return resultado
 
@@ -98,31 +101,42 @@ class ProductClassificationService:
             logger.warning('[IA] Não foi possível enriquecer contexto do cliente %s: %s', cliente_id, e)
         return {}
 
-    def _call_ia(self, payload: dict) -> dict:
+    def _call_ia(self, payload: dict, cliente_id=None, user_id=None) -> dict:
         """
         Chama o serviço de IA e retorna a classificação bruta.
         Levanta ProductClassificationUnavailable se a chamada falhar.
         """
-        logger.debug('[IA] Chamando API IA: descricao=%s', payload.get('descricao'))
+        logger.debug('[IA] Chamando classificador legado via AIService: descricao=%s', payload.get('descricao'))
+        ai_service = AIService(
+            db=self._db,
+            provider=LegacyNcmClassificationProvider(),
+            config=AIServiceConfig(provider_url=''),
+        )
         try:
-            resp = req_lib.post(
-                f'{IA_SERVICE_URL}/sugestao',
-                json=payload,
-                timeout=IA_TIMEOUT_SECONDS,
+            result = ai_service.generate_json(
+                prompt_name='product_classification',
+                user_message=json.dumps(payload, ensure_ascii=False),
+                cliente_id=cliente_id,
+                user_id=user_id,
+                functionality='classificacao_produto',
+                tools_scope='products',
+                record=True,
             )
-        except req_lib.exceptions.RequestException as e:
-            logger.error('[IA] Falha de conexão com serviço IA: %s', e)
+        except AIProviderError as e:
+            logger.error('[IA] Falha de conexão com classificador legado: %s', e)
             raise ProductClassificationUnavailable(
                 'Serviço de IA não está disponível (porta 8081).'
             ) from e
+        except (AIResponseFormatError, AIUsageLimitExceeded) as e:
+            logger.error('[IA] Erro ao processar classificação: %s', e)
+            raise ProductClassificationError(str(e)) from e
 
-        if resp.status_code != 200:
-            logger.error('[IA] API IA retornou status %s', resp.status_code)
-            raise ProductClassificationError(
-                f'Erro HTTP {resp.status_code} ao consultar API de IA'
-            )
-
-        result = resp.json()
+        parsed = result.get('parsed') or {}
+        result = self._normalize_classificacao(parsed)
+        diagnostico = {
+            'provider': result.get('_provider') or parsed.get('_provider') or (result and ai_service.provider.provider_name),
+            'model': result.get('_model') or parsed.get('_model') or None,
+        }
 
         if result.get('erro'):
             raise ProductClassificationError(result['erro'])
@@ -132,7 +146,34 @@ class ProductClassificationService:
                 'Resposta da API de IA inválida — NCM ausente'
             )
 
+        if diagnostico['provider']:
+            result['_diagnostico'] = diagnostico
+
         return result
+
+    def _normalize_classificacao(self, raw: dict) -> dict:
+        """Normaliza chaves e formatos retornados pela IA para reduzir variações."""
+        normalized = dict(raw)
+
+        if not normalized.get('cst') and normalized.get('cst_icms'):
+            normalized['cst'] = str(normalized.get('cst_icms')).strip()
+        if not normalized.get('csosn') and normalized.get('csosn_icms'):
+            normalized['csosn'] = str(normalized.get('csosn_icms')).strip()
+
+        normalized['ncm'] = self._digits_only(normalized.get('ncm'))
+        normalized['cfop'] = self._digits_only(normalized.get('cfop'))
+        normalized['cst'] = self._digits_only(normalized.get('cst'))
+        normalized['csosn'] = self._digits_only(normalized.get('csosn'))
+        normalized['cest'] = self._digits_only(normalized.get('cest'))
+
+        return normalized
+
+    @staticmethod
+    def _digits_only(value):
+        if value is None:
+            return None
+        cleaned = re.sub(r'\D+', '', str(value))
+        return cleaned or None
 
     # ─────────────────────────────────────────────────────────────────────────
     # Privado — resolução de IDs no banco
@@ -147,6 +188,7 @@ class ProductClassificationService:
             'sucesso': True,
             'classificacao': classificacao,
             'ids': {},
+            'avisos': [],
         }
 
         # NCM
@@ -164,7 +206,29 @@ class ProductClassificationService:
                 resultado['ncm_descricao'] = d['descricao']
                 logger.debug('[IA] NCM %s → id=%s', d['codigo'], d['ncm_id'])
             else:
-                logger.warning('[IA] NCM %s não encontrado no banco', ncm_codigo)
+                # Fallback: tenta subitem aproximado por prefixo (6 dígitos)
+                prefixo_ncm = ncm_codigo[:6]
+                row_prefixo = None
+                if len(prefixo_ncm) == 6:
+                    row_prefixo = self._db.execute(text("""
+                        SELECT ncm_id, codigo, descricao
+                        FROM ncms
+                        WHERE REPLACE(codigo, '.', '') LIKE :prefixo
+                        ORDER BY codigo
+                        LIMIT 1
+                    """), {'prefixo': f'{prefixo_ncm}%'}).fetchone()
+
+                if row_prefixo:
+                    d = dict(row_prefixo._mapping)
+                    resultado['ids']['ncm_id'] = d['ncm_id']
+                    resultado['ncm_descricao'] = d['descricao']
+                    resultado['avisos'].append(
+                        f'NCM {ncm_codigo} não encontrado exatamente; aplicado aproximado {d.get("codigo")}.'
+                    )
+                    logger.warning('[IA] NCM %s não exato; usando aproximado %s', ncm_codigo, d.get('codigo'))
+                else:
+                    logger.warning('[IA] NCM %s não encontrado no banco', ncm_codigo)
+                    resultado['avisos'].append(f'NCM {ncm_codigo} não encontrado no cadastro local')
 
         # CFOP
         cfop_codigo = classificacao.get('cfop')
@@ -182,6 +246,7 @@ class ProductClassificationService:
                 logger.debug('[IA] CFOP %s → id=%s', d['cfop'], d['cfop_id'])
             else:
                 logger.warning('[IA] CFOP %s não encontrado no banco', cfop_codigo)
+                resultado['avisos'].append(f'CFOP {cfop_codigo} não encontrado no cadastro local')
 
         # CST ICMS
         cst_codigo = classificacao.get('cst')
@@ -196,6 +261,30 @@ class ProductClassificationService:
                 d = dict(row._mapping)
                 resultado['ids']['cst_id'] = d['cst_id']
                 resultado['cst_descricao'] = d['descricao']
+            else:
+                # Fallback: aceita variações como 00 vs 000
+                rows = self._db.execute(text("""
+                    SELECT cst_id, codigo, descricao
+                    FROM cst_icms
+                """)).fetchall()
+
+                alvo = self._digits_only(cst_codigo) or ''
+                alvo_norm = alvo.zfill(3)
+                match = None
+                for raw in rows:
+                    d = dict(raw._mapping)
+                    codigo_norm = self._digits_only(d.get('codigo')) or ''
+                    if codigo_norm.zfill(3) == alvo_norm:
+                        match = d
+                        break
+
+                if match:
+                    resultado['ids']['cst_id'] = match['cst_id']
+                    resultado['cst_descricao'] = match['descricao']
+                    resultado['avisos'].append(
+                        f'CST {cst_codigo} ajustado para formato local {match.get("codigo")}.'
+                    )
+                    logger.warning('[IA] CST %s não exato; usando %s', cst_codigo, match.get('codigo'))
 
         # CSOSN
         csosn_codigo = classificacao.get('csosn')
@@ -215,6 +304,10 @@ class ProductClassificationService:
         cest = classificacao.get('cest')
         if cest:
             resultado['ids']['cest'] = cest
+
+        diagnostico = classificacao.get('_diagnostico')
+        if diagnostico:
+            resultado['diagnostico'] = diagnostico
 
         return resultado
 

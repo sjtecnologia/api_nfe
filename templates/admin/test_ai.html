@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+
+{% block title %}Teste de IA - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-robot"></i> Teste de IA</h2>
+            <p class="text-muted mb-0">Inspecione prompts, status e uma prévia sem tocar no fluxo fiscal atual.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+            </a>
+            <button class="btn btn-primary" onclick="loadAiStatus()">
+                <i class="fas fa-sync-alt"></i> Atualizar Status
+            </button>
+            <button class="btn btn-outline-primary" onclick="loadAiHealth()">
+                <i class="fas fa-heartbeat"></i> Verificar Saúde
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-signal"></i> Status</h5>
+                </div>
+                <div class="card-body">
+                    <div id="ai-status-loading" class="text-muted">Carregando status...</div>
+                    <div id="ai-status-content" class="d-none"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-scroll"></i> Prompts</h5>
+                    <span class="badge bg-light text-dark" id="ai-prompt-count">0</span>
+                </div>
+                <div class="card-body">
+                    <div id="ai-prompts-loading" class="text-muted">Carregando prompts...</div>
+                    <div id="ai-prompts-content" class="d-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-heartbeat"></i> Saúde Operacional da IA</h5>
+            <span id="ai-health-badge" class="badge bg-secondary">Não verificado</span>
+        </div>
+        <div class="card-body">
+            <div id="ai-health-loading" class="text-muted">Aguardando verificação...</div>
+            <div id="ai-health-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-flask"></i> Prévia de Prompt</h5>
+        </div>
+        <div class="card-body">
+            <form id="ai-preview-form" class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Prompt</label>
+                    <select class="form-select" id="prompt-name" name="prompt_name" required></select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Variáveis JSON</label>
+                    <textarea class="form-control" id="prompt-variables" rows="4" placeholder='{"empresa": "ACME", "cliente": "Carlos"}'>{}</textarea>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-magic"></i> Gerar Prévia
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleVariables()">
+                        Exemplo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-code"></i> Resultado</h5>
+        </div>
+        <div class="card-body">
+            <pre id="ai-preview-result" class="mb-0 bg-light p-3 rounded" style="min-height: 240px; white-space: pre-wrap;">Selecione um prompt e clique em Gerar Prévia.</pre>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-box-open"></i> Classificação de Produto</h5>
+        </div>
+        <div class="card-body">
+            <form id="ai-classify-form" class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Descrição do produto</label>
+                    <input type="text" class="form-control" id="produto-descricao" placeholder="Ex.: Cadeira ergonômica com apoio lombar" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cliente ID</label>
+                    <input type="number" class="form-control" id="produto-cliente-id" placeholder="Opcional">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo item</label>
+                    <select class="form-select" id="produto-tipo-item">
+                        <option value="Produto" selected>Produto</option>
+                        <option value="Serviço">Serviço</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Unidade</label>
+                    <input type="text" class="form-control" id="produto-unidade" value="UN">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Código interno</label>
+                    <input type="text" class="form-control" id="produto-codigo-interno" placeholder="Opcional">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Classificar Produto
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleProduct()">
+                        Exemplo de Produto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-clipboard-list"></i> Classificação do Produto</h5>
+        </div>
+        <div class="card-body">
+            <pre id="ai-classify-result" class="mb-0 bg-light p-3 rounded" style="min-height: 240px; white-space: pre-wrap;">Envie um produto para ver o resultado da classificação.</pre>
+        </div>
+    </div>
+
+    <div id="classification-context" class="alert alert-info d-none mt-4 mb-0"></div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-thumbs-up"></i> Feedback da IA</h5>
+        </div>
+        <div class="card-body">
+            <form id="ai-feedback-form" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Funcionalidade</label>
+                    <select class="form-select" id="feedback-funcionalidade" required>
+                        <option value="" selected disabled>Selecione</option>
+                        <option value="assistente_business">Assistente Business</option>
+                        <option value="assistente_fiscal">Assistente Fiscal</option>
+                        <option value="classificacao_produto">Classificação de Produto</option>
+                        <option value="daily_summary">Resumo Diário</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cliente ID</label>
+                    <input type="number" class="form-control" id="feedback-cliente-id" placeholder="Obrigatório">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Feedback</label>
+                    <select class="form-select" id="feedback-value" required>
+                        <option value="POSITIVO" selected>Positivo</option>
+                        <option value="NEGATIVO">Negativo</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Comentário</label>
+                    <input type="text" class="form-control" id="feedback-comment" placeholder="Opcional">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Registrar Feedback
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="applyLastClassificationToFeedback()">
+                        Usar última classificação
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleFeedback()">
+                        Exemplo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-history"></i> Histórico Recente</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiLogs()">
+                Atualizar histórico
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="ai-logs-loading" class="text-muted">Carregando histórico...</div>
+            <div id="ai-logs-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-comment-dots"></i> Feedbacks Recentes</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiFeedbacks()">
+                Atualizar feedbacks
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="ai-feedbacks-loading" class="text-muted">Carregando feedbacks...</div>
+            <div id="ai-feedbacks-content" class="d-none"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let lastClassificationContext = null;
+
+async function loadAiStatus() {
+    const statusLoading = document.getElementById('ai-status-loading');
+    const statusContent = document.getElementById('ai-status-content');
+    const promptsLoading = document.getElementById('ai-prompts-loading');
+    const promptsContent = document.getElementById('ai-prompts-content');
+    const promptSelect = document.getElementById('prompt-name');
+    const promptCount = document.getElementById('ai-prompt-count');
+
+    statusLoading.classList.remove('d-none');
+    promptsLoading.classList.remove('d-none');
+    statusContent.classList.add('d-none');
+    promptsContent.classList.add('d-none');
+
+    try {
+        const [statusResp, promptsResp] = await Promise.all([
+            fetch('{{ url_for('admin_api.api_ia_status') }}'),
+            fetch('{{ url_for('admin_api.api_ia_prompts') }}')
+        ]);
+
+        const statusJson = await statusResp.json();
+        const promptsJson = await promptsResp.json();
+
+        if (!statusResp.ok || !statusJson.success) {
+            throw new Error(statusJson.error || 'Falha ao carregar status');
+        }
+        if (!promptsResp.ok || !promptsJson.success) {
+            throw new Error(promptsJson.error || 'Falha ao carregar prompts');
+        }
+
+        const status = statusJson.data || {};
+        statusContent.innerHTML = `
+            <dl class="row mb-0">
+                <dt class="col-sm-6">Provider configurado</dt><dd class="col-sm-6">${status.provider_url_configured ? 'Sim' : 'Não'}</dd>
+                <dt class="col-sm-6">Modelo padrão</dt><dd class="col-sm-6">${status.provider_model || '-'}</dd>
+                <dt class="col-sm-6">Temperatura</dt><dd class="col-sm-6">${status.default_temperature ?? '-'}</dd>
+                <dt class="col-sm-6">Max tokens</dt><dd class="col-sm-6">${status.default_max_tokens ?? '-'}</dd>
+                <dt class="col-sm-6">Limite mensal</dt><dd class="col-sm-6">${status.default_monthly_limit ?? '-'}</dd>
+                <dt class="col-sm-6">Prompts</dt><dd class="col-sm-6">${status.prompt_count ?? 0}</dd>
+                <dt class="col-sm-6">Feedbacks</dt><dd class="col-sm-6">${status.feedback_count ?? 0}</dd>
+                <dt class="col-sm-6">Positivos</dt><dd class="col-sm-6">${status.feedback_positive_count ?? 0} (${status.feedback_positive_rate ?? 0}%)</dd>
+                <dt class="col-sm-6">Negativos</dt><dd class="col-sm-6">${status.feedback_negative_count ?? 0}</dd>
+            </dl>
+            ${statusJson.warning ? `<div class="alert alert-warning py-2 px-3 mt-3 mb-0">${statusJson.warning}</div>` : ''}
+        `;
+
+        const prompts = promptsJson.data || [];
+        promptSelect.innerHTML = prompts.map(prompt => `<option value="${prompt.nome}">${prompt.nome} - ${prompt.funcionalidade}</option>`).join('');
+        promptCount.textContent = prompts.length;
+
+        promptsContent.innerHTML = prompts.map(prompt => `
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between gap-3 mb-2">
+                    <strong>${prompt.nome}</strong>
+                    <span class="badge bg-secondary">${prompt.funcionalidade}</span>
+                </div>
+                <div class="text-muted small mb-2">Versão ${prompt.versao} | Modelo ${prompt.modelo || '-'}</div>
+                <div style="white-space: pre-wrap;">${prompt.prompt}</div>
+            </div>
+        `).join('');
+
+        statusLoading.classList.add('d-none');
+        promptsLoading.classList.add('d-none');
+        statusContent.classList.remove('d-none');
+        promptsContent.classList.remove('d-none');
+    } catch (error) {
+        statusLoading.textContent = 'Falha ao carregar status da IA: ' + error;
+        promptsLoading.textContent = 'Falha ao carregar prompts da IA: ' + error;
+    }
+}
+
+async function loadAiHealth() {
+    const loading = document.getElementById('ai-health-loading');
+    const content = document.getElementById('ai-health-content');
+    const badge = document.getElementById('ai-health-badge');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+    badge.className = 'badge bg-secondary';
+    badge.textContent = 'Verificando...';
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_health') }}');
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Falha no healthcheck');
+        }
+
+        const data = payload.data || {};
+        const checks = data.checks || [];
+        const operational = !!data.operational;
+
+        badge.className = `badge ${operational ? 'bg-success' : 'bg-danger'}`;
+        badge.textContent = operational ? 'Operacional' : 'Com falhas';
+
+        content.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Verificação</th>
+                            <th>HTTP</th>
+                            <th>Status</th>
+                            <th>Detalhe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${checks.map(item => `
+                            <tr>
+                                <td>${item.name}</td>
+                                <td>${item.status_code ?? '-'}</td>
+                                <td><span class="badge ${item.ok ? 'bg-success' : 'bg-danger'}">${item.ok ? 'OK' : 'FALHA'}</span></td>
+                                <td class="text-muted small">${item.error || item.url || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        badge.className = 'badge bg-danger';
+        badge.textContent = 'Falha';
+        loading.textContent = 'Falha ao verificar saúde da IA: ' + error;
+    }
+}
+
+async function loadAiLogs() {
+    const loading = document.getElementById('ai-logs-loading');
+    const content = document.getElementById('ai-logs-content');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_logs') }}?limit=10');
+        const payload = await response.json();
+        const logs = payload.data || [];
+
+        if (!logs.length) {
+            content.innerHTML = '<div class="text-muted">Nenhum uso registrado até o momento.</div>';
+        } else {
+            content.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Funcionalidade</th>
+                                <th>Modelo</th>
+                                <th>Status</th>
+                                <th>Tokens</th>
+                                <th>Custo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${logs.map(log => `
+                                <tr>
+                                    <td>${log.created_at || '-'}</td>
+                                    <td>${log.funcionalidade || '-'}</td>
+                                    <td>${log.model || '-'}</td>
+                                    <td><span class="badge ${log.status === 'SUCCESS' ? 'bg-success' : 'bg-danger'}">${log.status || '-'}</span></td>
+                                    <td>${log.total_tokens ?? 0}</td>
+                                    <td>R$ ${(Number(log.cost_estimated || 0)).toFixed(4)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar histórico: ' + error;
+    }
+}
+
+async function loadAiFeedbacks() {
+    const loading = document.getElementById('ai-feedbacks-loading');
+    const content = document.getElementById('ai-feedbacks-content');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_feedbacks') }}?limit=10');
+        const payload = await response.json();
+        const feedbacks = payload.data || [];
+
+        if (!feedbacks.length) {
+            content.innerHTML = '<div class="text-muted">Nenhum feedback registrado até o momento.</div>';
+        } else {
+            content.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Funcionalidade</th>
+                                <th>Feedback</th>
+                                <th>Cliente</th>
+                                <th>Comentário</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${feedbacks.map(item => `
+                                <tr>
+                                    <td>${item.created_at || '-'}</td>
+                                    <td>${item.funcionalidade || '-'}</td>
+                                    <td><span class="badge ${item.feedback === 'POSITIVO' ? 'bg-success' : 'bg-danger'}">${item.feedback || '-'}</span></td>
+                                    <td>${item.cliente_id ?? '-'}</td>
+                                    <td class="text-muted small">${item.comentario || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar feedbacks: ' + error;
+    }
+}
+
+function fillSampleVariables() {
+    document.getElementById('prompt-variables').value = JSON.stringify({
+        empresa: 'EmiteMax',
+        cliente: 'Cliente Demonstração',
+        produto: 'Cadeira ergonômica',
+        objetivo: 'teste rápido'
+    }, null, 2);
+}
+
+function fillSampleProduct() {
+    document.getElementById('produto-descricao').value = 'Cadeira ergonômica com apoio lombar';
+    document.getElementById('produto-cliente-id').value = '';
+    document.getElementById('produto-tipo-item').value = 'Produto';
+    document.getElementById('produto-unidade').value = 'UN';
+    document.getElementById('produto-codigo-interno').value = 'CAD-ERG-001';
+}
+
+function fillSampleFeedback() {
+    document.getElementById('feedback-funcionalidade').value = 'classificacao_produto';
+    document.getElementById('feedback-cliente-id').value = '';
+    document.getElementById('feedback-value').value = 'POSITIVO';
+    document.getElementById('feedback-comment').value = 'Resposta útil para classificação fiscal.';
+}
+
+function applyLastClassificationToFeedback() {
+    const contextBox = document.getElementById('classification-context');
+    if (!lastClassificationContext) {
+        contextBox.classList.remove('d-none');
+        contextBox.className = 'alert alert-warning mt-4 mb-0';
+        contextBox.textContent = 'Nenhuma classificação recente encontrada.';
+        return;
+    }
+
+    document.getElementById('feedback-funcionalidade').value = lastClassificationContext.funcionalidade || 'classificacao_produto';
+    document.getElementById('feedback-cliente-id').value = lastClassificationContext.cliente_id || '';
+    if (lastClassificationContext.comentario_sugerido) {
+        document.getElementById('feedback-comment').value = lastClassificationContext.comentario_sugerido;
+    }
+
+    contextBox.classList.remove('d-none');
+    contextBox.className = 'alert alert-info mt-4 mb-0';
+    contextBox.innerHTML = `
+        <strong>Última classificação aplicada ao feedback.</strong><br>
+        Cliente ID: ${lastClassificationContext.cliente_id ?? '-'}<br>
+        Funcionalidade: ${lastClassificationContext.funcionalidade || '-'}
+    `;
+}
+
+document.getElementById('ai-preview-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    const promptName = document.getElementById('prompt-name').value;
+    const variablesRaw = document.getElementById('prompt-variables').value;
+    const resultBox = document.getElementById('ai-preview-result');
+
+    let variables = {};
+    try {
+        variables = variablesRaw ? JSON.parse(variablesRaw) : {};
+    } catch (error) {
+        resultBox.textContent = 'Variáveis JSON inválidas: ' + error;
+        return;
+    }
+
+    resultBox.textContent = 'Gerando prévia...';
+
+    try {
+        const response = await fetch(`{{ url_for('admin_api.api_ia_prompt_preview', prompt_name='__PROMPT__') }}`.replace('__PROMPT__', encodeURIComponent(promptName)), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ variables })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            resultBox.textContent = payload.error || 'Falha ao gerar prévia';
+            return;
+        }
+        resultBox.textContent = payload.data.rendered_prompt;
+    } catch (error) {
+        resultBox.textContent = 'Erro ao gerar prévia: ' + error;
+    }
+});
+
+loadAiStatus();
+loadAiLogs();
+loadAiHealth();
+
+document.getElementById('ai-classify-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const resultBox = document.getElementById('ai-classify-result');
+    const payload = {
+        descricao: document.getElementById('produto-descricao').value.trim(),
+        cliente_id: document.getElementById('produto-cliente-id').value ? Number(document.getElementById('produto-cliente-id').value) : null,
+        tipo_item: document.getElementById('produto-tipo-item').value,
+        unidade_comercial: document.getElementById('produto-unidade').value.trim() || 'UN',
+        codigo_interno: document.getElementById('produto-codigo-interno').value.trim(),
+    };
+
+    if (!payload.descricao) {
+        resultBox.textContent = 'Informe a descrição do produto.';
+        return;
+    }
+
+    resultBox.textContent = 'Classificando produto...';
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_classificar_produto') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+        resultBox.textContent = JSON.stringify(body, null, 2);
+
+        if (response.ok && body.success) {
+            const classificacao = body.data || {};
+            const classificacaoDetalhe = classificacao.classificacao || {};
+            const ids = classificacao.ids || {};
+            const avisos = Array.isArray(classificacao.avisos) ? classificacao.avisos : [];
+
+            lastClassificationContext = {
+                cliente_id: payload.cliente_id,
+                funcionalidade: 'classificacao_produto',
+                comentario_sugerido: [
+                    `NCM: ${classificacaoDetalhe.ncm || '-'}`,
+                    `CFOP: ${classificacaoDetalhe.cfop || '-'}`,
+                    `CST: ${classificacaoDetalhe.cst || classificacaoDetalhe.cst_icms || '-'}`,
+                    `CSOSN: ${classificacaoDetalhe.csosn || classificacaoDetalhe.csosn_icms || '-'}`,
+                    `IDs: ${JSON.stringify(ids)}`,
+                    avisos.length ? `Avisos: ${avisos.join(' | ')}` : null,
+                ].filter(Boolean).join('\n'),
+            };
+
+            const contextBox = document.getElementById('classification-context');
+            contextBox.classList.remove('d-none');
+            contextBox.className = 'alert alert-info mt-4 mb-0';
+            contextBox.innerHTML = `
+                <strong>Classificação pronta para feedback.</strong><br>
+                Clique em <em>Usar última classificação</em> para preencher o formulário.
+            `;
+        }
+    } catch (error) {
+        resultBox.textContent = 'Erro ao classificar produto: ' + error;
+    }
+});
+
+document.getElementById('ai-feedback-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const resultBox = document.getElementById('ai-preview-result');
+    const payload = {
+        funcionalidade: document.getElementById('feedback-funcionalidade').value,
+        cliente_id: document.getElementById('feedback-cliente-id').value ? Number(document.getElementById('feedback-cliente-id').value) : null,
+        feedback: document.getElementById('feedback-value').value,
+        comentario: document.getElementById('feedback-comment').value.trim(),
+    };
+
+    if (!payload.funcionalidade || !payload.cliente_id) {
+        resultBox.textContent = 'Informe funcionalidade e cliente ID para registrar feedback.';
+        return;
+    }
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_feedback') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+        if (!response.ok) {
+            resultBox.textContent = body.error || 'Falha ao registrar feedback';
+            return;
+        }
+        resultBox.textContent = 'Feedback registrado com sucesso: ' + JSON.stringify(body.data, null, 2);
+        loadAiLogs();
+        loadAiFeedbacks();
+    } catch (error) {
+        resultBox.textContent = 'Erro ao registrar feedback: ' + error;
+    }
+});
+
+loadAiFeedbacks();
+</script>
+{% endblock %}

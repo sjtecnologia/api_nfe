@@ -9,8 +9,34 @@ Registrado em app.py com url_prefix='/admin'.
 """
 import logging
 from flask import Blueprint, jsonify, request
-from flask_login import login_required
+from flask_login import login_required, current_user
+import requests
 from database.connection import get_db
+try:
+    from database.models import AiFeedback, AiUsageLog
+except ImportError:
+    AiFeedback = None
+    AiUsageLog = None
+
+try:
+    from services.ai_service import AIService
+except ImportError:
+    AIService = None
+
+try:
+    from services.product_classification_service import (
+        ProductClassificationError,
+        ProductClassificationService,
+        ProductClassificationUnavailable,
+    )
+except ImportError:
+    ProductClassificationService = None
+
+    class ProductClassificationError(RuntimeError):
+        pass
+
+    class ProductClassificationUnavailable(RuntimeError):
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -132,5 +158,312 @@ def api_cliente_info(cliente_id):
     except Exception as e:
         logger.error('Erro ao buscar dados do cliente %s: %s', cliente_id, e, exc_info=True)
         return jsonify({'erro': 'Erro interno do servidor'}), 500
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Infraestrutura de IA
+# ─────────────────────────────────────────────────────────────────────────────
+
+@admin_api_bp.route('/api/ia/prompts', methods=['GET'])
+@login_required
+def api_ia_prompts():
+    """Lista os prompts ativos da IA centralizada."""
+    if AIService is None:
+        return jsonify({'success': False, 'error': 'Infraestrutura de IA indisponivel neste ambiente'}), 503
+
+    service = AIService()
+    return jsonify({
+        'success': True,
+        'data': service.list_prompts(),
+    })
+
+
+@admin_api_bp.route('/api/ia/prompts/<string:prompt_name>/preview', methods=['POST'])
+@login_required
+def api_ia_prompt_preview(prompt_name):
+    """Renderiza um prompt com variáveis informadas, sem chamar o provider."""
+    if AIService is None:
+        return jsonify({'success': False, 'error': 'Infraestrutura de IA indisponivel neste ambiente'}), 503
+
+    service = AIService()
+    payload = request.get_json(silent=True) or {}
+    try:
+        rendered = service.render_prompt(prompt_name, payload.get('variables') or {})
+    except KeyError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 404
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'prompt_name': prompt_name,
+            'rendered_prompt': rendered,
+            'variables': payload.get('variables') or {},
+        },
+    })
+
+
+@admin_api_bp.route('/api/ia/status', methods=['GET'])
+@login_required
+def api_ia_status():
+    """Retorna um resumo da configuração atual da IA."""
+    if AIService is None:
+        return jsonify({
+            'success': True,
+            'data': {
+                'provider_model': '',
+                'provider_url_configured': False,
+                'default_temperature': 0,
+                'default_max_tokens': 0,
+                'default_monthly_limit': 0,
+                'default_daily_limit': 0,
+                'prompt_count': 0,
+                'feedback_count': 0,
+                'feedback_positive_count': 0,
+                'feedback_negative_count': 0,
+                'feedback_positive_rate': 0,
+            },
+            'warning': 'Infraestrutura de IA indisponivel neste ambiente',
+        })
+
+    service = AIService()
+    config = service.config
+    feedback_count = 0
+    feedback_positive_count = 0
+    feedback_negative_count = 0
+
+    if AiFeedback is not None:
+        db = next(get_db())
+        try:
+            feedback_count = db.query(AiFeedback).count()
+            feedback_positive_count = db.query(AiFeedback).filter(AiFeedback.feedback == 'POSITIVO').count()
+            feedback_negative_count = db.query(AiFeedback).filter(AiFeedback.feedback == 'NEGATIVO').count()
+        except Exception as exc:
+            logger.error('Erro ao buscar métricas de feedback da IA: %s', exc, exc_info=True)
+        finally:
+            db.close()
+
+    feedback_positive_rate = round((feedback_positive_count / feedback_count) * 100, 1) if feedback_count else 0
+    return jsonify({
+        'success': True,
+        'data': {
+            'provider_model': config.provider_model,
+            'provider_url_configured': bool(config.provider_url),
+            'default_temperature': config.default_temperature,
+            'default_max_tokens': config.default_max_tokens,
+            'default_monthly_limit': config.default_monthly_limit,
+            'default_daily_limit': config.default_daily_limit,
+            'prompt_count': len(service.list_prompts()),
+            'feedback_count': feedback_count,
+            'feedback_positive_count': feedback_positive_count,
+            'feedback_negative_count': feedback_negative_count,
+            'feedback_positive_rate': feedback_positive_rate,
+        },
+    })
+
+
+@admin_api_bp.route('/api/ia/health', methods=['GET'])
+@login_required
+def api_ia_health():
+    """Checa rapidamente a disponibilidade operacional da IA legado (8081)."""
+    checks = []
+    base_url = 'http://127.0.0.1:8081'
+
+    payloads = [
+        (
+            'sugestao',
+            f'{base_url}/sugestao',
+            {
+                'descricao': 'Produto teste healthcheck',
+                'tipo_item': 'Produto',
+                'unidade_comercial': 'UN',
+            },
+        ),
+        (
+            'valida_regra',
+            f'{base_url}/valida/regra',
+            {
+                'regime_tributario': 'Simples Nacional',
+                'cfop': '5102',
+                'csosn_icms': '102',
+                'descricao': 'Produto teste healthcheck',
+            },
+        ),
+    ]
+
+    for name, url, payload in payloads:
+        try:
+            resp = requests.post(url, json=payload, timeout=8)
+            checks.append({
+                'name': name,
+                'url': url,
+                'status_code': resp.status_code,
+                'ok': resp.status_code == 200,
+            })
+        except requests.RequestException as exc:
+            checks.append({
+                'name': name,
+                'url': url,
+                'status_code': None,
+                'ok': False,
+                'error': str(exc),
+            })
+
+    operational = all(item.get('ok') for item in checks)
+    return jsonify({
+        'success': True,
+        'data': {
+            'operational': operational,
+            'checks': checks,
+        },
+    })
+
+
+@admin_api_bp.route('/api/ia/logs', methods=['GET'])
+@login_required
+def api_ia_logs():
+    """Retorna os usos recentes da IA para auditoria rápida."""
+    if AiUsageLog is None:
+        return jsonify({
+            'success': True,
+            'data': [],
+            'warning': 'Modelo AiUsageLog indisponivel neste ambiente',
+        })
+
+    raw_limit = request.args.get('limit', 10)
+    try:
+        limit = max(1, min(int(raw_limit), 50))
+    except (TypeError, ValueError):
+        limit = 10
+
+    db = next(get_db())
+    try:
+        rows = (
+            db.query(AiUsageLog)
+            .order_by(AiUsageLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return jsonify({
+            'success': True,
+            'data': [row.to_dict() for row in rows],
+        })
+    except Exception as exc:
+        logger.error('Erro ao buscar logs da IA: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/ia/feedbacks', methods=['GET'])
+@login_required
+def api_ia_feedbacks():
+    """Retorna os feedbacks recentes da IA para acompanhamento de qualidade."""
+    if AiFeedback is None:
+        return jsonify({
+            'success': True,
+            'data': [],
+            'warning': 'Modelo AiFeedback indisponivel neste ambiente',
+        })
+
+    raw_limit = request.args.get('limit', 10)
+    try:
+        limit = max(1, min(int(raw_limit), 50))
+    except (TypeError, ValueError):
+        limit = 10
+
+    db = next(get_db())
+    try:
+        rows = (
+            db.query(AiFeedback)
+            .order_by(AiFeedback.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return jsonify({
+            'success': True,
+            'data': [row.to_dict() for row in rows],
+        })
+    except Exception as exc:
+        logger.error('Erro ao buscar feedbacks da IA: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/ia/feedback', methods=['POST'])
+@login_required
+def api_ia_feedback():
+    """Registra feedback manual para acompanhamento da qualidade da IA."""
+    if AIService is None:
+        return jsonify({'success': False, 'error': 'Infraestrutura de IA indisponivel neste ambiente'}), 503
+
+    payload = request.get_json(silent=True) or {}
+    funcionalidade = (payload.get('funcionalidade') or '').strip()
+    feedback = (payload.get('feedback') or '').strip()
+
+    if not funcionalidade:
+        return jsonify({'success': False, 'error': 'Campo funcionalidade é obrigatório'}), 400
+    if feedback not in {'POSITIVO', 'NEGATIVO'}:
+        return jsonify({'success': False, 'error': 'Campo feedback deve ser POSITIVO ou NEGATIVO'}), 400
+
+    cliente_id = payload.get('cliente_id')
+    if cliente_id is None:
+        return jsonify({'success': False, 'error': 'Campo cliente_id é obrigatório'}), 400
+
+    try:
+        cliente_id = int(cliente_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Campo cliente_id inválido'}), 400
+
+    service = AIService()
+    try:
+        resultado = service.register_feedback(
+            cliente_id=cliente_id,
+            user_id=getattr(current_user, 'id', None),
+            funcionalidade=funcionalidade,
+            feedback=feedback,
+            comentario=(payload.get('comentario') or '').strip() or None,
+            conversation_id=payload.get('conversation_id'),
+            message_id=payload.get('message_id'),
+        )
+        return jsonify({'success': True, 'data': resultado})
+    except Exception as exc:
+        logger.error('Erro ao registrar feedback da IA: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro interno ao registrar feedback'}), 500
+
+
+@admin_api_bp.route('/api/ia/classificar-produto', methods=['POST'])
+@login_required
+def api_ia_classificar_produto():
+    """Classifica um produto usando o fluxo fiscal de IA já existente."""
+    if ProductClassificationService is None:
+        return jsonify({'success': False, 'error': 'Classificacao de IA indisponivel neste ambiente'}), 503
+
+    payload = request.get_json(silent=True) or {}
+    descricao = (payload.get('descricao') or '').strip()
+    if not descricao:
+        return jsonify({'success': False, 'error': 'Campo descricao é obrigatório'}), 400
+
+    db = next(get_db())
+    try:
+        service = ProductClassificationService(db)
+        resultado = service.classify(
+            descricao=descricao,
+            cliente_id=payload.get('cliente_id'),
+            tipo_item=payload.get('tipo_item', 'Produto'),
+            unidade_comercial=payload.get('unidade_comercial', 'UN'),
+            codigo_interno=payload.get('codigo_interno', ''),
+            user_id=getattr(current_user, 'id', None),
+        )
+        return jsonify({'success': True, 'data': resultado})
+    except ProductClassificationUnavailable as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 503
+    except ProductClassificationError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    except Exception as exc:
+        logger.error('Erro ao classificar produto via IA: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro interno ao classificar produto'}), 500
     finally:
         db.close()
