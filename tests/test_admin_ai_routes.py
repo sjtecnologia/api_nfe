@@ -339,6 +339,9 @@ class TestAdminAiRoutes:
         assert summary['feedback_positive'] == 2
         assert len(payload['data']['by_functionality']) == 2
         assert len(payload['data']['daily_history']) == 14
+        assert payload['data']['applied_filters']['cliente_id'] is None
+        assert payload['data']['applied_filters']['funcionalidade'] is None
+        assert payload['data']['top_errors'][0]['count'] == 1
 
     def test_ai_analytics_endpoint_handles_empty_data(self, client):
         mock_user = _mock_admin_user()
@@ -364,3 +367,39 @@ class TestAdminAiRoutes:
         assert payload['data']['summary']['total_requests'] == 0
         assert payload['data']['summary']['confidence_score'] == 0
         assert len(payload['data']['daily_history']) == 7
+        assert payload['data']['top_errors'] == []
+
+    def test_ai_analytics_endpoint_applies_filters(self, client):
+        mock_user = _mock_admin_user()
+
+        class _MockQuery:
+            def filter(self, *_args, **_kwargs):
+                return self
+
+            def all(self):
+                return []
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.get_db") as mock_get_db:
+            mock_db = MagicMock()
+            mock_db.query.return_value = _MockQuery()
+            mock_get_db.return_value = iter([mock_db])
+
+            response = client.get('/admin/api/ia/analytics?days=30&cliente_id=27&funcionalidade=classificacao_produto')
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload['success'] is True
+        assert payload['data']['period_days'] == 30
+        assert payload['data']['applied_filters']['cliente_id'] == 27
+        assert payload['data']['applied_filters']['funcionalidade'] == 'classificacao_produto'
+
+    def test_ai_analytics_endpoint_rejects_invalid_cliente_id(self, client):
+        mock_user = _mock_admin_user()
+
+        with patch("flask_login.utils._get_user", return_value=mock_user):
+            response = client.get('/admin/api/ia/analytics?cliente_id=abc')
+
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload['success'] is False

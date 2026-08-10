@@ -63,9 +63,19 @@
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-chart-line"></i> Analytics IA (14 dias)</h5>
-            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiAnalytics()">
-                Atualizar analytics
-            </button>
+            <div class="d-flex gap-2">
+                <select id="analytics-days" class="form-select form-select-sm" style="width: 130px;">
+                    <option value="7">Últimos 7 dias</option>
+                    <option value="14" selected>Últimos 14 dias</option>
+                    <option value="30">Últimos 30 dias</option>
+                    <option value="90">Últimos 90 dias</option>
+                </select>
+                <input id="analytics-cliente-id" class="form-control form-control-sm" style="width: 140px;" type="number" placeholder="Cliente ID">
+                <input id="analytics-funcionalidade" class="form-control form-control-sm" style="width: 190px;" type="text" placeholder="Funcionalidade">
+                <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiAnalytics()">
+                    Aplicar filtros
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <div id="ai-analytics-loading" class="text-muted">Carregando analytics...</div>
@@ -367,12 +377,24 @@ async function loadAiHealth() {
 async function loadAiAnalytics() {
     const loading = document.getElementById('ai-analytics-loading');
     const content = document.getElementById('ai-analytics-content');
+    const days = document.getElementById('analytics-days').value || '14';
+    const clienteId = (document.getElementById('analytics-cliente-id').value || '').trim();
+    const funcionalidade = (document.getElementById('analytics-funcionalidade').value || '').trim();
+
+    const query = new URLSearchParams();
+    query.set('days', days);
+    if (clienteId) {
+        query.set('cliente_id', clienteId);
+    }
+    if (funcionalidade) {
+        query.set('funcionalidade', funcionalidade);
+    }
 
     loading.classList.remove('d-none');
     content.classList.add('d-none');
 
     try {
-        const response = await fetch('{{ url_for('admin_api.api_ia_analytics') }}?days=14');
+        const response = await fetch(`{{ url_for('admin_api.api_ia_analytics') }}?${query.toString()}`);
         const payload = await response.json();
 
         if (!response.ok || !payload.success) {
@@ -383,6 +405,8 @@ async function loadAiAnalytics() {
         const summary = data.summary || {};
         const history = data.daily_history || [];
         const byFunc = data.by_functionality || [];
+        const topErrors = data.top_errors || [];
+        const filters = data.applied_filters || {};
 
         const dailyRows = history.map(item => `
             <tr>
@@ -408,7 +432,26 @@ async function loadAiAnalytics() {
             `).join('')
             : '<tr><td colspan="6" class="text-muted">Sem dados no período.</td></tr>';
 
+        const errorRows = topErrors.length
+            ? topErrors.map(item => `
+                <tr>
+                    <td class="small">${item.message}</td>
+                    <td class="text-end">${item.count}</td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="2" class="text-muted">Sem erros registrados no período filtrado.</td></tr>';
+
+        const filterTags = [
+            `Período: ${data.period_days || days} dias`,
+            filters.cliente_id ? `Cliente: ${filters.cliente_id}` : 'Cliente: todos',
+            filters.funcionalidade ? `Funcionalidade: ${filters.funcionalidade}` : 'Funcionalidade: todas',
+        ];
+
         content.innerHTML = `
+            <div class="mb-3">
+                ${filterTags.map(tag => `<span class="badge bg-light text-dark me-1">${tag}</span>`).join('')}
+            </div>
+
             <div class="row g-3 mb-3">
                 <div class="col-md-3">
                     <div class="border rounded p-3 h-100">
@@ -439,7 +482,7 @@ async function loadAiAnalytics() {
                 </div>
             </div>
 
-            <div class="row g-3">
+            <div class="row g-3 mb-3">
                 <div class="col-lg-7">
                     <h6 class="mb-2">Histórico diário</h6>
                     <div class="table-responsive">
@@ -476,6 +519,25 @@ async function loadAiAnalytics() {
                             </thead>
                             <tbody>
                                 ${byFuncRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <h6 class="mb-2">Top erros de IA no período</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Mensagem</th>
+                                    <th class="text-end">Ocorrências</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${errorRows}
                             </tbody>
                         </table>
                     </div>

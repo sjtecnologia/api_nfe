@@ -403,48 +403,66 @@ def api_ia_analytics():
     except (TypeError, ValueError):
         days = 14
 
+    raw_cliente_id = request.args.get('cliente_id')
+    raw_funcionalidade = (request.args.get('funcionalidade') or '').strip()
+
+    cliente_id = None
+    if raw_cliente_id not in (None, ''):
+        try:
+            cliente_id = int(raw_cliente_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Parâmetro cliente_id inválido'}), 400
+
+    funcionalidade = raw_funcionalidade or None
+
     start_date = datetime.now() - timedelta(days=days - 1)
 
-    if AiUsageLog is None:
-        return jsonify({
-            'success': True,
-            'data': {
-                'period_days': days,
-                'summary': {
-                    'total_requests': 0,
-                    'success_requests': 0,
-                    'error_requests': 0,
-                    'success_rate': 0,
-                    'avg_response_time_ms': 0,
-                    'total_tokens': 0,
-                    'total_cost': 0,
-                    'feedback_total': 0,
-                    'feedback_positive': 0,
-                    'feedback_negative': 0,
-                    'feedback_positive_rate': 0,
-                    'confidence_score': 0,
-                },
-                'daily_history': [],
-                'by_functionality': [],
+    def _base_payload():
+        return {
+            'period_days': days,
+            'applied_filters': {
+                'cliente_id': cliente_id,
+                'funcionalidade': funcionalidade,
             },
-            'warning': 'Modelo AiUsageLog indisponivel neste ambiente',
-        })
+            'summary': {
+                'total_requests': 0,
+                'success_requests': 0,
+                'error_requests': 0,
+                'success_rate': 0,
+                'avg_response_time_ms': 0,
+                'total_tokens': 0,
+                'total_cost': 0,
+                'feedback_total': 0,
+                'feedback_positive': 0,
+                'feedback_negative': 0,
+                'feedback_positive_rate': 0,
+                'confidence_score': 0,
+            },
+            'daily_history': [],
+            'by_functionality': [],
+            'top_errors': [],
+        }
+
+    if AiUsageLog is None:
+        return jsonify({'success': True, 'data': _base_payload(), 'warning': 'Modelo AiUsageLog indisponivel neste ambiente'})
 
     db = next(get_db())
     try:
-        logs = (
-            db.query(AiUsageLog)
-            .filter(AiUsageLog.created_at >= start_date)
-            .all()
-        )
+        logs_query = db.query(AiUsageLog).filter(AiUsageLog.created_at >= start_date)
+        if cliente_id is not None:
+            logs_query = logs_query.filter(AiUsageLog.cliente_id == cliente_id)
+        if funcionalidade:
+            logs_query = logs_query.filter(AiUsageLog.funcionalidade == funcionalidade)
+        logs = logs_query.all()
 
         feedbacks = []
         if AiFeedback is not None:
-            feedbacks = (
-                db.query(AiFeedback)
-                .filter(AiFeedback.created_at >= start_date)
-                .all()
-            )
+            feedback_query = db.query(AiFeedback).filter(AiFeedback.created_at >= start_date)
+            if cliente_id is not None:
+                feedback_query = feedback_query.filter(AiFeedback.cliente_id == cliente_id)
+            if funcionalidade:
+                feedback_query = feedback_query.filter(AiFeedback.funcionalidade == funcionalidade)
+            feedbacks = feedback_query.all()
 
         total_requests = len(logs)
         success_requests = sum(1 for row in logs if (row.status or '').upper() == 'SUCCESS')
@@ -501,6 +519,18 @@ def api_ia_analytics():
 
         by_functionality_rows.sort(key=lambda row: row['requests'], reverse=True)
 
+        error_counter = {}
+        for row in logs:
+            if (row.status or '').upper() == 'SUCCESS':
+                continue
+            msg = (getattr(row, 'error_message', None) or '').strip() or 'Erro não informado'
+            error_counter[msg] = error_counter.get(msg, 0) + 1
+
+        top_errors = [
+            {'message': message, 'count': count}
+            for message, count in sorted(error_counter.items(), key=lambda item: item[1], reverse=True)[:5]
+        ]
+
         daily_index = {}
         for offset in range(days):
             day = (start_date + timedelta(days=offset)).date()
@@ -539,28 +569,26 @@ def api_ia_analytics():
 
         daily_history = [daily_index[key] for key in sorted(daily_index.keys())]
 
-        return jsonify({
-            'success': True,
-            'data': {
-                'period_days': days,
-                'summary': {
-                    'total_requests': total_requests,
-                    'success_requests': success_requests,
-                    'error_requests': error_requests,
-                    'success_rate': success_rate,
-                    'avg_response_time_ms': avg_response_time_ms,
-                    'total_tokens': total_tokens,
-                    'total_cost': round(total_cost, 6),
-                    'feedback_total': feedback_total,
-                    'feedback_positive': feedback_positive,
-                    'feedback_negative': feedback_negative,
-                    'feedback_positive_rate': feedback_positive_rate,
-                    'confidence_score': confidence_score,
-                },
-                'daily_history': daily_history,
-                'by_functionality': by_functionality_rows,
-            },
-        })
+        data = _base_payload()
+        data['summary'] = {
+            'total_requests': total_requests,
+            'success_requests': success_requests,
+            'error_requests': error_requests,
+            'success_rate': success_rate,
+            'avg_response_time_ms': avg_response_time_ms,
+            'total_tokens': total_tokens,
+            'total_cost': round(total_cost, 6),
+            'feedback_total': feedback_total,
+            'feedback_positive': feedback_positive,
+            'feedback_negative': feedback_negative,
+            'feedback_positive_rate': feedback_positive_rate,
+            'confidence_score': confidence_score,
+        }
+        data['daily_history'] = daily_history
+        data['by_functionality'] = by_functionality_rows
+        data['top_errors'] = top_errors
+
+        return jsonify({'success': True, 'data': data})
     except Exception as exc:
         logger.error('Erro ao gerar analytics da IA: %s', exc, exc_info=True)
         return jsonify({'success': False, 'error': str(exc)}), 500
