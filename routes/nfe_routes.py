@@ -2,7 +2,7 @@ import logging
 import json
 import os
 import time
-from flask import Blueprint, jsonify, request, render_template, redirect, session, url_for, flash
+from flask import Blueprint, jsonify, request, render_template, redirect, session, url_for, flash, send_file, abort, make_response
 from typing import Dict, Any
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
@@ -70,6 +70,49 @@ def _resolver_xml_nfe_para_envio(json_nfe, status_nfe='', protocolo_sefaz='', da
             logger.warning(f"[AVISO] Protocolo XML não adicionado ao envio: {exc}")
 
     return xml_content
+
+
+def _resolver_caminho_danfe(nfe_id):
+    danfe_dir = os.path.join('static', 'danfe')
+    caminho_permanente = os.path.join(danfe_dir, f'danfe_{nfe_id}.pdf')
+    if os.path.exists(caminho_permanente):
+        return caminho_permanente
+
+    candidatos = []
+    if os.path.isdir(danfe_dir):
+        prefixo = f'danfe_{nfe_id}_'
+        for nome_arquivo in os.listdir(danfe_dir):
+            if nome_arquivo.startswith(prefixo) and nome_arquivo.endswith('.pdf'):
+                caminho = os.path.join(danfe_dir, nome_arquivo)
+                candidatos.append((os.path.getmtime(caminho), caminho))
+
+    if candidatos:
+        candidatos.sort(reverse=True)
+        return candidatos[0][1]
+
+    return None
+
+
+@nfe_bp.route('/danfe/<int:nfe_id>/pdf', methods=['GET'])
+@login_required
+@viewer_or_higher_required()
+def download_danfe_pdf(nfe_id):
+    caminho = _resolver_caminho_danfe(nfe_id)
+    if not caminho or not os.path.exists(caminho):
+        return jsonify({'success': False, 'message': 'DANFE não encontrado'}), 404
+
+    response = make_response(send_file(
+        caminho,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f'danfe_{nfe_id}.pdf',
+        conditional=True,
+        max_age=0,
+    ))
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @nfe_bp.route('/api/produtos')
@@ -1198,7 +1241,7 @@ def emitir_nfe():
                             if pdf_path and os.path.exists(pdf_path):
                                 logger.debug(f"OK: DANFE gerado: {pdf_path}")
                                 # Adicionar URL do DANFE à sessão (opcional - para uso futuro)
-                                pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf')
+                                pdf_url = url_for('nfe.download_danfe_pdf', nfe_id=nfe_id)
                                 if 'danfes_gerados' not in session:
                                     session['danfes_gerados'] = {}
                                 # CORREÇÃO: Converter nfe_id para string para evitar erro de serialização JSON
@@ -1211,7 +1254,7 @@ def emitir_nfe():
                                 
                                 # Marcar que DANFE foi gerado para abrir o modal
                                 danfe_gerado_com_sucesso = True
-                                caminho_danfe = f'static/danfe/danfe_{nfe_id}.pdf'
+                                caminho_danfe = url_for('nfe.download_danfe_pdf', nfe_id=nfe_id)
                             else:
                                 logger.warning(f"AVISO: DANFE não foi gerado (pdf_path: {pdf_path})")
                                 flash('NFe emitida, mas o DANFE não foi gerado.', 'warning')
@@ -1873,7 +1916,7 @@ def generate_danfe(nfe_id):
             
             # Adicionar timestamp para evitar cache do navegador
             timestamp = int(time.time())
-            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf') + f'?t={timestamp}'
+            pdf_url = url_for('nfe.download_danfe_pdf', nfe_id=nfe_id) + f'?t={timestamp}'
             
             return jsonify({
                 'success': True,
@@ -1969,7 +2012,7 @@ def generate_danfe_after_issue():
             
             # Adicionar timestamp para evitar cache do navegador
             timestamp = int(time.time())
-            pdf_url = url_for('static', filename=f'danfe/danfe_{nfe_id}.pdf') + f'?t={timestamp}'
+            pdf_url = url_for('nfe.download_danfe_pdf', nfe_id=nfe_id) + f'?t={timestamp}'
             
             return jsonify({
                 'success': True,
@@ -2051,8 +2094,8 @@ def enviar_danfe_email(nfe_id):
             return jsonify({'success': False, 'message': 'Email inválido'}), 400
 
         # Verificar se DANFE existe
-        danfe_path = os.path.join('static', 'danfe', f'danfe_{nfe_id}.pdf')
-        if not os.path.exists(danfe_path):
+        danfe_path = _resolver_caminho_danfe(nfe_id)
+        if not danfe_path or not os.path.exists(danfe_path):
             return jsonify({'success': False, 'message': 'DANFE não encontrado. Gere o DANFE primeiro.'}), 404
 
         # Dados principais

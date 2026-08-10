@@ -658,6 +658,11 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str], clie
         # Verificar/criar diretório para os arquivos DANFE
         danfe_dir = os.path.join('static', 'danfe')
         os.makedirs(danfe_dir, exist_ok=True)
+        try:
+            # Garante travessia/leitura para servidor web (nginx/www-data)
+            os.chmod(danfe_dir, 0o755)
+        except Exception:
+            logger.warning("[!] Não foi possível ajustar permissão do diretório DANFE")
         
         # Caminho de saída para o PDF
         output_pdf_path = os.path.join(danfe_dir, f'danfe_{nfe_id}_{datetime.now().strftime("%Y%m%d%H%M%S")}.pdf')
@@ -897,7 +902,16 @@ def generate_danfe(xml_content: Union[str, bytes], nfe_id: Union[int, str], clie
         # Se o DANFE foi gerado, criar um link permanente
         if os.path.exists(output_pdf_path):
             try:
+                try:
+                    os.chmod(output_pdf_path, 0o644)
+                except Exception:
+                    logger.warning(f"[!] Não foi possível ajustar permissão do arquivo DANFE temporário: {output_pdf_path}")
+
                 shutil.copy2(output_pdf_path, permanent_path)
+                try:
+                    os.chmod(permanent_path, 0o644)
+                except Exception:
+                    logger.warning(f"[!] Não foi possível ajustar permissão do arquivo DANFE permanente: {permanent_path}")
                 logger.info(f"[OK] DANFE permanente salvo em: {permanent_path}")
             except Exception as e:
                 logger.error(f"[X] Erro ao criar link permanente: {str(e)}")

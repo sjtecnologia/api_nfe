@@ -1371,12 +1371,20 @@ class AiUsageLog(Base):
 
     def to_dict(self):
         data = serialize_sqla_object(self)
+        # Evita conflito com Base.metadata (MetaData do SQLAlchemy), que não é serializável.
+        if 'metadata' in data and not isinstance(data.get('metadata'), (dict, list, str, int, float, bool, type(None))):
+            data.pop('metadata', None)
+
         if isinstance(self.metadata_json, str):
             try:
                 import json
                 data['metadata'] = json.loads(self.metadata_json)
             except Exception:
                 data['metadata'] = self.metadata_json
+        elif self.metadata_json is not None:
+            data['metadata'] = self.metadata_json
+        else:
+            data['metadata'] = None
         return data
 
     def __repr__(self):

@@ -4,8 +4,10 @@ Data: 09/02/2026
 Referência: AnexoVII - IndOp_IBSCBS v1.01.00
 """
 
+from pathlib import Path
 from typing import Tuple, Dict, Any, Optional
 from sqlalchemy.orm import Session
+from lxml import etree
 
 
 class NFSeValidationService:
@@ -295,6 +297,91 @@ class NFSeValidationService:
             resultado['avisos'].append("Nenhum tributo total informado - verifique se está correto")
         
         return resultado
+
+    @staticmethod
+    def _default_xsd_path() -> Path:
+        """Retorna caminho padrão do XSD NFS-e v2.04 disponível no repositório."""
+        project_root = Path(__file__).resolve().parents[1]
+        return project_root / "docs" / "nfse_sjrp_giss" / "schemas_modificados_gissv2" / "Schemas_XSD_Servicos_Prestados" / "v2_04" / "nfse_v2-04.xsd"
+
+    @staticmethod
+    def validar_xml_contra_xsd(xml_content: str, xsd_path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Valida um XML NFS-e contra um schema XSD.
+
+        Args:
+            xml_content: Conteúdo XML em string
+            xsd_path: Caminho absoluto/relativo para XSD. Se omitido, usa XSD padrão do projeto.
+
+        Returns:
+            {
+                'valido': bool,
+                'xsd_path': str,
+                'erros': list[str],
+                'mensagem': str
+            }
+        """
+        if not xml_content or not xml_content.strip():
+            return {
+                'valido': False,
+                'xsd_path': '',
+                'erros': ['Conteúdo XML não fornecido'],
+                'mensagem': 'XML vazio'
+            }
+
+        resolved_xsd = Path(xsd_path).expanduser() if xsd_path else NFSeValidationService._default_xsd_path()
+        if not resolved_xsd.is_absolute():
+            resolved_xsd = Path.cwd() / resolved_xsd
+        resolved_xsd = resolved_xsd.resolve()
+
+        if not resolved_xsd.exists():
+            return {
+                'valido': False,
+                'xsd_path': str(resolved_xsd),
+                'erros': [f'Arquivo XSD não encontrado: {resolved_xsd}'],
+                'mensagem': 'XSD não encontrado'
+            }
+
+        try:
+            xml_doc = etree.fromstring(xml_content.encode('utf-8'))
+        except etree.XMLSyntaxError as exc:
+            return {
+                'valido': False,
+                'xsd_path': str(resolved_xsd),
+                'erros': [f'XML malformado: {exc}'],
+                'mensagem': 'XML inválido'
+            }
+
+        try:
+            xsd_doc = etree.parse(str(resolved_xsd))
+            schema = etree.XMLSchema(xsd_doc)
+        except (etree.XMLSchemaParseError, etree.XMLSyntaxError, OSError) as exc:
+            return {
+                'valido': False,
+                'xsd_path': str(resolved_xsd),
+                'erros': [f'Falha ao carregar schema XSD: {exc}'],
+                'mensagem': 'XSD inválido'
+            }
+
+        is_valid = schema.validate(xml_doc)
+        if is_valid:
+            return {
+                'valido': True,
+                'xsd_path': str(resolved_xsd),
+                'erros': [],
+                'mensagem': 'XML válido conforme XSD'
+            }
+
+        errors = []
+        for error in schema.error_log:
+            errors.append(f'Linha {error.line}: {error.message}')
+
+        return {
+            'valido': False,
+            'xsd_path': str(resolved_xsd),
+            'erros': errors,
+            'mensagem': 'XML inválido conforme XSD'
+        }
 
 
 # =============================================================================

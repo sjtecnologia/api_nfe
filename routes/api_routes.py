@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, session
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import or_, text, func
@@ -8,6 +8,22 @@ from database.models import (
     RegimeTributario, RegraTributacao, Csosnicms, Csticms, OrigemMercadoria
 )
 from auth.permissions import get_accessible_client_ids
+
+try:
+    from services.ai_service import AIService
+except ImportError:
+    AIService = None
+
+try:
+    from services.auditoria_service import AuditoriaService
+except ImportError:
+    AuditoriaService = None
+
+try:
+    from services.ai_providers import AIProviderError
+except ImportError:
+    class AIProviderError(RuntimeError):
+        pass
 
 api_bp = Blueprint('api', __name__)
 
@@ -554,12 +570,26 @@ def assistente_ia():
     🤖 Assistente IA EmiteMax - Responde perguntas sobre emissão de NFe
     """
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         pergunta = data.get('pergunta', '').strip()
         contexto = data.get('contexto', {})
         
         if not pergunta:
             return jsonify({"success": False, "error": "Pergunta não fornecida"}), 400
+
+        permitido, motivo = _pergunta_em_escopo_fiscal(pergunta)
+        if not permitido:
+            _registrar_bloqueio_assistente_fiscal(
+                user_id=getattr(current_user, 'id', None),
+                cliente_id=_resolver_cliente_id_contexto(contexto),
+                pergunta=pergunta,
+                motivo=motivo,
+            )
+            return jsonify({
+                "success": False,
+                "error": motivo,
+                "sugestao": "Faça perguntas sobre legislação fiscal, CFOP, CST/CSOSN, NCM, impostos e emissão de NFe/NFS-e.",
+            }), 422
         
         # Extrair contexto da empresa e NFe
         empresa = contexto.get('empresa', {})
@@ -571,13 +601,46 @@ def assistente_ia():
         
         print(f"[ASSISTENTE IA] Pergunta: {pergunta}")
         print(f"[ASSISTENTE IA] Contexto: CRT={crt}, UF={uf}, Regime={regime}")
-        
-        # Base de conhecimento estruturada por tipo de pergunta
-        respostas = gerar_resposta_assistente(pergunta, crt, uf, regime, nfe_info)
+
+        respostas = None
+        fonte = 'base_local'
+
+        if AIService is not None:
+            try:
+                service = AIService()
+                resposta_ia = service.chat(
+                    prompt_name='assistant_fiscal',
+                    user_message=pergunta,
+                    cliente_id=None,
+                    user_id=getattr(current_user, 'id', None),
+                    funcionalidade='assistente_fiscal',
+                    contexto={
+                        'empresa': {
+                            'crt': crt,
+                            'uf': uf,
+                            'regime': regime,
+                        },
+                        'nfe': nfe_info,
+                    },
+                    tools_scope='fiscal',
+                    record=False,
+                )
+                respostas = (resposta_ia.get('content') or '').strip() or None
+                if respostas:
+                    fonte = 'ia'
+            except AIProviderError as exc:
+                print(f"[ASSISTENTE IA] Provedor indisponível, usando fallback local: {exc}")
+            except Exception as exc:
+                print(f"[ASSISTENTE IA] Falha ao usar AIService, usando fallback local: {exc}")
+
+        if not respostas:
+            # Fallback local para manter utilidade mesmo sem provedor de IA
+            respostas = gerar_resposta_assistente(pergunta, crt, uf, regime, nfe_info)
         
         return jsonify({
             "success": True,
-            "resposta": respostas
+            "resposta": respostas,
+            "fonte": fonte,
         }), 200
         
     except Exception as e:
@@ -591,10 +654,88 @@ def assistente_ia():
         }), 500
 
 
+def _pergunta_em_escopo_fiscal(pergunta: str):
+    """Valida se a pergunta está no escopo fiscal/tributário do assistente."""
+    texto = (pergunta or '').strip().lower()
+    if len(texto) < 8:
+        return False, 'Pergunta muito curta. Descreva melhor sua dúvida fiscal.'
+
+    termos_fiscais = [
+        'fiscal', 'tribut', 'imposto', 'icms', 'ipi', 'pis', 'cofins', 'iss', 'difal',
+        'simples nacional', 'regime', 'cfop', 'cst', 'csosn', 'ncm', 'cest', 'aliquota',
+        'alíquota', 'base de calculo', 'base de cálculo', 'credito', 'crédito',
+        'nota fiscal', 'nfe', 'nf-e', 'nfse', 'nfs-e', 'emissao', 'emissão',
+        'cancelamento', 'inutilizacao', 'inutilização', 'xml', 'danfe', 'tomador',
+        'destinatario', 'destinatário', 'retencao', 'retenção', 'servico', 'serviço'
+    ]
+
+    termos_bloqueados = [
+        'piada', 'poema', 'receita de bolo', 'futebol', 'filme', 'jogo', 'minecraft',
+        'horoscopo', 'horóscopo', 'investimento em cripto', 'namoro', 'política',
+        'politica', 'senha', 'hack', 'hacking'
+    ]
+
+    if any(t in texto for t in termos_bloqueados):
+        return False, 'Esta pergunta está fora do escopo do Assistente Fiscal.'
+
+    if any(t in texto for t in termos_fiscais):
+        return True, ''
+
+    return False, 'Pergunta fora de escopo. Este assistente responde apenas dúvidas fiscais e de emissão de notas.'
+
+
+def _resolver_cliente_id_contexto(contexto: dict):
+    """Resolve cliente_id a partir do contexto da requisição/sessão."""
+    if isinstance(contexto, dict):
+        cliente_id_ctx = contexto.get('cliente_id')
+        if cliente_id_ctx is not None:
+            return cliente_id_ctx
+
+        nfe_ctx = contexto.get('nfe') if isinstance(contexto.get('nfe'), dict) else {}
+        if nfe_ctx.get('cliente_id') is not None:
+            return nfe_ctx.get('cliente_id')
+
+    return session.get('current_client_id')
+
+
+def _registrar_bloqueio_assistente_fiscal(user_id, cliente_id, pergunta: str, motivo: str):
+    """Registra em auditoria perguntas bloqueadas por fora de escopo no assistente."""
+    if AuditoriaService is None:
+        return
+
+    try:
+        AuditoriaService.registrar_acao(
+            user_id=user_id,
+            acao='AI_ASSISTENTE_BLOQUEADO',
+            tabela_afetada='assistente_ia',
+            registro_id=int(cliente_id) if cliente_id is not None else None,
+            descricao='Pergunta bloqueada por política de escopo fiscal do assistente',
+            dados_depois={
+                'cliente_id': cliente_id,
+                'pergunta': (pergunta or '')[:1000],
+                'motivo_bloqueio': motivo,
+            },
+        )
+    except Exception as exc:
+        # Auditoria não pode interromper o fluxo principal.
+        print(f"[ASSISTENTE IA] Falha ao registrar auditoria de bloqueio: {exc}")
+
+
 def gerar_resposta_assistente(pergunta, crt, uf, regime, nfe_info):
     """
     Gera resposta baseada em base de conhecimento estruturada
     """
+    permitido, motivo = _pergunta_em_escopo_fiscal(pergunta)
+    if not permitido:
+        return (
+            "❌ <strong>Pergunta fora de escopo do Assistente Fiscal.</strong><br><br>"
+            f"{motivo}<br><br>"
+            "💡 <strong>Exemplos válidos:</strong><br>"
+            "• Qual CFOP usar para venda interestadual?<br>"
+            "• Como preencher CSOSN no Simples Nacional?<br>"
+            "• Como emitir NFS-e com retenção de ISS?"
+        )
+
     pergunta_lower = pergunta.lower()
     
     # 📦 Perguntas sobre emissão/venda dentro ou fora do estado

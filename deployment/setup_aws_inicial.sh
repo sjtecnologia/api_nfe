@@ -142,6 +142,20 @@ echo -e "${YELLOW}⏰ Configurando backup automático...${NC}"
 echo -e "${GREEN}✅ Backup automático configurado (diariamente às 3h)${NC}"
 echo ""
 
+# Configurar cron para auditoria diária do assistente fiscal
+echo -e "${YELLOW}🛡️ Configurando auditoria diária do assistente fiscal...${NC}"
+(crontab -l 2>/dev/null; echo "30 6 * * * cd /home/ubuntu/api_nfe && /usr/bin/python3 /home/ubuntu/api_nfe/scripts/auditoria_assistente_diaria.py >> /home/ubuntu/api_nfe/logs/assistente_auditoria.log 2>&1") | crontab -
+
+echo -e "${GREEN}✅ Auditoria diária do assistente configurada (06:30)${NC}"
+echo ""
+
+# Configurar cron para resumo diário do consultor de vendas
+echo -e "${YELLOW}📈 Configurando resumo diário do consultor de vendas...${NC}"
+(crontab -l 2>/dev/null; echo "45 6 * * * cd /home/ubuntu/api_nfe && /usr/bin/python3 /home/ubuntu/api_nfe/scripts/consultor_vendas_diario.py >> /home/ubuntu/api_nfe/logs/consultor_vendas_diario.log 2>&1") | crontab -
+
+echo -e "${GREEN}✅ Resumo diário do consultor configurado (06:45)${NC}"
+echo ""
+
 # Criar alias úteis
 echo -e "${YELLOW}🔧 Configurando aliases...${NC}"
 cat >> /home/ubuntu/.bashrc <<'EOF'
@@ -152,6 +166,8 @@ alias ia-logs='sudo journalctl -u api-nfe-ia -f'
 alias nfe-restart='sudo systemctl restart api-nfe-principal api-nfe-ia nginx'
 alias nfe-status='sudo systemctl status api-nfe-principal api-nfe-ia ollama nginx'
 alias nfe-backup='bash /home/ubuntu/backup-database.sh'
+alias nfe-auditoria-assistente='cd /home/ubuntu/api_nfe && /usr/bin/python3 /home/ubuntu/api_nfe/scripts/auditoria_assistente_diaria.py'
+alias nfe-consultor-diario='cd /home/ubuntu/api_nfe && /usr/bin/python3 /home/ubuntu/api_nfe/scripts/consultor_vendas_diario.py'
 
 EOF
 

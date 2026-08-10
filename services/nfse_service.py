@@ -240,6 +240,49 @@ class NFSeService:
                 return self._montar_urls_municipio(slug_normalizado)
 
         return ambiente_urls
+
+    def _validar_xml_rps_antes_envio(self, xml_rps: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        Valida XML RPS contra XSD com modo configurável:
+        - off: não valida
+        - warn: valida e apenas registra aviso
+        - strict: bloqueia envio quando inválido
+        """
+        mode = (os.getenv("NFSE_XSD_VALIDATION_MODE", "warn") or "warn").strip().lower()
+        if mode not in {"off", "warn", "strict"}:
+            mode = "warn"
+
+        if mode == "off":
+            return True, None
+
+        from services.nfse_validation_service import NFSeValidationService
+
+        xsd_path = os.getenv("NFSE_XSD_PATH")
+        resultado = NFSeValidationService.validar_xml_contra_xsd(
+            xml_content=xml_rps,
+            xsd_path=xsd_path,
+        )
+
+        if resultado.get("valido"):
+            return True, None
+
+        if mode == "warn":
+            print(
+                "[NFSE] ⚠️ XML RPS inválido no XSD, mas envio continuará (modo warn). "
+                f"Detalhes: {resultado.get('erros', [])[:3]}"
+            )
+            return True, {
+                "tipo": "xsd_warning",
+                "xsd_validation_mode": mode,
+                "xsd_result": resultado,
+            }
+
+        return False, {
+            "erro": "Validação XSD do XML RPS falhou",
+            "mensagem": "XML inválido conforme schema XSD configurado (modo strict)",
+            "xsd_validation_mode": mode,
+            "xsd_result": resultado,
+        }
         
     def gerar_id_lote(self) -> str:
         """Gera ID único para o lote de RPS (apenas números, máximo 15 dígitos)"""
@@ -876,6 +919,16 @@ class NFSeService:
                 xml_rps = self.gerar_xml_rps(nfse)
                 nfse.xml_rps = xml_rps
                 print(f"[NFSE] XML RPS gerado: {len(xml_rps)} caracteres")
+
+            xsd_ok, xsd_detalhes = self._validar_xml_rps_antes_envio(xml_rps)
+            if not xsd_ok:
+                print("[NFSE] ❌ Envio bloqueado por validação XSD (modo strict)")
+                return False, xsd_detalhes or {
+                    "erro": "Validação XSD do XML RPS falhou",
+                    "mensagem": "XML inválido conforme schema XSD configurado",
+                }
+            if xsd_detalhes and xsd_detalhes.get("tipo") == "xsd_warning":
+                print("[NFSE] ⚠️ Validação XSD reportou avisos (modo warn), seguindo com envio")
             
             # 2. Obter certificado do banco para envio HTTPS
             certificado = None

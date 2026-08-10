@@ -218,6 +218,83 @@
 
     <div class="card mt-4">
         <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-landmark"></i> Assistente Fiscal (MVP Local)</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="resetFiscalConversation()">
+                Nova conversa
+            </button>
+        </div>
+        <div class="card-body">
+            <form id="ai-fiscal-form" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Cliente ID</label>
+                    <input type="number" class="form-control" id="fiscal-cliente-id" placeholder="Obrigatório" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Conversation ID</label>
+                    <input type="text" class="form-control" id="fiscal-conversation-id" placeholder="Gerado automaticamente" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Pergunta fiscal</label>
+                    <input type="text" class="form-control" id="fiscal-question" placeholder="Ex.: Qual CFOP devo usar para venda interestadual para consumidor final?" required>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Perguntar ao Assistente Fiscal
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleFiscalQuestion()">
+                        Exemplo de pergunta
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-comments"></i> Resposta do Assistente Fiscal</h5>
+        </div>
+        <div class="card-body">
+            <pre id="ai-fiscal-result" class="mb-0 bg-light p-3 rounded" style="min-height: 220px; white-space: pre-wrap;">Faça uma pergunta para iniciar o Assistente Fiscal.</pre>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-clock"></i> Conversas Fiscais Recentes</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadFiscalConversations()">
+                Atualizar conversas
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="ai-fiscal-conversations-loading" class="text-muted">Carregando conversas...</div>
+            <div id="ai-fiscal-conversations-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Consultor de Vendas (MVP)</h5>
+            <div class="d-flex gap-2">
+                <input type="number" class="form-control form-control-sm" id="sales-cliente-id" placeholder="Cliente ID" style="width: 140px;">
+                <select class="form-select form-select-sm" id="sales-days" style="width: 130px;">
+                    <option value="14">14 dias</option>
+                    <option value="30" selected>30 dias</option>
+                    <option value="60">60 dias</option>
+                    <option value="90">90 dias</option>
+                </select>
+                <button class="btn btn-sm btn-outline-light" type="button" onclick="loadSalesAdvisorInsights()">
+                    Gerar insights
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="ai-sales-loading" class="text-muted">Informe um Cliente ID e clique em Gerar insights.</div>
+            <div id="ai-sales-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-history"></i> Histórico Recente</h5>
             <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiLogs()">
                 Atualizar histórico
@@ -245,6 +322,156 @@
 
 <script>
 let lastClassificationContext = null;
+
+function resetFiscalConversation() {
+    document.getElementById('fiscal-conversation-id').value = '';
+    document.getElementById('ai-fiscal-result').textContent = 'Nova conversa iniciada. Faça sua pergunta fiscal.';
+}
+
+function fillSampleFiscalQuestion() {
+    document.getElementById('fiscal-question').value = 'Posso emitir NFC-e para consumidor final de outro estado? Quais cuidados com CFOP e CST devo revisar?';
+}
+
+async function loadFiscalConversations() {
+    const loading = document.getElementById('ai-fiscal-conversations-loading');
+    const content = document.getElementById('ai-fiscal-conversations-content');
+    const clienteId = (document.getElementById('fiscal-cliente-id').value || '').trim();
+
+    const query = new URLSearchParams();
+    query.set('limit', '10');
+    if (clienteId) {
+        query.set('cliente_id', clienteId);
+    }
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch(`{{ url_for('admin_api.api_ia_assistente_fiscal_conversas') }}?${query.toString()}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Falha ao carregar conversas fiscais');
+        }
+
+        const rows = payload.data || [];
+        if (!rows.length) {
+            content.innerHTML = '<div class="text-muted">Nenhuma conversa fiscal registrada no filtro atual.</div>';
+        } else {
+            content.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Conversation ID</th>
+                                <th>Cliente</th>
+                                <th>Título</th>
+                                <th>Última mensagem</th>
+                                <th>Atualizada em</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map(item => `
+                                <tr>
+                                    <td><button type="button" class="btn btn-link btn-sm p-0" onclick="selectFiscalConversation('${item.conversation_id}')">${item.conversation_id}</button></td>
+                                    <td>${item.cliente_id ?? '-'}</td>
+                                    <td>${item.titulo || '-'}</td>
+                                    <td class="small text-muted">${item.last_message?.content || '-'}</td>
+                                    <td>${item.updated_at || item.last_message_at || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar conversas fiscais: ' + error;
+    }
+}
+
+function selectFiscalConversation(conversationId) {
+    document.getElementById('fiscal-conversation-id').value = conversationId;
+}
+
+async function loadSalesAdvisorInsights() {
+    const loading = document.getElementById('ai-sales-loading');
+    const content = document.getElementById('ai-sales-content');
+    const clienteId = (document.getElementById('sales-cliente-id').value || '').trim();
+    const days = document.getElementById('sales-days').value || '30';
+
+    if (!clienteId) {
+        loading.textContent = 'Informe o Cliente ID para gerar insights de vendas.';
+        loading.classList.remove('d-none');
+        content.classList.add('d-none');
+        return;
+    }
+
+    loading.textContent = 'Gerando insights de vendas...';
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const endpoint = '{{ url_for('admin_api.api_ia_consultor_vendas_insights') }}';
+        const query = `cliente_id=${encodeURIComponent(clienteId)}&days=${encodeURIComponent(days)}`;
+        const response = await fetch(`${endpoint}?${query}`);
+        const payload = await response.json().catch(() => ({ success: false, error: `Resposta inválida do servidor (HTTP ${response.status})` }));
+
+        if (!response.ok || !payload.success) {
+            const msg = payload.error || `Falha ao gerar insights (HTTP ${response.status})`;
+            throw new Error(msg);
+        }
+
+        const data = payload.data || {};
+        const metricas = data.metricas || {};
+        const insights = data.insights || [];
+        const topProdutos = data.top_produtos || [];
+        const topDestinatarios = data.top_destinatarios || [];
+        const narrativaIa = (data.narrativa_ia && data.narrativa_ia.text) ? data.narrativa_ia.text : '';
+        const narrativaOrigem = (data.narrativa_ia && data.narrativa_ia.source) ? data.narrativa_ia.source : 'disabled';
+        const narrativaHtml = narrativaIa
+            ? `<div class="alert alert-secondary"><strong>Narrativa IA (${narrativaOrigem})</strong><br>${String(narrativaIa).replace(/\n/g, '<br>')}</div>`
+            : '';
+
+        content.innerHTML = `
+            <div class="row g-3 mb-3">
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Notas autorizadas</div><div class="fs-4 fw-bold">${metricas.total_notas ?? 0}</div></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Faturamento</div><div class="fs-4 fw-bold">R$ ${Number(metricas.faturamento || 0).toFixed(2)}</div></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Ticket médio</div><div class="fs-4 fw-bold">R$ ${Number(metricas.ticket_medio || 0).toFixed(2)}</div></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Taxa autorização</div><div class="fs-4 fw-bold">${Number(metricas.taxa_autorizacao || 0).toFixed(1)}%</div></div></div>
+            </div>
+
+            <div class="alert alert-info mb-3">
+                <strong>Comparativo:</strong>
+                Faturamento ${Number(metricas.delta_faturamento_pct || 0).toFixed(1)}% | 
+                Notas ${Number(metricas.delta_notas_pct || 0).toFixed(1)}% (vs período anterior)
+            </div>
+
+            <h6>Insights automáticos</h6>
+            <ul>${insights.map(i => `<li>${i}</li>`).join('') || '<li>Sem insights para o período.</li>'}</ul>
+
+            ${narrativaHtml}
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <h6>Top produtos</h6>
+                    <ul>${topProdutos.map(p => `<li>${p.descricao} (${p.total_ocorrencias} ocorrências, R$ ${Number(p.valor_total || 0).toFixed(2)})</li>`).join('') || '<li>Sem dados</li>'}</ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>Top destinatários</h6>
+                    <ul>${topDestinatarios.map(d => `<li>${d.destinatario} (${d.total_notas} notas, R$ ${Number(d.faturamento || 0).toFixed(2)})</li>`).join('') || '<li>Sem dados</li>'}</ul>
+                </div>
+            </div>
+        `;
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao gerar insights de vendas: ' + error;
+    }
+}
 
 async function loadAiStatus() {
     const statusLoading = document.getElementById('ai-status-loading');
@@ -741,6 +968,7 @@ loadAiStatus();
 loadAiLogs();
 loadAiHealth();
 loadAiAnalytics();
+loadFiscalConversations();
 
 document.getElementById('ai-classify-form').addEventListener('submit', async function(event) {
     event.preventDefault();
@@ -842,5 +1070,53 @@ document.getElementById('ai-feedback-form').addEventListener('submit', async fun
 });
 
 loadAiFeedbacks();
+
+document.getElementById('ai-fiscal-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const resultBox = document.getElementById('ai-fiscal-result');
+    const clienteIdRaw = document.getElementById('fiscal-cliente-id').value;
+    const conversationIdRaw = document.getElementById('fiscal-conversation-id').value;
+    const pergunta = document.getElementById('fiscal-question').value.trim();
+
+    if (!clienteIdRaw || !pergunta) {
+        resultBox.textContent = 'Informe cliente ID e pergunta fiscal.';
+        return;
+    }
+
+    const payload = {
+        cliente_id: Number(clienteIdRaw),
+        pergunta,
+    };
+    if (conversationIdRaw) {
+        payload.conversation_id = Number(conversationIdRaw);
+    }
+
+    resultBox.textContent = 'Consultando assistente fiscal...';
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_assistente_fiscal_perguntar') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+
+        if (!response.ok || !body.success) {
+            resultBox.textContent = body.error || 'Falha ao consultar Assistente Fiscal';
+            return;
+        }
+
+        const data = body.data || {};
+        document.getElementById('fiscal-conversation-id').value = data.conversation_id || '';
+        resultBox.textContent = data.answer || 'Sem resposta.';
+        loadAiLogs();
+        loadFiscalConversations();
+    } catch (error) {
+        resultBox.textContent = 'Erro ao consultar assistente fiscal: ' + error;
+    }
+});
 </script>
 {% endblock %}

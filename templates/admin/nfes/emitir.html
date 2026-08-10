@@ -1578,11 +1578,59 @@ function enviarPerguntaSugerida(pergunta) {
     enviarPergunta();
 }
 
+function perguntaEmEscopoFiscal(pergunta) {
+    const texto = (pergunta || '').trim().toLowerCase();
+    if (texto.length < 8) {
+        return {
+            ok: false,
+            mensagem: 'Descreva melhor sua dúvida fiscal para eu conseguir ajudar.'
+        };
+    }
+
+    const termosFiscais = [
+        'fiscal', 'tribut', 'imposto', 'icms', 'ipi', 'pis', 'cofins', 'iss', 'difal',
+        'simples nacional', 'regime', 'cfop', 'cst', 'csosn', 'ncm', 'cest', 'aliquota',
+        'alíquota', 'nota fiscal', 'nfe', 'nf-e', 'nfse', 'nfs-e', 'emissao', 'emissão',
+        'cancelamento', 'inutilizacao', 'inutilização', 'xml', 'danfe', 'tomador', 'destinatario',
+        'destinatário', 'retencao', 'retenção', 'servico', 'serviço'
+    ];
+
+    const termosBloqueados = [
+        'piada', 'poema', 'receita de bolo', 'futebol', 'filme', 'jogo', 'minecraft',
+        'horoscopo', 'horóscopo', 'investimento em cripto', 'namoro', 'política', 'politica',
+        'senha', 'hack', 'hacking'
+    ];
+
+    if (termosBloqueados.some((t) => texto.includes(t))) {
+        return {
+            ok: false,
+            mensagem: 'Pergunta fora de escopo. Este assistente responde apenas dúvidas fiscais e de emissão de notas.'
+        };
+    }
+
+    if (termosFiscais.some((t) => texto.includes(t))) {
+        return { ok: true, mensagem: '' };
+    }
+
+    return {
+        ok: false,
+        mensagem: 'Pergunta fora de escopo. Faça perguntas sobre CFOP, CST/CSOSN, impostos e emissão de NFe/NFS-e.'
+    };
+}
+
 async function enviarPergunta() {
     const input = document.getElementById('chatInput');
     const pergunta = input.value.trim();
     
     if (!pergunta) return;
+
+    const escopo = perguntaEmEscopoFiscal(pergunta);
+    if (!escopo.ok) {
+        adicionarMensagemChat('user', pergunta);
+        input.value = '';
+        adicionarMensagemChat('bot', `❌ ${escopo.mensagem}`);
+        return;
+    }
     
     adicionarMensagemChat('user', pergunta);
     input.value = '';
@@ -1621,7 +1669,9 @@ async function enviarPergunta() {
         if (data.success) {
             adicionarMensagemChat('bot', data.resposta);
         } else {
-            adicionarMensagemChat('bot', '❌ Desculpe, ocorreu um erro. Tente novamente.');
+            const erro = data.error || 'Desculpe, ocorreu um erro. Tente novamente.';
+            const sugestao = data.sugestao ? `<br><small>${data.sugestao}</small>` : '';
+            adicionarMensagemChat('bot', `❌ ${erro}${sugestao}`);
         }
         
     } catch (error) {

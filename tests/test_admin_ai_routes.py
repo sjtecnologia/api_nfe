@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from routes import admin_api_routes
+from services.ai_providers import AIProviderError
 
 
 def _mock_admin_user():
@@ -248,6 +249,161 @@ class TestAdminAiRoutes:
         assert response.status_code == 400
         payload = response.get_json()
         assert payload["success"] is False
+
+    def test_ai_assistente_fiscal_perguntar_returns_answer(self, client):
+        mock_user = _mock_admin_user()
+        mock_service = MagicMock()
+        mock_service.start_conversation.return_value = {"conversation_id": 123}
+        mock_service.append_message.side_effect = [
+            {"message_id": 1, "role": "user"},
+            {"message_id": 2, "role": "assistant"},
+        ]
+        mock_service.chat.return_value = {
+            "content": "Use CFOP 6108 quando aplicável ao cenário informado.",
+            "model": "gpt-4o-mini",
+            "usage": {"total_tokens": 120, "cost_estimated": 0.0012},
+        }
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.AIService", return_value=mock_service):
+            response = client.post(
+                "/admin/api/ia/assistente-fiscal/perguntar",
+                json={
+                    "cliente_id": 1,
+                    "pergunta": "Qual CFOP usar para venda interestadual?",
+                },
+            )
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["success"] is True
+        assert payload["data"]["conversation_id"] == 123
+        assert "Valide com seu contador" in payload["data"]["answer"]
+        mock_service.start_conversation.assert_called_once()
+        assert mock_service.append_message.call_count == 2
+        mock_service.chat.assert_called_once()
+
+    def test_ai_assistente_fiscal_perguntar_requires_fields(self, client):
+        mock_user = _mock_admin_user()
+        with patch("flask_login.utils._get_user", return_value=mock_user):
+            response = client.post(
+                "/admin/api/ia/assistente-fiscal/perguntar",
+                json={"cliente_id": 1, "pergunta": "   "},
+            )
+
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload["success"] is False
+
+    def test_ai_assistente_fiscal_perguntar_provider_unavailable(self, client):
+        mock_user = _mock_admin_user()
+        mock_service = MagicMock()
+        mock_service.start_conversation.return_value = {"conversation_id": 777}
+        mock_service.append_message.return_value = {"message_id": 1, "role": "user"}
+        mock_service.chat.side_effect = AIProviderError("Nenhum provedor de IA configurado")
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.AIService", return_value=mock_service):
+            response = client.post(
+                "/admin/api/ia/assistente-fiscal/perguntar",
+                json={
+                    "cliente_id": 1,
+                    "pergunta": "Quando usar CST 060?",
+                },
+            )
+
+        assert response.status_code == 503
+        payload = response.get_json()
+        assert payload["success"] is False
+        assert "Provedor de IA indisponível" in payload["error"]
+
+    def test_ai_assistente_fiscal_conversas_lists_data(self, client):
+        mock_user = _mock_admin_user()
+
+        conversation = MagicMock()
+        conversation.conversation_id = 555
+        conversation.to_dict.return_value = {
+            "conversation_id": 555,
+            "cliente_id": 1,
+            "titulo": "Pergunta fiscal",
+            "updated_at": "2026-08-10T15:00:00",
+        }
+
+        message = MagicMock()
+        message.role = "assistant"
+        message.content = "Resposta curta"
+        message.created_at = "2026-08-10T15:00:01"
+
+        conv_query = MagicMock()
+        conv_query.filter.return_value = conv_query
+        conv_query.order_by.return_value = conv_query
+        conv_query.limit.return_value = conv_query
+        conv_query.all.return_value = [conversation]
+
+        msg_query = MagicMock()
+        msg_query.filter.return_value = msg_query
+        msg_query.order_by.return_value = msg_query
+        msg_query.first.return_value = message
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.get_db") as mock_get_db:
+            mock_db = MagicMock()
+            mock_db.query.side_effect = [conv_query, msg_query]
+            mock_get_db.return_value = iter([mock_db])
+
+            response = client.get("/admin/api/ia/assistente-fiscal/conversas?limit=10")
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["success"] is True
+        assert len(payload["data"]) == 1
+        assert payload["data"][0]["conversation_id"] == 555
+
+    def test_ai_consultor_vendas_insights_returns_metrics(self, client):
+        mock_user = _mock_admin_user()
+
+        fake_data = {
+            'metricas': {
+                'cliente_id': 1,
+                'days': 30,
+                'total_notas': 12,
+                'faturamento': 3200.0,
+                'ticket_medio': 266.67,
+                'taxa_autorizacao': 85.7,
+            },
+            'insights': ['Insight 1', 'Insight 2'],
+            'top_produtos': [
+                {'descricao': 'Produto A', 'total_ocorrencias': 7, 'valor_total': 1400.0},
+                {'descricao': 'Produto B', 'total_ocorrencias': 3, 'valor_total': 700.0},
+            ],
+            'top_destinatarios': [
+                {'destinatario': 'Cliente XPTO', 'total_notas': 4, 'faturamento': 1100.0},
+            ],
+            'narrativa_ia': {'enabled': True, 'source': 'ia', 'text': 'Resumo IA'},
+        }
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.gerar_resumo_consultor_vendas", return_value=fake_data) as resumo_mock:
+            response = client.get('/admin/api/ia/consultor-vendas/insights?cliente_id=1&days=30&include_ai=1')
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload['success'] is True
+        assert payload['data']['metricas']['cliente_id'] == 1
+        assert payload['data']['metricas']['total_notas'] == 12
+        assert len(payload['data']['insights']) >= 1
+        assert len(payload['data']['top_produtos']) == 2
+        assert payload['data']['narrativa_ia']['source'] == 'ia'
+        resumo_mock.assert_called_once()
+
+    def test_ai_consultor_vendas_insights_requires_cliente_id(self, client):
+        mock_user = _mock_admin_user()
+        with patch("flask_login.utils._get_user", return_value=mock_user):
+            response = client.get('/admin/api/ia/consultor-vendas/insights?days=30')
+
+        assert response.status_code == 400
+        payload = response.get_json()
+        assert payload['success'] is False
 
     def test_ai_health_endpoint_reports_checks(self, client):
         mock_user = _mock_admin_user()

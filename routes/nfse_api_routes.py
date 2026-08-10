@@ -181,6 +181,57 @@ def validar_campos_nfse():
         }), 500
 
 
+@nfse_api_bp.route('/validar-xml-xsd', methods=['POST'])
+def validar_xml_xsd_nfse():
+    """
+    Valida XML de NFS-e contra XSD.
+
+    Request Body (JSON):
+        {
+            'xml_content': str,
+            'xsd_path': str (opcional)
+        }
+
+    Returns:
+        JSON: {
+            'valido': bool,
+            'xsd_path': str,
+            'erros': list,
+            'mensagem': str
+        }
+    """
+    try:
+        from services.nfse_validation_service import NFSeValidationService
+
+        payload = request.get_json(silent=True) or {}
+        xml_content = (payload.get('xml_content') or '').strip()
+        xsd_path = payload.get('xsd_path')
+
+        if not xml_content:
+            return jsonify({
+                'valido': False,
+                'xsd_path': '',
+                'erros': ['Campo xml_content é obrigatório'],
+                'mensagem': 'Payload inválido'
+            }), 400
+
+        resultado = NFSeValidationService.validar_xml_contra_xsd(
+            xml_content=xml_content,
+            xsd_path=xsd_path,
+        )
+
+        status_code = 200 if resultado.get('valido') else 422
+        return jsonify(resultado), status_code
+
+    except Exception as e:
+        return jsonify({
+            'valido': False,
+            'xsd_path': '',
+            'erros': [f'Erro interno na validação de XML: {str(e)}'],
+            'mensagem': 'Erro interno'
+        }), 500
+
+
 @nfse_api_bp.route('/indicadores-operacao', methods=['GET'])
 def listar_indicadores_operacao():
     """

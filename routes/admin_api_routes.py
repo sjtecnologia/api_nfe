@@ -12,17 +12,32 @@ from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 import requests
+from sqlalchemy import text
 from database.connection import get_db
 try:
-    from database.models import AiFeedback, AiUsageLog
+    from database.models import AiConversation, AiFeedback, AiMessage, AiUsageLog
 except ImportError:
+    AiConversation = None
     AiFeedback = None
+    AiMessage = None
     AiUsageLog = None
 
 try:
-    from services.ai_service import AIService
+    from services.ai_service import AIService, AITenantAccessError, AIUsageLimitExceeded
 except ImportError:
     AIService = None
+
+    class AITenantAccessError(RuntimeError):
+        pass
+
+    class AIUsageLimitExceeded(RuntimeError):
+        pass
+
+try:
+    from services.ai_providers import AIProviderError
+except ImportError:
+    class AIProviderError(RuntimeError):
+        pass
 
 try:
     from services.product_classification_service import (
@@ -38,6 +53,11 @@ except ImportError:
 
     class ProductClassificationUnavailable(RuntimeError):
         pass
+
+try:
+    from services.consultor_vendas_service import gerar_resumo_consultor_vendas
+except ImportError:
+    gerar_resumo_consultor_vendas = None
 
 logger = logging.getLogger(__name__)
 
@@ -637,6 +657,228 @@ def api_ia_feedback():
     except Exception as exc:
         logger.error('Erro ao registrar feedback da IA: %s', exc, exc_info=True)
         return jsonify({'success': False, 'error': 'Erro interno ao registrar feedback'}), 500
+
+
+@admin_api_bp.route('/api/ia/assistente-fiscal/perguntar', methods=['POST'])
+@login_required
+def api_ia_assistente_fiscal_perguntar():
+    """Executa uma pergunta no Assistente Fiscal com persistência de conversa e mensagens."""
+    if AIService is None:
+        return jsonify({'success': False, 'error': 'Infraestrutura de IA indisponivel neste ambiente'}), 503
+    if AiConversation is None or AiMessage is None:
+        return jsonify({'success': False, 'error': 'Modelos de conversa de IA indisponíveis'}), 503
+
+    payload = request.get_json(silent=True) or {}
+    pergunta = (payload.get('pergunta') or '').strip()
+    if not pergunta:
+        return jsonify({'success': False, 'error': 'Campo pergunta é obrigatório'}), 400
+
+    cliente_id = payload.get('cliente_id')
+    if cliente_id is None:
+        return jsonify({'success': False, 'error': 'Campo cliente_id é obrigatório'}), 400
+
+    try:
+        cliente_id = int(cliente_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Campo cliente_id inválido'}), 400
+
+    raw_conversation_id = payload.get('conversation_id')
+    conversation_id = None
+    if raw_conversation_id not in (None, ''):
+        try:
+            conversation_id = int(raw_conversation_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Campo conversation_id inválido'}), 400
+
+    user_id = getattr(current_user, 'id', None)
+    service = AIService()
+    warnings = []
+
+    try:
+        if conversation_id is None:
+            try:
+                conversation = service.start_conversation(
+                    cliente_id=cliente_id,
+                    user_id=user_id,
+                    funcionalidade='assistente_fiscal',
+                    titulo=(pergunta[:80] + '...') if len(pergunta) > 80 else pergunta,
+                    contexto=payload.get('contexto') if isinstance(payload.get('contexto'), dict) else None,
+                )
+                conversation_id = conversation.get('conversation_id')
+            except Exception as exc:
+                logger.warning('Assistente fiscal sem persistência de conversa: %s', exc)
+                warnings.append('Não foi possível iniciar persistência da conversa; resposta gerada sem histórico completo.')
+
+        user_message = None
+        if conversation_id is not None:
+            try:
+                user_message = service.append_message(
+                    conversation_id=conversation_id,
+                    cliente_id=cliente_id,
+                    user_id=user_id,
+                    funcionalidade='assistente_fiscal',
+                    role='user',
+                    content=pergunta,
+                )
+            except Exception as exc:
+                logger.warning('Falha ao persistir pergunta do assistente fiscal: %s', exc)
+                warnings.append('Não foi possível persistir a pergunta no histórico.')
+
+        resposta = service.chat(
+            prompt_name='assistant_fiscal',
+            user_message=pergunta,
+            cliente_id=cliente_id,
+            user_id=user_id,
+            functionality='assistente_fiscal',
+            conversation_id=conversation_id,
+            tools_scope='fiscal',
+            record=True,
+        )
+
+        conteudo = (resposta.get('content') or '').strip()
+        aviso_legal = 'Aviso: esta orientação é informativa e pode depender da legislação local. Valide com seu contador antes de decisão fiscal definitiva.'
+        if aviso_legal not in conteudo:
+            conteudo = f"{conteudo}\n\n{aviso_legal}" if conteudo else aviso_legal
+
+        usage = resposta.get('usage') or {}
+        assistant_message = None
+        if conversation_id is not None:
+            try:
+                assistant_message = service.append_message(
+                    conversation_id=conversation_id,
+                    cliente_id=cliente_id,
+                    user_id=user_id,
+                    funcionalidade='assistente_fiscal',
+                    role='assistant',
+                    content=conteudo,
+                    model=resposta.get('model'),
+                    prompt_tokens=int(usage.get('prompt_tokens') or 0),
+                    completion_tokens=int(usage.get('completion_tokens') or 0),
+                    total_tokens=int(usage.get('total_tokens') or 0),
+                    cost_estimated=float(usage.get('cost_estimated') or 0),
+                )
+            except Exception as exc:
+                logger.warning('Falha ao persistir resposta do assistente fiscal: %s', exc)
+                warnings.append('Não foi possível persistir a resposta no histórico.')
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'conversation_id': conversation_id,
+                'user_message': user_message,
+                'assistant_message': assistant_message,
+                'answer': conteudo,
+                'usage': usage,
+                'warnings': warnings,
+            },
+        })
+    except AIUsageLimitExceeded as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 429
+    except AITenantAccessError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except AIProviderError as exc:
+        return jsonify({
+            'success': False,
+            'error': 'Provedor de IA indisponível no ambiente local. Configure AI_PROVIDER_URL para testar respostas reais.',
+            'details': str(exc),
+        }), 503
+    except Exception as exc:
+        logger.error('Erro no assistente fiscal: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': f'Erro interno no Assistente Fiscal: {exc}'}), 500
+
+
+@admin_api_bp.route('/api/ia/assistente-fiscal/conversas', methods=['GET'])
+@login_required
+def api_ia_assistente_fiscal_conversas():
+    """Lista conversas recentes do Assistente Fiscal para inspeção no painel admin."""
+    if AiConversation is None:
+        return jsonify({'success': True, 'data': []})
+
+    raw_limit = request.args.get('limit', 10)
+    try:
+        limit = max(1, min(int(raw_limit), 50))
+    except (TypeError, ValueError):
+        limit = 10
+
+    raw_cliente_id = request.args.get('cliente_id')
+    cliente_id = None
+    if raw_cliente_id not in (None, ''):
+        try:
+            cliente_id = int(raw_cliente_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Parâmetro cliente_id inválido'}), 400
+
+    db = next(get_db())
+    try:
+        query = (
+            db.query(AiConversation)
+            .filter(AiConversation.funcionalidade == 'assistente_fiscal')
+            .order_by(AiConversation.last_message_at.desc(), AiConversation.updated_at.desc())
+        )
+        if cliente_id is not None:
+            query = query.filter(AiConversation.cliente_id == cliente_id)
+
+        rows = query.limit(limit).all()
+        resultado = []
+        for row in rows:
+            last_msg = None
+            if AiMessage is not None:
+                last_msg = (
+                    db.query(AiMessage)
+                    .filter(AiMessage.conversation_id == row.conversation_id)
+                    .order_by(AiMessage.created_at.desc())
+                    .first()
+                )
+            item = row.to_dict()
+            item['last_message'] = {
+                'role': getattr(last_msg, 'role', None),
+                'content': (getattr(last_msg, 'content', '') or '')[:280],
+                'created_at': getattr(last_msg, 'created_at', None),
+            } if last_msg else None
+            resultado.append(item)
+
+        return jsonify({'success': True, 'data': resultado})
+    except Exception as exc:
+        logger.error('Erro ao listar conversas do assistente fiscal: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro interno ao listar conversas'}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/ia/consultor-vendas/insights', methods=['GET'])
+@login_required
+def api_ia_consultor_vendas_insights():
+    """Consultor de Vendas com comparativo de períodos e narrativa opcional por IA."""
+    if gerar_resumo_consultor_vendas is None:
+        return jsonify({'success': False, 'error': 'Consultor de vendas indisponível neste ambiente'}), 503
+
+    raw_cliente_id = request.args.get('cliente_id')
+    if raw_cliente_id in (None, ''):
+        return jsonify({'success': False, 'error': 'Parâmetro cliente_id é obrigatório'}), 400
+
+    try:
+        cliente_id = int(raw_cliente_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Parâmetro cliente_id inválido'}), 400
+
+    raw_days = request.args.get('days', 30)
+    try:
+        days = max(7, min(int(raw_days), 365))
+    except (TypeError, ValueError):
+        days = 30
+    include_ai = request.args.get('include_ai', '1').strip().lower() not in {'0', 'false', 'no'}
+
+    try:
+        data = gerar_resumo_consultor_vendas(
+            cliente_id=cliente_id,
+            days=days,
+            user_id=getattr(current_user, 'id', None),
+            incluir_narrativa_ia=include_ai,
+        )
+        return jsonify({'success': True, 'data': data})
+    except Exception as exc:
+        logger.error('Erro ao gerar insights do consultor de vendas: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro interno ao gerar insights do consultor de vendas'}), 500
 
 
 @admin_api_bp.route('/api/ia/classificar-produto', methods=['POST'])
