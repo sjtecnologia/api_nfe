@@ -1004,7 +1004,7 @@ def delete_cfop(cfop_id):
 @login_required
 @admin_required()
 def list_usuarios():
-    """Lista usuários - Super_Admin vê todos, Admin vê apenas usuários dos seus clientes"""
+    """Lista usuários - Super_Admin vê todos, Admin vê apenas usuários do cliente ativo."""
     db = _get_db()
     q = request.args.get('q', '').strip()
     
@@ -1024,15 +1024,30 @@ def list_usuarios():
                 ORDER BY username
             """)).fetchall()
     else:
-        # Admin Comum: busca usuários vinculados aos mesmos clientes (excluindo Super Admins)
+        # Admin comum: restringe ao cliente ativo da sessão.
+        active_client_id = session.get('current_client_id') or session.get('active_cliente_id')
+        if not active_client_id:
+            flash('Selecione um cliente ativo para listar usuários.', 'warning')
+            return render_template('admin/usuarios/list.html', usuarios=[])
+
+        # Garante que o admin tem acesso ao cliente ativo antes de listar.
+        has_access = db.execute(text("""
+            SELECT 1
+            FROM user_clients
+            WHERE user_id = :current_user_id AND client_id = :active_client_id
+            LIMIT 1
+        """), {'current_user_id': current_user.id, 'active_client_id': int(active_client_id)}).first()
+
+        if not has_access:
+            flash('Acesso negado ao cliente ativo selecionado.', 'danger')
+            return render_template('admin/usuarios/list.html', usuarios=[])
+
         if q:
             rows = db.execute(text("""
                 SELECT DISTINCT u.id, u.username, u.email, u._is_active, u.created_at
                 FROM users u
                 INNER JOIN user_clients uc ON u.id = uc.user_id
-                WHERE uc.client_id IN (
-                    SELECT client_id FROM user_clients WHERE user_id = :current_user_id
-                )
+                WHERE uc.client_id = :active_client_id
                 AND (u.username ILIKE :q OR u.email ILIKE :q)
                 AND u.id NOT IN (
                     SELECT ur.user_id 
@@ -1041,15 +1056,13 @@ def list_usuarios():
                     WHERE LOWER(r.name) = 'super_admin'
                 )
                 ORDER BY u.username
-            """), {'current_user_id': current_user.id, 'q': f'%{q}%'}).fetchall()
+            """), {'active_client_id': int(active_client_id), 'q': f'%{q}%'}).fetchall()
         else:
             rows = db.execute(text("""
                 SELECT DISTINCT u.id, u.username, u.email, u._is_active, u.created_at
                 FROM users u
                 INNER JOIN user_clients uc ON u.id = uc.user_id
-                WHERE uc.client_id IN (
-                    SELECT client_id FROM user_clients WHERE user_id = :current_user_id
-                )
+                WHERE uc.client_id = :active_client_id
                 AND u.id NOT IN (
                     SELECT ur.user_id 
                     FROM user_roles ur
@@ -1057,7 +1070,7 @@ def list_usuarios():
                     WHERE LOWER(r.name) = 'super_admin'
                 )
                 ORDER BY u.username
-            """), {'current_user_id': current_user.id}).fetchall()
+            """), {'active_client_id': int(active_client_id)}).fetchall()
     
     usuarios = []
     for row in rows:

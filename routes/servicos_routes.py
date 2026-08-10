@@ -13,7 +13,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import text
 
 from database.connection import get_db
-from auth.decorators import admin_required, block_viewer_access, permission_required, viewer_or_higher_required
+from auth.decorators import admin_required, block_viewer_access, viewer_or_higher_required
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _get_or_none(field: str, convert_to=None):
 
 @servicos_bp.route('')
 @login_required
-@permission_required('servicos.view')
+@admin_required()
 def list_servicos():
     """Lista o catálogo de serviços do cliente atual, com filtros e paginação."""
     db = _get_db()
@@ -136,7 +136,7 @@ def list_servicos():
 
 @servicos_bp.route('/add', methods=['GET'])
 @login_required
-@permission_required('servicos.create')
+@admin_required()
 def create_servico():
     cliente_id = request.args.get('cliente_id') or session.get('current_client_id')
     if not cliente_id or str(cliente_id).lower() == 'none':
@@ -167,7 +167,8 @@ def create_servico():
 
 @servicos_bp.route('/add', methods=['POST'])
 @login_required
-@permission_required('servicos.create')
+@admin_required()
+@block_viewer_access()
 def store_servico():
     db = _get_db()
     try:
