@@ -1707,6 +1707,7 @@ def delete_permission(permission_id):
 
 @admin_bp.route('/user-permissions')
 @login_required
+@super_admin_required()
 def list_user_permissions():
     """
     Stub para evitar BuildError de url_for('admin.list_user_permissions') usado em base.html.
@@ -1717,6 +1718,7 @@ def list_user_permissions():
 
 @admin_bp.route('/logs')
 @login_required
+@admin_required()
 def list_logs():
     """
     Stub para evitar BuildError de url_for('admin.list_logs') usado em base.html.
@@ -1727,6 +1729,7 @@ def list_logs():
 
 @admin_bp.route('/configuracoes')
 @login_required
+@admin_required()
 def configuracoes():
     """
     Stub para evitar BuildError de url_for('admin.configuracoes') usado em base.html.

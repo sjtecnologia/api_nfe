@@ -212,7 +212,6 @@ def client_access_required():
             finally:
                 if db is not None:
                     db.close()
-                    db.close()
                     
         return decorated_function
     return decorator
