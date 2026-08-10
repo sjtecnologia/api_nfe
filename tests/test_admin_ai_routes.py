@@ -256,6 +256,7 @@ class TestAdminAiRoutes:
         ok_response.status_code = 200
 
         with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.requests.get", return_value=ok_response), \
              patch("routes.admin_api_routes.requests.post", return_value=ok_response):
             response = client.get("/admin/api/ia/health")
 

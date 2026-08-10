@@ -394,7 +394,7 @@ async function loadAiAnalytics() {
     content.classList.add('d-none');
 
     try {
-        const response = await fetch(`{{ url_for('admin_api.api_ia_analytics') }}?${query.toString()}`);
+        const response = await fetch(`/admin/api/ia/analytics?${query.toString()}`);
         const payload = await response.json();
 
         if (!response.ok || !payload.success) {

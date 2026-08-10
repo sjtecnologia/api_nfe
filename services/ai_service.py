@@ -355,7 +355,7 @@ class AIService:
             feedback_row = AiFeedback(
                 cliente_id=cliente_id,
                 user_id=user_id,
-                funcionalidade=functionalidade,
+                funcionalidade=funcionalidade,
                 feedback=feedback,
                 comentario=comentario,
                 conversation_id=conversation_id,

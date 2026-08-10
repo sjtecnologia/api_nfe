@@ -273,31 +273,31 @@ def api_ia_health():
 
     payloads = [
         (
-            'sugestao',
-            f'{base_url}/sugestao',
+            'openapi',
+            'GET',
+            f'{base_url}/openapi.json',
+            None,
+        ),
+        (
+            'valida_basica',
+            'POST',
+            f'{base_url}/valida',
             {
                 'descricao': 'Produto teste healthcheck',
                 'tipo_item': 'Produto',
-                'unidade_comercial': 'UN',
-            },
-        ),
-        (
-            'valida_regra',
-            f'{base_url}/valida/regra',
-            {
-                'regime_tributario': 'Simples Nacional',
-                'cfop': '5102',
-                'csosn_icms': '102',
-                'descricao': 'Produto teste healthcheck',
             },
         ),
     ]
 
-    for name, url, payload in payloads:
+    for name, method, url, payload in payloads:
         try:
-            resp = requests.post(url, json=payload, timeout=8)
+            if method == 'GET':
+                resp = requests.get(url, timeout=5)
+            else:
+                resp = requests.post(url, json=payload, timeout=8)
             checks.append({
                 'name': name,
+                'method': method,
                 'url': url,
                 'status_code': resp.status_code,
                 'ok': resp.status_code == 200,
@@ -305,6 +305,7 @@ def api_ia_health():
         except requests.RequestException as exc:
             checks.append({
                 'name': name,
+                'method': method,
                 'url': url,
                 'status_code': None,
                 'ok': False,
