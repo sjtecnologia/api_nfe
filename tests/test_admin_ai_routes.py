@@ -422,6 +422,22 @@ class TestAdminAiRoutes:
         assert payload["data"]["operational"] is True
         assert len(payload["data"]["checks"]) == 2
 
+    def test_ai_health_endpoint_handles_network_exceptions(self, client):
+        mock_user = _mock_admin_user()
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.requests.get", side_effect=RuntimeError("connection reset")), \
+             patch("routes.admin_api_routes.requests.post", side_effect=RuntimeError("connection reset")):
+            response = client.get("/admin/api/ia/health")
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["success"] is True
+        assert payload["data"]["operational"] is False
+        assert len(payload["data"]["checks"]) == 2
+        assert payload["data"]["checks"][0]["ok"] is False
+        assert "connection reset" in payload["data"]["checks"][0]["error"]
+
     def test_ai_analytics_endpoint_aggregates_metrics(self, client):
         mock_user = _mock_admin_user()
         now = datetime.now()

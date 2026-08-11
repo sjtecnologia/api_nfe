@@ -322,7 +322,7 @@ def api_ia_health():
                 'status_code': resp.status_code,
                 'ok': resp.status_code == 200,
             })
-        except requests.RequestException as exc:
+        except Exception as exc:
             checks.append({
                 'name': name,
                 'method': method,
