@@ -853,13 +853,39 @@ def api_ia_consultor_vendas_insights():
         return jsonify({'success': False, 'error': 'Consultor de vendas indisponível neste ambiente'}), 503
 
     raw_cliente_id = request.args.get('cliente_id')
-    if raw_cliente_id in (None, ''):
-        return jsonify({'success': False, 'error': 'Parâmetro cliente_id é obrigatório'}), 400
+    cliente_id = None
+    if raw_cliente_id not in (None, ''):
+        try:
+            cliente_id = int(raw_cliente_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Parâmetro cliente_id inválido'}), 400
 
-    try:
-        cliente_id = int(raw_cliente_id)
-    except (TypeError, ValueError):
-        return jsonify({'success': False, 'error': 'Parâmetro cliente_id inválido'}), 400
+    if cliente_id is None:
+        db = None
+        try:
+            from database.models import UserClient
+
+            db = next(get_db())
+            user_id = getattr(current_user, 'id', None)
+            if user_id is None:
+                return jsonify({'success': False, 'error': 'Usuário sem identificação'}), 400
+
+            user_client_row = (
+                db.query(UserClient)
+                .filter(UserClient.user_id == user_id)
+                .order_by(UserClient.client_id.asc())
+                .first()
+            )
+            if user_client_row is None:
+                return jsonify({'success': False, 'error': 'Nenhum cliente vinculado ao usuário'}), 400
+
+            cliente_id = int(user_client_row.client_id)
+        except Exception as exc:
+            logger.warning('Consultor de vendas: não foi possível resolver cliente padrão para o usuário %s: %s', getattr(current_user, 'id', None), exc)
+            return jsonify({'success': False, 'error': 'Nenhum cliente vinculado ao usuário ou cliente indisponível'}), 400
+        finally:
+            if db is not None:
+                db.close()
 
     raw_days = request.args.get('days', 30)
     try:

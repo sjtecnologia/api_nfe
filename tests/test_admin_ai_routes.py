@@ -396,6 +396,24 @@ class TestAdminAiRoutes:
         assert payload['data']['narrativa_ia']['source'] == 'ia'
         resumo_mock.assert_called_once()
 
+    def test_ai_consultor_vendas_insights_uses_user_client_when_cliente_id_missing(self, client):
+        mock_user = _mock_admin_user()
+        fake_data = {'metricas': {'total_notas': 5, 'faturamento': 100.0, 'ticket_medio': 20.0, 'taxa_autorizacao': 80.0}, 'insights': [], 'top_produtos': [], 'top_destinatarios': []}
+
+        with patch("flask_login.utils._get_user", return_value=mock_user), \
+             patch("routes.admin_api_routes.get_db") as mock_get_db, \
+             patch("routes.admin_api_routes.gerar_resumo_consultor_vendas", return_value=fake_data) as resumo_mock:
+            mock_db = MagicMock()
+            mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = SimpleNamespace(client_id=7)
+            mock_get_db.return_value = iter([mock_db])
+            response = client.get('/admin/api/ia/consultor-vendas/insights?days=30')
+
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload['success'] is True
+        resumo_mock.assert_called_once()
+        assert resumo_mock.call_args.kwargs['cliente_id'] == 7
+
     def test_ai_consultor_vendas_insights_requires_cliente_id(self, client):
         mock_user = _mock_admin_user()
         with patch("flask_login.utils._get_user", return_value=mock_user):
