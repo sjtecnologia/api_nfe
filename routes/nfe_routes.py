@@ -524,7 +524,20 @@ def emitir_nfe():
             
             logger.warning(f"🔑 [DEBUG] finNFe={form_data_initial.get('finNFe')} | chave_nfe_ref='{form_data_initial.get('chave_nfe_ref')}'")
 
-            # PROCESSAR AÇÃO BASEADA NO BOTÃO CLICADO
+            # Se qualquer item tiver CFOP de devolução/retorno, forçar finNFe=4
+            import json as _json, re as _re
+            _cfop_devol = _re.compile(r'^[1256](20[1-9]|21[0-9]|553|41[0-3])$')
+            for _key, _val in request.form.items():
+                if 'json' in _key and _val:
+                    try:
+                        _item = _json.loads(_val)
+                        _cfop_item = str(_item.get('cfop', '')).replace('.', '').strip()
+                        if _cfop_devol.match(_cfop_item) and form_data_initial.get('finNFe') != '4':
+                            logger.warning(f"⚠️ CFOP de devolução {_cfop_item} detectado — forçando finNFe=4")
+                            form_data_initial['finNFe'] = '4'
+                            break
+                    except Exception:
+                        pass
             action = request.form.get('action')
             preview_only = request.form.get('preview_only') == 'true'
             preview_danfe = request.form.get('preview_danfe') == 'true'
@@ -3135,7 +3148,20 @@ def reenviar_nfe(nfe_id):
         ambiente = json_data.get('ambiente', 'homologacao')
         # tpAmb SEFAZ: 1=Produção, 2=Homologação
         tp_amb = 1 if ambiente == 'producao' else 2
-        
+
+        # Corrigir finNFe se items têm CFOP de devolução mas finalidade não foi salva como 4
+        import re as _re_rv, json as _json_rv
+        _cfop_devol_rv = _re_rv.compile(r'^[1256](20[1-9]|21[0-9]|553|41[0-3])$')
+        _form_data_rv = json_data.get('form_data', {})
+        if str(_form_data_rv.get('finNFe', '1')) != '4':
+            for _it in json_data.get('items', []):
+                _cfop_rv = str(_it.get('cfop', '')).replace('.', '').strip()
+                if _cfop_devol_rv.match(_cfop_rv):
+                    logger.warning(f"⚠️ [REENVIO] CFOP de devolução {_cfop_rv} — forçando finNFe=4")
+                    _form_data_rv['finNFe'] = '4'
+                    json_data['form_data'] = _form_data_rv
+                    break
+
         try:
             xml_gerado = generate_nfe_xml(
                 json_data.get('form_data', {}),

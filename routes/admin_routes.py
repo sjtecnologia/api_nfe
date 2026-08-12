@@ -460,6 +460,38 @@ def admin_home():
         # Admin comum vai para home de seleção de cliente
         return redirect(url_for('home.home'))
 
+
+@admin_bp.route('/estoque')
+@login_required
+@admin_required()
+def estoque_dashboard():
+    """Página do módulo de controle de estoque."""
+    return render_template('admin/estoque/index.html')
+
+
+@admin_bp.route('/fluxo-caixa')
+@login_required
+@admin_required()
+def fluxo_caixa_dashboard():
+    """Página do módulo de fluxo de caixa."""
+    return render_template('admin/fluxo_caixa/index.html')
+
+
+@admin_bp.route('/fluxo-caixa/categorias')
+@login_required
+@admin_required()
+def fluxo_caixa_categorias():
+    """Página de cadastro de categorias do fluxo de caixa."""
+    return render_template('admin/fluxo_caixa/categorias.html')
+
+
+@admin_bp.route('/fluxo-caixa/relatorio')
+@login_required
+@admin_required()
+def fluxo_caixa_relatorio():
+    """Página de relatório do fluxo de caixa com filtros."""
+    return render_template('admin/fluxo_caixa/relatorio.html')
+
 @admin_bp.route('/nfes')
 @login_required
 @admin_required()
@@ -6499,6 +6531,46 @@ def test_email():
 def test_ai():
     """Página administrativa para testar prompts e status da IA centralizada."""
     return render_template('admin/test_ai.html')
+
+
+@admin_bp.route('/consultor-vendas', methods=['GET'])
+@login_required
+@admin_required()
+def consultor_vendas():
+    """Consultor de Vendas com insights automáticos para admins."""
+    return render_template('admin/consultor_vendas.html')
+
+
+@admin_bp.route('/assistente-fiscal', methods=['GET'])
+@login_required
+@admin_required()
+def assistente_fiscal():
+    """Assistente Fiscal com IA para dúvidas sobre NF-e, CFOP, CST e regras tributárias."""
+    return render_template('admin/assistente_fiscal.html')
+
+
+@admin_bp.route('/gerador-anuncios', methods=['GET'])
+@login_required
+@admin_required()
+def gerador_anuncios():
+    """Gerador de anúncios com IA para Mercado Livre, Shopee, Instagram, Facebook e WhatsApp."""
+    return render_template('admin/gerador_anuncios.html')
+
+
+@admin_bp.route('/mensagens-whatsapp', methods=['GET'])
+@login_required
+@admin_required()
+def mensagens_whatsapp():
+    """Gerador de mensagens comerciais para WhatsApp com IA."""
+    return render_template('admin/mensagens_whatsapp.html')
+
+
+@admin_bp.route('/dashboard-inteligente', methods=['GET'])
+@login_required
+@admin_required()
+def dashboard_inteligente():
+    """Dashboard Inteligente com métricas reais e narrativa gerada por IA."""
+    return render_template('admin/dashboard_inteligente.html')
 
 
 # =============================================================================

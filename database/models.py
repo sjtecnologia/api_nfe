@@ -438,6 +438,8 @@ class Cliente(Base):
     nfes_emitidas = relationship('NFeEmitidas', back_populates='cliente', cascade='all, delete-orphan')
     inutilizacoes = relationship('NFeInutilizacao', back_populates='cliente', cascade='all, delete-orphan')
     produtos = relationship('Produto', back_populates='cliente', cascade='all, delete-orphan')
+    estoque_movimentacoes = relationship('EstoqueMovimentacao', back_populates='cliente', cascade='all, delete-orphan')
+    fluxo_caixa_lancamentos = relationship('FluxoCaixaLancamento', back_populates='cliente', cascade='all, delete-orphan')
     servicos = relationship('Servico', back_populates='cliente', cascade='all, delete-orphan')
     regras_tributacao = relationship('RegraTributacao', back_populates='cliente', cascade='all, delete-orphan')
     regras_servicos = relationship('RegraTributacaoServico', back_populates='cliente', cascade='all, delete-orphan')
@@ -670,6 +672,7 @@ class Produto(Base):
     csosns_icms = relationship('Csosnicms', foreign_keys=[csosn_id])
     classificacao_ibs_cbs = relationship('ClassificacaoIBSCBS', back_populates='produtos')
     created_by_user = relationship('UserModel', foreign_keys=[created_by_user_id])
+    estoque_movimentacoes = relationship('EstoqueMovimentacao', back_populates='produto')
 
     def to_dict(self):
         data = serialize_sqla_object(self)
@@ -699,6 +702,62 @@ class Produto(Base):
 
     def __repr__(self):
         return f"<Produto(id={self.produto_id}, codigo='{self.codigo_interno}', descricao='{self.descricao[:30]}...')>"
+
+
+class EstoqueMovimentacao(Base):
+    __tablename__ = 'estoque_movimentacoes'
+
+    movimentacao_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    produto_id = Column(Integer, ForeignKey('produtos.produto_id', ondelete='SET NULL'), nullable=True)
+    tipo_movimentacao = Column(String(10), nullable=False)  # ENTRADA | SAIDA
+    quantidade = Column(Numeric(15, 3), nullable=False)
+    valor_unitario = Column(Numeric(15, 2), nullable=True)
+    observacao = Column(Text, nullable=True)
+    data_movimentacao = Column(DateTime, default=datetime_now_brt, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at = Column(DateTime, default=datetime_now_brt, nullable=False)
+
+    cliente = relationship('Cliente', back_populates='estoque_movimentacoes')
+    produto = relationship('Produto', back_populates='estoque_movimentacoes')
+    created_by_user = relationship('UserModel', foreign_keys=[created_by_user_id])
+
+    def to_dict(self):
+        return serialize_sqla_object(self)
+
+    def __repr__(self):
+        return (
+            f"<EstoqueMovimentacao(id={self.movimentacao_id}, cliente_id={self.cliente_id}, "
+            f"tipo='{self.tipo_movimentacao}', quantidade={self.quantidade})>"
+        )
+
+
+class FluxoCaixaLancamento(Base):
+    __tablename__ = 'fluxo_caixa_lancamentos'
+
+    lancamento_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    tipo_lancamento = Column(String(10), nullable=False)  # RECEITA | DESPESA
+    categoria = Column(String(100), nullable=False)
+    descricao = Column(Text, nullable=False)
+    valor = Column(Numeric(15, 2), nullable=False)
+    forma_pagamento = Column(String(50), nullable=True)
+    observacao = Column(Text, nullable=True)
+    data_lancamento = Column(DateTime, default=datetime_now_brt, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at = Column(DateTime, default=datetime_now_brt, nullable=False)
+
+    cliente = relationship('Cliente', back_populates='fluxo_caixa_lancamentos')
+    created_by_user = relationship('UserModel', foreign_keys=[created_by_user_id])
+
+    def to_dict(self):
+        return serialize_sqla_object(self)
+
+    def __repr__(self):
+        return (
+            f"<FluxoCaixaLancamento(id={self.lancamento_id}, cliente_id={self.cliente_id}, "
+            f"tipo='{self.tipo_lancamento}', valor={self.valor})>"
+        )
 
 
 class Servico(Base):

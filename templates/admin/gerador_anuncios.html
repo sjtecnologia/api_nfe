@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Gerador de Anúncios - EmiteMax{% endblock %}
+
+{% block extra_css %}
+<style>
+    .canal-btn { transition: all 0.2s; }
+    .canal-btn.ativo { border-width: 2px; font-weight: 600; }
+    .canal-btn:not(.ativo) { opacity: 0.65; }
+    #anuncio-output {
+        white-space: pre-wrap;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        min-height: 200px;
+        font-family: inherit;
+        line-height: 1.7;
+    }
+    .canal-icon { font-size: 1.4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h3 class="mb-0"><i class="fas fa-bullhorn text-primary"></i> Gerador de Anúncios</h3>
+            <small class="text-muted">IA cria anúncios prontos para Mercado Livre, Shopee, Instagram, Facebook e WhatsApp</small>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Formulário -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-header"><h6 class="mb-0"><i class="fas fa-edit me-1"></i> Dados do Produto</h6></div>
+                <div class="card-body">
+
+                    <!-- Canal -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Canal de venda</label>
+                        <div class="d-flex flex-wrap gap-2" id="canais-btns">
+                            <button type="button" class="btn btn-outline-warning canal-btn ativo" data-canal="mercado_livre">
+                                <span class="canal-icon">🛒</span> Mercado Livre
+                            </button>
+                            <button type="button" class="btn btn-outline-danger canal-btn" data-canal="shopee">
+                                <span class="canal-icon">🍊</span> Shopee
+                            </button>
+                            <button type="button" class="btn btn-outline-purple canal-btn" data-canal="instagram" style="border-color:#e1306c;color:#e1306c">
+                                <span class="canal-icon">📸</span> Instagram
+                            </button>
+                            <button type="button" class="btn btn-outline-primary canal-btn" data-canal="facebook">
+                                <span class="canal-icon">👍</span> Facebook
+                            </button>
+                            <button type="button" class="btn btn-outline-success canal-btn" data-canal="whatsapp">
+                                <span class="canal-icon">💬</span> WhatsApp
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Descrição -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Descrição do produto <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="descricao" rows="3"
+                            placeholder="Ex: Notebook Dell Inspiron 15, Intel i5, 8GB RAM, 256GB SSD, tela Full HD"></textarea>
+                    </div>
+
+                    <!-- Preço -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Preço (opcional)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" class="form-control" id="preco" placeholder="0,00">
+                        </div>
+                    </div>
+
+                    <!-- Detalhes extras -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Diferenciais / detalhes extras (opcional)</label>
+                        <textarea class="form-control" id="detalhes" rows="2"
+                            placeholder="Ex: produto novo, frete grátis, disponível em 3 cores, garantia 1 ano"></textarea>
+                    </div>
+
+                    <button class="btn btn-primary w-100" id="btn-gerar" onclick="gerarAnuncio()">
+                        <i class="fas fa-magic me-1"></i> Gerar Anúncio
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultado -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0" id="resultado-titulo"><i class="fas fa-file-alt me-1"></i> Anúncio gerado</h6>
+                    <button class="btn btn-sm btn-outline-secondary d-none" id="btn-copiar" onclick="copiarAnuncio()">
+                        <i class="fas fa-copy me-1"></i> Copiar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <!-- Estado inicial -->
+                    <div id="estado-inicial" class="text-center py-5">
+                        <i class="fas fa-bullhorn fa-4x text-muted mb-3"></i>
+                        <p class="text-muted">Selecione o canal, preencha os dados e clique em <strong>Gerar Anúncio</strong></p>
+                    </div>
+                    <!-- Loading -->
+                    <div id="loading" class="text-center py-5 d-none">
+                        <div class="spinner-border text-primary mb-3" role="status"></div>
+                        <p class="text-muted">Criando seu anúncio...</p>
+                    </div>
+                    <!-- Erro -->
+                    <div id="erro" class="alert alert-danger d-none"></div>
+                    <!-- Output -->
+                    <div id="anuncio-output" class="d-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const endpoint = '{{ url_for("admin_api.api_ia_gerador_anuncios") }}';
+let canalAtivo = 'mercado_livre';
+
+// Seleção de canal
+document.querySelectorAll('.canal-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.canal-btn').forEach(b => b.classList.remove('ativo'));
+        this.classList.add('ativo');
+        canalAtivo = this.dataset.canal;
+    });
+});
+
+async function gerarAnuncio() {
+    const descricao = document.getElementById('descricao').value.trim();
+    if (!descricao) { alert('Preencha a descrição do produto.'); return; }
+
+    const btn = document.getElementById('btn-gerar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
+
+    document.getElementById('estado-inicial').classList.add('d-none');
+    document.getElementById('erro').classList.add('d-none');
+    document.getElementById('anuncio-output').classList.add('d-none');
+    document.getElementById('btn-copiar').classList.add('d-none');
+    document.getElementById('loading').classList.remove('d-none');
+
+    try {
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: JSON.stringify({
+                descricao,
+                canal: canalAtivo,
+                preco: document.getElementById('preco').value.trim(),
+                detalhes: document.getElementById('detalhes').value.trim(),
+            })
+        });
+        const payload = await resp.json().catch(() => ({ success: false, error: `Erro HTTP ${resp.status}` }));
+
+        document.getElementById('loading').classList.add('d-none');
+
+        if (!resp.ok || !payload.success) throw new Error(payload.error || 'Erro ao gerar anúncio');
+
+        const nomes = { mercado_livre: 'Mercado Livre', shopee: 'Shopee', instagram: 'Instagram', facebook: 'Facebook', whatsapp: 'WhatsApp' };
+        document.getElementById('resultado-titulo').innerHTML =
+            `<i class="fas fa-check-circle text-success me-1"></i> Anúncio para ${nomes[canalAtivo]}`;
+        document.getElementById('anuncio-output').textContent = payload.data.anuncio;
+        document.getElementById('anuncio-output').classList.remove('d-none');
+        document.getElementById('btn-copiar').classList.remove('d-none');
+    } catch (err) {
+        document.getElementById('loading').classList.add('d-none');
+        document.getElementById('erro').textContent = err.message;
+        document.getElementById('erro').classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-magic me-1"></i> Gerar Anúncio';
+    }
+}
+
+function copiarAnuncio() {
+    const texto = document.getElementById('anuncio-output').textContent;
+    navigator.clipboard.writeText(texto).then(() => {
+        const btn = document.getElementById('btn-copiar');
+        btn.innerHTML = '<i class="fas fa-check me-1"></i> Copiado!';
+        setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy me-1"></i> Copiar'; }, 2000);
+    });
+}
+</script>
+{% endblock %}

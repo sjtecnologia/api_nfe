@@ -19,7 +19,32 @@
 </div>
 <div class="mb-3">
     <label for="descricao" class="form-label">Descrição</label>
-    <textarea class="form-control" id="descricao" name="descricao" rows="3" required>{{ form_data.descricao | default('') }}</textarea>
+    <div class="input-group">
+        <textarea class="form-control" id="descricao" name="descricao" rows="3" required>{{ form_data.descricao | default('') }}</textarea>
+        <button type="button" class="btn btn-outline-primary" id="btn-ia-preencher"
+                onclick="preencherComIA()" title="A IA analisa a descrição e preenche NCM, CFOP, CST, CSOSN e unidade automaticamente"
+                style="align-self: stretch; border-radius: 0 0.375rem 0.375rem 0;">
+            <i class="fas fa-magic me-1"></i><span id="btn-ia-texto">IA</span>
+        </button>
+    </div>
+    <small class="form-text text-muted">
+        <i class="fas fa-info-circle me-1 text-primary"></i>
+        Digite a descrição e clique em <strong>IA</strong> para preencher NCM, CFOP, CST, CSOSN e unidade automaticamente.
+    </small>
+</div>
+
+<!-- Painel de resultado da sugestão IA -->
+<div id="ia-sugestao-painel" class="alert alert-info d-none mb-3">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <strong><i class="fas fa-robot me-1"></i> Sugestão IA</strong>
+            <div id="ia-sugestao-explicacao" class="small mt-1 text-muted"></div>
+        </div>
+        <button type="button" class="btn-close btn-sm" onclick="document.getElementById('ia-sugestao-painel').classList.add('d-none')"></button>
+    </div>
+</div>
+<div id="ia-erro-painel" class="alert alert-warning d-none mb-3">
+    <i class="fas fa-exclamation-triangle me-1"></i> <span id="ia-erro-msg"></span>
 </div>
 <div class="mb-3">
     <label for="ncm_id" class="form-label">NCM</label>
@@ -110,3 +135,111 @@
         Produto Ativo
     </label>
 </div>
+
+<script>
+async function preencherComIA() {
+    const descricao = (document.getElementById('descricao')?.value || '').trim();
+    if (!descricao) {
+        alert('Preencha a descrição do produto antes de usar a IA.');
+        return;
+    }
+
+    const btn = document.getElementById('btn-ia-preencher');
+    const btnTexto = document.getElementById('btn-ia-texto');
+    const painel = document.getElementById('ia-sugestao-painel');
+    const erroPainel = document.getElementById('ia-erro-painel');
+
+    btn.disabled = true;
+    btnTexto.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    painel.classList.add('d-none');
+    erroPainel.classList.add('d-none');
+
+    try {
+        const resp = await fetch('/api/ia/classificar-produto', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+            },
+            body: JSON.stringify({ descricao }),
+        });
+        const payload = await resp.json().catch(() => ({ success: false, error: `Erro HTTP ${resp.status}` }));
+
+        if (!resp.ok || !payload.success) throw new Error(payload.error || 'Erro ao classificar produto');
+
+        const d = payload.data || {};
+
+        // NCM — select2: buscar option cujo texto começa com o código retornado
+        const ncmCodigo = (d.ncm || '').replace(/\./g, '').trim();
+        if (ncmCodigo) {
+            const ncmSelect = document.getElementById('ncm_id');
+            if (ncmSelect) {
+                for (const opt of ncmSelect.options) {
+                    const txt = opt.text.replace(/\./g, '').replace(/\s/g, '');
+                    if (txt.startsWith(ncmCodigo)) {
+                        ncmSelect.value = opt.value;
+                        // Disparar evento para Select2 atualizar
+                        $(ncmSelect).val(opt.value).trigger('change');
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Unidade comercial
+        if (d.unidade_comercial) {
+            const el = document.getElementById('unidade_comercial');
+            if (el && !el.value) el.value = d.unidade_comercial;
+        }
+
+        // CEST
+        if (d.cest) {
+            const el = document.getElementById('cest');
+            if (el && !el.value) el.value = d.cest;
+        }
+
+        // CFOP — selecionar pelo código de 4 dígitos
+        const cfopCodigo = (d.cfop || '').replace('.', '').trim();
+        if (cfopCodigo) {
+            selecionarPorCodigo('cfop_id', cfopCodigo);
+        }
+
+        // CST — selecionar pelo código
+        const cstCodigo = (d.cst || '').trim().padStart(3, '0');
+        if (cstCodigo && cstCodigo !== '000') {
+            selecionarPorCodigo('cst_id', cstCodigo);
+        }
+
+        // CSOSN — selecionar pelo código
+        const csosnCodigo = (d.csosn || '').trim();
+        if (csosnCodigo) {
+            selecionarPorCodigo('csosn_id', csosnCodigo);
+        }
+
+        // Mostrar explicação
+        const explicacao = d.explicacao || d.explanation || '';
+        if (explicacao) {
+            document.getElementById('ia-sugestao-explicacao').textContent = explicacao;
+            painel.classList.remove('d-none');
+        }
+
+    } catch (err) {
+        document.getElementById('ia-erro-msg').textContent = err.message;
+        erroPainel.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        btnTexto.innerHTML = 'IA';
+    }
+}
+
+function selecionarPorCodigo(selectId, codigo) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    for (const opt of sel.options) {
+        if (opt.text.trim().startsWith(codigo + ' ') || opt.text.trim().startsWith(codigo + '-')) {
+            sel.value = opt.value;
+            return;
+        }
+    }
+}
+</script>

@@ -842,21 +842,47 @@ $(document).ready(function() {
             );
         }
 
-        solicitarSugestaoIA('/api/sugestao-produto-ia', dados,
-            function(respPublico) {
-                console.log('[IA] ✅ Resposta do proxy público:', respPublico);
-                hideLoading();
-                if (!renderizarSugestaoIA(respPublico)) {
-                    tentarAdmin();
+        // Prioridade: novo endpoint IA centralizado
+        $.ajax({
+            url: '/api/ia/classificar-produto',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': $('meta[name="csrf-token"]').attr('content') || '' },
+            data: JSON.stringify({ descricao: dados.descricao, cliente_id: dados.cliente_id, tipo_item: dados.tipo_item }),
+            timeout: 30000,
+            success: function(resp) {
+                if (resp.success && resp.data && (resp.data.ncm || resp.data.cfop)) {
+                    console.log('[IA] ✅ Resposta do endpoint IA centralizado:', resp.data);
+                    hideLoading();
+                    renderizarSugestaoIA(resp.data);
+                } else {
+                    console.log('[IA] Endpoint IA centralizado retornou sem dados, tentando proxy público...');
+                    tentarPublico();
                 }
             },
-            function(xhrPublico, status) {
-                console.log('[IA] Proxy público falhou:', xhrPublico, status);
-                erroPublico = xhrPublico;
-                statusPublico = status;
-                tentarAdmin();
+            error: function() {
+                console.log('[IA] Endpoint IA centralizado falhou, tentando proxy público...');
+                tentarPublico();
             }
-        );
+        });
+
+        function tentarPublico() {
+            solicitarSugestaoIA('/api/sugestao-produto-ia', dados,
+                function(respPublico) {
+                    console.log('[IA] ✅ Resposta do proxy público:', respPublico);
+                    hideLoading();
+                    if (!renderizarSugestaoIA(respPublico)) {
+                        tentarAdmin();
+                    }
+                },
+                function(xhrPublico, status) {
+                    console.log('[IA] Proxy público falhou:', xhrPublico, status);
+                    erroPublico = xhrPublico;
+                    statusPublico = status;
+                    tentarAdmin();
+                }
+            );
+        }
     }
 
     // Função para selecionar option por código ou ID (melhorada para NCM)

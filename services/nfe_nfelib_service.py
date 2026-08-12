@@ -528,6 +528,9 @@ def generate_nfe_xml_nfelib(
     if cfop_primeiro_item.startswith('7') or cfop_primeiro_item.startswith('3'):
         # CFOP 7xxx/3xxx = operação com exterior
         id_dest = "3"
+    elif cfop_primeiro_item.startswith('2') or cfop_primeiro_item.startswith('6'):
+        # CFOP 2xxx/6xxx = entrada/saída interestadual (prevalece sobre comparação de UF)
+        id_dest = "2"
     elif uf_emitente != uf_destinatario:
         # UFs diferentes = operação interestadual
         id_dest = "2"
@@ -539,7 +542,7 @@ def generate_nfe_xml_nfelib(
 
     # Auto-corrigir finNFe: se qualquer item usar CFOP de devolução, finNFe deve ser 4
     import re as _re
-    _cfop_devol_pattern = _re.compile(r'^[56](20[1-4]|21[0-2]|41[0-3]|553)$')
+    _cfop_devol_pattern = _re.compile(r'^[1256](20[1-9]|21[0-9]|41[0-3]|553)$')
     _tem_cfop_devol = any(
         _cfop_devol_pattern.match((item.get('cfop') or '').strip())
         for item in items
@@ -724,14 +727,13 @@ def generate_nfe_xml_nfelib(
     else:
         ie_dest_norm = ''
 
-    # Validação básica de tamanho: apenas logar, NÃO descartar IE que veio do cadastro.
-    # A SEFAZ valida o conteúdo; nossa função de tamanho pode ter falsos negativos.
+    # Validação básica de tamanho: descartar IE inválida para evitar Rejeição 210.
     if ie_dest_norm not in {'', 'ISENTO'} and not ie_valida_basica_por_uf(ie_dest_norm, uf_destinatario):
         print(
-            f"⚠️  [NFELIB] IE do destinatario com tamanho inesperado para UF {uf_destinatario}: "
-            f"'{ie_dest_norm}'. Mantendo no XML — a SEFAZ fará a validação final."
+            f"⚠️  [NFELIB] IE do destinatario com tamanho inválido para UF {uf_destinatario}: "
+            f"'{ie_dest_norm}' — descartando para evitar Rejeição 210 (indIEDest→9)."
         )
-        # NÃO descarta: mantém ie_dest_norm para que indIEDest=1 seja gerado
+        ie_dest_norm = ''  # descarta: indIEDest será 9 (não contribuinte)
 
     if len(dest_cpf_cnpj) == 11:  # CPF = pessoa física = não contribuinte
         ind_ie_dest = "9"

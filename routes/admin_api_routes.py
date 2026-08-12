@@ -9,9 +9,10 @@ Registrado em app.py com url_prefix='/admin'.
 """
 import logging
 from datetime import datetime, timedelta
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request, session
 from flask_login import login_required, current_user
 import requests
+import io
 from sqlalchemy import text
 from database.connection import get_db
 try:
@@ -62,6 +63,136 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 admin_api_bp = Blueprint('admin_api', __name__)
+
+
+def _ensure_estoque_caixa_tables(db):
+    """Cria as tabelas de estoque/caixa caso a migração ainda não tenha sido aplicada."""
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS estoque_movimentacoes (
+            movimentacao_id BIGSERIAL PRIMARY KEY,
+            cliente_id INTEGER NOT NULL REFERENCES clientes(cliente_id) ON DELETE CASCADE,
+            produto_id INTEGER,
+            tipo_movimentacao VARCHAR(10) NOT NULL CHECK (tipo_movimentacao IN ('ENTRADA', 'SAIDA')),
+            quantidade NUMERIC(15, 3) NOT NULL CHECK (quantidade > 0),
+            valor_unitario NUMERIC(15, 2),
+            observacao TEXT,
+            data_movimentacao TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo'),
+            created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo')
+        )
+    """))
+    db.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_estoque_mov_cliente_data
+        ON estoque_movimentacoes (cliente_id, data_movimentacao DESC)
+    """))
+    db.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_estoque_mov_produto
+        ON estoque_movimentacoes (produto_id)
+    """))
+
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS fluxo_caixa_lancamentos (
+            lancamento_id BIGSERIAL PRIMARY KEY,
+            cliente_id INTEGER NOT NULL REFERENCES clientes(cliente_id) ON DELETE CASCADE,
+            tipo_lancamento VARCHAR(10) NOT NULL CHECK (tipo_lancamento IN ('RECEITA', 'DESPESA')),
+            categoria VARCHAR(100) NOT NULL,
+            descricao TEXT NOT NULL,
+            valor NUMERIC(15, 2) NOT NULL CHECK (valor > 0),
+            forma_pagamento VARCHAR(50),
+            observacao TEXT,
+            data_lancamento TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo'),
+            created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo')
+        )
+    """))
+    db.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_cliente_data
+        ON fluxo_caixa_lancamentos (cliente_id, data_lancamento DESC)
+    """))
+    db.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_tipo
+        ON fluxo_caixa_lancamentos (tipo_lancamento)
+    """))
+
+    db.execute(text("""
+        CREATE TABLE IF NOT EXISTS fluxo_caixa_categorias (
+            categoria_id BIGSERIAL PRIMARY KEY,
+            cliente_id INTEGER NOT NULL REFERENCES clientes(cliente_id) ON DELETE CASCADE,
+            nome VARCHAR(100) NOT NULL,
+            tipo_lancamento VARCHAR(10) NOT NULL DEFAULT 'DESPESA' CHECK (tipo_lancamento IN ('RECEITA', 'DESPESA')),
+            descricao TEXT,
+            ativo BOOLEAN NOT NULL DEFAULT true,
+            created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo')
+        )
+    """))
+    db.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_fluxo_cat_cliente_nome
+        ON fluxo_caixa_categorias (cliente_id, nome)
+    """))
+    db.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_fluxo_cat_cliente_tipo_nome
+        ON fluxo_caixa_categorias (cliente_id, tipo_lancamento, nome)
+    """))
+
+
+def _parse_periodo_datas():
+    """Resolve período por data explícita ou por atalho (7/15/30/90/mes)."""
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+    periodo = (request.args.get('periodo') or '30').strip().lower()
+
+    if data_inicio_str and data_fim_str:
+        inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+        fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+        return inicio, fim
+
+    hoje = datetime.now().date()
+    if periodo == 'mes':
+        return hoje.replace(day=1), hoje
+
+    try:
+        dias = int(periodo)
+    except ValueError:
+        dias = 30
+
+    dias = max(1, min(dias, 365))
+    return hoje - timedelta(days=dias - 1), hoje
+
+
+def _resolve_cliente_id_admin_api() -> int:
+    """Resolve cliente_id respeitando isolamento por tenant e empresa ativa na sessão."""
+    raw_cliente_id = request.args.get('cliente_id')
+    body = request.get_json(silent=True) or {}
+    session_cliente_id = session.get('current_client_id') or session.get('active_cliente_id')
+
+    if raw_cliente_id in (None, ''):
+        raw_cliente_id = body.get('cliente_id')
+
+    accessible_ids = []
+    if current_user.is_super_admin():
+        if session_cliente_id not in (None, ''):
+            return int(session_cliente_id)
+        if raw_cliente_id not in (None, ''):
+            return int(raw_cliente_id)
+        raise ValueError('Selecione uma empresa para continuar')
+
+    if hasattr(current_user, 'get_accessible_clients'):
+        for c in current_user.get_accessible_clients() or []:
+            cid = c.get('cliente_id')
+            if cid is not None:
+                accessible_ids.append(int(cid))
+
+    if not accessible_ids:
+        raise PermissionError('Usuário não possui clientes vinculados')
+
+    if session_cliente_id in (None, ''):
+        raise ValueError('Selecione uma empresa para continuar')
+
+    cliente_id = int(session_cliente_id)
+    if cliente_id not in accessible_ids:
+        raise PermissionError('Acesso negado ao cliente ativo')
+    return cliente_id
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -845,6 +976,54 @@ def api_ia_assistente_fiscal_conversas():
         db.close()
 
 
+@admin_api_bp.route('/api/ia/assistente-fiscal/mensagens', methods=['GET'])
+@login_required
+def api_ia_assistente_fiscal_mensagens():
+    """Retorna todas as mensagens de uma conversa específica do Assistente Fiscal."""
+    if AiConversation is None or AiMessage is None:
+        return jsonify({'success': True, 'data': []})
+
+    raw_conversation_id = request.args.get('conversation_id')
+    if not raw_conversation_id:
+        return jsonify({'success': False, 'error': 'Parâmetro conversation_id obrigatório'}), 400
+    try:
+        conversation_id = int(raw_conversation_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Parâmetro conversation_id inválido'}), 400
+
+    db = next(get_db())
+    try:
+        conversa = db.query(AiConversation).filter(
+            AiConversation.conversation_id == conversation_id,
+            AiConversation.funcionalidade == 'assistente_fiscal',
+        ).first()
+        if conversa is None:
+            return jsonify({'success': False, 'error': 'Conversa não encontrada'}), 404
+
+        mensagens = (
+            db.query(AiMessage)
+            .filter(AiMessage.conversation_id == conversation_id)
+            .order_by(AiMessage.created_at.asc())
+            .all()
+        )
+        return jsonify({
+            'success': True,
+            'data': {
+                'conversation_id': conversation_id,
+                'titulo': conversa.titulo,
+                'mensagens': [
+                    {'role': m.role, 'content': m.content, 'created_at': str(m.created_at)}
+                    for m in mensagens
+                ],
+            },
+        })
+    except Exception as exc:
+        logger.error('Erro ao carregar mensagens da conversa %s: %s', conversation_id, exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro interno ao carregar mensagens'}), 500
+    finally:
+        db.close()
+
+
 @admin_api_bp.route('/api/ia/consultor-vendas/insights', methods=['GET'])
 @login_required
 def api_ia_consultor_vendas_insights():
@@ -938,5 +1117,1255 @@ def api_ia_classificar_produto():
     except Exception as exc:
         logger.error('Erro ao classificar produto via IA: %s', exc, exc_info=True)
         return jsonify({'success': False, 'error': 'Erro interno ao classificar produto'}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/ia/gerador-anuncios', methods=['POST'])
+@login_required
+def api_ia_gerador_anuncios():
+    """Gera anúncio comercial para um produto em diferentes canais usando IA."""
+    if AIService is None:
+        return jsonify({'success': False, 'error': 'Serviço de IA indisponível neste ambiente'}), 503
+
+    payload = request.get_json(silent=True) or {}
+    descricao = (payload.get('descricao') or '').strip()
+    canal = (payload.get('canal') or 'instagram').strip().lower()
+    preco = payload.get('preco', '')
+    detalhes = (payload.get('detalhes') or '').strip()
+
+    if not descricao:
+        return jsonify({'success': False, 'error': 'Campo descricao é obrigatório'}), 400
+
+    canais_validos = ['mercado_livre', 'shopee', 'instagram', 'facebook', 'whatsapp']
+    if canal not in canais_validos:
+        return jsonify({'success': False, 'error': f'Canal inválido. Use: {", ".join(canais_validos)}'}), 400
+
+    nomes_canal = {
+        'mercado_livre': 'Mercado Livre',
+        'shopee': 'Shopee',
+        'instagram': 'Instagram',
+        'facebook': 'Facebook',
+        'whatsapp': 'WhatsApp',
+    }
+
+    preco_str = f'R$ {preco}' if preco else 'não informado'
+    user_message = (
+        f'Crie um anúncio completo para {nomes_canal[canal]}.\n\n'
+        f'Produto: {descricao}\n'
+        f'Preço: {preco_str}\n'
+        f'Detalhes adicionais: {detalhes or "nenhum"}\n\n'
+        f'Gere: título atrativo, descrição completa, principais benefícios, '
+        f'call-to-action e hashtags (quando aplicável ao canal). '
+        f'Formate bem para o canal {nomes_canal[canal]}.'
+    )
+
+    try:
+        service = AIService()
+        resposta = service.chat(
+            prompt_name='marketing_ad',
+            user_message=user_message,
+            cliente_id=None,
+            user_id=getattr(current_user, 'id', None),
+            functionality='marketing',
+            record=False,
+        )
+        conteudo = (resposta.get('content') or '').strip()
+        if not conteudo:
+            return jsonify({'success': False, 'error': 'IA não retornou conteúdo'}), 500
+
+        return jsonify({'success': True, 'data': {'canal': canal, 'anuncio': conteudo}})
+    except Exception as exc:
+        logger.error('Erro no gerador de anúncios: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': f'Erro ao gerar anúncio: {exc}'}), 500
+
+
+@admin_api_bp.route('/api/ia/mensagens-whatsapp', methods=['POST'])
+@login_required
+def api_ia_mensagens_whatsapp():
+    """Gera mensagem comercial para WhatsApp usando IA."""
+    if AIService is None:
+        return jsonify({'success': False, 'error': 'Serviço de IA indisponível neste ambiente'}), 503
+
+    payload = request.get_json(silent=True) or {}
+    tipo = (payload.get('tipo') or 'cobranca').strip().lower()
+    nome_cliente = (payload.get('nome_cliente') or '').strip()
+    tom = (payload.get('tom') or 'amigavel').strip().lower()
+    detalhes = (payload.get('detalhes') or '').strip()
+
+    tipos_validos = ['cobranca', 'lembrete', 'agradecimento', 'promocao', 'recuperar_cliente', 'orcamento']
+    if tipo not in tipos_validos:
+        return jsonify({'success': False, 'error': f'Tipo inválido. Use: {", ".join(tipos_validos)}'}), 400
+
+    nomes_tipo = {
+        'cobranca': 'Cobrança',
+        'lembrete': 'Lembrete',
+        'agradecimento': 'Agradecimento',
+        'promocao': 'Promoção',
+        'recuperar_cliente': 'Recuperar Cliente',
+        'orcamento': 'Orçamento',
+    }
+    nomes_tom = {'formal': 'formal', 'amigavel': 'amigável', 'persuasivo': 'persuasivo'}
+
+    user_message = (
+        f'Crie uma mensagem de WhatsApp do tipo: {nomes_tipo[tipo]}.\n'
+        f'Tom: {nomes_tom.get(tom, "amigável")}.\n'
+        f'{"Nome do cliente: " + nome_cliente + chr(10) if nome_cliente else ""}'
+        f'{"Detalhes adicionais: " + detalhes + chr(10) if detalhes else ""}'
+        f'A mensagem deve ser curta, direta e pronta para copiar e enviar. '
+        f'Use emojis com moderação. Não inclua saudação redundante se já há nome.'
+    )
+
+    try:
+        service = AIService()
+        resposta = service.chat(
+            prompt_name='whatsapp_message',
+            user_message=user_message,
+            cliente_id=None,
+            user_id=getattr(current_user, 'id', None),
+            functionality='mensagens',
+            record=False,
+        )
+        conteudo = (resposta.get('content') or '').strip()
+        if not conteudo:
+            return jsonify({'success': False, 'error': 'IA não retornou conteúdo'}), 500
+
+        return jsonify({'success': True, 'data': {'tipo': tipo, 'mensagem': conteudo}})
+    except Exception as exc:
+        logger.error('Erro no gerador de mensagens WhatsApp: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': f'Erro ao gerar mensagem: {exc}'}), 500
+
+
+@admin_api_bp.route('/api/ia/dashboard-inteligente', methods=['GET'])
+@login_required
+def api_ia_dashboard_inteligente():
+    """Retorna dados reais + narrativa IA para o Dashboard Inteligente."""
+    raw_cliente_id = request.args.get('cliente_id')
+    cliente_id = None
+    if raw_cliente_id not in (None, ''):
+        try:
+            cliente_id = int(raw_cliente_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'cliente_id inválido'}), 400
+
+    # Auto-resolver cliente da sessão
+    if cliente_id is None:
+        from flask import session
+        cliente_id = session.get('current_client_id')
+    if cliente_id is None:
+        db_tmp = next(get_db())
+        try:
+            from database.models import UserClient
+            uc = db_tmp.query(UserClient).filter(UserClient.user_id == current_user.id).order_by(UserClient.client_id.asc()).first()
+            if uc:
+                cliente_id = int(uc.client_id)
+        except Exception:
+            pass
+        finally:
+            db_tmp.close()
+    if cliente_id is None:
+        return jsonify({'success': False, 'error': 'Nenhum cliente vinculado'}), 400
+
+    db = next(get_db())
+    try:
+        from datetime import datetime, timedelta
+        hoje = datetime.now().date()
+
+        # Período configurável: 'mes' (mês atual), ou N dias
+        periodo = request.args.get('periodo', 'mes')
+        if periodo == 'mes':
+            inicio = hoje.replace(day=1)
+            fim = hoje
+            # Período anterior: mês anterior completo
+            fim_ant = inicio - timedelta(days=1)
+            inicio_ant = fim_ant.replace(day=1)
+            label_periodo = f'{inicio.strftime("%d/%m")} a {fim.strftime("%d/%m/%Y")}'
+        elif periodo == 'mes_ant':
+            fim = hoje.replace(day=1) - timedelta(days=1)
+            inicio = fim.replace(day=1)
+            fim_ant = inicio - timedelta(days=1)
+            inicio_ant = fim_ant.replace(day=1)
+            label_periodo = f'{inicio.strftime("%d/%m")} a {fim.strftime("%d/%m/%Y")}'
+        else:
+            try:
+                dias = int(periodo)
+            except ValueError:
+                dias = 30
+            inicio = hoje - timedelta(days=dias - 1)
+            fim = hoje
+            inicio_ant = inicio - timedelta(days=dias)
+            fim_ant = inicio - timedelta(days=1)
+            label_periodo = f'Últimos {dias} dias'
+
+        _filtro_fat = "status='AUTORIZADA' AND tipo_nfe='1' AND finalidade_emissao=1"
+        _filtro_nfe = "status='AUTORIZADA' AND tipo_nfe='1'"
+
+        r_periodo = db.execute(text(f"""
+            SELECT
+                COUNT(*) FILTER (WHERE {_filtro_nfe}) AS total_nfes,
+                COALESCE(SUM(valor_total) FILTER (WHERE {_filtro_fat}), 0) AS faturamento,
+                COUNT(DISTINCT destinatario_cnpj_cpf) FILTER (WHERE {_filtro_fat}) AS clientes_ativos,
+                COALESCE(AVG(valor_total) FILTER (WHERE {_filtro_fat}), 0) AS ticket_medio,
+                COUNT(*) FILTER (WHERE status='REJEITADA') AS nfes_rejeitadas,
+                COUNT(*) FILTER (WHERE status='CANCELADA') AS nfes_canceladas
+            FROM nfe_emitidas
+            WHERE cliente_id = :cid AND data_emissao::date BETWEEN :ini AND :fim
+        """), {'cid': cliente_id, 'ini': inicio, 'fim': fim}).fetchone()
+
+        r_periodo_ant = db.execute(text(f"""
+            SELECT
+                COUNT(*) FILTER (WHERE {_filtro_nfe}) AS total_nfes,
+                COALESCE(SUM(valor_total) FILTER (WHERE {_filtro_fat}), 0) AS faturamento
+            FROM nfe_emitidas
+            WHERE cliente_id = :cid AND data_emissao::date BETWEEN :ini AND :fim
+        """), {'cid': cliente_id, 'ini': inicio_ant, 'fim': fim_ant}).fetchone()
+
+        r_hoje = db.execute(text(f"""
+            SELECT
+                COUNT(*) FILTER (WHERE {_filtro_nfe}) AS nfes_hoje,
+                COALESCE(SUM(valor_total) FILTER (WHERE {_filtro_fat}), 0) AS fat_hoje
+            FROM nfe_emitidas
+            WHERE cliente_id = :cid AND data_emissao::date = :hoje
+        """), {'cid': cliente_id, 'hoje': hoje}).fetchone()
+
+        # Top 5 produtos no período
+        r_top_prods = db.execute(text("""
+            SELECT
+                item->>'descricao' AS descricao,
+                COUNT(*) AS ocorrencias,
+                COALESCE(SUM((item->>'valor_total')::numeric), 0) AS valor_total
+            FROM nfe_emitidas,
+                 jsonb_array_elements(json_nfe->'items') AS item
+            WHERE cliente_id = :cid
+              AND status='AUTORIZADA' AND tipo_nfe='1' AND finalidade_emissao=1
+              AND data_emissao::date BETWEEN :ini AND :fim
+            GROUP BY item->>'descricao'
+            ORDER BY valor_total DESC
+            LIMIT 5
+        """), {'cid': cliente_id, 'ini': inicio, 'fim': fim}).fetchall()
+
+        # Top 5 clientes no período
+        r_top_clientes = db.execute(text(f"""
+            SELECT destinatario_razao_social, COUNT(*) AS total_nfes,
+                   COALESCE(SUM(valor_total), 0) AS faturamento
+            FROM nfe_emitidas
+            WHERE cliente_id = :cid AND {_filtro_fat}
+              AND data_emissao::date BETWEEN :ini AND :fim
+            GROUP BY destinatario_razao_social
+            ORDER BY faturamento DESC LIMIT 5
+        """), {'cid': cliente_id, 'ini': inicio, 'fim': fim}).fetchall()
+
+        r_ultimas = db.execute(text("""
+            SELECT numero, serie, status, tipo_nfe, finalidade_emissao,
+                   destinatario_razao_social,
+                   valor_total, data_emissao::date AS data_emissao
+            FROM nfe_emitidas
+            WHERE cliente_id = :cid
+            ORDER BY data_emissao DESC, nfe_emitida_id DESC LIMIT 10
+        """), {'cid': cliente_id}).fetchall()
+
+        fat_atual = float(r_periodo.faturamento or 0)
+        fat_anterior = float(r_periodo_ant.faturamento or 0)
+        delta_fat = ((fat_atual - fat_anterior) / fat_anterior * 100) if fat_anterior > 0 else 0
+        nfes_atual = int(r_periodo.total_nfes or 0)
+        nfes_anterior = int(r_periodo_ant.total_nfes or 0)
+        delta_nfes = ((nfes_atual - nfes_anterior) / nfes_anterior * 100) if nfes_anterior > 0 else 0
+
+        fat_atual = float(r_periodo.faturamento or 0)
+        fat_anterior = float(r_periodo_ant.faturamento or 0)
+        delta_fat = ((fat_atual - fat_anterior) / fat_anterior * 100) if fat_anterior > 0 else 0
+        nfes_atual = int(r_periodo.total_nfes or 0)
+        nfes_anterior = int(r_periodo_ant.total_nfes or 0)
+        delta_nfes = ((nfes_atual - nfes_anterior) / nfes_anterior * 100) if nfes_anterior > 0 else 0
+
+        # Narrativa IA
+        narrativa = None
+        if AIService is not None:
+            try:
+                hora = datetime.now().hour
+                saudacao = 'Bom dia' if hora < 12 else ('Boa tarde' if hora < 18 else 'Boa noite')
+                nome_usuario = getattr(current_user, 'username', '') or getattr(current_user, 'name', 'usuário')
+                top_prod_str = top_prod.get('descricao', 'não identificado') if (top_prod := dict(r_top._mapping) if r_top else None) else 'não identificado'
+
+                prompt = (
+                    f'{saudacao}, {nome_usuario}! Analise os dados e gere uma mensagem executiva curta (3-5 frases) '
+                    f'com os destaques do negócio. Seja direto, use números reais, destaque o que é bom e sinalize alertas.\n\n'
+                    f'Dados do período ({label_periodo}):\n'
+                    f'- NF-es de saída: {nfes_atual} ({delta_nfes:+.1f}% vs período anterior)\n'
+                    f'- Faturamento: R$ {fat_atual:,.2f} ({delta_fat:+.1f}% vs período anterior)\n'
+                    f'- Clientes atendidos: {r_periodo.clientes_ativos or 0}\n'
+                    f'- Ticket médio: R$ {float(r_periodo.ticket_medio or 0):,.2f}\n'
+                    f'- Produto campeão: {r_top_prods[0].descricao if r_top_prods else "não identificado"}\n'
+                    f'- NF-es emitidas hoje: {r_hoje.nfes_hoje or 0}\n'
+                    f'- Faturamento hoje: R$ {float(r_hoje.fat_hoje or 0):,.2f}\n'
+                )
+                service = AIService()
+                resp = service.chat(
+                    prompt_name='assistant_business',
+                    user_message=prompt,
+                    cliente_id=cliente_id,
+                    user_id=getattr(current_user, 'id', None),
+                    functionality='dashboard',
+                    record=False,
+                )
+                narrativa = (resp.get('content') or '').strip()
+            except Exception as e:
+                logger.warning('Dashboard narrativa IA falhou: %s', e)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'label_periodo': label_periodo,
+                'periodo': periodo,
+                'mes': {
+                    'total_nfes': nfes_atual,
+                    'faturamento': fat_atual,
+                    'clientes_ativos': int(r_periodo.clientes_ativos or 0),
+                    'ticket_medio': float(r_periodo.ticket_medio or 0),
+                    'nfes_rejeitadas': int(r_periodo.nfes_rejeitadas or 0),
+                    'nfes_canceladas': int(r_periodo.nfes_canceladas or 0),
+                    'delta_nfes_pct': round(delta_nfes, 1),
+                    'delta_faturamento_pct': round(delta_fat, 1),
+                },
+                'hoje': {
+                    'nfes': int(r_hoje.nfes_hoje or 0),
+                    'faturamento': float(r_hoje.fat_hoje or 0),
+                },
+                'top_produto': dict(r_top_prods[0]._mapping) if r_top_prods else None,
+                'top_produtos': [dict(r._mapping) for r in r_top_prods],
+                'top_clientes': [dict(r._mapping) for r in r_top_clientes],
+                'ultimas_nfes': [
+                    {
+                        'numero': r.numero,
+                        'serie': r.serie,
+                        'status': r.status,
+                        'tipo': 'Entrada' if r.tipo_nfe == '0' else ('Devolução' if r.finalidade_emissao == 4 else 'Saída'),
+                        'destinatario_razao_social': r.destinatario_razao_social,
+                        'valor': float(r.valor_total or 0),
+                        'data_emissao': str(r.data_emissao),
+                    }
+                    for r in r_ultimas
+                ],
+                'narrativa_ia': narrativa,
+            }
+        })
+    except Exception as exc:
+        logger.error('Erro no dashboard inteligente: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Controle de Estoque
+# ─────────────────────────────────────────────────────────────────────────────
+
+@admin_api_bp.route('/api/estoque/resumo', methods=['GET'])
+@login_required
+def api_estoque_resumo():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        inicio, fim = _parse_periodo_datas()
+        filtro_produto = (request.args.get('filtro_produto') or '').strip()
+
+        _ensure_estoque_caixa_tables(db)
+        db.commit()
+
+        row = db.execute(text("""
+            SELECT
+                COALESCE(SUM(CASE WHEN tipo_movimentacao = 'ENTRADA' THEN quantidade ELSE 0 END), 0) AS entradas,
+                COALESCE(SUM(CASE WHEN tipo_movimentacao = 'SAIDA' THEN quantidade ELSE 0 END), 0) AS saidas,
+                COALESCE(SUM(CASE WHEN tipo_movimentacao = 'ENTRADA' THEN quantidade ELSE -quantidade END), 0) AS saldo,
+                COUNT(*) AS total_movimentacoes
+            FROM estoque_movimentacoes
+            WHERE cliente_id = :cid
+              AND data_movimentacao::date BETWEEN :inicio AND :fim
+        """), {'cid': cliente_id, 'inicio': inicio, 'fim': fim}).fetchone()
+
+        params_produtos = {'cid': cliente_id}
+        where_produto = ''
+        if filtro_produto:
+            where_produto = " AND p.descricao ILIKE :filtro_produto"
+            params_produtos['filtro_produto'] = f'%{filtro_produto}%'
+
+        produtos_estoque = db.execute(text(f"""
+            SELECT
+                p.produto_id,
+                p.descricao,
+                COALESCE(SUM(CASE WHEN em.tipo_movimentacao = 'ENTRADA' THEN em.quantidade ELSE -em.quantidade END), 0) AS saldo_produto
+            FROM produtos p
+            LEFT JOIN estoque_movimentacoes em ON em.produto_id = p.produto_id
+            WHERE p.cliente_id = :cid{where_produto}
+            GROUP BY p.produto_id, p.descricao
+            ORDER BY saldo_produto ASC, p.descricao ASC
+        """), params_produtos).fetchall()
+
+        limite_baixo_estoque = 200 if filtro_produto else 20
+        baixo_estoque = [
+            {
+                'produto_id': int(r.produto_id),
+                'descricao': r.descricao,
+                'saldo': float(r.saldo_produto or 0),
+            }
+            for r in produtos_estoque
+            if float(r.saldo_produto or 0) <= 5
+        ][:limite_baixo_estoque]
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'cliente_id': cliente_id,
+                'periodo': {
+                    'data_inicio': inicio.isoformat(),
+                    'data_fim': fim.isoformat(),
+                },
+                'filtro_produto': filtro_produto,
+                'resumo': {
+                    'entradas': float(row.entradas or 0),
+                    'saidas': float(row.saidas or 0),
+                    'saldo': float(row.saldo or 0),
+                    'total_movimentacoes': int(row.total_movimentacoes or 0),
+                },
+                'baixo_estoque': baixo_estoque,
+            },
+        })
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao montar resumo de estoque: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/estoque/movimentacoes', methods=['GET'])
+@login_required
+def api_estoque_movimentacoes_listar():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        limit = max(1, min(request.args.get('limit', 50, type=int), 200))
+        produto_id = request.args.get('produto_id', type=int)
+
+        _ensure_estoque_caixa_tables(db)
+        db.commit()
+
+        filtros = ["em.cliente_id = :cid"]
+        params = {'cid': cliente_id, 'limit': limit}
+        if produto_id:
+            filtros.append("em.produto_id = :produto_id")
+            params['produto_id'] = produto_id
+
+        rows = db.execute(text(f"""
+            SELECT
+                em.movimentacao_id,
+                em.produto_id,
+                p.descricao AS produto_descricao,
+                em.tipo_movimentacao,
+                em.quantidade,
+                em.valor_unitario,
+                em.observacao,
+                em.data_movimentacao,
+                em.created_by_user_id
+            FROM estoque_movimentacoes em
+            LEFT JOIN produtos p ON p.produto_id = em.produto_id
+            WHERE {' AND '.join(filtros)}
+            ORDER BY em.data_movimentacao DESC, em.movimentacao_id DESC
+            LIMIT :limit
+        """), params).fetchall()
+
+        data = [
+            {
+                'movimentacao_id': int(r.movimentacao_id),
+                'produto_id': int(r.produto_id) if r.produto_id is not None else None,
+                'produto_descricao': r.produto_descricao,
+                'tipo_movimentacao': r.tipo_movimentacao,
+                'quantidade': float(r.quantidade or 0),
+                'valor_unitario': float(r.valor_unitario) if r.valor_unitario is not None else None,
+                'observacao': r.observacao,
+                'data_movimentacao': r.data_movimentacao.isoformat() if r.data_movimentacao else None,
+                'created_by_user_id': int(r.created_by_user_id) if r.created_by_user_id is not None else None,
+            }
+            for r in rows
+        ]
+
+        return jsonify({'success': True, 'data': data})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao listar movimentações de estoque: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/estoque/produtos', methods=['GET'])
+@login_required
+def api_estoque_produtos_listar():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        q = (request.args.get('q') or '').strip()
+        limit = max(1, min(request.args.get('limit', 200, type=int), 500))
+
+        params = {'cid': cliente_id, 'limit': limit}
+        where_q = ''
+        if q:
+            where_q = " AND (p.descricao ILIKE :q OR p.codigo_interno ILIKE :q)"
+            params['q'] = f'%{q}%'
+
+        rows = db.execute(text(f"""
+            SELECT p.produto_id, p.codigo_interno, p.descricao
+            FROM produtos p
+            WHERE p.cliente_id = :cid
+              AND p.ativo = true{where_q}
+            ORDER BY p.descricao
+            LIMIT :limit
+        """), params).fetchall()
+
+        data = [
+            {
+                'produto_id': int(r.produto_id),
+                'codigo_interno': r.codigo_interno,
+                'descricao': r.descricao,
+            }
+            for r in rows
+        ]
+
+        return jsonify({'success': True, 'data': data})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao listar produtos para estoque: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/estoque/movimentacoes', methods=['POST'])
+@login_required
+def api_estoque_movimentacoes_criar():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        payload = request.get_json(silent=True) or {}
+
+        produto_id = payload.get('produto_id')
+        tipo_movimentacao = (payload.get('tipo_movimentacao') or '').strip().upper()
+        quantidade = float(payload.get('quantidade') or 0)
+        valor_unitario = payload.get('valor_unitario')
+        valor_unitario = float(valor_unitario) if valor_unitario not in (None, '') else None
+        observacao = payload.get('observacao')
+        data_movimentacao = payload.get('data_movimentacao')
+
+        if tipo_movimentacao not in {'ENTRADA', 'SAIDA'}:
+            raise ValueError('tipo_movimentacao deve ser ENTRADA ou SAIDA')
+        if quantidade <= 0:
+            raise ValueError('quantidade deve ser maior que zero')
+        if produto_id in (None, ''):
+            raise ValueError('produto_id é obrigatório e deve ser de um produto cadastrado')
+
+        _ensure_estoque_caixa_tables(db)
+
+        produto_id = int(produto_id)
+        produto = db.execute(text("""
+            SELECT produto_id
+            FROM produtos
+            WHERE produto_id = :pid AND cliente_id = :cid AND ativo = true
+            LIMIT 1
+        """), {'pid': produto_id, 'cid': cliente_id}).fetchone()
+        if not produto:
+            raise PermissionError('Produto não encontrado para o cliente informado')
+
+        dt_mov = None
+        if data_movimentacao:
+            dt_mov = datetime.strptime(data_movimentacao, '%Y-%m-%d')
+
+        row = db.execute(text("""
+            INSERT INTO estoque_movimentacoes (
+                cliente_id, produto_id, tipo_movimentacao, quantidade,
+                valor_unitario, observacao, data_movimentacao, created_by_user_id
+            ) VALUES (
+                :cid, :produto_id, :tipo_mov, :qtd,
+                :valor_unitario, :obs, COALESCE(:dt_mov, NOW() AT TIME ZONE 'America/Sao_Paulo'), :uid
+            )
+            RETURNING movimentacao_id
+        """), {
+            'cid': cliente_id,
+            'produto_id': produto_id,
+            'tipo_mov': tipo_movimentacao,
+            'qtd': quantidade,
+            'valor_unitario': valor_unitario,
+            'obs': observacao,
+            'dt_mov': dt_mov,
+            'uid': getattr(current_user, 'id', None),
+        }).fetchone()
+
+        db.commit()
+        return jsonify({'success': True, 'movimentacao_id': int(row.movimentacao_id)}), 201
+    except PermissionError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        db.rollback()
+        logger.error('Erro ao criar movimentação de estoque: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fluxo de Caixa
+# ─────────────────────────────────────────────────────────────────────────────
+
+@admin_api_bp.route('/api/fluxo-caixa/categorias', methods=['GET'])
+@login_required
+def api_fluxo_caixa_categorias_listar():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        tipo_filtro = (request.args.get('tipo_lancamento') or '').strip().upper()
+        _ensure_estoque_caixa_tables(db)
+        db.commit()
+
+        where_parts = ['cliente_id = :cid', 'ativo = true']
+        params = {'cid': cliente_id}
+        if tipo_filtro in {'RECEITA', 'DESPESA'}:
+            where_parts.append('tipo_lancamento = :tipo')
+            params['tipo'] = tipo_filtro
+        where_sql = ' AND '.join(where_parts)
+
+        rows = db.execute(text("""
+            SELECT categoria_id, nome, tipo_lancamento, descricao, ativo, created_at
+            FROM fluxo_caixa_categorias
+            WHERE {where_sql}
+            ORDER BY nome
+        """.format(where_sql=where_sql)), params).fetchall()
+
+        data = [
+            {
+                'categoria_id': int(r.categoria_id),
+                'nome': r.nome,
+                'tipo_lancamento': r.tipo_lancamento,
+                'descricao': r.descricao,
+                'ativo': bool(r.ativo),
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]
+
+        return jsonify({'success': True, 'data': data})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao listar categorias de fluxo de caixa: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/fluxo-caixa/categorias', methods=['POST'])
+@login_required
+def api_fluxo_caixa_categorias_criar():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        payload = request.get_json(silent=True) or {}
+
+        nome = (payload.get('nome') or '').strip()
+        tipo_lancamento = (payload.get('tipo_lancamento') or '').strip().upper()
+        descricao = (payload.get('descricao') or '').strip() or None
+        if not nome:
+            raise ValueError('nome da categoria é obrigatório')
+        if tipo_lancamento not in {'RECEITA', 'DESPESA'}:
+            raise ValueError('tipo_lancamento deve ser RECEITA ou DESPESA')
+
+        _ensure_estoque_caixa_tables(db)
+
+        existente = db.execute(text("""
+            SELECT categoria_id, ativo
+            FROM fluxo_caixa_categorias
+            WHERE cliente_id = :cid
+                            AND tipo_lancamento = :tipo
+              AND LOWER(nome) = LOWER(:nome)
+            LIMIT 1
+                """), {'cid': cliente_id, 'tipo': tipo_lancamento, 'nome': nome}).fetchone()
+
+        if existente and bool(existente.ativo):
+            raise ValueError('Categoria já cadastrada para esta empresa')
+
+        if existente and not bool(existente.ativo):
+            db.execute(text("""
+                UPDATE fluxo_caixa_categorias
+                SET ativo = true,
+                    tipo_lancamento = :tipo,
+                    descricao = :descricao
+                WHERE categoria_id = :categoria_id
+            """), {
+                'tipo': tipo_lancamento,
+                'descricao': descricao,
+                'categoria_id': int(existente.categoria_id),
+            })
+            categoria_id = int(existente.categoria_id)
+        else:
+            row = db.execute(text("""
+                INSERT INTO fluxo_caixa_categorias (
+                    cliente_id, nome, tipo_lancamento, descricao, created_by_user_id
+                ) VALUES (
+                    :cid, :nome, :tipo, :descricao, :uid
+                )
+                RETURNING categoria_id
+            """), {
+                'cid': cliente_id,
+                'nome': nome,
+                'tipo': tipo_lancamento,
+                'descricao': descricao,
+                'uid': getattr(current_user, 'id', None),
+            }).fetchone()
+            categoria_id = int(row.categoria_id)
+
+        db.commit()
+        return jsonify({'success': True, 'categoria_id': categoria_id}), 201
+    except PermissionError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        db.rollback()
+        logger.error('Erro ao criar categoria de fluxo de caixa: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/fluxo-caixa/relatorio', methods=['GET'])
+@login_required
+def api_fluxo_caixa_relatorio():
+
+    def _montar_relatorio(db, cliente_id, inicio, fim, tipo_filtro, categoria_filtro):
+        where_parts = [
+            'fcl.cliente_id = :cid',
+            'fcl.data_lancamento::date BETWEEN :inicio AND :fim',
+        ]
+        params = {'cid': cliente_id, 'inicio': inicio, 'fim': fim}
+
+        if tipo_filtro in {'RECEITA', 'DESPESA'}:
+            where_parts.append('fcl.tipo_lancamento = :tipo')
+            params['tipo'] = tipo_filtro
+
+        if categoria_filtro:
+            where_parts.append('fcl.categoria = :categoria')
+            params['categoria'] = categoria_filtro
+
+        where_sql = ' AND '.join(where_parts)
+
+        resumo = db.execute(text(f"""
+            SELECT
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE 0 END), 0) AS receitas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'DESPESA' THEN fcl.valor ELSE 0 END), 0) AS despesas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE -fcl.valor END), 0) AS saldo,
+                COUNT(*) AS total_lancamentos
+            FROM fluxo_caixa_lancamentos fcl
+            WHERE {where_sql}
+        """), params).fetchone()
+
+        por_categoria = db.execute(text(f"""
+            SELECT
+                fcl.categoria,
+                fcl.tipo_lancamento,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE 0 END), 0) AS receitas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'DESPESA' THEN fcl.valor ELSE 0 END), 0) AS despesas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE -fcl.valor END), 0) AS saldo,
+                COUNT(*) AS total_lancamentos
+            FROM fluxo_caixa_lancamentos fcl
+            WHERE {where_sql}
+            GROUP BY fcl.categoria, fcl.tipo_lancamento
+            ORDER BY fcl.categoria, fcl.tipo_lancamento
+        """), params).fetchall()
+
+        lancamentos = db.execute(text(f"""
+            SELECT
+                fcl.lancamento_id,
+                fcl.tipo_lancamento,
+                fcl.categoria,
+                fcl.descricao,
+                fcl.valor,
+                fcl.forma_pagamento,
+                fcl.observacao,
+                fcl.data_lancamento,
+                SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE -fcl.valor END)
+                    OVER (ORDER BY fcl.data_lancamento ASC, fcl.lancamento_id ASC) AS saldo_acumulado
+            FROM fluxo_caixa_lancamentos fcl
+            WHERE {where_sql}
+            ORDER BY fcl.data_lancamento DESC, fcl.lancamento_id DESC
+            LIMIT 2000
+        """), params).fetchall()
+
+        return {
+            'periodo': {
+                'data_inicio': inicio.isoformat(),
+                'data_fim': fim.isoformat(),
+            },
+            'filtros': {
+                'tipo_lancamento': tipo_filtro if tipo_filtro in {'RECEITA', 'DESPESA'} else '',
+                'categoria': categoria_filtro,
+            },
+            'resumo': {
+                'receitas': float(resumo.receitas or 0),
+                'despesas': float(resumo.despesas or 0),
+                'saldo': float(resumo.saldo or 0),
+                'total_lancamentos': int(resumo.total_lancamentos or 0),
+            },
+            'por_categoria': [
+                {
+                    'categoria': r.categoria,
+                    'tipo_lancamento': r.tipo_lancamento,
+                    'receitas': float(r.receitas or 0),
+                    'despesas': float(r.despesas or 0),
+                    'saldo': float(r.saldo or 0),
+                    'total_lancamentos': int(r.total_lancamentos or 0),
+                }
+                for r in por_categoria
+            ],
+            'lancamentos': [
+                {
+                    'lancamento_id': int(r.lancamento_id),
+                    'tipo_lancamento': r.tipo_lancamento,
+                    'categoria': r.categoria,
+                    'descricao': r.descricao,
+                    'valor': float(r.valor or 0),
+                    'forma_pagamento': r.forma_pagamento,
+                    'observacao': r.observacao,
+                    'data_lancamento': r.data_lancamento.isoformat() if r.data_lancamento else None,
+                    'saldo_acumulado': float(r.saldo_acumulado or 0),
+                }
+                for r in lancamentos
+            ],
+        }
+
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        inicio, fim = _parse_periodo_datas()
+        tipo_filtro = (request.args.get('tipo_lancamento') or '').strip().upper()
+        categoria_filtro = (request.args.get('categoria') or '').strip()
+
+        _ensure_estoque_caixa_tables(db)
+        db.commit()
+
+        relatorio_data = _montar_relatorio(db, cliente_id, inicio, fim, tipo_filtro, categoria_filtro)
+
+        return jsonify({
+            'success': True,
+            'data': relatorio_data,
+        })
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao gerar relatório de fluxo de caixa: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/fluxo-caixa/relatorio/xlsx', methods=['GET'])
+@login_required
+def api_fluxo_caixa_relatorio_xlsx():
+
+    def _montar_relatorio(db, cliente_id, inicio, fim, tipo_filtro, categoria_filtro):
+        where_parts = [
+            'fcl.cliente_id = :cid',
+            'fcl.data_lancamento::date BETWEEN :inicio AND :fim',
+        ]
+        params = {'cid': cliente_id, 'inicio': inicio, 'fim': fim}
+
+        if tipo_filtro in {'RECEITA', 'DESPESA'}:
+            where_parts.append('fcl.tipo_lancamento = :tipo')
+            params['tipo'] = tipo_filtro
+
+        if categoria_filtro:
+            where_parts.append('fcl.categoria = :categoria')
+            params['categoria'] = categoria_filtro
+
+        where_sql = ' AND '.join(where_parts)
+
+        resumo = db.execute(text(f"""
+            SELECT
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE 0 END), 0) AS receitas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'DESPESA' THEN fcl.valor ELSE 0 END), 0) AS despesas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE -fcl.valor END), 0) AS saldo,
+                COUNT(*) AS total_lancamentos
+            FROM fluxo_caixa_lancamentos fcl
+            WHERE {where_sql}
+        """), params).fetchone()
+
+        por_categoria = db.execute(text(f"""
+            SELECT
+                fcl.categoria,
+                fcl.tipo_lancamento,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE 0 END), 0) AS receitas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'DESPESA' THEN fcl.valor ELSE 0 END), 0) AS despesas,
+                COALESCE(SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE -fcl.valor END), 0) AS saldo,
+                COUNT(*) AS total_lancamentos
+            FROM fluxo_caixa_lancamentos fcl
+            WHERE {where_sql}
+            GROUP BY fcl.categoria, fcl.tipo_lancamento
+            ORDER BY fcl.categoria, fcl.tipo_lancamento
+        """), params).fetchall()
+
+        lancamentos = db.execute(text(f"""
+            SELECT
+                fcl.lancamento_id,
+                fcl.tipo_lancamento,
+                fcl.categoria,
+                fcl.descricao,
+                fcl.valor,
+                fcl.forma_pagamento,
+                fcl.observacao,
+                fcl.data_lancamento,
+                SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE -fcl.valor END)
+                    OVER (ORDER BY fcl.data_lancamento ASC, fcl.lancamento_id ASC) AS saldo_acumulado
+            FROM fluxo_caixa_lancamentos fcl
+            WHERE {where_sql}
+            ORDER BY fcl.data_lancamento DESC, fcl.lancamento_id DESC
+            LIMIT 2000
+        """), params).fetchall()
+
+        return {
+            'periodo': {
+                'data_inicio': inicio.isoformat(),
+                'data_fim': fim.isoformat(),
+            },
+            'filtros': {
+                'tipo_lancamento': tipo_filtro if tipo_filtro in {'RECEITA', 'DESPESA'} else '',
+                'categoria': categoria_filtro,
+            },
+            'resumo': {
+                'receitas': float(resumo.receitas or 0),
+                'despesas': float(resumo.despesas or 0),
+                'saldo': float(resumo.saldo or 0),
+                'total_lancamentos': int(resumo.total_lancamentos or 0),
+            },
+            'por_categoria': [
+                {
+                    'categoria': r.categoria,
+                    'tipo_lancamento': r.tipo_lancamento,
+                    'receitas': float(r.receitas or 0),
+                    'despesas': float(r.despesas or 0),
+                    'saldo': float(r.saldo or 0),
+                    'total_lancamentos': int(r.total_lancamentos or 0),
+                }
+                for r in por_categoria
+            ],
+            'lancamentos': [
+                {
+                    'lancamento_id': int(r.lancamento_id),
+                    'tipo_lancamento': r.tipo_lancamento,
+                    'categoria': r.categoria,
+                    'descricao': r.descricao,
+                    'valor': float(r.valor or 0),
+                    'forma_pagamento': r.forma_pagamento,
+                    'observacao': r.observacao,
+                    'data_lancamento': r.data_lancamento.isoformat() if r.data_lancamento else None,
+                    'saldo_acumulado': float(r.saldo_acumulado or 0),
+                }
+                for r in lancamentos
+            ],
+        }
+
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        inicio, fim = _parse_periodo_datas()
+        tipo_filtro = (request.args.get('tipo_lancamento') or '').strip().upper()
+        categoria_filtro = (request.args.get('categoria') or '').strip()
+
+        _ensure_estoque_caixa_tables(db)
+        db.commit()
+
+        relatorio_data = _montar_relatorio(db, cliente_id, inicio, fim, tipo_filtro, categoria_filtro)
+
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font
+        except ImportError:
+            return jsonify({'success': False, 'error': 'Dependência openpyxl não instalada no servidor'}), 503
+
+        wb = Workbook()
+        ws_resumo = wb.active
+        ws_resumo.title = 'Resumo'
+
+        ws_resumo.append(['Relatório de Fluxo de Caixa'])
+        ws_resumo.append(['Gerado em', datetime.now().strftime('%d/%m/%Y %H:%M:%S')])
+        ws_resumo.append(['Cliente ID', cliente_id])
+        ws_resumo.append(['Período', f"{relatorio_data['periodo']['data_inicio']} até {relatorio_data['periodo']['data_fim']}"])
+        ws_resumo.append(['Tipo', relatorio_data['filtros']['tipo_lancamento'] or 'TODOS'])
+        ws_resumo.append(['Categoria', relatorio_data['filtros']['categoria'] or 'TODAS'])
+        ws_resumo.append([])
+
+        ws_resumo.append(['Indicador', 'Valor'])
+        ws_resumo.append(['Receitas', relatorio_data['resumo']['receitas']])
+        ws_resumo.append(['Despesas', relatorio_data['resumo']['despesas']])
+        ws_resumo.append(['Saldo', relatorio_data['resumo']['saldo']])
+        ws_resumo.append(['Total de Lançamentos', relatorio_data['resumo']['total_lancamentos']])
+        ws_resumo.append([])
+
+        ws_resumo.append(['Categoria', 'Tipo', 'Receitas', 'Despesas', 'Saldo', 'Qtd'])
+        for item in relatorio_data['por_categoria']:
+            ws_resumo.append([
+                item['categoria'] or '',
+                item['tipo_lancamento'] or '',
+                item['receitas'],
+                item['despesas'],
+                item['saldo'],
+                item['total_lancamentos'],
+            ])
+
+        ws_lanc = wb.create_sheet('Lancamentos')
+        ws_lanc.append(['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor', 'Forma de Pagamento', 'Observação', 'Saldo Acumulado'])
+        for item in relatorio_data['lancamentos']:
+            ws_lanc.append([
+                (item['data_lancamento'] or '')[:10],
+                item['tipo_lancamento'] or '',
+                item['categoria'] or '',
+                item['descricao'] or '',
+                item['valor'],
+                item['forma_pagamento'] or '',
+                item['observacao'] or '',
+                item['saldo_acumulado'],
+            ])
+
+        bold = Font(bold=True)
+        ws_resumo['A1'].font = bold
+        ws_resumo['A8'].font = bold
+        ws_resumo['A14'].font = bold
+        for cell in ws_lanc[1]:
+            cell.font = bold
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"relatorio_fluxo_caixa_{inicio.isoformat()}_{fim.isoformat()}.xlsx"
+        return Response(
+            output.getvalue(),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={'Content-Disposition': f'attachment; filename={filename}'},
+        )
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao exportar relatório XLSX de fluxo de caixa: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+@admin_api_bp.route('/api/fluxo-caixa/resumo', methods=['GET'])
+@login_required
+def api_fluxo_caixa_resumo():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        inicio, fim = _parse_periodo_datas()
+
+        _ensure_estoque_caixa_tables(db)
+        db.commit()
+
+        row = db.execute(text("""
+            SELECT
+                COALESCE(SUM(CASE WHEN tipo_lancamento = 'RECEITA' THEN valor ELSE 0 END), 0) AS receitas,
+                COALESCE(SUM(CASE WHEN tipo_lancamento = 'DESPESA' THEN valor ELSE 0 END), 0) AS despesas,
+                COALESCE(SUM(CASE WHEN tipo_lancamento = 'RECEITA' THEN valor ELSE -valor END), 0) AS saldo,
+                COUNT(*) AS total_lancamentos
+            FROM fluxo_caixa_lancamentos
+            WHERE cliente_id = :cid
+              AND data_lancamento::date BETWEEN :inicio AND :fim
+        """), {'cid': cliente_id, 'inicio': inicio, 'fim': fim}).fetchone()
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'cliente_id': cliente_id,
+                'periodo': {
+                    'data_inicio': inicio.isoformat(),
+                    'data_fim': fim.isoformat(),
+                },
+                'resumo': {
+                    'receitas': float(row.receitas or 0),
+                    'despesas': float(row.despesas or 0),
+                    'saldo': float(row.saldo or 0),
+                    'total_lancamentos': int(row.total_lancamentos or 0),
+                },
+            },
+        })
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao montar resumo de fluxo de caixa: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/fluxo-caixa/lancamentos', methods=['GET'])
+@login_required
+def api_fluxo_caixa_lancamentos_listar():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        inicio, fim = _parse_periodo_datas()
+        limit = max(1, min(request.args.get('limit', 100, type=int), 300))
+
+        _ensure_estoque_caixa_tables(db)
+        db.commit()
+
+        rows = db.execute(text("""
+            WITH base AS (
+                SELECT
+                    fcl.lancamento_id,
+                    fcl.tipo_lancamento,
+                    fcl.categoria,
+                    fcl.descricao,
+                    fcl.valor,
+                    fcl.forma_pagamento,
+                    fcl.observacao,
+                    fcl.data_lancamento,
+                    SUM(CASE WHEN fcl.tipo_lancamento = 'RECEITA' THEN fcl.valor ELSE -fcl.valor END)
+                        OVER (ORDER BY fcl.data_lancamento ASC, fcl.lancamento_id ASC) AS saldo_acumulado
+                FROM fluxo_caixa_lancamentos fcl
+                WHERE fcl.cliente_id = :cid
+                  AND fcl.data_lancamento::date BETWEEN :inicio AND :fim
+            )
+            SELECT *
+            FROM base
+            ORDER BY data_lancamento DESC, lancamento_id DESC
+            LIMIT :limit
+        """), {'cid': cliente_id, 'inicio': inicio, 'fim': fim, 'limit': limit}).fetchall()
+
+        data = [
+            {
+                'lancamento_id': int(r.lancamento_id),
+                'tipo_lancamento': r.tipo_lancamento,
+                'categoria': r.categoria,
+                'descricao': r.descricao,
+                'valor': float(r.valor or 0),
+                'forma_pagamento': r.forma_pagamento,
+                'observacao': r.observacao,
+                'data_lancamento': r.data_lancamento.isoformat() if r.data_lancamento else None,
+                'saldo_acumulado': float(r.saldo_acumulado or 0),
+            }
+            for r in rows
+        ]
+
+        return jsonify({'success': True, 'data': data})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao listar lançamentos do fluxo de caixa: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/fluxo-caixa/lancamentos', methods=['POST'])
+@login_required
+def api_fluxo_caixa_lancamentos_criar():
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        payload = request.get_json(silent=True) or {}
+
+        tipo_lancamento = (payload.get('tipo_lancamento') or '').strip().upper()
+        categoria = (payload.get('categoria') or '').strip()
+        descricao = (payload.get('descricao') or '').strip()
+        valor = float(payload.get('valor') or 0)
+        forma_pagamento = payload.get('forma_pagamento')
+        observacao = payload.get('observacao')
+        data_lancamento = payload.get('data_lancamento')
+
+        if tipo_lancamento not in {'RECEITA', 'DESPESA'}:
+            raise ValueError('tipo_lancamento deve ser RECEITA ou DESPESA')
+        if not categoria:
+            raise ValueError('categoria é obrigatória')
+        if not descricao:
+            raise ValueError('descricao é obrigatória')
+        if valor <= 0:
+            raise ValueError('valor deve ser maior que zero')
+
+        _ensure_estoque_caixa_tables(db)
+
+        categoria_row = db.execute(text("""
+                        SELECT nome, tipo_lancamento
+            FROM fluxo_caixa_categorias
+            WHERE cliente_id = :cid
+              AND ativo = true
+                            AND tipo_lancamento = :tipo
+              AND LOWER(nome) = LOWER(:categoria)
+            LIMIT 1
+                """), {'cid': cliente_id, 'tipo': tipo_lancamento, 'categoria': categoria}).fetchone()
+        if not categoria_row:
+                        raise ValueError('Categoria inválida para o tipo informado. Cadastre ou selecione uma categoria correspondente à Receita/Despesa.')
+        categoria = categoria_row.nome
+
+        dt_lanc = None
+        if data_lancamento:
+            dt_lanc = datetime.strptime(data_lancamento, '%Y-%m-%d')
+
+        row = db.execute(text("""
+            INSERT INTO fluxo_caixa_lancamentos (
+                cliente_id, tipo_lancamento, categoria, descricao,
+                valor, forma_pagamento, observacao, data_lancamento, created_by_user_id
+            ) VALUES (
+                :cid, :tipo, :categoria, :descricao,
+                :valor, :forma_pagamento, :obs,
+                COALESCE(:dt_lanc, NOW() AT TIME ZONE 'America/Sao_Paulo'), :uid
+            )
+            RETURNING lancamento_id
+        """), {
+            'cid': cliente_id,
+            'tipo': tipo_lancamento,
+            'categoria': categoria,
+            'descricao': descricao,
+            'valor': valor,
+            'forma_pagamento': forma_pagamento,
+            'obs': observacao,
+            'dt_lanc': dt_lanc,
+            'uid': getattr(current_user, 'id', None),
+        }).fetchone()
+
+        db.commit()
+        return jsonify({'success': True, 'lancamento_id': int(row.lancamento_id)}), 201
+    except PermissionError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        db.rollback()
+        logger.error('Erro ao criar lançamento de fluxo de caixa: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
     finally:
         db.close()

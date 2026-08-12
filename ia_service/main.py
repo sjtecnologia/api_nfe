@@ -636,23 +636,35 @@ IMPORTANTE - O QUE NÃO É ERRO:
 - NCM com 8 dígitos numéricos - VÁLIDO
 - CRT 3 (Lucro Presumido) PODE SIM emitir CFOP 6xxx (interestadual) - TOTALMENTE VÁLIDO
 - CRT 1, 2 ou 3 podem usar CFOP 5xxx ou 6xxx conforme a operação - TODOS VÁLIDOS
+- CFOP 1xxx (1101, 1201, 1202, etc.) = entrada interna - VÁLIDO quando UF emitente = UF destinatário
+- CFOP 2xxx (2101, 2201, 2202, etc.) = entrada interestadual - VÁLIDO quando UF emitente ≠ UF destinatário
+- NF-e de DEVOLUÇÃO (finNFe=4) com CFOP 1201, 1202, 2201, 2202, 5201, 5202, 6201, 6202 - TODOS VÁLIDOS
+- IE do destinatário inválida ou ausente gera indIEDest=9 automaticamente - NÃO é erro na validação prévia
 
 SÓ APONTE ERRO SE:
 - NCM estiver vazio ou com menos de 8 dígitos
-- CFOP começar com 5 e UFs forem DIFERENTES (operação interna mas estados diferentes)
-- CFOP começar com 6 e UFs forem IGUAIS (operação interestadual mas estados iguais)
+- CFOP começar com 5 e UFs forem DIFERENTES (deveria ser 6xxx)
+- CFOP começar com 6 e UFs forem IGUAIS (deveria ser 5xxx)
+- CFOP começar com 1 e UFs forem DIFERENTES (deveria ser 2xxx)
+- CFOP começar com 2 e UFs forem IGUAIS (deveria ser 1xxx)
 - Valor total for ZERO ou negativo
 - CNPJ/CPF estiver vazio
 
-REGRAS CFOP - ATENÇÃO:
-- CFOP 5xxx (5101, 5102, 5405, etc): Operações INTERNAS - REQUER UF emitente = UF destinatário
-- CFOP 6xxx (6101, 6102, 6108, 6405, etc): Operações INTERESTADUAIS - REQUER UF emitente ≠ UF destinatário
-- NÃO existe restrição de CRT para CFOP! CRT 1, 2 ou 3 podem usar qualquer CFOP!
+REGRAS CFOP:
+- CFOP 1xxx: Entrada INTERNA - VÁLIDO somente se UF emitente = UF destinatário
+- CFOP 2xxx: Entrada INTERESTADUAL - VÁLIDO somente se UF emitente ≠ UF destinatário
+- CFOP 3xxx: Entrada EXTERIOR
+- CFOP 5xxx: Saída INTERNA - VÁLIDO somente se UF emitente = UF destinatário
+- CFOP 6xxx: Saída INTERESTADUAL - VÁLIDO somente se UF emitente ≠ UF destinatário
+- CFOP 7xxx: Saída EXTERIOR
+- NÃO existe restrição de CRT para nenhum CFOP!
 
-EXEMPLO DE OPERAÇÃO CORRETA:
-- Emitente SP com CFOP 6108 para Destinatário PE = CORRETO (interestadual)
-- Emitente SP com CFOP 5102 para Destinatário SP = CORRETO (interna)
-- CRT 3 com CFOP 6xxx = CORRETO (não há restrição)
+EXEMPLOS CORRETOS (NÃO SÃO ERROS):
+- CFOP 2202 com Emitente SP e Destinatário MT → CORRETO (2xxx = entrada interestadual, UFs diferentes = OK)
+- CFOP 2201 com Emitente SP e Destinatário RJ → CORRETO (entrada interestadual)
+- CFOP 6202 com Emitente SP e Destinatário MT → CORRETO (6xxx = saída interestadual, UFs diferentes = OK)
+- CFOP 5202 com Emitente SP e Destinatário SP → CORRETO (5xxx = saída interna, mesma UF = OK)
+- CFOP 1202 com Emitente SP e Destinatário SP → CORRETO (1xxx = entrada interna, mesma UF = OK)
 
 DADOS:
 - Ambiente: {req.ambiente}
