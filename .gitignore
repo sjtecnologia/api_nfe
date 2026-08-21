@@ -5,6 +5,7 @@ venv/
 .venv/
 env/
 node_modules/
+artifacts/e2e/
 
 # Logs
 logs/
