@@ -219,6 +219,13 @@ def api_proximo_numero():
         if not cliente_id:
             return jsonify({'success': False, 'error': 'cliente_id não informado'})
 
+        accessible_client_ids = get_accessible_client_ids(db)
+        if cliente_id not in accessible_client_ids:
+            return jsonify({
+                'success': False,
+                'error': 'Acesso não autorizado para este cliente'
+            }), 403
+
                 # Passo 1: descobrir a última série usada para este cliente/modelo.
                 # CANCELADA também deve contar para sequência fiscal; apenas RASCUNHO é ignorado.
         ultima = db.execute(text("""
@@ -1539,7 +1546,9 @@ def list_nfes():
             # Se forneceu cliente_id específico, usar ele
             try:
                 cliente_id = int(cliente_id_str)
-                accessible_client_ids = [cliente_id]
+                accessible_client_ids = get_accessible_client_ids(db)
+                if cliente_id not in accessible_client_ids:
+                    return redirect(url_for('home.home'))
                 logger.debug(f"[OK] Cliente específico fornecido: {cliente_id}")
             except ValueError as ve:
                 logger.error(f"[X] Erro ao converter cliente_id: {ve}")
