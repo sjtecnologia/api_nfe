@@ -53,7 +53,7 @@ def test_nfe_requires_ibs_cbs_classification_for_crt3():
         [_item_base()],
     )
 
-    assert any('Classificação IBS/CBS é obrigatória para CRT=3' in erro for erro in erros)
+    assert any('campo Classificação IBS/CBS é obrigatório para CRT=3' in erro for erro in erros)
 
 
 def test_nfe_accepts_ibs_cbs_classification_for_crt3():
@@ -67,4 +67,4 @@ def test_nfe_accepts_ibs_cbs_classification_for_crt3():
         [item],
     )
 
-    assert not any('Classificação IBS/CBS é obrigatória para CRT=3' in erro for erro in erros)
+    assert not any('campo Classificação IBS/CBS é obrigatório para CRT=3' in erro for erro in erros)

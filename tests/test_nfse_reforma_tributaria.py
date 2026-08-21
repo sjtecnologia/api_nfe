@@ -345,7 +345,7 @@ def test_percentuais_default():
     print("✅ Teste de valores padrão passou!")
 
 
-def test_gerar_xml_com_tributos_federais_giss():
+def test_gerar_xml_com_tributos_federais_giss(monkeypatch):
     """Gera XML no formato GISS com blocos trib/totTrib/piscofins e IBSCBS."""
 
     prestador_data = {
@@ -396,6 +396,7 @@ def test_gerar_xml_com_tributos_federais_giss():
         'percentual_redutor': 0.0,
     }
 
+    monkeypatch.setenv('GISS_SCHEMA_RTC_HOMOLOGACAO', 'true')
     nfse = criar_nfse_de_formulario(dados, prestador_data)
     service = NFSeService()
     xml = service.gerar_xml_rps(nfse)
@@ -421,12 +422,15 @@ def test_resolver_urls_giss_por_municipio():
 
 
 def test_url_producao_sjrp_default():
-    """Serviço de Rio Preto deve usar o endpoint oficial informado em produção."""
+    """Produção usa o endpoint RTC atual; SJRP continua disponível por override."""
 
     service = NFSeService(ambiente='producao')
 
-    assert service.urls['base'] == 'https://ws-sjrp.giss.com.br/'
-    assert service.urls['wsdl'] == 'https://ws-sjrp.giss.com.br/service-ws/nf/nfse-ws?wsdl'
+    assert service.urls['base'] == 'https://ws-rtc.giss.com.br/'
+    assert service.urls['wsdl'] == 'https://ws-rtc.giss.com.br/service-ws/nf/nfse-ws?wsdl'
+
+    sjrp = NFSeService(ambiente='producao', municipio_slug='Sao Jose do Rio Preto')
+    assert sjrp.urls['base'] == 'https://ws-sjrp.giss.com.br/'
 
 
 if __name__ == '__main__':

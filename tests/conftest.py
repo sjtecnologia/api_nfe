@@ -35,6 +35,16 @@ def app():
         RATELIMIT_ENABLED=False,  # desabilitar rate limiting nos testes
         SERVER_NAME="localhost",
     )
+    
+    # Criar tabelas no banco em memória
+    with flask_app.app_context():
+        try:
+            from database.models import Base
+            from database.connection import engine
+            Base.metadata.create_all(bind=engine)
+        except Exception as e:
+            print(f"Aviso ao criar tabelas: {e}")
+    
     yield flask_app
 
 
