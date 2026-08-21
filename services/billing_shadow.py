@@ -50,7 +50,9 @@ class LegacySubscriptionAdapter:
             "cliente_id": cliente_id,
             "legacy_assinatura_id": subscription.assinatura_id,
             "legacy_plano_id": plan.plano_id,
-            "plan_code": "LEGACY_START_V1" if plan.nome.lower().startswith(("básico", "basico")) else plan.nome,
+            "plan_code": "LEGACY_START_V1" if any(
+                marker in plan.nome.lower() for marker in ("básico", "basico")
+            ) else plan.nome,
             "status": subscription.status,
             "contracted_price": None,
             "nfe_consumed": subscription.nfes_consumidas,

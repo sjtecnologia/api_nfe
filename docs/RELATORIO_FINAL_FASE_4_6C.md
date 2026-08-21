@@ -2,12 +2,13 @@
 
 ## Migration
 
-Criada, não executada:
+Criada e validada em banco PostgreSQL local isolado `billing_shadow_46c1`; não executada na AWS:
 
 - `database/migrations/009_create_billing_shadow.sql`
 - 8 tabelas novas de billing shadow;
 - índices e constraints;
 - seeds `START_V1`, `ESSENCIAL_V1`, `PROFISSIONAL_V1`, `PREMIUM_V1`, `ENTERPRISE_V1`;
+- seeds de features e `PlanFeature`, incluindo capacidades comerciais;
 - sem DROP, sem trigger fiscal e sem alteração do legado.
 
 ## Models
@@ -78,7 +79,24 @@ Não foram alterados `routes/nfe_routes.py`, `services/nfe_service.py`, `service
 
 Novo teste: `tests/test_billing_shadow.py` — 5 passed.
 
-Suíte completa: 165 passed antes da criação dos artefatos desta fase; a execução final deve ser repetida após commit.
+Validação integrada: `scripts/validate_billing_shadow_postgres.py` — PASS em PostgreSQL 16 local, com migration executada duas vezes.
+
+Suíte completa: 170 passed, 0 failed, 0 skipped.
+
+Evidências integradas:
+
+- 8 tabelas `billing_*` criadas;
+- 5 índices nomeados `idx_billing_*`;
+- 65 constraints incluindo FKs, UNIQUE/CHECK no schema isolado;
+- tabelas legadas `clientes`, `users`, `user_clients`, `planos_nfe` e `assinaturas_cliente` preservadas;
+- migration/seeds idempotentes na segunda execução;
+- 2/2 empresas profissionais → `OK`, 3/2 → `OVER_LIMIT`;
+- Premium 5/5 → `OK`, 6/5 → `OVER_LIMIT`;
+- override 3 empresas → `OK`;
+- preço contratado R$249 preservado contra preço público R$169;
+- ROADMAP desabilitada;
+- adapter legado sem migração automática.
+- script integrado corrigido e executado: `scripts/validate_billing_shadow_postgres.py`.
 
 ## Documentação criada
 
@@ -86,6 +104,7 @@ Suíte completa: 165 passed antes da criação dos artefatos desta fase; a execu
 - `docs/billing/SCHEMA_4_6C.md`;
 - `docs/billing/LEGACY_ADAPTER.md`;
 - `docs/RELATORIO_FINAL_FASE_4_6C.md`.
+- `scripts/validate_billing_shadow_postgres.py`.
 
 ## Baseline
 

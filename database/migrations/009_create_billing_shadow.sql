@@ -120,4 +120,64 @@ INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, statu
 SELECT plan_id, 'ENTERPRISE_V1', NULL, 'BRL', 'ACTIVE' FROM billing_plans WHERE code = 'ENTERPRISE'
 ON CONFLICT (version_code) DO NOTHING;
 
+-- Catálogo canônico e capacidades shadow. ROADMAP nunca é habilitado.
+INSERT INTO billing_features (key, name, description, status) VALUES
+    ('MAX_COMPANIES', 'Máximo de empresas', 'Capacidade shadow de empresas vinculadas', 'AVAILABLE'),
+    ('MAX_USERS', 'Máximo de usuários', 'Capacidade shadow de usuários vinculados', 'AVAILABLE'),
+    ('NFE_MONTHLY', 'NF-e mensal', 'Quota futura de NF-e, sem enforcement nesta fase', 'AVAILABLE'),
+    ('NFCE_MONTHLY', 'NFC-e mensal', 'Quota futura de NFC-e, sem enforcement nesta fase', 'AVAILABLE'),
+    ('NFSE_MONTHLY', 'NFS-e mensal', 'Quota futura de NFS-e, sem enforcement nesta fase', 'AVAILABLE'),
+    ('NFE', 'NF-e', 'Emissão NF-e existente', 'AVAILABLE'),
+    ('NFCE', 'NFC-e', 'Emissão NFC-e existente', 'AVAILABLE'),
+    ('NFSE', 'NFS-e', 'Emissão NFS-e existente', 'AVAILABLE'),
+    ('INVENTORY', 'Estoque', 'Gestão de estoque', 'AVAILABLE'),
+    ('CASH_FLOW', 'Fluxo de caixa', 'Gestão de caixa', 'AVAILABLE'),
+    ('REPORTS', 'Relatórios', 'Relatórios administrativos', 'AVAILABLE'),
+    ('MULTI_COMPANY', 'Multiempresa', 'Vínculo de empresas', 'AVAILABLE'),
+    ('MULTI_USER', 'Multiusuário', 'Vínculo de usuários', 'AVAILABLE'),
+    ('AI_SALES_ANALYSIS', 'Análise de vendas IA', 'Análise inteligente de vendas', 'AVAILABLE'),
+    ('AI_INSIGHTS_CENTER', 'Central de Insights', 'Recurso futuro', 'ROADMAP')
+ON CONFLICT (key) DO NOTHING;
+
+-- Capacidades por PlanVersion.
+WITH seed_values(version_code, feature_key, enabled, limit_type, limit_value) AS (VALUES
+    ('START_V1', 'MAX_COMPANIES', true, 'LIMITED', 1),
+    ('START_V1', 'MAX_USERS', true, 'LIMITED', 1),
+    ('START_V1', 'NFE_MONTHLY', true, 'LIMITED', 50),
+    ('START_V1', 'NFCE_MONTHLY', true, 'LIMITED', 50),
+    ('START_V1', 'NFSE_MONTHLY', true, 'LIMITED', 30),
+    ('ESSENCIAL_V1', 'MAX_COMPANIES', true, 'LIMITED', 1),
+    ('ESSENCIAL_V1', 'MAX_USERS', true, 'LIMITED', 2),
+    ('ESSENCIAL_V1', 'NFE_MONTHLY', true, 'LIMITED', 200),
+    ('ESSENCIAL_V1', 'NFCE_MONTHLY', true, 'LIMITED', 200),
+    ('ESSENCIAL_V1', 'NFSE_MONTHLY', true, 'LIMITED', 100),
+    ('PROFISSIONAL_V1', 'MAX_COMPANIES', true, 'LIMITED', 2),
+    ('PROFISSIONAL_V1', 'MAX_USERS', true, 'LIMITED', 5),
+    ('PROFISSIONAL_V1', 'NFE_MONTHLY', true, 'LIMITED', 500),
+    ('PROFISSIONAL_V1', 'NFCE_MONTHLY', true, 'LIMITED', 500),
+    ('PROFISSIONAL_V1', 'NFSE_MONTHLY', true, 'LIMITED', 300),
+    ('PREMIUM_V1', 'MAX_COMPANIES', true, 'LIMITED', 5),
+    ('PREMIUM_V1', 'MAX_USERS', true, 'LIMITED', 10),
+    ('PREMIUM_V1', 'NFE_MONTHLY', true, 'UNMETERED_WITH_FAIR_USE', NULL),
+    ('PREMIUM_V1', 'NFCE_MONTHLY', true, 'UNMETERED_WITH_FAIR_USE', NULL),
+    ('PREMIUM_V1', 'NFSE_MONTHLY', true, 'UNMETERED_WITH_FAIR_USE', NULL),
+    ('ENTERPRISE_V1', 'MAX_COMPANIES', true, 'CONTRACTUAL', NULL),
+    ('ENTERPRISE_V1', 'MAX_USERS', true, 'CONTRACTUAL', NULL),
+    ('ENTERPRISE_V1', 'NFE_MONTHLY', true, 'CONTRACTUAL', NULL),
+    ('ENTERPRISE_V1', 'NFCE_MONTHLY', true, 'CONTRACTUAL', NULL),
+    ('ENTERPRISE_V1', 'NFSE_MONTHLY', true, 'CONTRACTUAL', NULL),
+    ('START_V1', 'AI_INSIGHTS_CENTER', true, 'ENABLED', NULL),
+    ('START_V1', 'AI_SALES_ANALYSIS', false, 'DISABLED', NULL),
+    ('ESSENCIAL_V1', 'AI_SALES_ANALYSIS', true, 'LIMITED', 20),
+    ('PROFISSIONAL_V1', 'AI_SALES_ANALYSIS', true, 'ENABLED', NULL),
+    ('PREMIUM_V1', 'AI_SALES_ANALYSIS', true, 'ENABLED', NULL),
+    ('ENTERPRISE_V1', 'AI_SALES_ANALYSIS', true, 'CONTRACTUAL', NULL)
+)
+INSERT INTO billing_plan_features (plan_version_id, feature_id, enabled, limit_type, limit_value)
+SELECT v.plan_version_id, f.feature_id, seed_values.enabled, seed_values.limit_type, seed_values.limit_value
+FROM seed_values
+JOIN billing_plan_versions v ON v.version_code = seed_values.version_code
+JOIN billing_features f ON f.key = seed_values.feature_key
+ON CONFLICT (plan_version_id, feature_id) DO NOTHING;
+
 -- Não cria UsageEvent/UsageCounter/BillingEvent nesta fase.

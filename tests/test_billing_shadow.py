@@ -16,8 +16,11 @@ def test_legacy_adapter_is_read_only_and_maps_active_subscription():
         updated_at=datetime.utcnow(),
     )
     plan = SimpleNamespace(plano_id=2, nome='Pacote Básico', quantidade_nfes=50)
-    db.query.return_value.filter.return_value.order_by.return_value.first.return_value = legacy
-    db.query.return_value.filter_by.return_value.first.return_value = plan
+    legacy_query = MagicMock()
+    legacy_query.filter.return_value.order_by.return_value.first.return_value = legacy
+    plan_query = MagicMock()
+    plan_query.filter.return_value.first.return_value = plan
+    db.query.side_effect = [legacy_query, plan_query]
 
     result = LegacySubscriptionAdapter(db).get_for_company(7)
 
