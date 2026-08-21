@@ -57,11 +57,14 @@ if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(baseUrl) && process.en
       await page.waitForLoadState('domcontentloaded');
     }
 
-    const dashboardResponse = await page.goto(`${baseUrl}/admin/dashboard`, { waitUntil: 'domcontentloaded' });
+    const dashboardResponse = await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
     if (!dashboardResponse || dashboardResponse.status() < 200 || dashboardResponse.status() >= 400) {
       throw new Error(`Dashboard retornou HTTP ${dashboardResponse ? dashboardResponse.status() : 'sem resposta'}.`);
     }
     if (page.url().includes('/auth/login')) throw new Error('Dashboard redirecionou para login.');
+    if (!page.url().includes('/cliente/dashboard') && !page.url().includes('/admin/dashboard')) {
+      throw new Error(`Fluxo pós-login não abriu um dashboard: ${page.url()}`);
+    }
 
     const listResponse = await page.goto(`${baseUrl}/admin/nfe/list`, { waitUntil: 'domcontentloaded' });
     if (!listResponse || listResponse.status() < 200 || listResponse.status() >= 400) {
