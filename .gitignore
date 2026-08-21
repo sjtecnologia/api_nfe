@@ -4,6 +4,7 @@
 venv/
 .venv/
 env/
+node_modules/
 
 # Logs
 logs/
@@ -24,6 +25,19 @@ backups/
 .env.bak*
 .env.bak_*
 .env.local
+!.env.example
+
+# Segredos, certificados e chaves privadas
+*.pem
+*.p12
+*.pfx
+*.key
+*.crt
+!ca-bundle-icpbrasil.pem
+certificados/
+credentials/
+secrets/
+certificates-private/
 
 # Arquivos do sistema
 .DS_Store

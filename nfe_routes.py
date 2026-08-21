@@ -1,3 +1,28 @@
+"""
+⚠️  DEPRECATED - FILE NO LONGER USED
+====================================
+
+This file is DEPRECATED and should NOT be used.
+Use routes/nfe_routes.py instead.
+
+REASON:
+  - This is a legacy version of NFe routes
+  - The active version is in routes/nfe_routes.py (5226 lines, updated 11/08/2026)
+  - This version is outdated (3976 lines, dated 28/05/2026)
+  - Deploy scripts may accidentally copy this and overwrite the correct version
+
+PROTECTION:
+  - test_nfe_critical_regression.py verifies that routes/nfe_routes.py is larger
+  - This prevents deployment regressions
+
+ACTION REQUIRED:
+  - Do NOT modify this file
+  - Do NOT import from this file
+  - Deploy scripts must REMOVE this file or keep it as backup with different name
+  
+See: /docs/AUDITORIA_PROFUNDA_FASE_4_5.md (Point 1-2: Duplication Risk)
+"""
+
 import json
 import os
 import re
