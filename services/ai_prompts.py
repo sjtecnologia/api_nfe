@@ -113,6 +113,23 @@ DEFAULT_PROMPTS: dict[str, PromptDefinition] = {
         ),
         parametros={'requires_confirmation': True},
     ),
+    'product_description': PromptDefinition(
+        nome='product_description',
+        funcionalidade='product_description_generation',
+        versao='1.0.0',
+        modelo='gpt-4o-mini',
+        temperatura=0.3,
+        prompt=(
+            'Gere uma descrição comercial profissional em português-BR usando SOMENTE os dados fornecidos. '
+            'Não invente especificações técnicas, garantia, peso, tamanho, material, compatibilidade, potência, '
+            'voltagem, cor, quantidade, bateria, certificações, origem, fabricante ou modelo. '
+            'Se uma informação não estiver disponível, omita-a. Benefícios só podem ser consequências razoáveis '
+            'das características informadas. Não use superlativos não comprovados, CAPS LOCK ou emojis em excesso. '
+            'Retorne somente JSON válido com as chaves: titulo, descricao_curta, descricao_completa, '
+            'caracteristicas, beneficios, palavras_chave e avisos. Todas as listas devem ser arrays de strings.'
+        ),
+        parametros={'output_format': 'json', 'requires_confirmation': True, 'scope': 'produto_comercial'},
+    ),
     'marketing_ad': PromptDefinition(
         nome='marketing_ad',
         funcionalidade='marketing',
@@ -144,8 +161,10 @@ DEFAULT_PROMPTS: dict[str, PromptDefinition] = {
         modelo='gpt-4o-mini',
         temperatura=0.2,
         prompt=(
-            'Analise vendas e indicadores do negócio com base em dados estruturados. '
-            'Nunca invente números. Destaque tendências, quedas e oportunidades.'
+            'Interprete uma análise histórica de vendas com base exclusivamente no contexto agregado fornecido. '
+            'Não recalcule números, não invente dados e não apresente causalidade sem evidência. '
+            'Diferencie observações de recomendações, não garanta resultados futuros e respeite avisos de qualidade '
+            'dos dados. Responda em português-BR de forma objetiva.'
         ),
         parametros={'scope': 'sales'},
     ),

@@ -1011,6 +1011,12 @@
                                         <a class="dropdown-item" href="{{ url_for('admin.fluxo_caixa_dashboard') }}?cliente_id={{ session.current_client_id }}">
                                             <i class="fas fa-wallet"></i> Fluxo de Caixa
                                         </a>
+                                        <a class="dropdown-item" href="{{ url_for('admin.consultor_vendas') }}">
+                                            <i class="fas fa-chart-line"></i> Análise de Vendas
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url_for('admin.dashboard_inteligente') }}">
+                                            <i class="fas fa-brain"></i> Inteligência EmiteMax
+                                        </a>
                                     </div>
                                 </li>
                                 <li class="nav-item">
@@ -1447,7 +1453,15 @@
     <!-- Injeção automática do CSRF token em todos os formulários POST -->
     <script>
     (function() {
-        var csrfToken = '{{ csrf_token() }}';
+        var initialCsrfToken = '{{ csrf_token() }}';
+
+        function getCurrentCsrfToken() {
+            var metaToken = document.querySelector('meta[name="csrf-token"]');
+            if (metaToken && metaToken.content) {
+                return metaToken.content;
+            }
+            return initialCsrfToken;
+        }
 
         function shouldAttachCsrf(url, method) {
             var normalizedMethod = (method || 'GET').toUpperCase();
@@ -1473,12 +1487,20 @@
                 var requestUrl = typeof input === 'string' ? input : (input && input.url);
                 var options = init ? Object.assign({}, init) : {};
                 var method = options.method || (typeof input !== 'string' && input && input.method) || 'GET';
+                var isSameOrigin = shouldAttachCsrf(requestUrl, method);
+                var csrfToken = getCurrentCsrfToken();
 
-                if (csrfToken && shouldAttachCsrf(requestUrl, method)) {
+                if (isSameOrigin) {
                     var headers = new Headers(options.headers || (typeof input !== 'string' && input && input.headers) || {});
-                    if (!headers.has('X-CSRFToken') && !headers.has('X-CSRF-Token')) {
+                    // Sinaliza chamadas fetch internas como AJAX para o backend responder JSON em erros.
+                    if (!headers.has('X-Requested-With')) {
+                        headers.set('X-Requested-With', 'XMLHttpRequest');
+                    }
+
+                    if (csrfToken && !headers.has('X-CSRFToken') && !headers.has('X-CSRF-Token')) {
                         headers.set('X-CSRFToken', csrfToken);
                     }
+
                     options.headers = headers;
                 }
 
@@ -1488,6 +1510,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            var csrfToken = getCurrentCsrfToken();
             document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
                 if (!form.querySelector('input[name="csrf_token"]')) {
                     var input = document.createElement('input');

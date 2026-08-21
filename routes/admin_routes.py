@@ -6573,6 +6573,66 @@ def dashboard_inteligente():
     return render_template('admin/dashboard_inteligente.html')
 
 
+@admin_bp.route('/analise-vendas', methods=['GET'])
+@login_required
+@admin_required()
+def analise_vendas():
+    """Análise histórica de vendas baseada nos dados reais da empresa ativa."""
+    if current_user.is_super_admin():
+        return redirect(url_for('home.home'))
+
+    active_cliente_id = session.get('current_client_id') or session.get('active_cliente_id')
+    requested_cliente_id = request.args.get('cliente_id', type=int)
+    if not active_cliente_id and requested_cliente_id:
+        if current_user.can_access_client(requested_cliente_id):
+            session['current_client_id'] = requested_cliente_id
+            session['active_cliente_id'] = requested_cliente_id
+            active_cliente_id = requested_cliente_id
+
+    if not active_cliente_id:
+        session['next_url'] = request.url
+        flash('Selecione uma empresa para acessar a análise de vendas.', 'warning')
+        return redirect(url_for('home.home'))
+    return render_template('admin/analise_vendas.html')
+
+
+@admin_bp.route('/inteligencia', methods=['GET'])
+@login_required
+@admin_required()
+def inteligencia_emitemax():
+    """MVP do diagnóstico empresarial para Admin comum."""
+    if current_user.is_super_admin():
+        return redirect(url_for('home.home'))
+
+    active_cliente_id = session.get('current_client_id') or session.get('active_cliente_id')
+    requested_cliente_id = request.args.get('cliente_id', type=int)
+    if not active_cliente_id and requested_cliente_id:
+        if current_user.can_access_client(requested_cliente_id):
+            session['current_client_id'] = requested_cliente_id
+            session['active_cliente_id'] = requested_cliente_id
+            active_cliente_id = requested_cliente_id
+
+    if not active_cliente_id:
+        session['next_url'] = request.url
+        flash('Selecione uma empresa para acessar a Inteligência EmiteMax.', 'warning')
+        return redirect(url_for('home.home'))
+    return render_template('admin/inteligencia.html')
+
+
+@admin_bp.route('/inteligencia/clientes', methods=['GET'])
+@login_required
+@admin_required()
+def inteligencia_clientes():
+    """Lista clientes identificados no período com dados comerciais seguros."""
+    if current_user.is_super_admin():
+        return redirect(url_for('home.home'))
+    if not (session.get('current_client_id') or session.get('active_cliente_id')):
+        session['next_url'] = request.url
+        flash('Selecione uma empresa para acessar os clientes identificados.', 'warning')
+        return redirect(url_for('home.home'))
+    return render_template('admin/inteligencia_clientes.html')
+
+
 # =============================================================================
 # cBenef-SP – Tabela oficial v20260626
 # =============================================================================

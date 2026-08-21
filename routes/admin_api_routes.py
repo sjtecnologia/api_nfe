@@ -11,10 +11,23 @@ import logging
 from datetime import datetime, timedelta
 from flask import Blueprint, Response, jsonify, request, session
 from flask_login import login_required, current_user
+from auth.decorators import admin_required
 import requests
 import io
 from sqlalchemy import text
 from database.connection import get_db
+from services.intelligence.cash_flow_data_aggregator import CashFlowDataAggregator
+from services.intelligence.customer_data_aggregator import CustomerDataAggregator
+from services.intelligence.data_types import PeriodoAnalise
+from services.intelligence.inventory_data_aggregator import InventoryDataAggregator
+from services.intelligence.sales_data_aggregator import SalesDataAggregator
+from services.intelligence.sales_analysis_service import SalesAnalysisService
+from services.intelligence.business_diagnostic_service import BusinessDiagnosticService
+from services.product_description_service import (
+    ProductDescriptionError,
+    ProductDescriptionService,
+    ProductDescriptionUnavailable,
+)
 try:
     from database.models import AiConversation, AiFeedback, AiMessage, AiUsageLog
 except ImportError:
@@ -195,6 +208,29 @@ def _resolve_cliente_id_admin_api() -> int:
     return cliente_id
 
 
+def _periodo_inteligencia() -> PeriodoAnalise:
+    inicio, fim = _parse_periodo_datas()
+    return PeriodoAnalise(inicio=inicio, fim=fim)
+
+
+def _executar_agregador_inteligencia(aggregator_class):
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        periodo = _periodo_inteligencia()
+        dados = aggregator_class(db).aggregate(cliente_id=cliente_id, periodo=periodo)
+        return jsonify({'success': True, 'data': dados})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro no agregador de inteligência %s: %s', aggregator_class.__name__, exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro ao calcular dados de inteligência'}), 500
+    finally:
+        db.close()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Classificações IBS/CBS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -310,6 +346,247 @@ def api_cliente_info(cliente_id):
     except Exception as e:
         logger.error('Erro ao buscar dados do cliente %s: %s', cliente_id, e, exc_info=True)
         return jsonify({'erro': 'Erro interno do servidor'}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/ia/produtos/gerar-descricao', methods=['POST'])
+@login_required
+def api_ia_produto_gerar_descricao():
+    """Gera sugestão comercial estruturada sem alterar o produto automaticamente."""
+    db = next(get_db())
+    try:
+        if not current_user.is_admin():
+            return jsonify({'success': False, 'error': 'Permissão insuficiente para utilizar a IA no cadastro de produtos'}), 403
+
+        cliente_id = _resolve_cliente_id_admin_api()
+        payload = request.get_json(silent=True) or {}
+        produto_id = payload.get('produto_id')
+        additional_info = (payload.get('informacoes_adicionais') or '').strip()
+        if len(additional_info) > ProductDescriptionService.MAX_ADDITIONAL_INFO:
+            raise ProductDescriptionError(
+                f'Informações adicionais devem ter no máximo {ProductDescriptionService.MAX_ADDITIONAL_INFO} caracteres.'
+            )
+
+        product_data = {}
+        if produto_id not in (None, ''):
+            try:
+                produto_id = int(produto_id)
+            except (TypeError, ValueError) as exc:
+                raise ProductDescriptionError('produto_id inválido') from exc
+
+            row = db.execute(text("""
+                SELECT
+                    p.produto_id, p.cliente_id, p.codigo_interno, p.descricao,
+                    p.unidade_comercial, p.tipo_item, p.preco_unitario_padrao,
+                    p.cest, n.codigo AS ncm_codigo, n.descricao AS ncm_descricao,
+                    c.cfop AS cfop_codigo, c.descricao AS cfop_descricao
+                FROM produtos p
+                LEFT JOIN ncms n ON n.ncm_id = p.ncm_id
+                LEFT JOIN cfops c ON c.cfop_id = p.cfop_id
+                WHERE p.produto_id = :produto_id
+                LIMIT 1
+            """), {'produto_id': produto_id}).fetchone()
+            if not row:
+                return jsonify({'success': False, 'error': 'Produto não encontrado'}), 404
+            if int(row.cliente_id) != cliente_id:
+                return jsonify({'success': False, 'error': 'Acesso negado ao produto informado'}), 403
+            product_data = dict(row._mapping)
+        else:
+            product_data = {
+                key: payload.get(key)
+                for key in (
+                    'codigo_interno', 'descricao', 'unidade_comercial', 'tipo_item',
+                    'preco_unitario_padrao', 'cest', 'ncm_codigo', 'ncm_descricao',
+                    'cfop_codigo', 'cfop_descricao',
+                )
+            }
+
+        if not (product_data.get('descricao') or '').strip():
+            raise ProductDescriptionError('Descrição do produto é obrigatória')
+
+        service = ProductDescriptionService(db)
+        result = service.generate(
+            product_data=product_data,
+            additional_info=additional_info,
+            cliente_id=cliente_id,
+            user_id=getattr(current_user, 'id', None),
+        )
+        return jsonify({'success': True, 'data': result})
+    except PermissionError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ProductDescriptionError as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except ProductDescriptionUnavailable as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc)}), 503
+    except AIUsageLimitExceeded as exc:
+        db.rollback()
+        return jsonify({'success': False, 'error': str(exc), 'code': 'AI_USAGE_LIMIT'}), 429
+    except Exception as exc:
+        db.rollback()
+        logger.error('Erro ao gerar descrição comercial do produto: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Não foi possível gerar a descrição neste momento.'}), 500
+    finally:
+        db.close()
+
+
+# -----------------------------------------------------------------------------
+# Dados estruturados para futura inteligência empresarial
+# -----------------------------------------------------------------------------
+
+@admin_api_bp.route('/api/inteligencia/dados/vendas', methods=['GET'])
+@login_required
+def api_inteligencia_dados_vendas():
+    """Retorna métricas comerciais agregadas da empresa ativa, sem chamar IA."""
+    return _executar_agregador_inteligencia(SalesDataAggregator)
+
+
+@admin_api_bp.route('/api/inteligencia/dados/estoque', methods=['GET'])
+@login_required
+def api_inteligencia_dados_estoque():
+    """Retorna métricas agregadas de estoque da empresa ativa, sem chamar IA."""
+    return _executar_agregador_inteligencia(InventoryDataAggregator)
+
+
+@admin_api_bp.route('/api/inteligencia/dados/caixa', methods=['GET'])
+@login_required
+def api_inteligencia_dados_caixa():
+    """Retorna análise histórica agregada do caixa, sem previsão e sem IA."""
+    return _executar_agregador_inteligencia(CashFlowDataAggregator)
+
+
+@admin_api_bp.route('/api/inteligencia/dados/clientes', methods=['GET'])
+@login_required
+def api_inteligencia_dados_clientes():
+    """Retorna métricas agregadas de relacionamento da empresa ativa."""
+    return _executar_agregador_inteligencia(CustomerDataAggregator)
+
+
+@admin_api_bp.route('/api/inteligencia/analises/vendas', methods=['GET'])
+@login_required
+@admin_required()
+def api_inteligencia_analise_vendas():
+    """Calcula análise histórica determinística de vendas sem chamar IA."""
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        periodo = _periodo_inteligencia()
+        resultado = SalesAnalysisService(db).analyze(cliente_id, periodo)
+        return jsonify({'success': True, 'data': resultado})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro na análise de vendas: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro ao calcular análise de vendas'}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/inteligencia/analises/vendas/explicar', methods=['POST'])
+@login_required
+@admin_required()
+def api_inteligencia_analise_vendas_explicar():
+    """Gera narrativa sob demanda usando somente análise calculada no backend."""
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        periodo = _periodo_inteligencia()
+        service = SalesAnalysisService(db)
+        analysis = service.analyze(cliente_id, periodo)
+        explanation = service.explain(analysis, cliente_id, getattr(current_user, 'id', None))
+        analysis['narrativa'] = explanation.get('narrativa')
+        if explanation.get('error'):
+            analysis['qualidade_dados']['avisos'].append(
+                'A análise foi calculada, mas não foi possível gerar a explicação por IA neste momento.'
+            )
+            return jsonify({'success': True, 'data': analysis, 'warning': explanation['error']})
+        return jsonify({'success': True, 'data': analysis})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao explicar análise de vendas: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Não foi possível explicar a análise neste momento'}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/inteligencia/diagnostico', methods=['GET'])
+@login_required
+@admin_required()
+def api_inteligencia_diagnostico():
+    """Calcula diagnóstico executivo determinístico para a empresa ativa."""
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        periodo = _periodo_inteligencia()
+        data = BusinessDiagnosticService(db).diagnose(cliente_id, periodo)
+        return jsonify({'success': True, 'data': data})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro no diagnóstico empresarial: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro ao calcular diagnóstico empresarial'}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/inteligencia/diagnostico/resumir', methods=['POST'])
+@login_required
+@admin_required()
+def api_inteligencia_diagnostico_resumir():
+    """Gera resumo IA opcional a partir de diagnóstico calculado no backend."""
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        periodo = _periodo_inteligencia()
+        service = BusinessDiagnosticService(db)
+        data = service.diagnose(cliente_id, periodo)
+        explanation = service.summarize_with_ai(data, cliente_id, getattr(current_user, 'id', None))
+        data['narrative'] = explanation.get('narrative')
+        if explanation.get('error'):
+            return jsonify({'success': True, 'data': data, 'warning': 'Não foi possível gerar o resumo por IA neste momento.'})
+        return jsonify({'success': True, 'data': data})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao resumir diagnóstico empresarial: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Não foi possível resumir o diagnóstico neste momento'}), 500
+    finally:
+        db.close()
+
+
+@admin_api_bp.route('/api/inteligencia/clientes', methods=['GET'])
+@login_required
+@admin_required()
+def api_inteligencia_clientes():
+    """Lista clientes encontrados no período da empresa ativa."""
+    db = next(get_db())
+    try:
+        cliente_id = _resolve_cliente_id_admin_api()
+        periodo = _periodo_inteligencia()
+        tipo = (request.args.get('tipo') or 'todos').strip().lower()
+        if tipo not in {'todos', 'sem_compra', 'recorrentes'}:
+            return jsonify({'success': False, 'error': 'Tipo de listagem inválido'}), 400
+        data = CustomerDataAggregator(db).identified_customers(cliente_id, periodo, tipo)
+        return jsonify({'success': True, 'data': {'periodo': periodo.to_dict(), 'tipo': tipo, 'clientes': data}})
+    except PermissionError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Erro ao listar clientes identificados: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': 'Erro ao carregar clientes identificados'}), 500
     finally:
         db.close()
 

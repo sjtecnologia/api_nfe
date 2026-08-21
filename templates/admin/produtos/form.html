@@ -33,6 +33,10 @@
     opacity: 0.8;
 }
 
+#btn-gerar-descricao-ia:disabled {
+    opacity: 0.8;
+}
+
 .spinner-border-sm {
     width: 1rem;
     height: 1rem;
@@ -184,6 +188,19 @@
                                          Processando...
                                      </span>
                                  </button>
+                                 <button type="button"
+                                         id="btn-gerar-descricao-ia"
+                                         class="btn btn-outline-success btn-sm mt-2 ms-1"
+                                         data-product-id="{{ produto.produto_id if produto else '' }}">
+                                     <i class="fas fa-pen-fancy"></i>
+                                     Gerar descrição com IA
+                                 </button>
+                                 {% if produto and produto.descricao %}
+                                 <small class="d-block text-warning mt-1">
+                                     <i class="fas fa-info-circle"></i>
+                                     Este produto já possui uma descrição. A sugestão não substituirá o texto atual automaticamente.
+                                 </small>
+                                 {% endif %}
                                 </div>
                             </div>
                             
@@ -429,6 +446,85 @@
                         {% endif %}
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDescricaoIa" tabindex="-1" aria-labelledby="modalDescricaoIaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalDescricaoIaLabel">
+                    <i class="fas fa-pen-fancy me-1"></i>Gerar descrição com IA
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border">
+                    <strong>Informações que serão utilizadas</strong>
+                    <div id="descricaoIaDados" class="small mt-2"></div>
+                </div>
+                <div class="mb-3">
+                    <label for="descricaoIaAdicional" class="form-label">Informações adicionais (opcional)</label>
+                    <textarea id="descricaoIaAdicional" class="form-control" rows="3" maxlength="2000"
+                              placeholder="Ex.: cor preta, conexão USB, uso em escritório."></textarea>
+                    <small class="text-muted">A IA utilizará somente estas informações e os dados exibidos acima.</small>
+                </div>
+                <div id="descricaoIaErro" class="alert alert-warning d-none"></div>
+                <div id="descricaoIaLoading" class="text-center py-4 d-none">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="mt-2 mb-0">Gerando descrição...</p>
+                </div>
+                <div id="descricaoIaResultado" class="d-none">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Título</label>
+                        <div class="input-group">
+                            <input id="descricaoIaTitulo" class="form-control" readonly>
+                            <button type="button" class="btn btn-outline-secondary btn-copiar-descricao" data-target="descricaoIaTitulo">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Descrição curta</label>
+                        <div class="input-group">
+                            <textarea id="descricaoIaCurta" class="form-control" rows="2"></textarea>
+                            <button type="button" class="btn btn-outline-secondary btn-copiar-descricao" data-target="descricaoIaCurta">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Descrição completa</label>
+                        <div class="input-group">
+                            <textarea id="descricaoIaCompleta" class="form-control" rows="5"></textarea>
+                            <button type="button" class="btn btn-outline-secondary btn-copiar-descricao" data-target="descricaoIaCompleta">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Características</label>
+                            <ul id="descricaoIaCaracteristicas" class="small"></ul>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Benefícios</label>
+                            <ul id="descricaoIaBeneficios" class="small"></ul>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-bold">Palavras-chave</label>
+                        <div id="descricaoIaPalavrasChave" class="small"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btnGerarDescricaoIaModal" class="btn btn-success">
+                    <i class="fas fa-wand-magic-sparkles me-1"></i>Gerar descrição
+                </button>
+                <button type="button" id="btnRegenerarDescricaoIa" class="btn btn-outline-success d-none">
+                    <i class="fas fa-rotate me-1"></i>Regenerar
+                </button>
+                <button type="button" id="btnUsarDescricaoIa" class="btn btn-primary d-none">
+                    <i class="fas fa-check me-1"></i>Usar descrição
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
             </div>
         </div>
     </div>
@@ -1125,6 +1221,141 @@ $(document).ready(function() {
     $('input[name="cliente_id"]').on('change', function() {
         const clienteId = $(this).val();
         ajustarCamposTributarios(clienteId);
+    });
+
+    const descricaoIaModalEl = document.getElementById('modalDescricaoIa');
+    const descricaoIaModal = descricaoIaModalEl && window.bootstrap
+        ? bootstrap.Modal.getOrCreateInstance(descricaoIaModalEl)
+        : null;
+    let ultimaDescricaoIa = null;
+
+    function coletarDadosDescricaoIa() {
+        const selectText = (selector) => {
+            const text = $(`${selector} option:selected`).text() || '';
+            return text.includes('Selecione') ? '' : text.trim();
+        };
+        return {
+            produto_id: $('#btn-gerar-descricao-ia').data('product-id') || null,
+            codigo_interno: $('#codigo_interno').val() || '',
+            descricao: $('#descricao').val() || '',
+            unidade_comercial: $('#unidade_comercial').val() || '',
+            tipo_item: $('#tipo_item').val() || '',
+            preco_unitario_padrao: $('#preco_unitario_padrao').val() || '',
+            cest: $('#cest').val() || '',
+            ncm_codigo: selectText('#ncm_id').split(' - ')[0] || '',
+            ncm_descricao: selectText('#ncm_id').split(' - ').slice(1).join(' - '),
+            cfop_codigo: selectText('#cfop_id').split(' - ')[0] || '',
+            cfop_descricao: selectText('#cfop_id').split(' - ').slice(1).join(' - '),
+        };
+    }
+
+    function mostrarDadosDescricaoIa() {
+        const dados = coletarDadosDescricaoIa();
+        const container = document.getElementById('descricaoIaDados');
+        if (!container) return;
+        container.innerHTML = '';
+        const labels = [
+            ['Descrição', dados.descricao],
+            ['Código', dados.codigo_interno],
+            ['Unidade', dados.unidade_comercial],
+            ['NCM', dados.ncm_codigo],
+            ['CFOP', dados.cfop_codigo],
+            ['Preço', dados.preco_unitario_padrao],
+        ];
+        labels.forEach(([label, value]) => {
+            const item = document.createElement('div');
+            item.textContent = `${value ? '✓' : '○'} ${label}: ${value || 'não informado'}`;
+            container.appendChild(item);
+        });
+    }
+
+    function preencherListaDescricaoIa(id, items) {
+        const list = document.getElementById(id);
+        if (!list) return;
+        list.innerHTML = '';
+        (items || []).forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            list.appendChild(li);
+        });
+        if (!list.children.length) {
+            const li = document.createElement('li');
+            li.textContent = 'Nenhuma informação adicional gerada.';
+            list.appendChild(li);
+        }
+    }
+
+    function renderizarDescricaoIa(data) {
+        ultimaDescricaoIa = data;
+        $('#descricaoIaTitulo').val(data.titulo || '');
+        $('#descricaoIaCurta').val(data.descricao_curta || '');
+        $('#descricaoIaCompleta').val(data.descricao_completa || '');
+        preencherListaDescricaoIa('descricaoIaCaracteristicas', data.caracteristicas);
+        preencherListaDescricaoIa('descricaoIaBeneficios', data.beneficios);
+        const keywords = document.getElementById('descricaoIaPalavrasChave');
+        keywords.textContent = (data.palavras_chave || []).join(', ') || 'Nenhuma palavra-chave gerada.';
+        $('#descricaoIaResultado').removeClass('d-none');
+        $('#btnRegenerarDescricaoIa, #btnUsarDescricaoIa').removeClass('d-none');
+    }
+
+    async function gerarDescricaoIa() {
+        const btn = document.getElementById('btnGerarDescricaoIaModal');
+        const dados = coletarDadosDescricaoIa();
+        const adicional = $('#descricaoIaAdicional').val() || '';
+        $('#descricaoIaErro').addClass('d-none').text('');
+        $('#descricaoIaLoading').removeClass('d-none');
+        $('#descricaoIaResultado').addClass('d-none');
+        if (btn) btn.disabled = true;
+
+        try {
+            const response = await fetch('/admin/api/ia/produtos/gerar-descricao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': $('input[name="csrf_token"]').first().val() || '',
+                },
+                body: JSON.stringify({ ...dados, informacoes_adicionais: adicional }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || 'Não foi possível gerar a descrição neste momento.');
+            }
+            renderizarDescricaoIa(payload.data || {});
+        } catch (error) {
+            $('#descricaoIaErro').removeClass('d-none').text(error.message || 'Não foi possível gerar a descrição neste momento.');
+        } finally {
+            $('#descricaoIaLoading').addClass('d-none');
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    $('#btn-gerar-descricao-ia').on('click', function() {
+        mostrarDadosDescricaoIa();
+        $('#descricaoIaAdicional').val('');
+        $('#descricaoIaResultado, #btnRegenerarDescricaoIa, #btnUsarDescricaoIa').addClass('d-none');
+        $('#descricaoIaErro').addClass('d-none').text('');
+        if (descricaoIaModal) descricaoIaModal.show();
+    });
+    $('#btnGerarDescricaoIaModal, #btnRegenerarDescricaoIa').on('click', gerarDescricaoIa);
+
+    $('.btn-copiar-descricao').on('click', async function() {
+        const target = document.getElementById($(this).data('target'));
+        if (!target) return;
+        try {
+            await navigator.clipboard.writeText(target.value || target.textContent || '');
+            const original = this.textContent;
+            this.textContent = 'Copiado';
+            setTimeout(() => { this.textContent = original; }, 1200);
+        } catch (error) {
+            target.select?.();
+            document.execCommand('copy');
+        }
+    });
+
+    $('#btnUsarDescricaoIa').on('click', function() {
+        const descricao = $('#descricaoIaCurta').val() || ultimaDescricaoIa?.descricao_curta || '';
+        if (descricao) $('#descricao').val(descricao.slice(0, 120)).trigger('input');
+        if (descricaoIaModal) descricaoIaModal.hide();
     });
 });
 

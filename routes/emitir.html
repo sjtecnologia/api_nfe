@@ -802,7 +802,7 @@ input[readonly] {
                         <button type="button" class="btn btn-secondary" onclick="previewDANFE()">
                             <i class="fas fa-file-pdf"></i> Preview DANFE
                         </button>
-                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled>
+                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled onclick="event.preventDefault(); if (!confirm('Confirmar emissão da NFe?')) { return false; } var b=this; var a=b.form.querySelector('input[name=action][type=hidden]')||document.createElement('input'); a.type='hidden'; a.name='action'; a.value='emitir'; if(!a.parentNode)b.form.appendChild(a); b.form.dataset.directNativeEmit='1'; fetch('/api/csrf-token',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){var t=b.form.querySelector('input[name=csrf_token]');if(t&&d.csrf_token)t.value=d.csrf_token;HTMLFormElement.prototype.submit.call(b.form);}).catch(function(){HTMLFormElement.prototype.submit.call(b.form);}); return false;">
                             <i class="fas fa-paper-plane"></i> Emitir NFe
                         </button>
                         <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary">
@@ -862,7 +862,7 @@ input[readonly] {
             </div>
             <div class="modal-footer" id="modalValidacaoFooter" style="display: none;">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-success" id="btnContinuarEmissao" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-success" id="btnContinuarEmissao" data-bs-dismiss="modal" onclick="(function(){var f=document.getElementById('nfeForm');if(!f){alert('Formulário de emissão não encontrado.');return;}var a=f.querySelector('input[name=action][type=hidden]')||document.createElement('input');a.type='hidden';a.name='action';a.value='emitir';if(!a.parentNode)f.appendChild(a);HTMLFormElement.prototype.submit.call(f);})()">
                     <i class="fas fa-check"></i> Continuar para Emissão
                 </button>
             </div>
@@ -2650,6 +2650,28 @@ function coletarDadosFormulario() {
     };
 }
 
+function continuarParaEmissaoViaModal() {
+    const form = document.getElementById('nfeForm');
+    const btnEmitir = document.getElementById('btnEmitir');
+
+    if (!form || !btnEmitir) {
+        alert('Erro ao iniciar emissão. Recarregue a página e tente novamente.');
+        return;
+    }
+
+    let actionInput = form.querySelector('input[name="action"][type="hidden"]');
+    if (!actionInput) {
+        actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        form.appendChild(actionInput);
+    }
+    actionInput.value = window.location.pathname.includes('/edit/') ? 'emit' : 'emitir';
+    btnEmitir.disabled = true;
+    btnEmitir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
+    HTMLFormElement.prototype.submit.call(form);
+}
+
 function mostrarResultadoValidacao(data) {
     document.getElementById('validacaoLoading').style.display = 'none';
     document.getElementById('validacaoResultado').style.display = 'block';
@@ -3389,6 +3411,11 @@ document.addEventListener('DOMContentLoaded', function() {
         
         form.addEventListener('submit', function(e) {
             console.log('🎯 SUBMIT INTERCEPTADO!', e);
+
+            if (form.dataset.directNativeEmit === '1') {
+                form.dataset.directNativeEmit = '0';
+                return;
+            }
             
             // Verificar qual botão foi clicado
             const submitter = e.submitter;

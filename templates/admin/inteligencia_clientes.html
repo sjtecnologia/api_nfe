@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Clientes Identificados{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <div>
+            <h2 class="mb-1"><i class="fas fa-users me-2"></i><span id="tituloClientes">Clientes Identificados</span></h2>
+            <p class="text-muted mb-0" id="subtituloClientes">Clientes encontrados nas vendas autorizadas do período analisado.</p>
+        </div>
+        <a id="linkVoltarDiagnostico" href="{{ url_for('admin.inteligencia_emitemax') }}" class="btn btn-outline-primary"><i class="fas fa-arrow-left me-1"></i>Voltar ao diagnóstico</a>
+    </div>
+    <div class="row g-2 align-items-end mb-4">
+        <div class="col-md-3"><label class="form-label">Período</label><select id="periodoClientes" class="form-select"><option value="7">Últimos 7 dias</option><option value="15">Últimos 15 dias</option><option value="30" selected>Últimos 30 dias</option><option value="mes">Mês atual</option></select></div>
+        <div class="col-md-2"><button id="btnCarregarClientes" class="btn btn-primary w-100">Carregar</button></div>
+    </div>
+    <div class="card"><div class="card-header"><h5 class="mb-0" id="periodoClientesTexto">Clientes do período</h5></div><div class="table-responsive"><table class="table table-striped mb-0"><thead><tr><th>Cliente</th><th>Compras</th><th>Última compra</th><th>Status</th></tr></thead><tbody id="clientesIdentificados"><tr><td colspan="4" class="text-muted">Carregando...</td></tr></tbody></table></div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const periodo = document.getElementById('periodoClientes');
+    const tipo = new URLSearchParams(window.location.search).get('tipo') || 'todos';
+    const button = document.getElementById('btnCarregarClientes');
+    const tbody = document.getElementById('clientesIdentificados');
+    const moneyDate = (value) => value ? new Date(value).toLocaleDateString('pt-BR') : '-';
+    const linkVoltar = document.getElementById('linkVoltarDiagnostico');
+    linkVoltar.href = `/admin/inteligencia?periodo=${encodeURIComponent(periodo.value)}`;
+    if (tipo === 'sem_compra') {
+        document.getElementById('tituloClientes').textContent = 'Clientes sem compra';
+        document.getElementById('subtituloClientes').textContent = 'Clientes cadastrados sem compra no período analisado.';
+    } else if (tipo === 'recorrentes') {
+        document.getElementById('tituloClientes').textContent = 'Clientes recorrentes';
+        document.getElementById('subtituloClientes').textContent = 'Clientes com duas ou mais compras no período analisado.';
+    }
+    async function carregar() {
+        linkVoltar.href = `/admin/inteligencia?periodo=${encodeURIComponent(periodo.value)}`;
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Carregando...';
+        try {
+            const response = await fetch(`/admin/api/inteligencia/clientes?tipo=${encodeURIComponent(tipo)}&periodo=${encodeURIComponent(periodo.value)}`);
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || 'Erro ao carregar clientes');
+            const clientes = payload.data?.clientes || [];
+            document.getElementById('periodoClientesTexto').textContent = `${payload.data.periodo.inicio} até ${payload.data.periodo.fim}`;
+            tbody.innerHTML = clientes.length ? clientes.map((cliente) => `<tr><td>${cliente.nome}</td><td>${cliente.compras}</td><td>${moneyDate(cliente.ultima_compra)}</td><td><span class="badge ${cliente.recorrente ? 'bg-success' : 'bg-info'}">${cliente.status_periodo}</span></td></tr>`).join('') : '<tr><td colspan="4" class="text-muted">Nenhum cliente identificado no período.</td></tr>';
+        } catch (error) { tbody.innerHTML = `<tr><td colspan="4" class="text-danger">${error.message}</td></tr>`; }
+        finally { button.disabled = false; button.innerHTML = 'Carregar'; }
+    }
+    button.addEventListener('click', carregar);
+    carregar();
+})();
+</script>
+{% endblock %}

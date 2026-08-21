@@ -274,7 +274,7 @@ input[readonly] {
         </div>
     </div>
 
-    <form method="POST" id="nfeForm" action="{{ url_for('nfe.create') }}" novalidate autocomplete="off">
+    <form method="POST" id="nfeForm" action="{{ url_for('nfe.emitir_nfe') }}" novalidate autocomplete="off">
         <div id="rascunhoStatusInline" class="alert alert-secondary d-flex justify-content-between align-items-center" role="status" style="display:block;">
             <span>Status do rascunho: inicializando...</span>
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="limparRascunhoAgora()">
@@ -834,7 +834,7 @@ input[readonly] {
                         <button type="button" class="btn btn-secondary" onclick="previewDANFE()">
                             <i class="fas fa-file-pdf"></i> Preview DANFE
                         </button>
-                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled>
+                        <button type="submit" name="action" value="emitir" class="btn btn-success" id="btnEmitir" formnovalidate disabled onclick="event.preventDefault(); if (!confirm('Confirmar emissão da NFe?')) { return false; } var b=this; var a=b.form.querySelector('input[name=action][type=hidden]')||document.createElement('input'); a.type='hidden'; a.name='action'; a.value='emitir'; if(!a.parentNode)b.form.appendChild(a); b.form.dataset.directNativeEmit='1'; fetch('/api/csrf-token',{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){var t=b.form.querySelector('input[name=csrf_token]');if(t&&d.csrf_token)t.value=d.csrf_token;HTMLFormElement.prototype.submit.call(b.form);}).catch(function(){HTMLFormElement.prototype.submit.call(b.form);}); return false;">
                             <i class="fas fa-paper-plane"></i> Emitir NFe
                         </button>
                         <a href="{{ url_for('nfe.list_nfes') }}" class="btn btn-outline-secondary">
@@ -894,7 +894,7 @@ input[readonly] {
             </div>
             <div class="modal-footer" id="modalValidacaoFooter" style="display: none;">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-success" id="btnContinuarEmissao" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-success" id="btnContinuarEmissao" onclick="(function(){var f=document.getElementById('nfeForm');if(!f){alert('Formulário de emissão não encontrado.');return;}var a=f.querySelector('input[name=action][type=hidden]')||document.createElement('input');a.type='hidden';a.name='action';a.value='emitir';if(!a.parentNode)f.appendChild(a);HTMLFormElement.prototype.submit.call(f);})()">
                     <i class="fas fa-check"></i> Continuar para Emissão
                 </button>
             </div>
@@ -3359,7 +3359,7 @@ function validarComIA() {
     })
     .then(response => response.json())
     .then(data => {
-        mostrarResultadoValidacao(data);
+        mostrarResultadoValidacao(normalizarResultadoCfop(data, formData));
     })
     .catch(error => {
         console.error('Erro validação IA:', error);
@@ -3373,6 +3373,42 @@ function validarComIA() {
             resumo: 'Erro de conexão'
         });
     });
+}
+
+function normalizarResultadoCfop(data, formData) {
+    const emitenteUf = String(formData.emitente_uf || '').trim().toUpperCase();
+    const destinatarioUf = String(formData.destinatario_uf || '').trim().toUpperCase();
+    const ufsDisponiveis = /^[A-Z]{2}$/.test(emitenteUf) && /^[A-Z]{2}$/.test(destinatarioUf);
+    const operacaoInterna = ufsDisponiveis && emitenteUf === destinatarioUf;
+    const itens = Array.isArray(formData.itens) ? formData.itens : [];
+
+    const cfopCompativel = (cfop) => {
+        const codigo = String(cfop || '').replace(/[^0-9]/g, '');
+        if (codigo.length !== 4 || !ufsDisponiveis) return false;
+        if (codigo.startsWith('1') || codigo.startsWith('5')) return operacaoInterna;
+        if (codigo.startsWith('2') || codigo.startsWith('6')) return !operacaoInterna;
+        return false;
+    };
+
+    const erroCfopValido = (item) => {
+        const texto = typeof item === 'string' ? item : `${item?.campo || ''} ${item?.erro || ''}`;
+        if (!/cfop/i.test(texto)) return false;
+        const codigos = texto.match(/\b[1256]\d{3}\b/g) || [];
+        const codigosDosItens = itens.map(itemNfe => String(itemNfe.cfop || ''));
+        const codigosVerificados = codigos.length ? codigos : codigosDosItens;
+        return codigosVerificados.length > 0 && codigosVerificados.every(cfopCompativel);
+    };
+
+    const filtrar = (lista) => (Array.isArray(lista) ? lista : []).filter(item => !erroCfopValido(item));
+    const errosCriticos = filtrar(data.erros_criticos);
+    const alertas = filtrar(data.alertas);
+
+    return {
+        ...data,
+        erros_criticos: errosCriticos,
+        alertas,
+        validacao_ok: errosCriticos.length === 0
+    };
 }
 
 function coletarDadosFormulario() {
@@ -3608,6 +3644,79 @@ function mostrarResultadoValidacao(data) {
     document.getElementById('validacaoResultado').innerHTML = html;
 }
 
+function extrairMensagemErroHttp(response, text) {
+    const rawText = (text || '').trim();
+    const upperText = rawText.toUpperCase();
+
+    if (upperText.includes('CSRF') && (upperText.includes('EXPIRED') || upperText.includes('TOKEN'))) {
+        return 'Sua sessão expirou ou o token de segurança venceu. Recarregue a página e faça login novamente.';
+    }
+
+    // Quando backend devolve página HTML (ex.: CSRF/sessão expirada), evita exibir DOCTYPE no alert.
+    if (rawText.startsWith('<!DOCTYPE html') || rawText.startsWith('<html')) {
+        if (upperText.includes('CSRF') || upperText.includes('TOKEN')) {
+            return 'Sua sessão expirou ou o token de segurança venceu. Recarregue a página e tente novamente.';
+        }
+        return `Erro HTTP ${response.status}. A aplicação retornou uma página HTML inesperada. Recarregue a página e tente novamente.`;
+    }
+
+    try {
+        const parsed = JSON.parse(rawText);
+        return parsed.message || parsed.error || `Erro HTTP ${response.status}`;
+    } catch (e) {
+        return `Erro HTTP ${response.status}: ${rawText.substring(0, 200)}`;
+    }
+}
+
+function obterCsrfAtual() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta && meta.content ? meta.content : '';
+}
+
+function tratarErroCsrfComRecarga(errorMsg) {
+    const msg = String(errorMsg || '').toLowerCase();
+    if (!msg.includes('sessão expirou') && !msg.includes('token de segurança') && !msg.includes('csrf')) {
+        return false;
+    }
+
+    const jaTentou = sessionStorage.getItem('csrf_reload_attempted') === '1';
+    if (!jaTentou) {
+        sessionStorage.setItem('csrf_reload_attempted', '1');
+        location.reload();
+        return true;
+    }
+
+    return false;
+}
+
+function continuarParaEmissaoViaModal() {
+    const form = document.getElementById('nfeForm');
+    const btnEmitir = document.getElementById('btnEmitir');
+
+    if (!form || !btnEmitir) {
+        alert('Erro ao iniciar emissão. Recarregue a página e tente novamente.');
+        return;
+    }
+
+    let actionInput = form.querySelector('input[name="action"][type="hidden"]');
+    if (!actionInput) {
+        actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        form.appendChild(actionInput);
+    }
+    actionInput.value = window.location.pathname.includes('/edit/') ? 'emit' : 'emitir';
+
+    btnEmitir.disabled = true;
+    btnEmitir.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
+
+    if (modalValidacaoIA) {
+        modalValidacaoIA.hide();
+    }
+
+    HTMLFormElement.prototype.submit.call(form);
+}
+
 // Visualizar XML - Gera preview do XML da NFe sem enviar ao SEFAZ
 function previewXML() {
     // Validar campos obrigatórios antes de gerar XML
@@ -3657,17 +3766,35 @@ function previewXML() {
     const form = document.getElementById('nfeForm');
     const formData = new FormData(form);
     formData.append('preview_only', 'true'); // Flag para indicar que é apenas preview
+    const csrfToken = obterCsrfAtual();
+    if (csrfToken) {
+        formData.set('csrf_token', csrfToken);
+    }
     
     console.log('[PREVIEW] FormData coletado, enviando requisição...');
     
     // Fazer requisição para gerar XML
     fetch('{{ url_for("nfe.emitir_nfe") }}', {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+        }
     })
     .then(response => {
         console.log('[PREVIEW] Response status:', response.status);
-        return response.json();
+        if (response.ok) {
+            return response.json();
+        }
+
+        return response.text().then(text => {
+            return {
+                success: false,
+                message: extrairMensagemErroHttp(response, text)
+            };
+        });
     })
     .then(data => {
         console.log('[PREVIEW] Response data:', data);
@@ -3676,6 +3803,9 @@ function previewXML() {
             mostrarModalXML(data.xml_preview);
         } else {
             const errorMsg = data.message || 'Erro desconhecido';
+            if (tratarErroCsrfComRecarga(errorMsg)) {
+                return;
+            }
             console.error('[PREVIEW] Erro:', errorMsg);
             alert('Erro ao gerar XML: ' + errorMsg);
         }
@@ -3901,13 +4031,22 @@ function previewDANFE() {
     
     const formData = new FormData(form);
     formData.append('preview_danfe', 'true'); // Flag para gerar DANFE preview
+    const csrfToken = obterCsrfAtual();
+    if (csrfToken) {
+        formData.set('csrf_token', csrfToken);
+    }
     
     console.log('[DANFE PREVIEW] FormData coletado, enviando requisição...');
     
     // Fazer requisição para gerar DANFE
     fetch('{{ url_for("nfe.emitir_nfe") }}', {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+        }
     })
     .then(response => {
         console.log('[DANFE PREVIEW] Response status:', response.status);
@@ -3933,11 +4072,10 @@ function previewDANFE() {
             // Erro HTTP - tentar ler como JSON ou texto
             return response.text().then(text => {
                 console.error('[DANFE PREVIEW] Erro HTTP - Resposta:', text);
-                try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    return { success: false, message: `Erro HTTP ${response.status}: ${text.substring(0, 200)}` };
-                }
+                return {
+                    success: false,
+                    message: extrairMensagemErroHttp(response, text)
+                };
             });
         }
     })
@@ -3977,6 +4115,9 @@ function previewDANFE() {
             alert('DANFE gerado com sucesso, mas PDF não foi retornado. Verifique o console.');
         } else {
             const errorMsg = data.message || 'Erro desconhecido';
+            if (tratarErroCsrfComRecarga(errorMsg)) {
+                return;
+            }
             console.error('[DANFE PREVIEW] Erro:', errorMsg);
             alert('Erro ao gerar DANFE: ' + errorMsg);
         }
@@ -4231,6 +4372,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     }
     
+    const btnContinuarEmissao = document.getElementById('btnContinuarEmissao');
+    if (btnContinuarEmissao && !btnContinuarEmissao.dataset.boundClick) {
+        btnContinuarEmissao.addEventListener('click', continuarParaEmissaoViaModal);
+        btnContinuarEmissao.dataset.boundClick = '1';
+    }
+
     // ========================================================================
     // FUNCIONALIDADE: Enter funciona como Tab
     // ========================================================================
@@ -4299,18 +4446,42 @@ document.addEventListener('DOMContentLoaded', function() {
         
         form.addEventListener('submit', function(e) {
             console.log('🎯 SUBMIT INTERCEPTADO!', e);
+
+            if (form.dataset.directNativeEmit === '1') {
+                form.dataset.directNativeEmit = '0';
+                return;
+            }
+
+            const parseNumeroNfe = (valor) => {
+                if (valor === null || valor === undefined) return 0;
+                const txt = String(valor).trim();
+                if (!txt) return 0;
+                const normalizado = txt.replace(/\./g, '').replace(',', '.');
+                const n = Number(normalizado);
+                return Number.isFinite(n) ? n : 0;
+            };
             
             // Verificar qual botão foi clicado
             const submitter = e.submitter;
+            const emissaoForcadaModal = form.dataset.forceEmitFromModal === '1';
+            const emissaoConfirmadaModal = form.dataset.confirmedFromModal === '1';
+            const submitterValue = submitter?.value || '';
+            const botaoEmitir = document.getElementById('btnEmitir');
+            const botaoAcao = submitterValue === 'emitir' ? submitter : botaoEmitir;
             console.log('🔍 Botão clicado:', submitter);
-            console.log('🔍 Valor do botão:', submitter?.value);
+            console.log('🔍 Valor do botão:', submitterValue);
             console.log('🔍 Name do botão:', submitter?.name);
+            console.log('🔍 Emissão forçada via modal:', emissaoForcadaModal);
             
             // Se não for o botão Emitir, permitir submit normal
-            if (!submitter || submitter.value !== 'emitir') {
+            if (!emissaoForcadaModal && submitterValue !== 'emitir') {
                 console.log('⚠️ Não é o botão Emitir, permitindo submit normal...');
                 return; // Deixa o navegador processar normalmente
             }
+
+            // Consome a flag para não interferir em submits futuros.
+            form.dataset.forceEmitFromModal = '0';
+            form.dataset.confirmedFromModal = '0';
             
             // É o botão Emitir - prevenir submit padrão e processar com fetch
             e.preventDefault();
@@ -4341,6 +4512,29 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!itensCards || itensCards.length === 0) {
                 erros.push('Adicione pelo menos um produto à nota fiscal');
             }
+
+            // Validar/normalizar campos críticos de itens antes da emissão
+            const itemEls = Array.from(document.querySelectorAll('[id^="item-"]'));
+            itemEls.forEach((itemEl, idx) => {
+                const itemId = itemEl.id.split('-')[1];
+                const qtdEl = document.querySelector(`input[name="quantidade_${itemId}"]`);
+                const vuEl = document.querySelector(`input[name="valor_unitario_${itemId}"]`);
+                const vtEl = document.querySelector(`input[name="valor_total_${itemId}"]`);
+
+                const qtd = parseNumeroNfe(qtdEl?.value);
+                let vu = parseNumeroNfe(vuEl?.value);
+                const vt = parseNumeroNfe(vtEl?.value);
+
+                // Autoajuste: se qtd e total existem, calcula valor unitário faltante.
+                if (qtd > 0 && vu <= 0 && vt > 0 && vuEl) {
+                    vu = vt / qtd;
+                    vuEl.value = vu.toFixed(4);
+                }
+
+                if (qtd > 0 && vu <= 0) {
+                    erros.push(`Item ${idx + 1}: campo Valor unitário é obrigatório`);
+                }
+            });
             
             // Validar forma de pagamento (ID correto é formaPagamento)
             const formaPagamento = document.getElementById('formaPagamento')?.value;
@@ -4371,7 +4565,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 `⚠️ ATENÇÃO: Esta ação irá transmitir a nota fiscal para a SEFAZ e não poderá ser desfeita!\n\n` +
                 `Deseja realmente continuar?`;
             
-            if (confirm(mensagemConfirmacao)) {
+            if (emissaoConfirmadaModal || confirm(mensagemConfirmacao)) {
                 console.log('✅ Confirmação OK - preparando submissão...');
                 
                 // Atualizar JSON de todos os itens antes de submeter
@@ -4380,23 +4574,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 const itens = document.querySelectorAll('[id^="item-"]');
                 itens.forEach(item => {
                     const itemId = item.id.split('-')[1];
+                    calcularTotalItem(itemId);
                     atualizarItemJSON(itemId);
                 });
                 
                 // Desabilitar botão
-                submitter.disabled = true;
-                submitter.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
+                if (botaoAcao) {
+                    botaoAcao.disabled = true;
+                    botaoAcao.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitindo...';
+                }
                 
                 console.log('🚀 Criando FormData e enviando via fetch...');
                 
                 // Criar FormData com todos os dados do form
                 const formData = new FormData(form);
+                const csrfToken = obterCsrfAtual();
+                if (csrfToken) {
+                    formData.set('csrf_token', csrfToken);
+                }
                 
                 // IMPORTANTE: Verificar se está em modo edição
                 // Modo edição: action=emit (rota /admin/nfe/edit/X)
                 // Modo novo: usar o value do botão original (emitir)
                 const isEditMode = window.location.pathname.includes('/edit/');
-                const actionValue = isEditMode ? 'emit' : submitter.value;
+                const actionValue = isEditMode ? 'emit' : 'emitir';
                 
                 formData.append('action', actionValue);
                 console.log(`✅ Campo action=${actionValue} adicionado (modo: ${isEditMode ? 'edição' : 'novo'})`);
@@ -4408,7 +4609,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Enviar via fetch (sem validação HTML5)
                 fetch(actionUrl, {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json, text/html;q=0.9,*/*;q=0.8',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+                    }
                 })
                 .then(response => {
                     console.log('✅ Resposta recebida:', response.status);
@@ -4417,42 +4623,111 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Se foi redirecionado, ir para a nova URL
                     if (response.redirected) {
-                        limparRascunhoNfe();
-                        console.log('🔀 Redirecionando para:', response.url);
-                        window.location.href = response.url;
+                        const redirectedUrl = response.url || '';
+
+                        // Redirect de volta para /emitir geralmente indica erro de validação/certificado/SEFAZ.
+                        if (redirectedUrl.includes('/admin/nfe/emitir')) {
+                            return response.text().then(html => {
+                                try {
+                                    const parser = new DOMParser();
+                                    const doc = parser.parseFromString(html, 'text/html');
+                                    const msgEl = doc.querySelector('.global-alert .alert-message, .alert-danger, .alert-warning');
+                                    const msg = (msgEl && msgEl.textContent ? msgEl.textContent.trim() : '') || 'A emissão não foi concluída. Revise os dados e tente novamente.';
+
+                                    if (!tratarErroCsrfComRecarga(msg)) {
+                                        alert('Erro ao emitir NFe: ' + msg);
+                                    }
+                                } catch (e) {
+                                    console.warn('⚠️ Não foi possível extrair mensagem do redirect para /emitir', e);
+                                }
+
+                                if (botaoAcao) {
+                                    botaoAcao.disabled = false;
+                                    botaoAcao.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
+                                }
+                                document.open();
+                                document.write(html);
+                                document.close();
+                            });
+                        }
+
+                        // Redirect para lista/dashboard indica sucesso operacional do fluxo.
+                        if (redirectedUrl.includes('/admin/nfe/list') || redirectedUrl.includes('/cliente/dashboard')) {
+                            limparRascunhoNfe();
+                        }
+
+                        console.log('🔀 Redirecionando para:', redirectedUrl);
+                        window.location.href = redirectedUrl;
                         return;
                     }
                     
-                    // Processar resposta HTML
+                    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+                    // Processar resposta textual (JSON/HTML)
                     return response.text().then(html => {
                         console.log('📄 HTML recebido:', html.substring(0, 500));
-                        
-                        // Se a resposta contém "success" ou "autorizada", é sucesso
-                        if (html.includes('success') || html.includes('autorizada') || html.includes('Autorizada')) {
-                            limparRascunhoNfe();
-                            console.log('✅ NFe emitida com sucesso! Redirecionando...');
-                            // Extrair URL de redirect se houver
-                            const match = html.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/);
-                            if (match) {
-                                window.location.href = match[1];
-                            } else {
-                                // Recarregar para mostrar lista de NFes
-                                window.location.href = '/admin/nfe/list';
+
+                        // Prioridade para erros HTTP
+                        if (!response.ok) {
+                            let errorMsg = `Erro ao emitir NFe (HTTP ${response.status}).`;
+                            try {
+                                const parsed = JSON.parse(html);
+                                errorMsg = parsed.message || parsed.error || errorMsg;
+                            } catch (e) {
+                                errorMsg = extrairMensagemErroHttp(response, html);
                             }
-                        } else {
-                            // Substituir página com a resposta
-                            console.log('📝 Substituindo conteúdo da página...');
-                            document.open();
-                            document.write(html);
-                            document.close();
+
+                            if (tratarErroCsrfComRecarga(errorMsg)) {
+                                return;
+                            }
+
+                            alert('Erro ao emitir NFe: ' + errorMsg);
+                            if (botaoAcao) {
+                                botaoAcao.disabled = false;
+                                botaoAcao.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
+                            }
+                            return;
                         }
+
+                        // Resposta JSON com sucesso/falha explícita
+                        if (contentType.includes('application/json')) {
+                            try {
+                                const parsed = JSON.parse(html);
+                                if (parsed && parsed.success) {
+                                    limparRascunhoNfe();
+                                    window.location.href = parsed.redirect_url || '/admin/nfe/list';
+                                    return;
+                                }
+
+                                const msg = (parsed && (parsed.message || parsed.error)) || 'Não foi possível emitir a NFe.';
+                                if (tratarErroCsrfComRecarga(msg)) {
+                                    return;
+                                }
+                                alert('Erro ao emitir NFe: ' + msg);
+                                if (botaoAcao) {
+                                    botaoAcao.disabled = false;
+                                    botaoAcao.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
+                                }
+                                return;
+                            } catch (e) {
+                                // Se falhar parse, segue para fallback HTML abaixo.
+                            }
+                        }
+
+                        // Fallback HTML: mantém comportamento de render do backend (flash/erros de validação).
+                        console.log('📝 Substituindo conteúdo da página...');
+                        document.open();
+                        document.write(html);
+                        document.close();
                     });
                 })
                 .catch(error => {
                     console.error('❌ Erro ao enviar:', error);
                     alert('Erro ao enviar NFe: ' + error.message);
-                    submitter.disabled = false;
-                    submitter.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
+                    if (botaoAcao) {
+                        botaoAcao.disabled = false;
+                        botaoAcao.innerHTML = '<i class="fas fa-paper-plane"></i> Emitir NFe';
+                    }
                 });
             }
         }, true); // Usar capture phase

@@ -86,11 +86,18 @@ app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'  # Compatível com iOS
 
 # CSRF — protege todos os formulários HTML (exceto APIs autenticadas via API Key)
 csrf = CSRFProtect(app)
+# Usuários podem ficar longos períodos preenchendo a NFe; ampliar janela evita erro "CSRF token expired".
+app.config['WTF_CSRF_TIME_LIMIT'] = int(os.getenv('WTF_CSRF_TIME_LIMIT', '28800'))  # 8 horas
 # Isentar blueprints de API pura (autenticados via API Key no header)
 csrf.exempt(api_v2_bp)
 csrf.exempt(api_bp)
 csrf.exempt(llm_api_bp)
 csrf.exempt(nfse_api_bp)
+
+@app.route('/api/csrf-token', methods=['GET'])
+@login_required
+def csrf_token_api():
+    return jsonify({'csrf_token': generate_csrf()})
 
 # CORS — origens explícitas via variável de ambiente
 _raw_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5000')
@@ -145,6 +152,12 @@ app.register_blueprint(regras_servicos_bp)  # Regras Tributárias de Serviços
 app.register_blueprint(classificacao_ibs_cbs_bp)  # Classificações IBS/CBS - Reforma Tributária
 app.register_blueprint(nfse_api_bp)  # API NFS-e - Busca NBS e Validações NT007
 app.register_blueprint(admin_api_bp, url_prefix='/admin')  # Rotas API JSON do admin
+
+
+@app.route('/login')
+def legacy_login_redirect():
+    """Compatibilidade com links antigos de login."""
+    return redirect(url_for('auth.login'))
 
 import re
 from markupsafe import Markup, escape
@@ -287,13 +300,23 @@ logger = logging.getLogger(__name__)
 
 def _is_api_request():
     """Retorna True se a requisição espera JSON (API/fetch) em vez de HTML."""
+    accept_header = (request.headers.get('Accept') or '').lower()
+    requested_with = request.headers.get('X-Requested-With')
+    sec_fetch_mode = (request.headers.get('Sec-Fetch-Mode') or '').lower()
+    sec_fetch_dest = (request.headers.get('Sec-Fetch-Dest') or '').lower()
+
+    # Fetch/XHR normalmente envia "dest=empty" e mode diferente de "navigate".
+    # Form submit clássico de página usa "navigate"/"document".
+    is_programmatic_fetch = sec_fetch_mode and sec_fetch_mode != 'navigate' and sec_fetch_dest == 'empty'
+
     return (
         request.path.startswith('/api/')
         or request.path.startswith('/admin/api/')
         or request.path.startswith('/admin/nfe/api/')
         or request.path.startswith('/admin/nfse/api/')
-        or request.headers.get('Accept', '').startswith('application/json')
-        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in accept_header
+        or requested_with == 'XMLHttpRequest'
+        or is_programmatic_fetch
         or request.content_type == 'application/json'
     )
 
