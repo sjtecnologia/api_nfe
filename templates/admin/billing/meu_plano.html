@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Meu Plano - EmiteMax{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div><h1 class="h3 mb-1">Meu plano</h1><p class="text-muted mb-0">Visão comercial da empresa ativa.</p></div>
+    <a class="btn btn-outline-primary" href="{{ url_for('billing_shadow.billing_shadow_diagnostic') }}">Diagnóstico</a>
+  </div>
+  {% if subscription %}
+  <div class="card mb-4"><div class="card-body">
+    <h2 class="h5">{{ subscription.plan_version.version_code }}</h2>
+    <p class="mb-1">Status: {{ subscription.status }}</p>
+    <p class="mb-0">Preço contratado: {{ subscription.contracted_price or 'Contratual' }} {{ subscription.currency }}</p>
+  </div></div>
+  {% else %}
+  <div class="alert alert-secondary"><strong>Plano atual:</strong> legado ou ainda não vinculado à camada comercial shadow.</div>
+  {% endif %}
+  {% if access and not access.enabled and access.reason == 'PLAN_NOT_ENTITLED' %}
+  <div class="card border-warning"><div class="card-body">
+    <h2 class="h5">Recurso disponível em plano superior</h2>
+    <p>Este recurso não faz parte do seu plano atual.</p>
+    <p class="mb-0"><strong>Análise Inteligente de Vendas</strong> está disponível a partir do plano Profissional.</p>
+  </div></div>
+  {% endif %}
+</div>
+{% endblock %}

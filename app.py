@@ -48,6 +48,7 @@ from routes.regras_servicos_routes import regras_servicos_bp
 from routes.classificacao_ibs_cbs_routes import classificacao_ibs_cbs_bp
 from routes.nfse_api_routes import nfse_api_bp
 from routes.admin_api_routes import admin_api_bp
+from routes.billing_shadow_routes import billing_shadow_bp
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -152,6 +153,7 @@ app.register_blueprint(regras_servicos_bp)  # Regras Tributárias de Serviços
 app.register_blueprint(classificacao_ibs_cbs_bp)  # Classificações IBS/CBS - Reforma Tributária
 app.register_blueprint(nfse_api_bp)  # API NFS-e - Busca NBS e Validações NT007
 app.register_blueprint(admin_api_bp, url_prefix='/admin')  # Rotas API JSON do admin
+app.register_blueprint(billing_shadow_bp)  # Billing shadow/upgrade não fiscal
 
 
 @app.route('/login')

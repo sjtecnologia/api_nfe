@@ -23,6 +23,7 @@ from auth.decorators import (
     editor_or_admin_required,
     permission_required,
 )
+from services.commercial_entitlements import feature_required
 
 # Inicializa get_db na primeira chamada
 from database.connection import get_db
@@ -6576,6 +6577,7 @@ def dashboard_inteligente():
 @admin_bp.route('/analise-vendas', methods=['GET'])
 @login_required
 @admin_required()
+@feature_required('AI_SALES_ANALYSIS')
 def analise_vendas():
     """Análise histórica de vendas baseada nos dados reais da empresa ativa."""
     if current_user.is_super_admin():

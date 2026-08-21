@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Recurso do plano - EmiteMax{% endblock %}
+{% block content %}
+<div class="container py-5"><div class="card border-warning"><div class="card-body text-center">
+  <h1 class="h4">Recurso disponível em plano superior</h1>
+  <p class="text-muted">Este recurso não faz parte do seu plano atual.</p>
+  <p>Conheça as opções comerciais para liberar este recurso.</p>
+  <a class="btn btn-primary" href="{{ url_for('billing_shadow.meu_plano') }}">Conhecer planos</a>
+</div></div></div>
+{% endblock %}

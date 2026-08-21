@@ -67,6 +67,21 @@ class EntitlementResolver:
         self.db = db
 
     def resolve(self, subscription_id: int, feature_key: str) -> dict:
+        subscription = self.db.query(BillingSubscription).filter_by(subscription_id=subscription_id).first()
+        if subscription:
+            for override in subscription.overrides:
+                if override.key != feature_key:
+                    continue
+                if override.expires_at is not None and override.expires_at < datetime.utcnow():
+                    continue
+                value = str(override.value).strip().lower()
+                enabled = value in {"1", "true", "yes", "on", "enabled"}
+                return {
+                    "enabled": enabled,
+                    "limit_type": "ENABLED" if enabled else "DISABLED",
+                    "limit_value": None,
+                    "source": "OVERRIDE",
+                }
         row = self.db.query(BillingPlanFeature, BillingFeature).join(
             BillingFeature, BillingPlanFeature.feature_id == BillingFeature.feature_id
         ).join(
