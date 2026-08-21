@@ -363,19 +363,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             if (loadingOverlay) loadingOverlay.classList.add('active');
-            fetch('https://viacep.com.br/ws/' + cep + '/json/')
-                .then(response => response.json())
+            fetch('/admin/api/buscar-cep/' + cep, { credentials: 'same-origin' })
+                .then(response => response.json().then(data => ({ response: response, data: data })))
                 .then(data => {
                     if (loadingOverlay) loadingOverlay.classList.remove('active');
-                    if (data.erro) {
-                        alert('CEP não encontrado.');
+                    if (!data.response.ok || !data.data.success) {
+                        alert(data.data.error || 'CEP não encontrado.');
                     } else {
-                        document.getElementById('logradouro').value = data.logradouro || '';
-                        document.getElementById('complemento').value = data.complemento || '';
-                        document.getElementById('bairro').value = data.bairro || '';
-                        document.getElementById('nome_municipio').value = data.localidade || '';
-                        document.getElementById('codigo_municipio').value = data.ibge || '';
-                        document.getElementById('uf').value = data.uf || '';
+                        document.getElementById('logradouro').value = data.data.logradouro || '';
+                        document.getElementById('complemento').value = data.data.complemento || '';
+                        document.getElementById('bairro').value = data.data.bairro || '';
+                        document.getElementById('nome_municipio').value = data.data.nome_municipio || '';
+                        document.getElementById('codigo_municipio').value = data.data.codigo_municipio || '';
+                        document.getElementById('uf').value = data.data.uf || '';
                         document.getElementById('numero').focus();
                     }
                 })
