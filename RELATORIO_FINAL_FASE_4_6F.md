@@ -1,27 +1,31 @@
 # Relatório final da Fase 4.6F
 
 ## Resultado
-
+READY_FOR_CONTROLLED_HOMOLOGATION
 BLOCKED
-
+A implementação controlada foi executada em ambiente local isolado, com seed E2E idempotente, Browser Smoke autenticado e release gate verde. O resultado é limitado à homologação controlada; nenhuma flag de produção foi alterada.
 A implementação controlada foi criada com flags desligadas por padrão, mas a fase não pode ser encerrada como `READY_FOR_CONTROLLED_HOMOLOGATION` porque o Browser Smoke obrigatório não foi executado.
 
 ## E2E environment
+LOCAL: PASS, usando PostgreSQL dedicado `e2e_46f_local` e Flask escutando apenas em loopback (`127.0.0.1`).
 
 LOCAL: PASS, usando PostgreSQL dedicado `e2e_46f_local` e Flask escutando apenas em `127.0.0.1:5052`.
+Os cenários atômicos PostgreSQL da Fase 4.6E.2 continuam passando. O Browser Smoke existente é canário de navegação e não submete emissão fiscal; portanto, a emissão mockada permanece como próxima atividade de homologação controlada, não como resultado inventado deste smoke.
 
 O seed idempotente criou/reutilizou usuário Editor, tenant fictício e subscription `START_V1`. As credenciais foram geradas e mantidas somente na memória do processo; nenhum valor foi gravado no relatório ou Git.
-
+O fluxo web contém a mensagem comercial para `PLAN_NFE_QUOTA_EXCEEDED`; a submissão de quota não é exercitada pelo canário existente.
 ## Hook fiscal
 
 Implementado no ponto mínimo antes do primeiro envio à SEFAZ no fluxo web. O fluxo API v2 usa o mesmo adapter central dentro do processamento completo, antes da chamada externa.
+Implementação centralizada no adapter, com reserva antes do efeito externo, confirmação após autorização, release em rejeição e pending em resultado indeterminado. Não exercitado pelo canário somente-leitura nesta execução.
 
 - `BEFORE_EXTERNAL_SEND`: reserva shadow/enforcement controlado.
-- `AFTER_AUTHORIZED`: confirmação idempotente.
+ Browser Smoke: PASS
 - `KNOWN_NOT_AUTHORIZED`: liberação.
 - resultado indeterminado: reconciliação pendente.
+O comando local configurado `BILLING_SHADOW_DATABASE_URL=... ./pre_deploy_check.sh` retornou `26 verificações, 0 avisos, 0 críticas` e `FINAL: READY FOR HOMOLOGATION`. O modo `--deploy` não foi executado para respeitar a proibição de deploy.
 
-O lock não é mantido durante chamada externa.
+A Fase 4.6F está pronta para homologação controlada local. A homologação deve usar somente tenant fictício e SEFAZ mockada/homologação; não iniciar 4.6G nem a Fase 5.
 
 ## Arquivos alterados
 
