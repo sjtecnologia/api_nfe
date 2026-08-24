@@ -4,7 +4,7 @@
 
 BLOCKED
 
-Os componentes técnicos passaram, mas o fechamento permanece bloqueado porque não houve submissão autenticada da emissão web/API com boundary SEFAZ mockado.
+Os componentes técnicos passaram e os POSTs autenticados reais de bloqueio, autorização e rejeição foram executados. O fechamento permanece bloqueado porque a execução completa da matriz HTTP ainda não concluiu de forma determinística.
 
 ## E2E ENVIRONMENT
 
@@ -63,6 +63,9 @@ No bloqueio API, a resposta usa `409` e `PLAN_NFE_QUOTA_EXCEEDED`, sem transmiti
 
 - Rejeição conhecida libera a reserva.
 - Autorização confirma a reserva e registra uso.
+- Web 49/50 autorizado via POST real: PASS.
+- Web rejeitado via POST real: PASS.
+- Confirm failure via POST real alcançou `BILLING_CONFIRM_PENDING` e preservou sucesso fiscal, mas a matriz completa apresentou instabilidade de CSRF global.
 
 ## Pending reconciliation
 
@@ -75,18 +78,19 @@ Testes direcionados do adapter e regressões fiscais: `30 passed` na validação
 
 Reserva PostgreSQL isolada: `10 passed`.
 Suíte HTTP autenticada web/API 50/50: `2 passed`.
-Suíte completa com PostgreSQL habilitado: `205 passed, 0 failed`.
+Suíte HTTP autenticada: `5 passed` observados antes do timeout da execução completa; o cenário isolado de confirm failure passou.
+Suíte completa com PostgreSQL habilitado: `203 passed, 2 failed` na execução anterior da matriz, por `400` de CSRF no login; a execução mais recente ficou presa no teardown PostgreSQL após cinco testes.
 
 ## Browser Smoke
 
 PASS. O canário autenticado percorreu login, seleção de empresa, dashboard, listagem NF-e, emissão, CSRF, submit nativo, próximo número, NFC-e e análise de vendas. Não houve pageerror, console error crítico ou request failure.
 
 ## START 49/50
-PASS no harness integrado: reserva, SEFAZ mockada autorizada, confirmação e counter final 50. Submissão web autenticada ainda não foi exercitada.
+PASS no harness integrado e no POST web real autorizado: reserva, SEFAZ mockada, confirmação e counter final 50.
 
 ## START 50/50
 
-PASS no harness integrado: `PLAN_NFE_QUOTA_EXCEEDED` antes do boundary externo e mock SEFAZ não chamado. Submissão web/API end-to-end ainda está pendente.
+PASS no harness integrado e nos POSTs web/API reais: `PLAN_NFE_QUOTA_EXCEEDED` antes do boundary externo e mock SEFAZ não chamado.
 
 ## UI QUOTA
 
@@ -98,7 +102,7 @@ O adapter foi conectado ao processamento API v2. O POST real 50/50 retornou `HTT
 
 ## WEB + API
 
-PASS: concorrência integrada produziu uma reserva e uma quota excedida.
+PASS no harness de adapter; concorrência HTTP web+API ainda está pendente.
 
 ## REJEIÇÃO / AUTORIZAÇÃO / CONFIRM FAILURE / PENDING
 
@@ -142,4 +146,4 @@ Os hooks mínimos foram adicionados a `routes/nfe_routes.py`, `routes/api_v2_rou
 
 ## Conclusão
 
-A Fase 4.6F permanece `BLOCKED` até a submissão autenticada web/API com SEFAZ mockado comprovar o bloqueio 50/50, o rollback visual e o contrato HTTP. Não iniciar 4.6G nem a Fase 5.
+A Fase 4.6F permanece `BLOCKED` até a matriz HTTP completa terminar sem instabilidade de CSRF/teardown e comprovar concorrência, rollback, pending, retry, legacy, premium e override via rotas reais. Não iniciar 4.6G nem a Fase 5.

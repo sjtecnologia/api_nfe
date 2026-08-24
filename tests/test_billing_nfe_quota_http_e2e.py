@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 from bs4 import BeautifulSoup
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import generate_password_hash
 from cryptography import x509
@@ -21,14 +22,8 @@ from database.billing_usage_models import BillingUsageCounter
 from database.models import CertificadoDigital, DestinatarioNFe, PlanoNFe, AssinaturaCliente
 from database.models import ApiKey
 from auth.api_key_auth import generate_api_key
-from tests.test_billing_reservation_shadow import pg_engine as source_pg_engine
+pytest_plugins = ("tests.test_billing_reservation_shadow",)
 from tests.test_billing_reservation_shadow import _seed_subscription
-
-
-@pytest.fixture(scope="module")
-def pg_engine():
-    yield from source_pg_engine.__wrapped__()
-
 
 @pytest.fixture(autouse=True)
 def e2e_environment(monkeypatch):
@@ -42,6 +37,8 @@ def http_context(app, pg_engine):
     from database.connection import SessionLocal
 
     SessionLocal.configure(bind=pg_engine)
+    from database.models import NFeEmitidas
+    NFeEmitidas.__table__.c.json_nfe.type = JSONB()
     original_csrf = app.config.get("WTF_CSRF_ENABLED")
     original_rate_limit = app.config.get("RATELIMIT_ENABLED")
     app.config.update(TESTING=True, WTF_CSRF_ENABLED=True, RATELIMIT_ENABLED=False, SERVER_NAME="localhost")
@@ -49,6 +46,8 @@ def http_context(app, pg_engine):
     if limiter is not None:
         limiter.reset()
     session = sessionmaker(bind=pg_engine)()
+    with pg_engine.begin() as connection:
+        connection.execute(text("TRUNCATE TABLE billing_usage_reservations, billing_usage_events, billing_usage_counters, billing_subscription_companies, billing_subscriptions, billing_plan_versions, billing_plans, nfe_emitidas, certificados_digitais, destinatarios_nfe, assinaturas_cliente, planos_nfe, api_keys, api_usage_logs RESTART IDENTITY CASCADE"))
     _seed_http_data(session)
     session.close()
     try:
@@ -181,3 +180,89 @@ def test_authenticated_api_v2_post_50_50_returns_quota_error(http_context, pg_en
     assert response.status_code == 409
     assert response.get_json()["code"] == "PLAN_NFE_QUOTA_EXCEEDED"
     sefaz.assert_not_called()
+
+
+def test_authenticated_web_post_49_50_authorizes_and_confirms(http_context, pg_engine):
+    db = sessionmaker(bind=pg_engine)()
+    subscription = _seed_subscription(db, counted=49)
+    subscription_id = subscription.subscription_id
+    db.close()
+    client = http_context.test_client()
+    _login(client)
+    token = _csrf_token(client)
+    sefaz = Mock(return_value={
+        "success": True,
+        "status": "AUTORIZADA",
+        "protocolo": "E2E-LOCAL",
+        "chave_acesso": "35260811222333000181550010000000011123456789",
+    })
+    with patch("services.nfe_service.NFeService._processar_envio_sefaz", sefaz):
+        response = client.post("/admin/nfe/emitir?cliente_id=1", data=_form(token, number="2"), follow_redirects=True)
+    assert response.status_code < 500
+    sefaz.assert_called_once()
+    db = sessionmaker(bind=pg_engine)()
+    assert db.execute(text("SELECT quantity FROM billing_usage_counters WHERE subscription_id = :sid AND metric_key = 'NFE_ISSUED'"), {"sid": subscription_id}).scalar() == 50
+    assert db.execute(text("SELECT COUNT(*) FROM billing_usage_reservations WHERE subscription_id = :sid AND status = 'CONFIRMED'"), {"sid": subscription_id}).scalar() == 1
+    assert db.execute(text("SELECT COUNT(*) FROM billing_usage_events WHERE subscription_id = :sid AND metric_key = 'NFE_ISSUED' AND status = 'COUNTED'"), {"sid": subscription_id}).scalar() == 1
+    db.close()
+
+
+def test_authenticated_web_post_49_50_releases_on_rejection(http_context, pg_engine):
+    db = sessionmaker(bind=pg_engine)()
+    subscription = _seed_subscription(db, counted=49)
+    subscription_id = subscription.subscription_id
+    db.close()
+    client = http_context.test_client()
+    _login(client)
+    token = _csrf_token(client)
+    sefaz = Mock(return_value={"success": False, "status": "REJEITADA", "message": "rejeicao E2E"})
+    with patch("services.nfe_service.NFeService._processar_envio_sefaz", sefaz):
+        response = client.post("/admin/nfe/emitir?cliente_id=1", data=_form(token, number="3"), follow_redirects=True)
+    assert response.status_code < 500
+    sefaz.assert_called_once()
+    db = sessionmaker(bind=pg_engine)()
+    assert db.execute(text("SELECT COUNT(*) FROM billing_usage_reservations WHERE subscription_id = :sid AND status = 'RELEASED'"), {"sid": subscription_id}).scalar() == 1
+    assert db.execute(text("SELECT quantity FROM billing_usage_counters WHERE subscription_id = :sid AND metric_key = 'NFE_ISSUED'"), {"sid": subscription_id}).scalar() == 49
+    assert db.execute(text("SELECT COUNT(*) FROM billing_usage_events WHERE subscription_id = :sid AND status = 'COUNTED'"), {"sid": subscription_id}).scalar() == 0
+    db.close()
+
+
+def test_authenticated_api_v2_post_49_50_authorizes_and_confirms(http_context, pg_engine):
+    db = sessionmaker(bind=pg_engine)()
+    subscription = _seed_subscription(db, counted=49)
+    subscription_id = subscription.subscription_id
+    key_value, key_hash, key_prefix = generate_api_key(1, "HTTP E2E")
+    db.add(ApiKey(cliente_id=1, key_hash=key_hash, key_prefix=key_prefix, nome="HTTP E2E", ativa=True, rate_limit=1000, permissoes='{"allowed": ["nfe.write", "nfe.emit"]}'))
+    db.commit()
+    db.close()
+    client = http_context.test_client()
+    payload = {
+        "destinatario": {"cpf_cnpj": "52998224725", "nome": "Destinatario E2E", "endereco": "Rua B", "numero": "10", "bairro": "Centro", "cidade": "Sao Paulo", "uf": "SP", "cep": "01000000"},
+        "itens": [{"descricao": "Produto E2E", "quantidade": 1, "valor_unitario": 10, "valor_total": 10, "ncm": "84713000", "cfop": "5102", "unidade": "UN", "csosn_icms": "102", "cst_pis": "01", "cst_cofins": "01"}],
+        "natureza_operacao": "Venda",
+    }
+    sefaz = Mock(return_value={"success": True, "status": "AUTORIZADA", "protocolo": "E2E-API", "chave_acesso": "35260811222333000181550010000000011123456789"})
+    with patch("services.nfe_service.NFeService._processar_envio_sefaz", sefaz):
+        response = client.post("/api/v2/nfe/emitir", json=payload, headers={"Authorization": f"Bearer {key_value}"})
+    assert response.status_code == 201
+    assert response.get_json()["success"] is True
+    sefaz.assert_called_once()
+    db = sessionmaker(bind=pg_engine)()
+    assert db.execute(text("SELECT quantity FROM billing_usage_counters WHERE subscription_id = :sid AND metric_key = 'NFE_ISSUED'"), {"sid": subscription_id}).scalar() == 50
+    assert db.execute(text("SELECT COUNT(*) FROM billing_usage_reservations WHERE subscription_id = :sid AND status = 'CONFIRMED'"), {"sid": subscription_id}).scalar() == 1
+    db.close()
+
+
+def test_authenticated_web_confirm_failure_keeps_fiscal_success(http_context, pg_engine):
+    db = sessionmaker(bind=pg_engine)()
+    _seed_subscription(db, counted=49)
+    db.close()
+    client = http_context.test_client()
+    _login(client)
+    token = _csrf_token(client)
+    sefaz = Mock(return_value={"success": True, "status": "AUTORIZADA", "protocolo": "E2E-CONFIRM", "chave_acesso": "35260811222333000181550010000000011123456780"})
+    with patch("services.nfe_service.NFeService._processar_envio_sefaz", sefaz), patch("services.billing_usage_shadow.BillingQuotaReservationService.confirm", side_effect=RuntimeError("billing unavailable")):
+        response = client.post("/admin/nfe/emitir?cliente_id=1", data=_form(token, number="4"), follow_redirects=True)
+    assert response.status_code < 500
+    assert b"NFe emitida com sucesso" in response.data
+    sefaz.assert_called_once()
