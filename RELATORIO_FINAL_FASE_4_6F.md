@@ -6,6 +6,12 @@ BLOCKED
 
 A implementação controlada foi criada com flags desligadas por padrão, mas a fase não pode ser encerrada como `READY_FOR_CONTROLLED_HOMOLOGATION` porque o Browser Smoke obrigatório não foi executado.
 
+## E2E environment
+
+LOCAL/HOMOLOGATION: NOT_CONFIGURED nesta execução.
+
+As variáveis `E2E_BASE_URL`, `E2E_USERNAME` e `E2E_PASSWORD` não estavam presentes. Nenhum valor foi gravado no código, relatório ou Git.
+
 ## Hook fiscal
 
 Implementado no ponto mínimo antes do primeiro envio à SEFAZ no fluxo web. O fluxo API v2 usa o mesmo adapter central dentro do processamento completo, antes da chamada externa.
@@ -75,7 +81,7 @@ Testado pelo adapter: `FEATURE_BILLING_NFE_QUOTA_ENABLED=false` preserva o compo
 
 ## Testes
 
-Testes direcionados do adapter e regressões fiscais: `30 passed`.
+Testes direcionados do adapter e regressões fiscais: `30 passed` na validação anterior; a revalidação operacional de reserva, adapter e regressão crítica passou com `29 passed`.
 
 Reserva PostgreSQL isolada: `10 passed`.
 
@@ -118,7 +124,22 @@ Implementação centralizada no adapter, com reserva antes do efeito externo, co
 - Working tree: PASS após commit local `7316fb84`
 - Browser Smoke: BLOCKED por ambiente
 
-O comando `BILLING_SHADOW_DATABASE_URL='postgresql://postgres@localhost:5432/postgres' ./pre_deploy_check.sh --deploy` retornou `FINAL: BLOCKED` somente por `Browser smoke: NOT_CONFIGURED`. O modo deploy não realizou deploy.
+O canário direto retornou `BROWSER_SMOKE_PENDING_ENVIRONMENT`.
+
+O comando `BILLING_SHADOW_DATABASE_URL='postgresql://postgres@localhost:5432/postgres' ./pre_deploy_check.sh --deploy` retornou:
+
+- Critical regression: PASS
+- Full suite: PASS
+- Roles: PASS
+- Multi-tenant: PASS
+- JavaScript: PASS
+- Templates: PASS
+- Browser smoke: NOT_CONFIGURED
+- Secrets: PASS
+- Working tree: PASS
+- `FINAL: BLOCKED`
+
+O modo deploy não realizou deploy.
 
 ## Enforcement em produção
 
