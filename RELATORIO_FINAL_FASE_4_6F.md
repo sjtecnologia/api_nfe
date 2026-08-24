@@ -1,4 +1,4 @@
-# Relatório final da Fase 4.6F.3
+# Relatório final da Fase 4.6F.4
 
 ## STATUS FINAL
 
@@ -59,35 +59,29 @@ A camada de reserva mantém suporte ao override `NFE_MONTHLY`, com prioridade so
 Web e API v2 utilizam `BillingNFeQuotaAdapter` e a mesma fonte `BillingQuotaReservationService`. A chave é determinística por cliente, série e número, evitando contadores separados.
 
 No bloqueio API, a resposta usa `409` e `PLAN_NFE_QUOTA_EXCEEDED`, sem transmitir à SEFAZ.
-
 ## Rejeição, autorização e confirm failure
 
 - Rejeição conhecida libera a reserva.
 - Autorização confirma a reserva e registra uso.
-- Falha de confirmação é registrada como `BILLING_CONFIRM_PENDING` e não converte sucesso fiscal em erro fiscal.
 
 ## Pending reconciliation
 
 Resultados não conclusivos são encaminhados para `PENDING_RECONCILIATION`. Não há job automático nesta fase.
-
 ## Flag off
 
 Testado pelo adapter: `FEATURE_BILLING_NFE_QUOTA_ENABLED=false` preserva o comportamento anterior e não invoca bloqueio.
 
-## Testes
-
 Testes direcionados do adapter e regressões fiscais: `30 passed` na validação anterior; a revalidação operacional de reserva, adapter e regressão crítica passou com `29 passed`.
 
 Reserva PostgreSQL isolada: `10 passed`.
-
-Suíte completa com PostgreSQL habilitado: `203 passed, 0 failed`.
+Suíte HTTP autenticada web/API 50/50: `2 passed`.
+Suíte completa com PostgreSQL habilitado: `205 passed, 0 failed`.
 
 ## Browser Smoke
 
 PASS. O canário autenticado percorreu login, seleção de empresa, dashboard, listagem NF-e, emissão, CSRF, submit nativo, próximo número, NFC-e e análise de vendas. Não houve pageerror, console error crítico ou request failure.
 
 ## START 49/50
-
 PASS no harness integrado: reserva, SEFAZ mockada autorizada, confirmação e counter final 50. Submissão web autenticada ainda não foi exercitada.
 
 ## START 50/50
@@ -100,7 +94,7 @@ PASS estrutural: a mensagem comercial existe. Prova visual após submissão est�
 
 ## API v2
 
-O adapter foi conectado ao processamento API v2 e retorna contrato HTTP `409` quando o tenant está no rollout explícito. Request autenticado com mock SEFAZ ainda não foi executado.
+O adapter foi conectado ao processamento API v2. O POST real 50/50 retornou `HTTP 409` com `PLAN_NFE_QUOTA_EXCEEDED`, sem chamada SEFAZ. O cenário API 49/50 autorizado ainda está pendente.
 
 ## WEB + API
 

@@ -88,10 +88,11 @@ def check_rate_limit(api_key):
         # Fallback: contar manualmente
         from datetime import datetime, timedelta
         uma_hora_atras = datetime.now() - timedelta(hours=1)
+        db.rollback()
         
         count = db.query(ApiUsageLog).filter(
             ApiUsageLog.api_key_id == api_key.api_key_id,
-            ApiUsageLog.request_time >= una_hora_atras
+            ApiUsageLog.request_time >= uma_hora_atras
         ).count()
         
         if count < api_key.rate_limit:
