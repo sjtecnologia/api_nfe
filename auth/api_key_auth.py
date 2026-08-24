@@ -47,14 +47,15 @@ def verify_api_key(api_key_string):
         return None
     
     db = next(get_db())
-    key_hash = hashlib.sha256(api_key_string.encode()).hexdigest()
-    
-    api_key = db.query(ApiKey).filter_by(key_hash=key_hash).first()
-    
-    if not api_key or not api_key.is_valid():
-        return None
-    
-    return api_key
+    try:
+        key_hash = hashlib.sha256(api_key_string.encode()).hexdigest()
+        api_key = db.query(ApiKey).filter_by(key_hash=key_hash).first()
+        if not api_key or not api_key.is_valid():
+            return None
+        db.expunge(api_key)
+        return api_key
+    finally:
+        db.close()
 
 
 def check_rate_limit(api_key):
@@ -71,7 +72,6 @@ def check_rate_limit(api_key):
         return True, "Sem limite"
     
     db = next(get_db())
-    
     try:
         # Usar função do banco para verificar
         result = db.execute(
@@ -99,6 +99,8 @@ def check_rate_limit(api_key):
             return True, "Dentro do limite"
         else:
             return False, f"Rate limit excedido ({api_key.rate_limit} req/hora)"
+    finally:
+        db.close()
 
 
 def check_ip_whitelist(api_key, ip_address):
@@ -137,6 +139,7 @@ def log_api_request(api_key, endpoint, metodo, status_code, response_time_ms=Non
         response_time_ms: Tempo de resposta em ms
         erro: Mensagem de erro (se houver)
     """
+    db = None
     try:
         db = next(get_db())
         
@@ -156,6 +159,9 @@ def log_api_request(api_key, endpoint, metodo, status_code, response_time_ms=Non
         db.commit()
     except Exception as e:
         print(f"[WARN] Erro ao registrar log de API: {e}")
+    finally:
+        if db is not None:
+            db.close()
 
 
 def require_api_key(permissions=None):

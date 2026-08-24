@@ -1,14 +1,15 @@
 import os
 import base64
 from datetime import datetime, timedelta
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from unittest.mock import Mock, patch
 
 import pytest
 from bs4 import BeautifulSoup
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 from werkzeug.security import generate_password_hash
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -22,8 +23,41 @@ from database.billing_usage_models import BillingUsageCounter
 from database.models import CertificadoDigital, DestinatarioNFe, PlanoNFe, AssinaturaCliente
 from database.models import ApiKey
 from auth.api_key_auth import generate_api_key
-pytest_plugins = ("tests.test_billing_reservation_shadow",)
-from tests.test_billing_reservation_shadow import _seed_subscription
+
+
+def _seed_subscription(db, *, plan_code="START_V1", counted=49):
+    account = BillingAccount(name=f"HTTP E2E Account {plan_code}")
+    db.add(account)
+    db.flush()
+    plan = BillingPlan(code=plan_code, name=plan_code, active=True, display_order=1)
+    db.add(plan)
+    db.flush()
+    version = BillingPlanVersion(plan_id=plan.plan_id, version_code=plan_code, price=60, currency="BRL", valid_from=datetime.utcnow(), status="ACTIVE", created_at=datetime.utcnow())
+    db.add(version)
+    db.flush()
+    subscription = BillingSubscription(account_id=account.account_id, plan_version_id=version.plan_version_id, status="ACTIVE", contracted_price=60, currency="BRL", started_at=datetime.utcnow(), billing_cycle="MONTHLY", created_at=datetime.utcnow(), updated_at=datetime.utcnow())
+    db.add(subscription)
+    db.flush()
+    db.add(BillingSubscriptionCompany(subscription_id=subscription.subscription_id, cliente_id=1, status="ACTIVE", linked_at=datetime.utcnow()))
+    period_start = datetime.utcnow().date().replace(day=1)
+    period_end = (period_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    db.add(BillingUsageCounter(subscription_id=subscription.subscription_id, metric_key="NFE_ISSUED", period_start=period_start, period_end=period_end, quantity=counted, version=1))
+    db.commit()
+    return subscription
+
+
+@pytest.fixture(scope="module")
+def pg_engine():
+    url = os.getenv("BILLING_SHADOW_DATABASE_URL")
+    if not url or not any(host in url for host in ("localhost", "127.0.0.1")):
+        pytest.skip("BILLING_SHADOW_DATABASE_URL não configurado para PostgreSQL local")
+    parsed = urlsplit(url)
+    database_name = "e2e_46f_local"
+    assert database_name.startswith("e2e_")
+    engine = create_engine(urlunsplit(parsed._replace(path=f"/{database_name}")), poolclass=NullPool)
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    engine.dispose()
 
 @pytest.fixture(autouse=True)
 def e2e_environment(monkeypatch):
@@ -36,6 +70,7 @@ def e2e_environment(monkeypatch):
 def http_context(app, pg_engine):
     from database.connection import SessionLocal
 
+    original_bind = SessionLocal.kw.get("bind")
     SessionLocal.configure(bind=pg_engine)
     from database.models import NFeEmitidas
     NFeEmitidas.__table__.c.json_nfe.type = JSONB()
@@ -47,12 +82,13 @@ def http_context(app, pg_engine):
         limiter.reset()
     session = sessionmaker(bind=pg_engine)()
     with pg_engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE billing_usage_reservations, billing_usage_events, billing_usage_counters, billing_subscription_companies, billing_subscriptions, billing_plan_versions, billing_plans, nfe_emitidas, certificados_digitais, destinatarios_nfe, assinaturas_cliente, planos_nfe, api_keys, api_usage_logs RESTART IDENTITY CASCADE"))
+        connection.execute(text("TRUNCATE TABLE billing_usage_reservations, billing_usage_events, billing_usage_counters, billing_subscription_companies, billing_subscriptions, billing_plan_versions, billing_plans, nfe_emitidas, certificados_digitais, destinatarios_nfe, assinaturas_cliente, planos_nfe, api_keys, api_usage_logs, user_clients, clientes, regimes_tributarios RESTART IDENTITY CASCADE"))
     _seed_http_data(session)
     session.close()
     try:
         yield app
     finally:
+        SessionLocal.configure(bind=original_bind)
         app.config["WTF_CSRF_ENABLED"] = original_csrf
         app.config["RATELIMIT_ENABLED"] = original_rate_limit
         if limiter is not None:
@@ -75,7 +111,9 @@ def _seed_http_data(db):
         VALUES (1, '11222333000181', '110042490114', 'Cliente HTTP E2E', 'Cliente HTTP E2E', FALSE, 1, '4781100',
             'Rua E2E', '100', 'Centro', '3550308', 'Sao Paulo', 'SP', '01000000', 2, TRUE,
             CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ON CONFLICT (cliente_id) DO NOTHING
+        ON CONFLICT (cliente_id) DO UPDATE SET cnpj = EXCLUDED.cnpj, inscricao_estadual = EXCLUDED.inscricao_estadual,
+            razao_social = EXCLUDED.razao_social, nome_fantasia = EXCLUDED.nome_fantasia,
+            regime_tributario_id = EXCLUDED.regime_tributario_id, ativo = TRUE
     """))
     db.execute(text("""
         INSERT INTO users (username, email, password_hash, is_active, created_at)
@@ -87,7 +125,10 @@ def _seed_http_data(db):
     if role_id is None:
         role_id = db.execute(text("INSERT INTO roles (name, description) VALUES ('Editor', 'E2E') RETURNING id")).scalar()
     db.execute(text("INSERT INTO user_roles (user_id, role_id) VALUES (:user, :role) ON CONFLICT DO NOTHING"), {"user": user_id, "role": role_id})
-    db.execute(text("INSERT INTO user_clients (user_id, client_id) VALUES (:user, 1) ON CONFLICT DO NOTHING"), {"user": user_id})
+    client_id = db.execute(text("SELECT cliente_id FROM clientes WHERE cnpj = '11222333000181' AND ativo = TRUE")).scalar()
+    if client_id is None:
+        raise AssertionError("E2E tenant was not created")
+    db.execute(text("INSERT INTO user_clients (user_id, client_id) VALUES (:user, :client) ON CONFLICT DO NOTHING"), {"user": user_id, "client": client_id})
 
     legacy_plan = db.query(PlanoNFe).filter_by(nome="HTTP E2E Start").first()
     if not legacy_plan:

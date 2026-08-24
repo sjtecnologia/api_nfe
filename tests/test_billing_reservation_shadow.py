@@ -6,6 +6,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import sessionmaker
 
 from database.billing_shadow_models import (
@@ -40,7 +41,7 @@ def pg_engine():
         conn.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :db_name AND pid <> pg_backend_pid()"), {"db_name": db_name})
         conn.execute(text(f"DROP DATABASE IF EXISTS {db_name}"))
         conn.execute(text(f"CREATE DATABASE {db_name}"))
-    engine = create_engine(target_url)
+    engine = create_engine(target_url, poolclass=NullPool)
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE billing_usage_reservations, billing_usage_counters, billing_subscription_companies, billing_subscriptions, billing_plan_versions, billing_plans, billing_accounts, clientes, regimes_tributarios RESTART IDENTITY CASCADE"))

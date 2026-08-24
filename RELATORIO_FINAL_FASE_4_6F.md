@@ -6,6 +6,18 @@ BLOCKED
 
 Os componentes técnicos passaram e os POSTs autenticados reais de bloqueio, autorização e rejeição foram executados. O fechamento permanece bloqueado porque a execução completa da matriz HTTP ainda não concluiu de forma determinística.
 
+## HTTP SUITE STABILITY
+
+BLOCKED. A suíte atual não atingiu 10/10 execuções consecutivas: em execução conjunta, cinco testes passaram e o sexto falhou no lifecycle PostgreSQL com `OperationalError` informando que `billing_reservation_46e2` havia sido removido. A execução também deixou conexões locais residuais em databases descartáveis.
+
+## ROOT CAUSE CSRF FLAKINESS
+
+O `confirm failure` isolado passou e alcançou `BILLING_CONFIRM_PENDING`; em execução conjunta houve `400` de CSRF no login. O app Flask compartilhado e tokens/sessões entre testes ainda exigem isolamento determinístico.
+
+## ROOT CAUSE POSTGRES TEARDOWN
+
+A suíte HTTP ainda compartilha o processo de testes com lifecycle de database externo em algumas execuções históricas. O ajuste de `NullPool` e o fechamento do middleware API foram aplicados, mas a prova 10x ainda não foi obtida.
+
 ## E2E ENVIRONMENT
 
 PASS. PostgreSQL dedicado `e2e_46f_local`, Flask em loopback e tenant fictício `START_V1`. Seed idempotente e recusa de produção validados.
