@@ -1,5 +1,6 @@
 import os
 import base64
+import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urljoin, urlsplit, urlunsplit
 from unittest.mock import Mock, patch
@@ -52,12 +53,20 @@ def pg_engine():
     if not url or not any(host in url for host in ("localhost", "127.0.0.1")):
         pytest.skip("BILLING_SHADOW_DATABASE_URL não configurado para PostgreSQL local")
     parsed = urlsplit(url)
-    database_name = "e2e_46f_local"
-    assert database_name.startswith("e2e_")
+    database_name = f"billing_http_e2e_{os.getpid()}_{uuid.uuid4().hex[:8]}"
+    assert database_name.startswith("billing_http_e2e_")
+    admin_engine = create_engine(urlunsplit(parsed._replace(path="/postgres")), poolclass=NullPool)
+    with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+        connection.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :name AND pid <> pg_backend_pid()"), {"name": database_name})
+        connection.execute(text(f"CREATE DATABASE {database_name}"))
     engine = create_engine(urlunsplit(parsed._replace(path=f"/{database_name}")), poolclass=NullPool)
     Base.metadata.create_all(bind=engine)
     yield engine
     engine.dispose()
+    with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+        connection.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :name AND pid <> pg_backend_pid()"), {"name": database_name})
+        connection.execute(text(f"DROP DATABASE IF EXISTS {database_name}"))
+    admin_engine.dispose()
 
 @pytest.fixture(autouse=True)
 def e2e_environment(monkeypatch):
@@ -81,6 +90,10 @@ def http_context(app, pg_engine):
     if limiter is not None:
         limiter.reset()
     session = sessionmaker(bind=pg_engine)()
+    admin_engine = create_engine(pg_engine.url.set(database="postgres"), poolclass=NullPool)
+    with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+        connection.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :database_name AND pid <> pg_backend_pid()"), {"database_name": pg_engine.url.database})
+    admin_engine.dispose()
     with pg_engine.begin() as connection:
         connection.execute(text("TRUNCATE TABLE billing_usage_reservations, billing_usage_events, billing_usage_counters, billing_subscription_companies, billing_subscriptions, billing_plan_versions, billing_plans, nfe_emitidas, certificados_digitais, destinatarios_nfe, assinaturas_cliente, planos_nfe, api_keys, api_usage_logs, user_clients, clientes, regimes_tributarios RESTART IDENTITY CASCADE"))
     _seed_http_data(session)

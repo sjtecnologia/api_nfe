@@ -4,11 +4,23 @@
 
 BLOCKED
 
-Os componentes técnicos passaram e os POSTs autenticados reais de bloqueio, autorização e rejeição foram executados. O fechamento permanece bloqueado porque a execução completa da matriz HTTP ainda não concluiu de forma determinística.
+## HTTP SUITE 10X
 
-## HTTP SUITE STABILITY
+PASS. A suíte HTTP atual foi executada 10 vezes consecutivas, com 6 testes aprovados em cada execução, sem timeout, deadlock ou falha de teardown. O marcador final foi `HTTP_SUITE_10X=PASS`.
 
-BLOCKED. A suíte atual não atingiu 10/10 execuções consecutivas: em execução conjunta, cinco testes passaram e o sexto falhou no lifecycle PostgreSQL com `OperationalError` informando que `billing_reservation_46e2` havia sido removido. A execução também deixou conexões locais residuais em databases descartáveis.
+## DATABASE OWNERSHIP / LIFECYCLE
+
+O módulo HTTP cria um database exclusivo `billing_http_e2e_<pid>_<run>`, usa `NullPool`, e somente essa fixture possui autorização para destruí-lo. A suíte reservation mantém seu próprio database `billing_reservation_46e2`; o HTTP não o termina nem o remove.
+
+## CONNECTION LEAK
+
+Após o ciclo 10x, `pg_stat_activity` não mostrou conexões nos databases descartáveis E2E/reservation.
+
+Os componentes técnicos passaram e os POSTs autenticados reais de bloqueio, autorização e rejeição foram executados. A infraestrutura HTTP agora está determinística; o fechamento permanece bloqueado apenas pelos cenários de negócio HTTP ainda não implementados nesta matriz.
+
+## CROSS SUITE
+
+PASS. Reservation primeiro + HTTP depois: `16 passed`. HTTP primeiro + reservation depois: `16 passed`.
 
 ## ROOT CAUSE CSRF FLAKINESS
 
@@ -16,7 +28,7 @@ O `confirm failure` isolado passou e alcançou `BILLING_CONFIRM_PENDING`; em exe
 
 ## ROOT CAUSE POSTGRES TEARDOWN
 
-A suíte HTTP ainda compartilha o processo de testes com lifecycle de database externo em algumas execuções históricas. O ajuste de `NullPool` e o fechamento do middleware API foram aplicados, mas a prova 10x ainda não foi obtida.
+A causa foi ownership ambíguo entre fixtures e sessões órfãs. O módulo HTTP agora cria/usa somente `billing_http_e2e_<pid>_<run>`, usa `NullPool`, termina apenas suas próprias sessões no reset administrativo e destrói o banco somente no teardown do owner.
 
 ## E2E ENVIRONMENT
 

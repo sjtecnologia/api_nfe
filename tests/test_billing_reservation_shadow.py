@@ -142,6 +142,7 @@ def test_49_50_two_concurrent_reservations_allow_only_one(pg_engine):
     db = Session()
     try:
         subscription = _seed_subscription(db, counted=49)
+        subscription_id = subscription.subscription_id
         barrier = threading.Barrier(2)
         results = {}
 
@@ -151,7 +152,7 @@ def test_49_50_two_concurrent_reservations_allow_only_one(pg_engine):
             try:
                 service = BillingQuotaReservationService(session, reservation_ttl_minutes=15)
                 results[label] = service.reserve(
-                    subscription_id=subscription.subscription_id,
+                    subscription_id=subscription_id,
                     cliente_id=1,
                     metric_key="NFE_ISSUED",
                     reservation_key=f"NFE:issue:{label}",
