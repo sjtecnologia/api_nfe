@@ -79,7 +79,7 @@ Testes direcionados do adapter e regressões fiscais: `30 passed`.
 
 Reserva PostgreSQL isolada: `10 passed`.
 
-Suíte completa com PostgreSQL habilitado: `197 passed, 0 failed` na execução direta anterior. Após os testes adicionais da 4.6F, a execução completa retornou `197 items`, com `187 passed, 10 skipped, 0 failed`, pois a fixture PostgreSQL foi omitida quando o script de release não recebeu a variável de ambiente.
+Suíte completa com PostgreSQL habilitado: `197 passed, 0 failed`.
 
 ## Browser Smoke
 
@@ -114,11 +114,11 @@ Implementação centralizada no adapter, com reserva antes do efeito externo, co
 - Multi-tenant: testes unitários/direcionados PASS; fluxo visual pendente
 - JavaScript: pendente Browser Smoke
 - Templates: pendente Browser Smoke
-- Secrets: não validado neste ciclo
-- Working tree: sem alteração nos arquivos fiscais listados
+- Secrets: PASS
+- Working tree: PASS após commit local `7316fb84`
 - Browser Smoke: BLOCKED por ambiente
 
-O comando `./pre_deploy_check.sh --deploy` retornou `FINAL: BLOCKED`, com `Browser smoke: NOT_CONFIGURED` e `Working tree: FAIL`. O modo deploy não realizou deploy.
+O comando `BILLING_SHADOW_DATABASE_URL='postgresql://postgres@localhost:5432/postgres' ./pre_deploy_check.sh --deploy` retornou `FINAL: BLOCKED` somente por `Browser smoke: NOT_CONFIGURED`. O modo deploy não realizou deploy.
 
 ## Enforcement em produção
 
