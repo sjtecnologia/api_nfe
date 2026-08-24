@@ -38,10 +38,10 @@ def login():
             db = next(get_db())
 
             result = db.execute(text("""
-                SELECT id, username, email, password_hash, _is_active
+                                SELECT id, username, email, password_hash, is_active AS _is_active
                 FROM users
                 WHERE (LOWER(email) = LOWER(:login) OR LOWER(username) = LOWER(:login))
-                  AND _is_active = true
+                                    AND is_active = true
             """), {"login": email})
 
             user_data = result.first()
@@ -160,7 +160,7 @@ def forgot_password():
             result = db.execute(text("""
                 SELECT id, username, email
                 FROM users
-                WHERE email = :email AND _is_active = true
+                WHERE email = :email AND is_active = true
             """), {"email": email})
             
             user_data = result.first()

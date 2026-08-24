@@ -8,9 +8,9 @@ A implementação controlada foi criada com flags desligadas por padrão, mas a 
 
 ## E2E environment
 
-LOCAL/HOMOLOGATION: NOT_CONFIGURED nesta execução.
+LOCAL: PASS, usando PostgreSQL dedicado `e2e_46f_local` e Flask escutando apenas em `127.0.0.1:5052`.
 
-As variáveis `E2E_BASE_URL`, `E2E_USERNAME` e `E2E_PASSWORD` não estavam presentes. Nenhum valor foi gravado no código, relatório ou Git.
+O seed idempotente criou/reutilizou usuário Editor, tenant fictício e subscription `START_V1`. As credenciais foram geradas e mantidas somente na memória do processo; nenhum valor foi gravado no relatório ou Git.
 
 ## Hook fiscal
 
@@ -89,20 +89,15 @@ Suíte completa com PostgreSQL habilitado: `197 passed, 0 failed`.
 
 ## Browser Smoke
 
-Não executado. O comando terminou com:
-
-```text
-BROWSER_SMOKE_PENDING_ENVIRONMENT
-Configure E2E_BASE_URL, E2E_USERNAME and E2E_PASSWORD.
-```
+PASS. O canário autenticado percorreu login, seleção de empresa, dashboard, listagem NF-e, emissão, CSRF, submit nativo, próximo número, NFC-e e análise de vendas. Não houve pageerror, console error crítico ou request failure.
 
 ## Start 49/50 e Start 50/50
 
-Os cenários atômicos PostgreSQL da Fase 4.6E.2 continuam passando. O fluxo integrado autenticado com SEFAZ mockada não foi homologado no navegador por falta do ambiente E2E.
+O seed preparou `49/50` e `50/50` no tenant E2E, e a camada de reserva PostgreSQL continua validada. O canário visual existente é somente leitura e não submete emissão nem chama SEFAZ.
 
 ## UI quota
 
-O fluxo web exibe mensagem comercial para `PLAN_NFE_QUOTA_EXCEEDED`; a confirmação visual depende do Browser Smoke autenticado.
+O fluxo web contém a mensagem comercial para `PLAN_NFE_QUOTA_EXCEEDED`; a submissão de quota não foi exercitada pelo canário existente.
 
 ## API v2
 
@@ -122,11 +117,21 @@ Implementação centralizada no adapter, com reserva antes do efeito externo, co
 - Templates: pendente Browser Smoke
 - Secrets: PASS
 - Working tree: PASS após commit local `7316fb84`
-- Browser Smoke: BLOCKED por ambiente
+- Browser Smoke: PASS
 
-O canário direto retornou `BROWSER_SMOKE_PENDING_ENVIRONMENT`.
+O release gate local foi revalidado após commit, com `Working directory limpo`, `Secrets: PASS` e `Full suite: PASS`. O comando `--deploy` não foi repetido para respeitar a proibição de deploy; a execução anterior marcou apenas Browser Smoke como `NOT_CONFIGURED`.
 
-O comando `BILLING_SHADOW_DATABASE_URL='postgresql://postgres@localhost:5432/postgres' ./pre_deploy_check.sh --deploy` retornou:
+## Seed safety
+
+O comando de seed foi executado duas vezes com os mesmos IDs, provando idempotência. Com `ENVIRONMENT=production`, abortou antes de conectar/escrever com `E2E_SEED_REFUSED_IN_PRODUCTION`.
+
+## Gate final
+
+O canário local passou, mas os cenários de emissão mockada, quota visual 50/50, web+API e rollback visual não fazem parte do Browser Smoke atual e não foram artificialmente declarados como homologados.
+
+O gate completo solicitado para homologação controlada permanece bloqueado até esses cenários serem executados em harness E2E apropriado.
+
+O último comando de release gate com `--deploy` retornou:
 
 - Critical regression: PASS
 - Full suite: PASS
@@ -134,10 +139,10 @@ O comando `BILLING_SHADOW_DATABASE_URL='postgresql://postgres@localhost:5432/pos
 - Multi-tenant: PASS
 - JavaScript: PASS
 - Templates: PASS
-- Browser smoke: NOT_CONFIGURED
+- Browser smoke: NOT_CONFIGURED (execução anterior, sem E2E configurado)
 - Secrets: PASS
 - Working tree: PASS
-- `FINAL: BLOCKED`
+- `FINAL: BLOCKED` (execução anterior)
 
 O modo deploy não realizou deploy.
 
@@ -155,4 +160,4 @@ Os hooks mínimos foram adicionados a `routes/nfe_routes.py`, `routes/api_v2_rou
 
 ## Conclusão
 
-A Fase 4.6F permanece `BLOCKED` até que o Browser Smoke seja executado com um ambiente local de homologação controlada e passe integralmente. Não iniciar 4.6G nem a Fase 5.
+A Fase 4.6F permanece `BLOCKED` até que o release gate seja executado integralmente com o ambiente E2E configurado e os cenários de quota mockada homologados. Não iniciar 4.6G nem a Fase 5.
