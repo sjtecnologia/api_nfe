@@ -877,9 +877,38 @@ class NFeService:
             
             logger.debug(f"OK: XML assinado: {len(xml_assinado)} caracteres")
             logger.debug(f"[DEBUG] XML assinado tem <Signature>: {'<Signature' in xml_assinado}")
+
+            quota_adapter = None
+            reservation_key = dados_form.get('quota_reservation_key') if isinstance(dados_form, dict) else None
+            if reservation_key:
+                from services.billing_nfe_quota import BillingNFeQuotaAdapter
+                quota_adapter = BillingNFeQuotaAdapter(self.db)
+                quota_result = quota_adapter.before_external_send(
+                    cliente_id=cliente_id,
+                    reservation_key=reservation_key,
+                    source_id=reservation_key,
+                )
+                if not quota_result.get('allowed', True):
+                    return {
+                        'success': False,
+                        'quota_blocked': True,
+                        'quota': quota_result,
+                        'message': 'Você atingiu o limite de 50 NF-e do seu plano Start neste período.',
+                    }
             
             # 4. ENVIAR PARA SEFAZ
             resultado_sefaz = self._processar_envio_sefaz(xml_assinado, certificado, ambiente, cliente_id)
+
+            if quota_adapter and reservation_key:
+                try:
+                    if resultado_sefaz.get('status') == 'AUTORIZADA':
+                        quota_adapter.after_authorized(reservation_key=reservation_key, source_id=reservation_key)
+                    elif resultado_sefaz.get('success') is False:
+                        quota_adapter.known_not_authorized(reservation_key=reservation_key, reason='REJEITADA')
+                    else:
+                        quota_adapter.reservations.reconcile(reservation_key=reservation_key, real_status='PENDING_RECONCILIATION')
+                except Exception as billing_error:
+                    logger.error(f"BILLING_CONFIRM_PENDING: {billing_error}")
             
             if not resultado_sefaz.get('success', False):
                 return {

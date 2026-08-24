@@ -2,6 +2,8 @@ from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from sqlalchemy.exc import IntegrityError
+
 from services.billing_usage_shadow import (
     APIUsageAdapter,
     AIUsageAdapter,
@@ -68,3 +70,17 @@ def test_usage_failure_is_non_blocking():
     service.enabled = staticmethod(lambda: True)
     result = service.record_safe(cliente_id=7, metric_key='AI_REQUEST', event_key='ai:2', source_type='AI')
     assert result['reason'] == 'USAGE_LOGGING_FAILED'
+
+
+def test_same_event_key_is_duplicate_when_db_unique_constraint_hits():
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = [subscription()]
+    db.query.return_value.filter_by.return_value.first.return_value = None
+    db.flush.side_effect = IntegrityError('stmt', 'params', Exception('unique violation'))
+    service = BillingUsageShadowService(db)
+    service.enabled = staticmethod(lambda: True)
+
+    result = service.record(cliente_id=7, metric_key='AI_REQUEST', event_key='ai:race', source_type='AI')
+
+    assert result['reason'] == 'DUPLICATE'
+    db.rollback.assert_called_once()

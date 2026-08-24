@@ -387,6 +387,7 @@ def emit_nfe():
             'destinatario_id': destinatario.destinatario_id,
             'destinatario_cnpj_cpf': destinatario.cpf_cnpj,
             'numero_nfe': proximo_numero,  # Número da NFe
+            'quota_reservation_key': f"NFE:api:{cliente_id}:1:{proximo_numero}",
             'serie': 1,  # Série
             'modelo': '55',  # Modelo NFe
             'natureza_operacao': data.get('natureza_operacao', 'Venda'),
@@ -459,6 +460,22 @@ def emit_nfe():
             
             print(f"[API] Resultado do processamento: success={resultado.get('success')}, status={resultado.get('status')}")
             
+            if resultado.get('quota_blocked'):
+                db.delete(nfe)
+                db.commit()
+                quota = resultado.get('quota', {})
+                return jsonify({
+                    "success": False,
+                    "code": quota.get('code', 'PLAN_NFE_QUOTA_EXCEEDED'),
+                    "metric": "NFE_ISSUED",
+                    "used": quota.get('used'),
+                    "limit": quota.get('limit', 50),
+                    "period_start": quota.get('period_start'),
+                    "period_end": quota.get('period_end'),
+                    "upgrade_available": True,
+                    "message": resultado.get('message'),
+                }), 409
+
             if not resultado.get('success'):
                 # Verificar se tem lista de erros
                 erros = resultado.get('errors', [resultado.get('message', 'Erro desconhecido')])

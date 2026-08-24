@@ -40,3 +40,24 @@ class BillingUsageCounter(Base):
     quantity = Column(Integer, nullable=False, default=0)
     version = Column(Integer, nullable=False, default=0)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BillingUsageReservation(Base):
+    __tablename__ = "billing_usage_reservations"
+    __table_args__ = (UniqueConstraint("subscription_id", "metric_key", "reservation_key", name="uq_billing_usage_reservation_key"),)
+
+    reservation_id = Column(BigInteger, primary_key=True)
+    subscription_id = Column(Integer, ForeignKey("billing_subscriptions.subscription_id"), nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.cliente_id"))
+    metric_key = Column(String(50), nullable=False)
+    reservation_key = Column(String(255), nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+    status = Column(String(30), nullable=False, default="RESERVED")
+    expires_at = Column(DateTime)
+    source_type = Column(String(30), nullable=False, default="NFE")
+    source_id = Column(String(255))
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    confirmed_at = Column(DateTime)
+    released_at = Column(DateTime)

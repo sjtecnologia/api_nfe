@@ -20,6 +20,7 @@ from auth.decorators import (
 from auth.permissions import get_accessible_client_ids
 from services.certificate_service import get_active_certificate_for_client
 from services.nfe_service import NFeService, generate_nfe_xml, sign_xml, send_to_sefaz, validar_tributacao_nfe
+from services.billing_nfe_quota import BillingNFeQuotaAdapter
 from utils.helpers import produto_to_dict_for_template, get_uf_ibge_code
 from utils.nfe_validators import validar_cpf, validar_cnpj
 from utils.nfe_validators import validar_dados_nfe, validar_xml_nfe
@@ -968,6 +969,20 @@ def emitir_nfe():
                         logger.warning("⏱️  Timeout validação IA (continuando)")
                     except Exception as e:
                         logger.error(f"⚠️  Erro validação IA: {e} (continuando)")
+
+                    reservation_key = f"NFE:web:{emitente_cliente_id}:{form_data_initial.get('serie', '1')}:{form_data_initial.get('numero_nfe', '1')}"
+                    quota_adapter = BillingNFeQuotaAdapter(db)
+                    quota_result = quota_adapter.before_external_send(
+                        cliente_id=emitente_cliente_id,
+                        reservation_key=reservation_key,
+                        source_id=reservation_key,
+                    )
+                    if not quota_result.get('allowed', True):
+                        if quota_result.get('code') == 'PLAN_NFE_QUOTA_EXCEEDED':
+                            flash('Você atingiu o limite de 50 NF-e do seu plano Start neste período.', 'warning')
+                        else:
+                            flash('A emissão não pôde prosseguir por uma regra comercial do plano.', 'warning')
+                        return redirect(url_for('nfe.emitir_nfe', cliente_id=emitente_cliente_id))
                     
                     # 4. ENVIAR PARA SEFAZ
                     logger.debug(f" === ENVIANDO PARA SEFAZ ===")
@@ -1067,6 +1082,26 @@ def emitir_nfe():
                         # CORREÇÃO: Usar o status retornado pelo serviço em vez de verificar apenas o código
                         status_nfe = resultado_sefaz.get('status', 'REJEITADA') if resultado_sefaz.get('success', False) else 'REJEITADA'
                         logger.debug(f" Status NFe: {status_nfe}")
+
+                        try:
+                            if status_nfe == 'AUTORIZADA':
+                                billing_result = quota_adapter.after_authorized(
+                                    reservation_key=reservation_key,
+                                    source_id=reservation_key,
+                                )
+                            elif resultado_sefaz.get('success', False) is False:
+                                billing_result = quota_adapter.known_not_authorized(
+                                    reservation_key=reservation_key,
+                                    reason=status_nfe,
+                                )
+                            else:
+                                billing_result = quota_adapter.reservations.reconcile(
+                                    reservation_key=reservation_key,
+                                    real_status='PENDING_RECONCILIATION',
+                                )
+                            logger.debug(f" Resultado billing shadow: {billing_result}")
+                        except Exception as billing_error:
+                            logger.error(f"BILLING_CONFIRM_PENDING: {billing_error}")
                         
                         # Extrair data de autorização do resultado SEFAZ
                         data_autorizacao_nfe = None
