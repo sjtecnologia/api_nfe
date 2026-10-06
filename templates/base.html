@@ -939,6 +939,9 @@
                                     <i class="fas fa-briefcase"></i> Gestão
                                 </a>
                                 <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('catalogo_vendas.listar_catalogos') }}">
+                                        <i class="fas fa-store"></i> Catálogos e Pedidos
+                                    </a>
                                     <a class="dropdown-item" href="{{ url_for('admin.estoque_dashboard') }}">
                                         <i class="fas fa-boxes"></i> Estoque
                                     </a>
@@ -1005,6 +1008,9 @@
                                         <i class="fas fa-briefcase"></i> Gestão
                                     </a>
                                     <div class="dropdown-menu">
+                                        <a class="dropdown-item" href="{{ url_for('catalogo_vendas.listar_catalogos') }}">
+                                            <i class="fas fa-store"></i> Catálogos e Pedidos
+                                        </a>
                                         <a class="dropdown-item" href="{{ url_for('admin.estoque_dashboard') }}?cliente_id={{ session.current_client_id }}">
                                             <i class="fas fa-boxes"></i> Estoque
                                         </a>

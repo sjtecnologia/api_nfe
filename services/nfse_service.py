@@ -30,6 +30,24 @@ from models.nfse_model import (
 )
 
 
+def _salvar_dump_debug_nfse(nome_arquivo: str, conteudo: str) -> None:
+    """Persiste XML/retorno apenas em depuração explicitamente autorizada.
+
+    XMLs fiscais carregam dados pessoais e não devem ser gravados em ``/tmp``
+    no fluxo normal de emissão. Quando necessário para diagnóstico pontual,
+    o operador pode habilitar ``NFSE_DEBUG_XML_DUMP=true``.
+    """
+    habilitado = os.getenv("NFSE_DEBUG_XML_DUMP", "false").strip().lower()
+    if habilitado not in {"1", "true", "yes", "on", "sim"}:
+        return
+
+    caminho = os.path.join(tempfile.gettempdir(), nome_arquivo)
+    with open(caminho, "w", encoding="utf-8") as arquivo:
+        arquivo.write(conteudo)
+    os.chmod(caminho, 0o600)
+    print(f"[NFSE] Dump de depuração salvo com acesso restrito: {caminho}")
+
+
 def _validar_periodo_certificado_x509(certificate):
     """Garante que o certificado X509 esteja vigente para o envio mTLS."""
     agora = datetime.now(certificate.not_valid_after_utc.tzinfo)
@@ -181,10 +199,30 @@ class NFSeService:
         return os.getenv(env_key, f"http://nfse.abrasf.org.br/{operacao}")
 
     def _usar_schema_rtc(self) -> bool:
-        """Define se o XML deve incluir blocos RTC (IBS/CBS e trib)."""
+        """Define se o XML deve incluir blocos RTC (IBS/CBS e trib).
+
+        Na homologação nacional, os grupos IBS/CBS e respectivas validações
+        passaram a ser obrigatórios em 03/08/2026. Produção preserva o opt-in
+        até que cada provedor municipal confirme a ativação do layout RTC.
+        """
         valor = (
             os.getenv(f"GISS_SCHEMA_RTC_{self.ambiente.upper()}")
             or os.getenv("GISS_SCHEMA_RTC")
+            or ("true" if self.ambiente == "homologacao" else "false")
+        )
+        return str(valor).strip().lower() in {"1", "true", "yes", "on", "sim"}
+
+    def _usar_tomador_plural_rtc(self) -> bool:
+        """Seleciona a variação de tag do tomador do XSD do provedor.
+
+        O endpoint GISS de homologação utiliza o contrato v2.04 original,
+        que mantém ``TomadorServico``/``IdentificacaoTomador`` mesmo quando
+        os grupos RTC estão presentes. A variante plural é preservada por
+        override para provedores que efetivamente a publiquem.
+        """
+        valor = (
+            os.getenv(f"GISS_TOMADOR_PLURAL_{self.ambiente.upper()}")
+            or os.getenv("GISS_TOMADOR_PLURAL")
             or "false"
         )
         return str(valor).strip().lower() in {"1", "true", "yes", "on", "sim"}
@@ -248,7 +286,8 @@ class NFSeService:
         - warn: valida e apenas registra aviso
         - strict: bloqueia envio quando inválido
         """
-        mode = (os.getenv("NFSE_XSD_VALIDATION_MODE", "warn") or "warn").strip().lower()
+        default_mode = "strict" if self.ambiente == "homologacao" else "warn"
+        mode = (os.getenv("NFSE_XSD_VALIDATION_MODE", default_mode) or default_mode).strip().lower()
         if mode not in {"off", "warn", "strict"}:
             mode = "warn"
 
@@ -283,6 +322,36 @@ class NFSeService:
             "xsd_validation_mode": mode,
             "xsd_result": resultado,
         }
+
+    def _validar_assinaturas_xml(self, xml_assinado: str) -> Tuple[bool, Optional[str]]:
+        """Garante as assinaturas estruturais exigidas pelo GISS antes do envio.
+
+        A checagem não substitui a validação criptográfica feita pelo provedor.
+        Ela impede que uma falha local de assinatura envie o XML original sem
+        assinatura digital.
+        """
+        try:
+            root = etree.fromstring(xml_assinado.encode("utf-8"))
+        except (TypeError, ValueError, etree.XMLSyntaxError) as exc:
+            return False, f"XML assinado inválido: {exc}"
+
+        namespaces = {"p": self.NS_ENVIO, "p1": self.NS_TIPOS, "ds": self.NS_DSIG}
+        lote_rps = root.find("./p:LoteRps", namespaces)
+        if lote_rps is None:
+            return False, "LoteRps não encontrado no XML assinado"
+
+        if root.find("./ds:Signature", namespaces) is None:
+            return False, "Assinatura digital do lote ausente"
+
+        rps_nodes = lote_rps.findall("./p1:ListaRps/p1:Rps", namespaces)
+        if not rps_nodes:
+            return False, "Nenhum RPS encontrado no lote assinado"
+
+        for indice, rps in enumerate(rps_nodes, start=1):
+            if rps.find("./ds:Signature", namespaces) is None:
+                return False, f"Assinatura digital ausente no RPS {indice}"
+
+        return True, None
         
     def gerar_id_lote(self) -> str:
         """Gera ID único para o lote de RPS (apenas números, máximo 15 dígitos)"""
@@ -574,10 +643,13 @@ class NFSeService:
         inscricao = nfse.prestador.inscricao_municipal or "0"
         etree.SubElement(prestador_el, "{%s}InscricaoMunicipal" % self.NS_TIPOS).text = inscricao
         
-        # Tomador: schema RTC usa plural; schema legado usa singular.
+        # O contrato original GISS v2.04 mantém as tags no singular, inclusive
+        # para RPS com blocos RTC. Alguns provedores disponibilizam uma variante
+        # plural; ela é habilitada apenas por configuração explícita.
         if nfse.Tomadores:
-            tag_tomador = "TomadoresServico" if usar_schema_rtc else "TomadorServico"
-            tag_ident_tomador = "IdentificacaoTomadores" if usar_schema_rtc else "IdentificacaoTomador"
+            usar_tomador_plural = usar_schema_rtc and self._usar_tomador_plural_rtc()
+            tag_tomador = "TomadoresServico" if usar_tomador_plural else "TomadorServico"
+            tag_ident_tomador = "IdentificacaoTomadores" if usar_tomador_plural else "IdentificacaoTomador"
 
             tomador_el = etree.SubElement(inf_rps, "{%s}%s" % (self.NS_TIPOS, tag_tomador))
             ident_Tomadores = etree.SubElement(tomador_el, "{%s}%s" % (self.NS_TIPOS, tag_ident_tomador))
@@ -629,13 +701,7 @@ class NFSeService:
         # Adicionar declaração XML
         xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_str
         
-        # DEBUG: Salvar XML gerado para análise
-        try:
-            with open('/tmp/last_generated_nfse.xml', 'w', encoding='utf-8') as f:
-                f.write(xml_str)
-            print(f"[NFSE] XML não assinado salvo em /tmp/last_generated_nfse.xml")
-        except:
-            pass
+        _salvar_dump_debug_nfse("last_generated_nfse.xml", xml_str)
         
         return xml_str
     
@@ -858,13 +924,7 @@ class NFSeService:
             
             print(f"[NFSE] ✅ RPS assinado: {len(xml_assinado)} caracteres")
             
-            # DEBUG: Salvar para análise
-            try:
-                with open('/tmp/last_signed_nfse.xml', 'w', encoding='utf-8') as f:
-                    f.write(xml_assinado)
-                print(f"[NFSE] XML salvo em /tmp/last_signed_nfse.xml")
-            except:
-                pass
+            _salvar_dump_debug_nfse("last_signed_nfse.xml", xml_assinado)
             
             return xml_assinado
             
@@ -1001,6 +1061,14 @@ class NFSeService:
             # 5. Assinar XML
             xml_assinado = self.assinar_xml(xml_rps, db_session=db_session, cliente_id=nfse.cliente_id)
             print(f"[NFSE] XML assinado: {len(xml_assinado)} caracteres")
+
+            assinaturas_ok, erro_assinatura = self._validar_assinaturas_xml(xml_assinado)
+            if not assinaturas_ok:
+                print(f"[NFSE] ❌ Envio bloqueado: {erro_assinatura}")
+                return False, {
+                    "erro": "Assinatura digital inválida ou ausente",
+                    "mensagem": erro_assinatura,
+                }
             
             # 6. Criar envelope SOAP para o webservice GISS
             # IMPORTANTE: O conteúdo dentro de nfseCabecMsg e nfseDadosMsg deve estar escapado (entidades HTML)
@@ -1068,13 +1136,7 @@ class NFSeService:
                     print(f"[NFSE] Status HTTP: {response.status_code}")
                     print(f"[NFSE] Resposta: {len(response.text)} caracteres")
 
-                    # DEBUG: Salvar última resposta
-                    try:
-                        with open('/tmp/last_nfse_response.xml', 'w', encoding='utf-8') as f:
-                            f.write(response.text)
-                        print(f"[NFSE] Resposta salva em /tmp/last_nfse_response.xml")
-                    except:
-                        pass
+                    _salvar_dump_debug_nfse("last_nfse_response.xml", response.text)
 
                     if response.status_code == 200:
                         sucesso, dados_resposta = self._processar_resposta_envio(response.text)
@@ -1359,19 +1421,22 @@ class NFSeService:
                 cert_param = (self.cert_path, self.cert_password)
 
             print(f"[NFSE] Consultando lote (protocolo={protocolo}) em {url}")
-            response = requests.post(
-                url,
-                data=soap_envelope.encode("utf-8"),
-                headers=headers,
-                cert=cert_param,
-                timeout=60
-            )
-
             try:
-                with open('/tmp/last_nfse_consulta_response.xml', 'w', encoding='utf-8') as f:
-                    f.write(response.text)
-            except Exception:
-                pass
+                response = requests.post(
+                    url,
+                    data=soap_envelope.encode("utf-8"),
+                    headers=headers,
+                    cert=cert_param,
+                    timeout=60
+                )
+            finally:
+                if db_session and cliente_id:
+                    import os as _os
+                    for _path in (cert_file_path, key_file_path):
+                        if _path and _os.path.exists(_path):
+                            _os.remove(_path)
+
+            _salvar_dump_debug_nfse("last_nfse_consulta_response.xml", response.text)
 
             if response.status_code == 200:
                 return self._processar_resposta_consulta(response.text)
@@ -1389,7 +1454,7 @@ class NFSeService:
                     except OSError:
                         pass
 
-    def cancelar_nfse(self, numero_nfse: str, codigo_cancelamento: str, prestador_cnpj: str, inscricao_municipal: str, codigo_municipio: str = "3549805") -> Tuple[bool, Dict[str, Any]]:
+    def cancelar_nfse(self, numero_nfse: str, codigo_cancelamento: str, prestador_cnpj: str, inscricao_municipal: str, codigo_municipio: str = "3549805", db_session=None, cliente_id: Optional[int] = None) -> Tuple[bool, Dict[str, Any]]:
         """
         Cancela uma NFS-e
         
@@ -1422,7 +1487,9 @@ class NFSeService:
 </CancelarNfseEnvio>'''
             
             # Assinar XML
-            xml_assinado = self.assinar_xml(xml_cancelamento)
+            xml_assinado = self.assinar_xml(xml_cancelamento, db_session=db_session, cliente_id=cliente_id)
+            if '<Signature' not in xml_assinado and ':Signature' not in xml_assinado:
+                return False, {"erro": "Certificado digital não disponível para assinar o cancelamento"}
             
             soap_envelope = self._criar_envelope_soap("CancelarNfse", xml_assinado)
             
@@ -1433,11 +1500,16 @@ class NFSeService:
             
             url = self.urls["base"] + self.urls["cancelar"]
             
+            cert_param = (self.cert_path, self.cert_password) if self.cert_path else None
+            if db_session and cliente_id:
+                cert_file_path, key_file_path = self._carregar_certificado_mtls(db_session, cliente_id)
+                cert_param = (cert_file_path, key_file_path)
+
             response = requests.post(
                 url,
                 data=soap_envelope.encode("utf-8"),
                 headers=headers,
-                cert=(self.cert_path, self.cert_password) if self.cert_path else None,
+                cert=cert_param,
                 timeout=60
             )
             

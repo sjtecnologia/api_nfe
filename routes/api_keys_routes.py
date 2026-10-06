@@ -70,6 +70,26 @@ def api_documentation(doc_name=None):
             'arquivo': 'API_INTEGRACAO_MANUAL.md',
             'titulo': 'Manual de Integração da API',
             'descricao': 'Manual completo para integração com a API do sistema'
+        },
+        'fiscal': {
+            'arquivo': 'API_FISCAL.md',
+            'titulo': 'API Fiscal - NF-e, NFC-e e NFS-e',
+            'descricao': 'Emissão, consulta, cancelamento, XML, idempotência e estados fiscais'
+        },
+        'prontidao-fiscal': {
+            'arquivo': 'PRONTIDAO_PRODUTO_FISCAL.md',
+            'titulo': 'Prontidão do Produto Fiscal',
+            'descricao': 'Critérios de emissão no painel, integrações, homologação, volume e suporte'
+        },
+        'roadmap-documentos-fiscais': {
+            'arquivo': 'ROADMAP_DOCUMENTOS_FISCAIS.md',
+            'titulo': 'Roadmap de Documentos Fiscais',
+            'descricao': 'Status atual e próxima frente: CT-e, CT-e OS e CT-e Simplificado'
+        },
+        'plano-cte-mdfe': {
+            'arquivo': 'PLANO_IMPLEMENTACAO_CTE_MDFE.md',
+            'titulo': 'Plano de Implementação CT-e e MDF-e',
+            'descricao': 'Fases técnicas para CT-e, CT-e OS, CT-e Simplificado e MDF-e'
         }
     }
     
@@ -129,6 +149,9 @@ def create_api_key(cliente_id):
     
     if request.method == 'POST':
         nome = request.form.get('nome')
+        ambiente = request.form.get('ambiente', 'producao')
+        if ambiente not in ('producao', 'teste'):
+            ambiente = 'producao'
         rate_limit = request.form.get('rate_limit', 1000, type=int)
         expira_em_dias = request.form.get('expira_em_dias', type=int)
         ip_whitelist = request.form.get('ip_whitelist', '').strip()
@@ -139,7 +162,7 @@ def create_api_key(cliente_id):
             return redirect(url_for('api_keys.create_api_key', cliente_id=cliente_id))
         
         # Gerar a chave
-        key_string, key_hash, key_prefix = generate_api_key(cliente_id, nome)
+        key_string, key_hash, key_prefix = generate_api_key(cliente_id, nome, ambiente=ambiente)
         
         # Calcular expiração
         expira_em = None
@@ -168,6 +191,7 @@ def create_api_key(cliente_id):
             expira_em=expira_em,
             ip_whitelist=ip_whitelist_json,
             permissoes=permissoes_json
+            , ambiente=ambiente
         )
         
         db.add(api_key)

@@ -49,7 +49,10 @@ class UserModel(Base):
     username = Column(String(255), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    _is_active = Column('is_active', Boolean, default=True, nullable=False)
+    # O schema histórico em produção usa literalmente ``_is_active``.
+    # O atributo Python preserva o mesmo nome para evitar uma tradução implícita
+    # que faria as consultas apontarem para a coluna inexistente ``is_active``.
+    _is_active = Column('_is_active', Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # [OK] Relacionamentos usando strings para evitar import circular
@@ -125,9 +128,9 @@ class User(UserMixin):
         
         # Buscar dados do usuário
         user_result = db.execute(text("""
-            SELECT id, username, email, is_active as _is_active
+            SELECT id, username, email, _is_active
             FROM users 
-            WHERE id = :user_id AND is_active = true
+            WHERE id = :user_id AND _is_active = true
         """), {"user_id": user_id})
         
         user_data = user_result.first()
@@ -198,9 +201,9 @@ class User(UserMixin):
         
         db = next(get_db())
         result = db.execute(text("""
-            SELECT id, username, password_hash, email, is_active as _is_active
+            SELECT id, username, password_hash, email, _is_active
             FROM users 
-            WHERE username = :username AND is_active = true
+            WHERE username = :username AND _is_active = true
         """), {"username": username})
         
         user_data = result.first()
@@ -1077,6 +1080,8 @@ class ApiKey(Base):
     rate_limit = Column(Integer, default=1000)
     ip_whitelist = Column(Text)  # JSON
     permissoes = Column(Text)  # JSON
+    # Separação explícita entre credenciais de teste e produção.
+    ambiente = Column(String(20), nullable=False, default='producao')
     
     # Relacionamentos
     cliente = relationship('Cliente')
@@ -1145,6 +1150,25 @@ class ApiUsageLog(Base):
     
     def __repr__(self):
         return f"<ApiUsageLog(id={self.log_id}, endpoint='{self.endpoint}', status={self.status_code})>"
+
+
+class FiscalApiIdempotency(Base):
+    """Resposta persistida de uma requisição fiscal idempotente."""
+    __tablename__ = 'fiscal_api_idempotency'
+
+    idempotency_id = Column(BigInteger, primary_key=True)
+    cliente_id = Column(Integer, ForeignKey('clientes.cliente_id', ondelete='CASCADE'), nullable=False)
+    endpoint = Column(String(120), nullable=False)
+    idempotency_key = Column(String(255), nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    status_code = Column(Integer)
+    response_json = Column(Text)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('cliente_id', 'endpoint', 'idempotency_key', name='uq_fiscal_api_idempotency'),
+    )
 
 
 class Webhook(Base):

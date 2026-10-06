@@ -1662,7 +1662,7 @@ def api_ia_dashboard_inteligente():
                 hora = datetime.now().hour
                 saudacao = 'Bom dia' if hora < 12 else ('Boa tarde' if hora < 18 else 'Boa noite')
                 nome_usuario = getattr(current_user, 'username', '') or getattr(current_user, 'name', 'usuário')
-                top_prod_str = top_prod.get('descricao', 'não identificado') if (top_prod := dict(r_top._mapping) if r_top else None) else 'não identificado'
+                top_prod_str = r_top_prods[0].descricao if r_top_prods else 'não identificado'
 
                 prompt = (
                     f'{saudacao}, {nome_usuario}! Analise os dados e gere uma mensagem executiva curta (3-5 frases) '
@@ -1672,7 +1672,7 @@ def api_ia_dashboard_inteligente():
                     f'- Faturamento: R$ {fat_atual:,.2f} ({delta_fat:+.1f}% vs período anterior)\n'
                     f'- Clientes atendidos: {r_periodo.clientes_ativos or 0}\n'
                     f'- Ticket médio: R$ {float(r_periodo.ticket_medio or 0):,.2f}\n'
-                    f'- Produto campeão: {r_top_prods[0].descricao if r_top_prods else "não identificado"}\n'
+                    f'- Produto campeão: {top_prod_str}\n'
                     f'- NF-es emitidas hoje: {r_hoje.nfes_hoje or 0}\n'
                     f'- Faturamento hoje: R$ {float(r_hoje.fat_hoje or 0):,.2f}\n'
                 )

@@ -96,47 +96,49 @@ CREATE INDEX IF NOT EXISTS idx_billing_subscription_company_cliente ON billing_s
 CREATE INDEX IF NOT EXISTS idx_billing_override_subscription ON billing_subscription_overrides(subscription_id);
 
 -- Seeds são shadow-only e não vinculam clientes nem assinaturas existentes.
-INSERT INTO billing_plans (code, name, display_order) VALUES
-    ('START', 'Start', 1),
-    ('ESSENCIAL', 'Essencial', 2),
-    ('PROFISSIONAL', 'Profissional', 3),
-    ('PREMIUM', 'Premium', 4),
-    ('ENTERPRISE', 'Enterprise / Parceiros', 5)
+-- Informe ``active`` explicitamente: bancos criados pelo ORM podem ter a
+-- coluna ``NOT NULL`` sem o DEFAULT físico da migration.
+INSERT INTO billing_plans (code, name, active, display_order) VALUES
+    ('START', 'Start', TRUE, 1),
+    ('ESSENCIAL', 'Essencial', TRUE, 2),
+    ('PROFISSIONAL', 'Profissional', TRUE, 3),
+    ('PREMIUM', 'Premium', TRUE, 4),
+    ('ENTERPRISE', 'Enterprise / Parceiros', TRUE, 5)
 ON CONFLICT (code) DO NOTHING;
 
-INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, status)
-SELECT plan_id, 'START_V1', 60.00, 'BRL', 'ACTIVE' FROM billing_plans WHERE code = 'START'
+INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, valid_from, status, created_at)
+SELECT plan_id, 'START_V1', 60.00, 'BRL', CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_TIMESTAMP FROM billing_plans WHERE code = 'START'
 ON CONFLICT (version_code) DO NOTHING;
-INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, status)
-SELECT plan_id, 'ESSENCIAL_V1', 99.00, 'BRL', 'ACTIVE' FROM billing_plans WHERE code = 'ESSENCIAL'
+INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, valid_from, status, created_at)
+SELECT plan_id, 'ESSENCIAL_V1', 99.00, 'BRL', CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_TIMESTAMP FROM billing_plans WHERE code = 'ESSENCIAL'
 ON CONFLICT (version_code) DO NOTHING;
-INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, status)
-SELECT plan_id, 'PROFISSIONAL_V1', 169.00, 'BRL', 'ACTIVE' FROM billing_plans WHERE code = 'PROFISSIONAL'
+INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, valid_from, status, created_at)
+SELECT plan_id, 'PROFISSIONAL_V1', 169.00, 'BRL', CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_TIMESTAMP FROM billing_plans WHERE code = 'PROFISSIONAL'
 ON CONFLICT (version_code) DO NOTHING;
-INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, status)
-SELECT plan_id, 'PREMIUM_V1', 299.00, 'BRL', 'ACTIVE' FROM billing_plans WHERE code = 'PREMIUM'
+INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, valid_from, status, created_at)
+SELECT plan_id, 'PREMIUM_V1', 299.00, 'BRL', CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_TIMESTAMP FROM billing_plans WHERE code = 'PREMIUM'
 ON CONFLICT (version_code) DO NOTHING;
-INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, status)
-SELECT plan_id, 'ENTERPRISE_V1', NULL, 'BRL', 'ACTIVE' FROM billing_plans WHERE code = 'ENTERPRISE'
+INSERT INTO billing_plan_versions (plan_id, version_code, price, currency, valid_from, status, created_at)
+SELECT plan_id, 'ENTERPRISE_V1', NULL, 'BRL', CURRENT_TIMESTAMP, 'ACTIVE', CURRENT_TIMESTAMP FROM billing_plans WHERE code = 'ENTERPRISE'
 ON CONFLICT (version_code) DO NOTHING;
 
 -- Catálogo canônico e capacidades shadow. ROADMAP nunca é habilitado.
-INSERT INTO billing_features (key, name, description, status) VALUES
-    ('MAX_COMPANIES', 'Máximo de empresas', 'Capacidade shadow de empresas vinculadas', 'AVAILABLE'),
-    ('MAX_USERS', 'Máximo de usuários', 'Capacidade shadow de usuários vinculados', 'AVAILABLE'),
-    ('NFE_MONTHLY', 'NF-e mensal', 'Quota futura de NF-e, sem enforcement nesta fase', 'AVAILABLE'),
-    ('NFCE_MONTHLY', 'NFC-e mensal', 'Quota futura de NFC-e, sem enforcement nesta fase', 'AVAILABLE'),
-    ('NFSE_MONTHLY', 'NFS-e mensal', 'Quota futura de NFS-e, sem enforcement nesta fase', 'AVAILABLE'),
-    ('NFE', 'NF-e', 'Emissão NF-e existente', 'AVAILABLE'),
-    ('NFCE', 'NFC-e', 'Emissão NFC-e existente', 'AVAILABLE'),
-    ('NFSE', 'NFS-e', 'Emissão NFS-e existente', 'AVAILABLE'),
-    ('INVENTORY', 'Estoque', 'Gestão de estoque', 'AVAILABLE'),
-    ('CASH_FLOW', 'Fluxo de caixa', 'Gestão de caixa', 'AVAILABLE'),
-    ('REPORTS', 'Relatórios', 'Relatórios administrativos', 'AVAILABLE'),
-    ('MULTI_COMPANY', 'Multiempresa', 'Vínculo de empresas', 'AVAILABLE'),
-    ('MULTI_USER', 'Multiusuário', 'Vínculo de usuários', 'AVAILABLE'),
-    ('AI_SALES_ANALYSIS', 'Análise de vendas IA', 'Análise inteligente de vendas', 'AVAILABLE'),
-    ('AI_INSIGHTS_CENTER', 'Central de Insights', 'Recurso futuro', 'ROADMAP')
+INSERT INTO billing_features (key, name, description, status, created_at) VALUES
+    ('MAX_COMPANIES', 'Máximo de empresas', 'Capacidade shadow de empresas vinculadas', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('MAX_USERS', 'Máximo de usuários', 'Capacidade shadow de usuários vinculados', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('NFE_MONTHLY', 'NF-e mensal', 'Quota futura de NF-e, sem enforcement nesta fase', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('NFCE_MONTHLY', 'NFC-e mensal', 'Quota futura de NFC-e, sem enforcement nesta fase', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('NFSE_MONTHLY', 'NFS-e mensal', 'Quota futura de NFS-e, sem enforcement nesta fase', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('NFE', 'NF-e', 'Emissão NF-e existente', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('NFCE', 'NFC-e', 'Emissão NFC-e existente', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('NFSE', 'NFS-e', 'Emissão NFS-e existente', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('INVENTORY', 'Estoque', 'Gestão de estoque', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('CASH_FLOW', 'Fluxo de caixa', 'Gestão de caixa', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('REPORTS', 'Relatórios', 'Relatórios administrativos', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('MULTI_COMPANY', 'Multiempresa', 'Vínculo de empresas', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('MULTI_USER', 'Multiusuário', 'Vínculo de usuários', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('AI_SALES_ANALYSIS', 'Análise de vendas IA', 'Análise inteligente de vendas', 'AVAILABLE', CURRENT_TIMESTAMP),
+    ('AI_INSIGHTS_CENTER', 'Central de Insights', 'Recurso futuro', 'ROADMAP', CURRENT_TIMESTAMP)
 ON CONFLICT (key) DO NOTHING;
 
 -- Capacidades por PlanVersion.
@@ -173,8 +175,8 @@ WITH seed_values(version_code, feature_key, enabled, limit_type, limit_value) AS
     ('PREMIUM_V1', 'AI_SALES_ANALYSIS', true, 'ENABLED', NULL),
     ('ENTERPRISE_V1', 'AI_SALES_ANALYSIS', true, 'CONTRACTUAL', NULL)
 )
-INSERT INTO billing_plan_features (plan_version_id, feature_id, enabled, limit_type, limit_value)
-SELECT v.plan_version_id, f.feature_id, seed_values.enabled, seed_values.limit_type, seed_values.limit_value
+INSERT INTO billing_plan_features (plan_version_id, feature_id, enabled, access_level, limit_type, limit_value)
+SELECT v.plan_version_id, f.feature_id, seed_values.enabled, 'STANDARD', seed_values.limit_type, seed_values.limit_value
 FROM seed_values
 JOIN billing_plan_versions v ON v.version_code = seed_values.version_code
 JOIN billing_features f ON f.key = seed_values.feature_key

@@ -441,7 +441,6 @@ def _decode_certificate_data(cert_data_encoded):
     
     print(f"[SEARCH] _decode_certificate_data: Decodificando {len(cert_data_encoded)} caracteres")
     print(f"[SEARCH] _decode_certificate_data: Tipo de dados: {type(cert_data_encoded)}")
-    print(f"[SEARCH] _decode_certificate_data: Primeiros 100 chars: {str(cert_data_encoded)[:100]}")
     
     # Se já for bytes, retorna direto
     if isinstance(cert_data_encoded, bytes):
@@ -461,8 +460,6 @@ def _decode_certificate_data(cert_data_encoded):
             
             # Verificar se os bytes começam com assinatura PKCS#12 (0x30 0x82)
             if len(result) > 2:
-                hex_start = result[:4].hex()
-                print(f"[SEARCH] _decode_certificate_data: Primeiros bytes (hex): {hex_start}")
                 if result[0] == 0x30:
                     print(f"[OK] _decode_certificate_data: Assinatura PKCS#12 detectada (0x30)")
             
@@ -478,7 +475,6 @@ def _validate_pkcs12_simple(cert_data, password):
         print(f"[?] _validate_pkcs12_simple: Validando PKCS#12")
         print(f"[?] _validate_pkcs12_simple: Dados do certificado - {len(cert_data)} bytes")
         print(f"[?] _validate_pkcs12_simple: Senha - {len(password)} chars (tipo: {type(password)})")
-        print(f"[?] _validate_pkcs12_simple: Primeiros 4 bytes do cert (hex): {cert_data[:4].hex()}")
         
         # Converter senha para bytes
         password_bytes = password.encode('utf-8') if isinstance(password, str) else password

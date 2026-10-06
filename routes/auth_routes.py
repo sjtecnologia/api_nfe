@@ -19,7 +19,9 @@ def _get_limiter():
 def login():
     """Login do usuário - ACEITA EMAIL OU USERNAME"""
     limiter = _get_limiter()
-    if limiter:
+    # O formulário GET é uma página pública e não deve consumir o limite de
+    # tentativas. O rate limit protege exclusivamente tentativas de login.
+    if limiter and request.method == 'POST':
         limiter.limit('10/minute')(lambda: None)()
 
     if request.method == 'POST':
@@ -38,10 +40,10 @@ def login():
             db = next(get_db())
 
             result = db.execute(text("""
-                                SELECT id, username, email, password_hash, is_active AS _is_active
+                                SELECT id, username, email, password_hash, _is_active
                 FROM users
                 WHERE (LOWER(email) = LOWER(:login) OR LOWER(username) = LOWER(:login))
-                                    AND is_active = true
+                                    AND _is_active = true
             """), {"login": email})
 
             user_data = result.first()
@@ -160,7 +162,7 @@ def forgot_password():
             result = db.execute(text("""
                 SELECT id, username, email
                 FROM users
-                WHERE email = :email AND is_active = true
+                WHERE email = :email AND _is_active = true
             """), {"email": email})
             
             user_data = result.first()

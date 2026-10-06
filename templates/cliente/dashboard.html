@@ -170,7 +170,7 @@
                             <i class="fas fa-plus-circle fa-lg"></i>
                             <span class="small fw-bold">Emitir NFe</span>
                         </a>
-                        <a href="{{ url_for('nfse.emitir_form') }}?cliente_id={{ cliente.cliente_id }}"
+                        <a href="{{ url_for('cliente.nfse_emitir', cliente_hash=encode_id(cliente.cliente_id)) }}"
                            class="btn btn-success dashboard-quick-action py-3 px-4">
                             <i class="fas fa-file-invoice-dollar fa-lg"></i>
                             <span class="small fw-bold">Emitir NFS-e</span>

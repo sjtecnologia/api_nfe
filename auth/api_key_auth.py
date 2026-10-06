@@ -7,11 +7,12 @@ from database.connection import get_db
 from database.models import ApiKey, ApiUsageLog
 import hashlib
 import time
+import os
 from datetime import datetime
 from sqlalchemy import text
 
 
-def generate_api_key(cliente_id, nome):
+def generate_api_key(cliente_id, nome, ambiente='producao'):
     """
     Gera uma nova API Key
     
@@ -20,9 +21,9 @@ def generate_api_key(cliente_id, nome):
     """
     import secrets
     
-    # Gerar chave aleatória (formato: emx_live_xxxxxxxxxxxxxxxxxxxxx)
+    ambiente = ambiente if ambiente in ('producao', 'teste') else 'producao'
     random_part = secrets.token_urlsafe(32)
-    key_string = f"emx_live_{random_part}"
+    key_string = f"emx_{'live' if ambiente == 'producao' else 'test'}_{random_part}"
     
     # Hash da chave para armazenar no banco
     key_hash = hashlib.sha256(key_string.encode()).hexdigest()
@@ -116,15 +117,25 @@ def check_ip_whitelist(api_key, ip_address):
     """
     if not api_key.ip_whitelist:
         return True  # Sem restrição de IP
-    
+
     import json
+    import ipaddress
     try:
         whitelist = json.loads(api_key.ip_whitelist)
         if not whitelist:
             return True
-        return ip_address in whitelist
-    except:
-        return True
+        origem = ipaddress.ip_address(ip_address)
+        for item in whitelist:
+            try:
+                if origem in ipaddress.ip_network(str(item).strip(), strict=False):
+                    return True
+            except ValueError:
+                # Entrada inválida não amplia acesso; apenas é ignorada.
+                continue
+        return False
+    except (TypeError, ValueError, json.JSONDecodeError):
+        # Whitelist configurada mas inválida deve falhar fechada.
+        return False
 
 
 def log_api_request(api_key, endpoint, metodo, status_code, response_time_ms=None, erro=None):
@@ -196,8 +207,9 @@ def require_api_key(permissions=None):
                 elif len(parts) == 1:
                     api_key_string = parts[0]
             
-            # Ou do query parameter (menos seguro, mas útil para testes)
-            if not api_key_string:
+            # Query string expõe segredo em logs, histórico e proxies. Só
+            # permitir em ambientes legados explicitamente habilitados.
+            if not api_key_string and os.getenv('ALLOW_API_KEY_QUERY_PARAM', '').lower() in ('1', 'true', 'yes'):
                 api_key_string = request.args.get('api_key')
             
             if not api_key_string:
@@ -228,11 +240,13 @@ def require_api_key(permissions=None):
             if not within_limit:
                 response_time = int((time.time() - start_time) * 1000)
                 log_api_request(api_key, request.path, request.method, 429, response_time, msg)
-                return jsonify({
+                response = jsonify({
                     "error": "Rate limit excedido",
                     "message": msg,
                     "retry_after": 3600  # 1 hora em segundos
-                }), 429
+                })
+                response.headers['Retry-After'] = '3600'
+                return response, 429
             
             # Verificar permissões específicas
             if permissions:
@@ -247,6 +261,9 @@ def require_api_key(permissions=None):
             # Armazenar no contexto do Flask
             g.api_key = api_key
             g.cliente_id = api_key.cliente_id
+            g.api_environment = getattr(api_key, 'ambiente', None) or (
+                'teste' if str(api_key_string).startswith('emx_test_') else 'producao'
+            )
             g.api_authenticated = True
             g.request_start_time = start_time
             

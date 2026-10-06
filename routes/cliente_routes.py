@@ -15,6 +15,46 @@ from database.models import CertificadoDigital, Cliente, DestinatarioNFe, Produt
 
 cliente_bp = Blueprint('cliente', __name__)
 
+
+@cliente_bp.route('/<string:cliente_hash>/nfse')
+@login_required
+@client_access_required()
+def nfse(cliente_hash):
+    """Entrada do cliente para consultar suas NFS-e."""
+    cliente_id = decode_id(cliente_hash)
+    if cliente_id is None:
+        flash('Link inválido ou expirado.', 'danger')
+        return redirect(url_for('home.home'))
+    db = next(get_db())
+    try:
+        if cliente_id not in get_accessible_client_ids(db):
+            flash('Você não tem permissão para acessar este cliente.', 'danger')
+            return redirect(url_for('home.home'))
+        session['current_client_id'] = cliente_id
+        return redirect(url_for('nfse.list_nfse', cliente_id=cliente_id))
+    finally:
+        db.close()
+
+
+@cliente_bp.route('/<string:cliente_hash>/nfse/emitir')
+@login_required
+@client_access_required()
+def nfse_emitir(cliente_hash):
+    """Entrada do cliente para emissão direta de NFS-e."""
+    cliente_id = decode_id(cliente_hash)
+    if cliente_id is None:
+        flash('Link inválido ou expirado.', 'danger')
+        return redirect(url_for('home.home'))
+    db = next(get_db())
+    try:
+        if cliente_id not in get_accessible_client_ids(db):
+            flash('Você não tem permissão para acessar este cliente.', 'danger')
+            return redirect(url_for('home.home'))
+        session['current_client_id'] = cliente_id
+        return redirect(url_for('nfse.emitir_form', cliente_id=cliente_id, cliente_mode=1))
+    finally:
+        db.close()
+
 @cliente_bp.route('/dashboard/<string:cliente_hash>')
 @login_required
 @client_access_required()

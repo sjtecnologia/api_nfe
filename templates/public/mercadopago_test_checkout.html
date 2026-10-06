@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Checkout de teste - EmiteMax{% endblock %}
+{% block content %}
+<main class="container py-5" style="max-width: 720px">
+  <div class="alert alert-warning" role="alert">
+    <strong>Ambiente de teste Mercado Pago.</strong> Não use dados de cartão reais.
+  </div>
+
+  <section class="card shadow-sm">
+    <div class="card-body p-4">
+      <p class="text-uppercase text-muted small mb-1">Assinatura mensal</p>
+      <h1 class="h3">{{ plan.name }}</h1>
+      <p class="h4 mb-4">R$ {{ '%.2f'|format(plan.price|float) }} <small class="text-muted">/ mês</small></p>
+
+      <div id="checkout-feedback" class="alert d-none" role="status" aria-live="polite"></div>
+
+      <form id="form-checkout" novalidate>
+        <div class="mb-3">
+          <label class="form-label" for="company-name">Nome da empresa</label>
+          <input id="company-name" class="form-control" type="text" maxlength="255" autocomplete="organization" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="form-checkout__cardholderEmail">E-mail do pagador</label>
+          <input id="form-checkout__cardholderEmail" class="form-control" type="email" autocomplete="email" required>
+        </div>
+
+        <fieldset class="border rounded p-3 mb-3">
+          <legend class="float-none w-auto px-2 fs-6">Dados do cartão TEST</legend>
+          <div class="mb-3">
+            <label class="form-label" for="form-checkout__cardNumber">Número do cartão</label>
+            <div id="form-checkout__cardNumber" class="form-control p-1"></div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="form-checkout__expirationDate">Validade</label>
+              <div id="form-checkout__expirationDate" class="form-control p-1"></div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="form-checkout__securityCode">Código de segurança</label>
+              <div id="form-checkout__securityCode" class="form-control p-1"></div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="form-checkout__cardholderName">Titular</label>
+            <input id="form-checkout__cardholderName" class="form-control" type="text" autocomplete="cc-name" required>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="form-checkout__identificationType">Tipo de documento</label>
+              <select id="form-checkout__identificationType" class="form-select"></select>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="form-checkout__identificationNumber">Documento</label>
+              <input id="form-checkout__identificationNumber" class="form-control" type="text" inputmode="numeric" required>
+            </div>
+          </div>
+          <select id="form-checkout__issuer" class="d-none" aria-hidden="true"></select>
+          <select id="form-checkout__installments" class="d-none" aria-hidden="true"></select>
+        </fieldset>
+
+        <div class="form-check mb-4">
+          <input id="contract-accepted" class="form-check-input" type="checkbox" required>
+          <label class="form-check-label" for="contract-accepted">Li e aceito as condições comerciais desta contratação.</label>
+        </div>
+
+        <button id="form-checkout__submit" class="btn btn-primary w-100" type="submit">Autorizar assinatura TEST</button>
+        <p class="small text-muted mt-3 mb-0">Os campos de cartão são tokenizados pelo Mercado Pago no navegador. O EmiteMax recebe apenas um token de uso único para esta requisição.</p>
+      </form>
+    </div>
+  </section>
+</main>
+
+<script src="https://sdk.mercadopago.com/js/v2"></script>
+<script>
+(() => {
+  const publicKey = {{ mercadopago_public_key|tojson }};
+  const planCode = {{ plan.version_code|tojson }};
+  const amount = {{ ('%.2f'|format(plan.price|float))|tojson }};
+  const contractVersion = {{ contract_version|tojson }};
+  const feedback = document.getElementById('checkout-feedback');
+  const submitButton = document.getElementById('form-checkout__submit');
+  let idempotencyKey = window.crypto?.randomUUID?.() || `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const showFeedback = (message, type = 'danger') => {
+    feedback.textContent = message;
+    feedback.className = `alert alert-${type}`;
+  };
+
+  if (!window.MercadoPago) {
+    showFeedback('Não foi possível carregar o formulário seguro do Mercado Pago.');
+    submitButton.disabled = true;
+    return;
+  }
+
+  const mp = new window.MercadoPago(publicKey);
+  const cardForm = mp.cardForm({
+    amount,
+    iframe: true,
+    form: {
+      id: 'form-checkout',
+      cardNumber: { id: 'form-checkout__cardNumber', placeholder: 'Número do cartão' },
+      expirationDate: { id: 'form-checkout__expirationDate', placeholder: 'MM/AA' },
+      securityCode: { id: 'form-checkout__securityCode', placeholder: 'CVV' },
+      cardholderName: { id: 'form-checkout__cardholderName', placeholder: 'Nome como no cartão' },
+      issuer: { id: 'form-checkout__issuer' },
+      installments: { id: 'form-checkout__installments' },
+      identificationType: { id: 'form-checkout__identificationType' },
+      identificationNumber: { id: 'form-checkout__identificationNumber', placeholder: 'CPF' },
+      cardholderEmail: { id: 'form-checkout__cardholderEmail', placeholder: 'nome@exemplo.com' },
+    },
+    callbacks: {
+      onFormMounted: (error) => {
+        if (error) showFeedback('Não foi possível inicializar o formulário seguro do Mercado Pago.');
+      },
+      onSubmit: async (event) => {
+        event.preventDefault();
+        const companyName = document.getElementById('company-name').value.trim();
+        const contractAccepted = document.getElementById('contract-accepted').checked;
+        const { token, cardholderEmail } = cardForm.getCardFormData();
+        if (!companyName || !contractAccepted || !token || !cardholderEmail) {
+          showFeedback('Preencha os dados obrigatórios e aceite as condições para continuar.');
+          return;
+        }
+
+        submitButton.disabled = true;
+        showFeedback('Enviando autorização TEST…', 'info');
+        try {
+          const response = await fetch('/api/public/commercial/checkout', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+            body: JSON.stringify({
+              plan_code: planCode,
+              payer_email: cardholderEmail,
+              signup: { email: cardholderEmail, company_name: companyName },
+              contract_version: contractVersion,
+              contract_accepted: true,
+              card_token_id: token,
+            }),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result.checkout_token) {
+            throw new Error(result.code || 'CHECKOUT_UNAVAILABLE');
+          }
+          showFeedback('Autorização enviada. Acompanhe o status da assinatura abaixo.', 'success');
+          const statusUrl = `/api/public/commercial/checkout/${encodeURIComponent(result.checkout_token)}/status`;
+          const statusLink = document.createElement('a');
+          statusLink.href = statusUrl;
+          statusLink.textContent = 'Consultar status';
+          statusLink.className = 'btn btn-outline-primary mt-3';
+          feedback.append(document.createElement('br'), statusLink);
+        } catch (_) {
+          // O token é de uso único: uma nova intenção precisa gerar um novo token e chave.
+          idempotencyKey = window.crypto?.randomUUID?.() || `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          showFeedback('Não foi possível criar a autorização TEST. Revise os dados e tente novamente.');
+          submitButton.disabled = false;
+        }
+      },
+    },
+  });
+})();
+</script>
+{% endblock %}

@@ -10,6 +10,35 @@ import hmac
 import hashlib
 from datetime import datetime, timedelta
 import threading
+import socket
+from urllib.parse import urlparse
+import ipaddress
+
+
+def validate_webhook_url(url, resolve_dns=False):
+    """Valida URL de webhook e bloqueia destinos obviamente internos."""
+    parsed = urlparse(str(url or '').strip())
+    if parsed.scheme not in ('https', 'http') or not parsed.hostname:
+        return False, 'URL deve usar http ou https e conter hostname'
+    hostname = parsed.hostname.lower().rstrip('.')
+    if hostname in {'localhost', 'localhost.localdomain'} or hostname.endswith('.local'):
+        return False, 'Destino local não permitido'
+    try:
+        address = ipaddress.ip_address(hostname)
+        if address.is_private or address.is_loopback or address.is_link_local or address.is_reserved:
+            return False, 'Destino de rede interna não permitido'
+    except ValueError:
+        pass
+    if resolve_dns:
+        try:
+            resolved = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == 'https' else 80), type=socket.SOCK_STREAM)
+            for entry in resolved:
+                address = ipaddress.ip_address(entry[4][0])
+                if address.is_private or address.is_loopback or address.is_link_local or address.is_reserved:
+                    return False, 'Hostname resolve para rede interna não permitida'
+        except (OSError, ValueError):
+            return False, 'Não foi possível resolver o hostname do webhook'
+    return True, None
 
 
 def trigger_webhook(cliente_id, evento, payload):
@@ -21,6 +50,7 @@ def trigger_webhook(cliente_id, evento, payload):
         evento: Nome do evento (ex: 'nfe.autorizada', 'nfe.cancelada')
         payload: Dict com os dados do evento
     """
+    db = None
     try:
         db = next(get_db())
         
@@ -48,6 +78,9 @@ def trigger_webhook(cliente_id, evento, payload):
     
     except Exception as e:
         print(f"[WARN] Erro ao adicionar webhook à fila: {e}")
+    finally:
+        if db is not None:
+            db.close()
 
 
 def calculate_signature(payload_str, secret):
@@ -83,12 +116,23 @@ def send_webhook(queue_item):
     Returns:
         tuple: (sucesso, mensagem_erro)
     """
+    db = None
     try:
         db = next(get_db())
+        # O worker pode chamar esta função com um objeto de outra sessão.
+        # Recarregar por ID evita atualizar uma instância detached e perder o
+        # estado de entrega no commit.
+        persisted_item = db.query(WebhookQueue).filter_by(queue_id=queue_item.queue_id).first()
+        if not persisted_item:
+            return False, "Item de webhook não encontrado"
+        queue_item = persisted_item
         webhook = db.query(Webhook).filter_by(webhook_id=queue_item.webhook_id).first()
         
         if not webhook or not webhook.ativo:
             return False, "Webhook inativo ou não encontrado"
+        url_ok, url_error = validate_webhook_url(webhook.url, resolve_dns=True)
+        if not url_ok:
+            return False, url_error
         
         # Preparar payload
         payload_dict = json.loads(queue_item.payload)
@@ -140,6 +184,11 @@ def send_webhook(queue_item):
         return False, f"Erro de conexão: {str(e)}"
     except Exception as e:
         return False, f"Erro inesperado: {str(e)}"
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def process_webhook_queue():
@@ -147,17 +196,21 @@ def process_webhook_queue():
     Processa a fila de webhooks pendentes
     Executado em background thread
     """
+    db = None
     try:
         db = next(get_db())
         
         # Buscar itens pendentes ou que devem ser retentados
         agora = datetime.now()
         
+        # Vários eventos podem iniciar workers ao mesmo tempo. O lock com
+        # SKIP LOCKED garante que dois workers não reivindiquem a mesma
+        # entrega durante a janela entre SELECT e status=processing.
         pending_items = db.query(WebhookQueue).filter(
             WebhookQueue.status == 'pending',
             WebhookQueue.tentativas < WebhookQueue.max_tentativas,
             (WebhookQueue.proximo_retry.is_(None) | (WebhookQueue.proximo_retry <= agora))
-        ).limit(10).all()
+        ).with_for_update(skip_locked=True).limit(10).all()
         
         for item in pending_items:
             # Marcar como processando
@@ -199,6 +252,9 @@ def process_webhook_queue():
         print(f"[WARN] Erro ao processar fila de webhooks: {e}")
         import traceback
         traceback.print_exc()
+    finally:
+        if db is not None:
+            db.close()
 
 
 def cleanup_old_webhook_logs():
@@ -206,6 +262,7 @@ def cleanup_old_webhook_logs():
     Remove registros antigos da fila de webhooks
     Manter apenas últimos 30 dias
     """
+    db = None
     try:
         db = next(get_db())
         trinta_dias_atras = datetime.now() - timedelta(days=30)
@@ -219,3 +276,6 @@ def cleanup_old_webhook_logs():
         print(f"[CLEAN] Removidos {deleted} logs antigos de webhooks")
     except Exception as e:
         print(f"[WARN] Erro ao limpar logs de webhooks: {e}")
+    finally:
+        if db is not None:
+            db.close()

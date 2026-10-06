@@ -404,7 +404,8 @@ def emitir_form():
             proximo_rps=proximo_rps,
             codigos_servico=CODIGOS_SERVICO_LC116,
             aliquotas_iss=ALIQUOTAS_ISS_SJRP,
-            municipios=CODIGOS_MUNICIPIO_SP
+            municipios=CODIGOS_MUNICIPIO_SP,
+            cliente_mode=request.args.get('cliente_mode') == '1'
         )
         
     except Exception as e:
@@ -460,6 +461,36 @@ def emitir():
         
         # Coletar dados do formulário
         dados, prestador_dict = _coletar_dados_prestador_nfse(request.form, prestador_data)
+
+        # A emissão nova é exclusivamente pelo padrão nacional. O fluxo GISS
+        # abaixo permanece apenas para leitura/reprocessamento de documentos
+        # antigos e não é mais utilizado para novas notas.
+        from services.certificate_service import get_active_certificate_for_client
+        from services.nfse_sefin_nacional import gerar_dps, assinar_dps, emitir_dps
+        certificado = get_active_certificate_for_client(db, cliente_id)
+        if not certificado:
+            raise ValueError('Certificado A1 ativo não encontrado para emissão nacional')
+        dps = {
+            'cnpj_prestador': prestador_data.cnpj,
+            'razao_social': prestador_data.razao_social,
+            'numero_dps': int(dados.get('numero_rps') or 1),
+            'serie': dados.get('serie_rps') or '1',
+            'codigo_municipio': getattr(prestador_data, 'codigo_municipio', None) or '3549805',
+            'codigo_servico': ''.join(ch for ch in str(dados.get('codigo_servico') or '') if ch.isdigit()).zfill(6),
+            'discriminacao': dados.get('discriminacao'),
+            'valor_servico': dados.get('valor_servico'),
+            'aliquota_iss': dados.get('aliquota_iss'),
+            'codigo_nbs': dados.get('codigo_nbs'),
+            'ambiente': dados.get('ambiente', 'homologacao'),
+            'competencia': dados.get('data_competencia'),
+            'optante_simples': dados.get('optante_simples_nacional', False),
+        }
+        ok, resposta = emitir_dps(assinar_dps(gerar_dps(dps), certificado), dps['ambiente'], certificado)
+        if ok:
+            flash('NFS-e Nacional enviada com sucesso para a SEFIN.', 'success')
+        else:
+            flash('SEFIN Nacional rejeitou a DPS: ' + str(resposta.get('erros') or resposta), 'danger')
+        return redirect(url_for('nfse.emitir_form'))
         
         # Criar objeto NFS-e
         nfse = criar_nfse_de_formulario(dados, prestador_dict)

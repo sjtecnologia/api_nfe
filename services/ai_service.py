@@ -580,8 +580,6 @@ class AIService:
     def _serialize_json_field(self, value: Any) -> Any:
         if value is None:
             return None
-        if os.getenv('DB_TYPE') == 'postgresql':
-            return value
         if isinstance(value, str):
             return value
         return json.dumps(value, ensure_ascii=False, default=self._stringify_value)

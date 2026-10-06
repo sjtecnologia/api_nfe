@@ -1,7 +1,7 @@
-# Política de Quota NF-e — 4.6E.1
+# Política de Quota NF-e — 4.6F.5
 
 **Fase**: 4.6E.1
-**Status**: proposta técnica formalizada; não aplicada ao runtime fiscal
+**Status**: política comercial consolidada; enforcement de produção desligado
 
 ## Objetivo
 
@@ -138,6 +138,8 @@ A quota futura deve compartilhar a mesma fonte comercial para Web NF-e e API v2 
 - `ENTERPRISE`: usar limite contratual somente se configurado; caso contrário, marcar `CONTRACTUAL_REVIEW` e não inventar valor.
 - `SUPER_ADMIN`: bypass operacional deve ser explícito, auditado e motivado; nunca silencioso.
 
+Clientes legados próximos de R$60 preservam `contracted_price` e direitos observados. Ausência de preço contratado ou evidência contratual suficiente retorna `LEGACY_POLICY_REVIEW_REQUIRED`; não se infere quota.
+
 ## Alertas de consumo
 
 A política proposta para alertas é:
@@ -180,15 +182,15 @@ Validação realizada:
 
 ## Status final do rollout
 
-O estágio 4.6E.1 está pronto para auditoria de concorrência e documentação de quota, mas ainda não atende ao critério final para 4.6F:
+O estágio 4.6F.5 está pronto para revisão de migração comercial, mas não ativa migração, checkout ou enforcement em produção:
 
-- concorrência real PostgreSQL exaustiva ainda não foi executada para 49/50 + 2 processos;
-- a política fiscal completa para cada status ainda precisa fechar acordo final com o fluxo real;
-- o ponto exato de hook na emissão NF-e não foi validado no código da aplicação;
-- a reserva de quota e fail-safe finais ainda são projeto e não implementação.
+- clientes atuais não são convertidos automaticamente;
+- `START_V1` é exclusivo para novas contratações;
+- preview legacy é read-only e toda classificação exige revisão manual;
+- produção permanece sem enforcement e sem clientes reais na allowlist.
 
 ## Resultado
 
-`BLOCKED` para 4.6F.
+`READY_FOR_LEGACY_MIGRATION_REVIEW` para 4.6F.5.
 
-Não iniciar 4.6F até que a concorrência real, a idempotência fiscal final, a política de status e a estratégia de reserva sejam validadas no fluxo real da aplicação.
+Não executar migração comercial, checkout ou ativação de produção nesta fase.

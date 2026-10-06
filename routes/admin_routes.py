@@ -2681,6 +2681,35 @@ from services.certificate_service import  _encrypt_password
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.hazmat.primitives import hashes
 import base64
+
+
+def _mensagem_erro_cliente(erro: Exception) -> str:
+    """Traduz erros comuns de banco (unique/check constraint) em mensagem amigavel."""
+    texto = str(erro).lower()
+    if 'cnpj_u' in texto or ('cnpj' in texto and 'unique' in texto):
+        return 'Já existe um cliente cadastrado com este CNPJ.'
+    if 'cpf' in texto and 'unique' in texto:
+        return 'Já existe um cliente cadastrado com este CPF.'
+    if 'fingerprint_u' in texto or 'fingerprint' in texto:
+        return 'Este certificado digital já está cadastrado para outro cliente.'
+    if 'check_cnpj_ou_cpf' in texto:
+        return 'Informe apenas CNPJ (empresa) ou apenas CPF (produtor rural), não ambos ou nenhum.'
+    if 'invalid input syntax for type integer' in texto:
+        return 'Selecione o regime tributário.'
+    if 'string data right truncation' in texto or 'value too long' in texto:
+        return 'Um dos campos está maior do que o permitido (verifique o CNAE, que aceita apenas o código, sem a descrição).'
+    return f'Erro ao salvar cliente ou certificado: {erro}'
+
+
+def _extrair_codigo_cnae(cnae_raw: str) -> str | None:
+    """Extrai apenas os digitos do codigo CNAE, descartando descricao colada (ex.: '5611-2/01 - Restaurantes')."""
+    if not cnae_raw:
+        return None
+    codigo = cnae_raw.split(' - ')[0]
+    digitos = ''.join(filter(str.isdigit, codigo))
+    return digitos[:7] or None
+
+
 @admin_bp.route('/clientes/novo', methods=['GET', 'POST'])
 @login_required
 @permission_required('clientes.create')
@@ -2708,6 +2737,9 @@ def create_cliente():
             cpf_raw = request.form.get('cpf', '')
             cpf_limpo = ''.join(filter(str.isdigit, cpf_raw)) or None
 
+            # Limpar CNAE (aceitar apenas o codigo, coluna e varchar(7))
+            cnae_limpo = _extrair_codigo_cnae(request.form.get('cnae', ''))
+
             # Processar upload da logo (se enviada)
             logo_path = None
             logo_file = request.files.get('logo_file')
@@ -2731,6 +2763,19 @@ def create_cliente():
             _cnpj_save = None if _is_rural else (cnpj_limpo or None)
             # Se rural e CPF nao preenchido, tenta usar cnpj_limpo se tiver 11 digitos
             _cpf_save = (cpf_limpo or (cnpj_limpo if cnpj_limpo and len(cnpj_limpo) == 11 else None)) if _is_rural else None
+
+            if not _is_rural and not _cnpj_save:
+                flash('Informe o CNPJ (ou marque "Produtor Rural" e informe o CPF).', 'danger')
+                return redirect(request.url)
+            if _is_rural and not _cpf_save:
+                flash('Informe o CPF do produtor rural.', 'danger')
+                return redirect(request.url)
+
+            _regime_raw = request.form.get('regime_tributario_id')
+            if not _regime_raw:
+                flash('Selecione o regime tributário.', 'danger')
+                return redirect(request.url)
+
             data = {
                 'razao_social': request.form.get('razao_social'),
                 'nome_fantasia': request.form.get('nome_fantasia'),
@@ -2739,9 +2784,9 @@ def create_cliente():
                 'produtor_rural': _is_rural,
                 'inscricao_estadual': request.form.get('inscricao_estadual'),
                 'inscricao_municipal': request.form.get('inscricao_municipal'),
-                'regime_tributario_id': request.form.get('regime_tributario_id'),
+                'regime_tributario_id': int(_regime_raw),
                 'ambiente': int(request.form.get('ambiente', 1)),  # 1=Homologação, 2=Produção
-                'cnae': request.form.get('cnae'),
+                'cnae': cnae_limpo,
                 'cep': cep_limpo,  # Limpo
                 'logradouro': request.form.get('logradouro'),
                 'numero': request.form.get('numero'),
@@ -2817,7 +2862,7 @@ def create_cliente():
                             raise Exception("Certificado X.509 não encontrado dentro do PKCS#12")
                         fingerprint = cert_obj.fingerprint(hashes.SHA256()).hex()
                         validade_inicio = getattr(cert_obj, "not_valid_before_utc", None)
-                        validade_fim = getattr(cert_obj, "not_valid_before_utc", None)
+                        validade_fim = getattr(cert_obj, "not_valid_after_utc", None)
                     except Exception as e:
                         logger.error(f"[X] Erro ao extrair dados do certificado: {e}")
                         fingerprint = None
@@ -2853,7 +2898,8 @@ def create_cliente():
             except Exception as e:
                 db.rollback()
                 logger.error(f"[X] Erro ao salvar cliente/certificado: {e}")
-                flash('Erro ao salvar cliente ou certificado', 'danger')
+                mensagem = _mensagem_erro_cliente(e)
+                flash(mensagem, 'danger')
                 form_data = data
                 return render_template(
                     'admin/clientes/form.html',
@@ -2955,6 +3001,9 @@ def edit_cliente(cliente_id: int):
                 cpf_raw = request.form.get('cpf', '')
                 cpf_limpo = ''.join(filter(str.isdigit, cpf_raw)) or None
 
+                # Limpar CNAE (aceitar apenas o codigo, coluna e varchar(7))
+                cnae_limpo = _extrair_codigo_cnae(request.form.get('cnae', ''))
+
                 # Processar upload da logo (se enviada)
                 logo_path = cliente.get('logo_path')  # Manter logo existente
                 logo_file = request.files.get('logo_file')
@@ -2979,6 +3028,19 @@ def edit_cliente(cliente_id: int):
                 _cnpj_save = None if _is_rural else (cnpj_limpo or None)
                 # Se rural e CPF nao preenchido, tenta usar cnpj_limpo se tiver 11 digitos
                 _cpf_save = (cpf_limpo or (cnpj_limpo if cnpj_limpo and len(cnpj_limpo) == 11 else None)) if _is_rural else None
+
+                if not _is_rural and not _cnpj_save:
+                    flash('Informe o CNPJ (ou marque "Produtor Rural" e informe o CPF).', 'danger')
+                    return redirect(request.url)
+                if _is_rural and not _cpf_save:
+                    flash('Informe o CPF do produtor rural.', 'danger')
+                    return redirect(request.url)
+
+                _regime_raw = request.form.get('regime_tributario_id')
+                if not _regime_raw:
+                    flash('Selecione o regime tributário.', 'danger')
+                    return redirect(request.url)
+
                 data = {
                     'razao_social': request.form.get('razao_social'),
                     'nome_fantasia': request.form.get('nome_fantasia'),
@@ -2987,9 +3049,9 @@ def edit_cliente(cliente_id: int):
                     'produtor_rural': _is_rural,
                     'inscricao_estadual': request.form.get('inscricao_estadual'),
                     'inscricao_municipal': request.form.get('inscricao_municipal'),
-                    'regime_tributario_id': request.form.get('regime_tributario_id'),
+                    'regime_tributario_id': int(_regime_raw),
                     'ambiente': int(request.form.get('ambiente', 1)),  # 1=Homologação, 2=Produção
-                    'cnae': request.form.get('cnae'),
+                    'cnae': cnae_limpo,
                     'cep': cep_limpo,  # Limpo
                     'logradouro': request.form.get('logradouro'),
                     'numero': request.form.get('numero'),
@@ -3038,7 +3100,7 @@ def edit_cliente(cliente_id: int):
             except Exception as e:
                 db.rollback()
                 logger.error(f"[X] Erro ao atualizar cliente: {e}")
-                flash('Erro ao atualizar cliente', 'danger')
+                flash(_mensagem_erro_cliente(e), 'danger')
                 # Continua para renderizar o formulário com os dados atuais
 
         form_data = _cliente_to_form_data(cliente)

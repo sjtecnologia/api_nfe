@@ -70,9 +70,9 @@ class User(UserMixin):
         try:
             db = next(get_db())
             user_data = db.execute(text("""
-                SELECT u.id, u.username, u.email, u.is_active AS _is_active
+                SELECT u.id, u.username, u.email, u._is_active
                 FROM users u
-                WHERE u.id = :user_id AND u.is_active = true
+                WHERE u.id = :user_id AND u._is_active = true
             """), {"user_id": int(user_id)}).first()
             if not user_data:
                 return None
@@ -117,9 +117,9 @@ class User(UserMixin):
         try:
             db = next(get_db())
             user_data = db.execute(text("""
-                SELECT u.id, u.username, u.password_hash, u.email, u.is_active AS _is_active
+                SELECT u.id, u.username, u.password_hash, u.email, u._is_active
                 FROM users u
-                WHERE u.username = :username AND u.is_active = true
+                WHERE u.username = :username AND u._is_active = true
             """), {"username": username}).first()
             if user_data and check_password_hash(user_data.password_hash, password):
                 logger.debug("user.py: autenticação OK username=%s", username)

@@ -1,4 +1,11 @@
+# Commercial census output may contain internal prices and classifications.
+legacy_migration_preview.json
+legacy_manual_review.json
+legacy_contract_review.json
+legacy_grandfather_preview.json
+artifacts/e2e/commercial/
 .env
+.env.mercadopago.test
 
 # Ambiente virtual
 venv/

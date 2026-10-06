@@ -41,6 +41,7 @@ from routes.planos_routes import planos_bp
 from routes.a3_routes import a3_bp
 from routes.api_keys_routes import api_keys_bp
 from routes.api_v2_routes import api_v2_bp
+from routes.transport_document_routes import transport_bp
 from routes.webhooks_routes import webhooks_bp
 from routes.nfse_routes import nfse_bp
 from routes.servicos_routes import servicos_bp
@@ -49,6 +50,8 @@ from routes.classificacao_ibs_cbs_routes import classificacao_ibs_cbs_bp
 from routes.nfse_api_routes import nfse_api_bp
 from routes.admin_api_routes import admin_api_bp
 from routes.billing_shadow_routes import billing_shadow_bp
+from routes.commercial_public_routes import commercial_public_bp, public_checkout
+from routes.catalogo_vendas_routes import catalogo_vendas_bp, catalogo_publico_bp
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
@@ -94,6 +97,8 @@ csrf.exempt(api_v2_bp)
 csrf.exempt(api_bp)
 csrf.exempt(llm_api_bp)
 csrf.exempt(nfse_api_bp)
+csrf.exempt(public_checkout)  # API pública server-to-server; não usa CSRF de formulário
+csrf.exempt(catalogo_publico_bp)  # Pedido criado por comprador sem sessão autenticada
 
 @app.route('/api/csrf-token', methods=['GET'])
 @login_required
@@ -137,6 +142,8 @@ login_manager = init_login_manager(app)
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(api_bp, url_prefix='/api')
 app.register_blueprint(api_v2_bp)  # API v2 com autenticação por API Key
+app.register_blueprint(transport_bp)
+csrf.exempt(transport_bp)
 app.register_blueprint(nfe_bp, url_prefix='/admin/nfe')
 app.register_blueprint(nfce_bp)  # NFC-e já tem url_prefix='/admin/nfce' no blueprint
 app.register_blueprint(admin_bp, url_prefix='/admin')
@@ -154,6 +161,9 @@ app.register_blueprint(classificacao_ibs_cbs_bp)  # Classificações IBS/CBS - R
 app.register_blueprint(nfse_api_bp)  # API NFS-e - Busca NBS e Validações NT007
 app.register_blueprint(admin_api_bp, url_prefix='/admin')  # Rotas API JSON do admin
 app.register_blueprint(billing_shadow_bp)  # Billing shadow/upgrade não fiscal
+app.register_blueprint(commercial_public_bp)  # Aquisição comercial shadow-only
+app.register_blueprint(catalogo_vendas_bp)
+app.register_blueprint(catalogo_publico_bp)
 
 
 @app.route('/login')

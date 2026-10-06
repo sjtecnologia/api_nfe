@@ -31,11 +31,20 @@ input[readonly] {
 .select2-container--bootstrap-5 .select2-selection--single {
     padding: 0.375rem 0.75rem;
 }
+.cliente-mode #cardReformaTributaria {
+    display: none;
+}
+.cliente-mode .page-subtitle::after {
+    content: "Emissão simplificada para clientes";
+    display: block;
+    color: #198754;
+    font-size: .9rem;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid{% if cliente_mode %} cliente-mode{% endif %}">
     <div class="row">
         <div class="col-12">
             <div class="page-header">
@@ -427,7 +436,7 @@ input[readonly] {
         </div>
 
         <!-- IBS/CBS - Reforma Tributária -->
-        <div class="card mt-3">
+        <div class="card mt-3" id="cardReformaTributaria">
             <div class="card-header">
                 <h5>⚖️ IBS/CBS - Reforma Tributária</h5>
             </div>

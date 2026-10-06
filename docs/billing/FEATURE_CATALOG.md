@@ -1,7 +1,7 @@
 # Feature Catalog Canônico — EmiteMax
 
-**Fase**: 4.6B  
-**Status**: catálogo documental; não habilita features
+**Fase**: 4.6G
+**Status**: fonte comercial documental; não habilita features nem migra clientes
 
 ## Estados
 
@@ -14,8 +14,8 @@
 | Key | Nome | Estado | Observação |
 |---|---|---|---|
 | `NFE` | NF-e | AVAILABLE | Núcleo fiscal homologado |
-| `NFCE` | NFC-e | AVAILABLE | Fluxo existente |
-| `NFSE` | NFS-e | AVAILABLE | Fluxo existente/configurável |
+| `NFCE` | NFC-e | AVAILABLE | Fluxo existente; quota comercial separada |
+| `NFSE` | NFS-e | AVAILABLE | Fluxo existente/configurável; quota comercial separada |
 | `INVENTORY` | Estoque | AVAILABLE | Gestão de estoque existente |
 | `CASH_FLOW` | Fluxo de Caixa | AVAILABLE | Gestão financeira existente |
 | `REPORTS` | Relatórios | AVAILABLE | Relatórios administrativos |
@@ -52,6 +52,8 @@
 
 Esta matriz é proposta comercial e não altera menu, banco, permissões ou emissão.
 
+Quotas de NF-e, NFC-e e NFS-e são capacidades independentes. Nesta fase, somente a política de NF-e do `START_V1` está aprovada para enforcement controlado; não se infere quota de NFC-e ou NFS-e.
+
 ## Separação obrigatória
 
 - Role/permission: usuário pode executar?
@@ -59,3 +61,5 @@ Esta matriz é proposta comercial e não altera menu, banco, permissões ou emis
 - Quota: capacidade restante?
 
 A feature só pode ser usada quando os três checks forem satisfeitos.
+
+O backend canônico para a UX é `services/commercial_catalog.py`. O frontend não deve manter uma segunda matriz hardcoded. Estados `PARTIAL` e `ROADMAP` não devem ser apresentados como disponibilidade plena.

@@ -1,7 +1,7 @@
 # Mapeamento de Planos Legados
 
-**Fase**: 4.6B  
-**Status**: somente mapeamento; nenhuma migração executada
+**Fase**: 4.6F.5
+**Status**: somente mapeamento e revisão; nenhuma migração executada
 
 ## Mapeamento conceitual
 
@@ -45,6 +45,15 @@ Não preencher informações ausentes por inferência.
 8. Não há política formal para autorizada/rejeitada/cancelada/retry.
 9. Quota de IA e quota fiscal são conceitos misturados por fallback de `quantidade_nfes` no serviço de IA.
 10. API v2 e emissão web têm enforcement diferente.
+
+## Política 4.6F.5
+
+- `LEGACY_START_V1` é `CLOSED_FOR_NEW_SALES`.
+- `START_V1` com 50 NF-e/mês vale para novas contratações, não retroativamente.
+- `contracted_price` é a fonte do preço contratado; `valor_mensal` não o substitui.
+- `quantidade_nfes=NULL` não será convertido em ilimitado sem contrato.
+- Premium possui no máximo 5 empresas e 10 usuários; nunca “ilimitado”.
+- Falta de evidência resulta em `LEGACY_UNKNOWN`/`REVIEW_REQUIRED` e fail-open.
 
 ## Estratégia futura
 

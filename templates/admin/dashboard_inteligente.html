@@ -79,7 +79,7 @@
             <div class="col-6 col-md-3">
                 <div class="card metric-card info h-100">
                     <div class="card-body py-3">
-                        <div class="text-muted small">NF-es (saída)</div>
+                        <div class="text-muted small">NF-es autorizadas (saída)</div>
                         <div class="fs-2 fw-bold" id="nfes-hoje">-</div>
                     </div>
                 </div>
@@ -100,7 +100,7 @@
             <div class="col-6 col-md-2">
                 <div class="card metric-card primary h-100">
                     <div class="card-body py-3">
-                        <div class="text-muted small">NF-es emitidas</div>
+                        <div class="text-muted small">NF-es autorizadas</div>
                         <div class="fs-3 fw-bold" id="nfes-mes">-</div>
                         <div class="small" id="delta-nfes"></div>
                     </div>
@@ -242,7 +242,8 @@ async function carregarDashboard() {
     try {
         let url = endpoint + `?periodo=${periodoAtivo}`;
         if (sessionClienteId) url += `&cliente_id=${sessionClienteId}`;
-        const resp = await fetch(url);
+        // Dados operacionais não podem ser reutilizados do cache do navegador.
+        const resp = await fetch(url, { cache: 'no-store' });
         const payload = await resp.json().catch(() => ({success:false, error:`Erro HTTP ${resp.status}`}));
         if (!payload.success) throw new Error(payload.error);
 

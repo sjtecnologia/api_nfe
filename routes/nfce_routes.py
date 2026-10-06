@@ -17,63 +17,97 @@ from services.certificate_service import get_active_certificate_for_client
 from utils.nfce_generator import gerar_xml_nfce, gerar_qrcode_nfce, gerar_chave_acesso_nfce
 from utils.helpers import get_uf_ibge_code
 
-# Funções stub temporárias até implementação real com SEFAZ
 def enviar_nfce_sefaz(xml_assinado: str, emitente: Any, certificado: Any) -> Dict[str, Any]:
-    """
-    Modo de teste - Simula autorização da SEFAZ
-    TODO: Implementar comunicação real com SEFAZ em produção
-    """
-    import random
-    from datetime import datetime
-    
-    # Gerar número aleatório para teste
-    numero = random.randint(1, 999999)
-    
-    # Extrair chave de acesso do XML ou gerar uma
-    chave_match = xml_assinado.find('Id="NFe')
-    if chave_match != -1:
-        chave_start = chave_match + 8
-        chave_acesso = xml_assinado[chave_start:chave_start + 44]
-    else:
-        # Gerar chave fake para teste
-        uf = emitente.get('uf_codigo', 35)
-        cnpj = ''.join(filter(str.isdigit, emitente.get('cnpj', '00000000000000')))
-        chave_acesso = f"{uf}{datetime.now().strftime('%y%m')}{cnpj}65001{numero:09d}1{'0'*8}0"
-    
-    return {
-        'sucesso': True,
-        'chave_acesso': chave_acesso,
-        'numero': numero,
-        'serie': 1,
-        'protocolo': f'TEST{random.randint(100000, 999999)}',
-        'ambiente': 2,  # Homologação
-        'data_autorizacao': datetime.now().isoformat(),
-        'url_consulta': 'https://www.fazenda.sp.gov.br/nfce/consulta'
-    }
+    """Envia NFC-e assinada ao autorizador SEFAZ real."""
+    import re
+    import tempfile
+    from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
+    from services.sefaz_service import SefazService
+
+    chave_match = re.search(r'Id="NFe(\d{44})"', xml_assinado)
+    if not chave_match:
+        return {'sucesso': False, 'erro': 'XML da NFC-e sem chave de acesso válida'}
+    chave_acesso = chave_match.group(1)
+    cert_data = certificado.get('cert_data')
+    senha = certificado.get('password')
+    if not cert_data or not senha:
+        return {'sucesso': False, 'erro': 'Certificado A1 ou senha não configurado'}
+
+    cert_path = key_path = None
+    try:
+        key, cert, cadeia = pkcs12.load_key_and_certificates(cert_data, senha.encode())
+        if not key or not cert:
+            return {'sucesso': False, 'erro': 'Não foi possível abrir o certificado A1'}
+        cert_file = tempfile.NamedTemporaryFile(suffix='.pem', delete=False)
+        key_file = tempfile.NamedTemporaryFile(suffix='.key', delete=False)
+        cert_path, key_path = cert_file.name, key_file.name
+        cert_file.write(cert.public_bytes(Encoding.PEM))
+        for extra in cadeia or ():
+            cert_file.write(extra.public_bytes(Encoding.PEM))
+        key_file.write(key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()))
+        cert_file.close(); key_file.close()
+
+        ambiente = 'producao' if '<tpAmb>1</tpAmb>' in xml_assinado else 'homologacao'
+        result = SefazService(ambiente=ambiente, cert_path=cert_path, key_path=key_path).enviar_nfe(
+            xml_assinado, chave_acesso
+        )
+        return {
+            'sucesso': bool(result.get('success')),
+            'chave_acesso': chave_acesso,
+            'numero': emitente.get('numero_nfce'),
+            'serie': emitente.get('serie_nfce', 1),
+            'protocolo': result.get('protocolo'),
+            'ambiente': 1 if ambiente == 'producao' else 2,
+            'erro': result.get('message') or result.get('mensagem'),
+            'url_consulta': 'https://www.fazenda.sp.gov.br/nfce/consulta'
+        }
+    finally:
+        import os
+        for path in (cert_path, key_path):
+            if path and os.path.exists(path):
+                os.unlink(path)
 
 def assinar_xml_nfce(xml: str, certificado: Any) -> str:
-    """Stub temporário - implementar assinatura digital"""
-    return xml  # Retorna XML sem assinatura (apenas para testes)
+    """Assina o elemento ``infNFe`` com certificado A1."""
+    import tempfile
+    from lxml import etree
+    from pynfe.processamento.assinatura import AssinaturaA1
+    cert_data = certificado.get('cert_data')
+    senha = certificado.get('password')
+    if not cert_data or not senha:
+        raise ValueError('Certificado A1 ou senha não configurado')
+    cert_path = tempfile.NamedTemporaryFile(suffix='.pfx', delete=False)
+    cert_path.write(cert_data); cert_path.close()
+    try:
+        tree = etree.fromstring(xml.encode('utf-8'))
+        signed = AssinaturaA1(cert_path.name, senha).assinar(tree, retorna_string=False)
+        return etree.tostring(signed, encoding='unicode')
+    finally:
+        import os
+        if os.path.exists(cert_path.name):
+            os.unlink(cert_path.name)
 
 def consultar_nfce(chave_acesso: str, ambiente: str = 'homologacao') -> Dict[str, Any]:
-    """Stub temporário - implementar consulta SEFAZ"""
-    return {'sucesso': False, 'erro': 'Consulta não implementada'}
+    """Consulta NFC-e na SEFAZ usando o mesmo protocolo de NF-e."""
+    from services.sefaz_service import SefazService
+    result = SefazService(ambiente=ambiente).consultar_nfe_por_chave(chave_acesso)
+    return {'sucesso': bool(result.get('success')), **result}
 
-def cancelar_nfce(chave_acesso: str, justificativa: str, emitente: Any, certificado: Any) -> Dict[str, Any]:
-    """
-    Modo de teste - Simula cancelamento da SEFAZ
-    TODO: Implementar comunicação real com SEFAZ em produção
-    """
-    import random
-    from datetime import datetime
-    
-    # Simular sucesso em modo de teste
-    return {
-        'sucesso': True,
-        'protocolo': f'CANCEL{random.randint(100000, 999999)}',
-        'data_cancelamento': datetime.now().isoformat(),
-        'mensagem': f'Cancelamento simulado - Homologação. Justificativa: {justificativa[:50]}...'
-    }
+def cancelar_nfce(chave_acesso: str, justificativa: str, emitente: Any, certificado: Any, ambiente: str = 'homologacao') -> Dict[str, Any]:
+    """Registra cancelamento real da NFC-e na SEFAZ."""
+    from services.sefaz_service import SefazService
+    protocolo = emitente.get('protocolo_sefaz') if isinstance(emitente, dict) else getattr(emitente, 'protocolo_sefaz', None)
+    cnpj = emitente.get('cnpj', '') if isinstance(emitente, dict) else getattr(emitente, 'cnpj', '')
+    ambiente = ambiente if ambiente in ('producao', 'homologacao') else 'homologacao'
+    result = SefazService(ambiente=ambiente).cancelar_nfe(
+        chave_nfe=chave_acesso,
+        protocolo=protocolo,
+        justificativa=justificativa,
+        cnpj_emitente=cnpj,
+        certificado_pfx=certificado.get('cert_data'),
+        senha_certificado=certificado.get('password'),
+    )
+    return {'sucesso': bool(result.get('success')), **result}
 
 def gerar_qrcode(chave_acesso: str, url_consulta: str = '') -> str:
     """Wrapper para gerar_qrcode_nfce"""
@@ -239,13 +273,32 @@ def emitir_nfce():
                 valor_produtos = sum(item['valor_total'] for item in itens)
                 valor_desconto = sum(prod.get('desconto', 0) for prod in dados_nfce['produtos'])
                 valor_total = valor_produtos
+
+                # NFC-e possui numeração própria (modelo 65). Nunca usar um
+                # número fixo: colisões de número são rejeitadas pela SEFAZ.
+                serie_nfce = int(request.form.get('serie', 1) or 1)
+                try:
+                    numero_nfce = db.execute(text(
+                        "SELECT get_proximo_numero_nfe(:cliente_id, :modelo, :serie)"
+                    ), {
+                        'cliente_id': emitente_cliente_id,
+                        'modelo': '65',
+                        'serie': serie_nfce,
+                    }).scalar() or 1
+                except Exception:
+                    db.rollback()
+                    numero_nfce = (db.query(NFeEmitidas).filter_by(
+                        cliente_id=emitente_cliente_id, modelo='65', serie=serie_nfce
+                    ).count() + 1)
+                emitente_dict['numero_nfce'] = numero_nfce
+                emitente_dict['serie_nfce'] = serie_nfce
                 
                 # Gerar XML (adaptar estrutura de dados)
                 dados_xml = {
                     'emitente': emitente_dict,
                     'nfce_info': {
-                        'numero': 1,  # TODO: buscar próximo número
-                        'serie': 1,
+                        'numero': numero_nfce,
+                        'serie': serie_nfce,
                         'modelo': '65',
                         'tipo_emissao': '1',  # Normal
                         'finalidade': '1',  # NF-e normal
@@ -576,7 +629,13 @@ def cancelar_nfce_route(nfce_id: int):
             return jsonify({'sucesso': False, 'erro': 'Justificativa deve ter pelo menos 15 caracteres'}), 400
         
         # Cancelar
-        resultado = cancelar_nfce(nfce.chave_acesso, justificativa, emitente, certificado)
+        resultado = cancelar_nfce(
+            nfce.chave_acesso,
+            justificativa,
+            {'cnpj': emitente.cnpj, 'protocolo_sefaz': nfce.protocolo_sefaz},
+            certificado,
+            ambiente=('producao' if getattr(nfce, 'ambiente', None) in (1, '1', 'producao') else 'homologacao'),
+        )
         
         if resultado['sucesso']:
             nfce.status = 'Cancelada'

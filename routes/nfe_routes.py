@@ -839,7 +839,12 @@ def emitir_nfe():
                     
                     # VALIDAR TRIBUTAÇÃO DOS ITENS
                     logger.debug(" === VALIDANDO TRIBUTAÇÃO ===")
-                    sucesso_trib, erros_tributacao = validar_tributacao_nfe(emitente_data_for_template, nfe_items)
+                    sucesso_trib, erros_tributacao = validar_tributacao_nfe(
+                        emitente_data_for_template,
+                        nfe_items,
+                        destinatario_data,
+                        form_data_initial.get('tpNF', '1'),
+                    )
                     if not sucesso_trib:
                         logger.error(f"❌ [VALIDAÇÃO TRIBUTÁRIA] {len(erros_tributacao)} erro(s) encontrado(s)")
                         for erro in erros_tributacao:
@@ -3104,7 +3109,7 @@ def reenviar_nfe(nfe_id):
             try:
                 dest_query = text("""
                     SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero, 
-                           bairro, cep, codigo_municipio, nome_municipio, uf, ie, tipo_pessoa
+                           bairro, cep, codigo_municipio, nome_municipio, uf, ie, ie_indicador_nfe, tipo_pessoa
                     FROM destinatarios_nfe 
                     WHERE destinatario_id = :dest_id AND cliente_id = :cliente_id
                 """)
@@ -3126,6 +3131,7 @@ def reenviar_nfe(nfe_id):
                         'nome_municipio': dest_mapping['nome_municipio'],
                         'uf': dest_mapping['uf'],
                         'ie': dest_mapping['ie'],
+                        'ie_indicador_nfe': dest_mapping['ie_indicador_nfe'],
                         'tipo_pessoa': dest_mapping['tipo_pessoa']
                     }
             except Exception as e:
@@ -3141,7 +3147,7 @@ def reenviar_nfe(nfe_id):
                 cpf_cnpj_stored = nfe_data.get('destinatario_cnpj_cpf', '')
                 if cpf_cnpj_stored:
                     ie_lookup = text("""
-                        SELECT ie, tipo_pessoa FROM destinatarios_nfe
+                        SELECT ie, ie_indicador_nfe, tipo_pessoa FROM destinatarios_nfe
                         WHERE cpf_cnpj = :cpf_cnpj AND cliente_id = :cliente_id
                         LIMIT 1
                     """)
@@ -3152,6 +3158,7 @@ def reenviar_nfe(nfe_id):
                     if ie_row:
                         ie_map = ie_row._mapping if hasattr(ie_row, '_mapping') else ie_row
                         ie_reenvio = ie_map['ie']
+                        ie_indicador_reenvio = ie_map['ie_indicador_nfe']
                         tipo_pessoa_reenvio = ie_map['tipo_pessoa']
                         logger.debug(f"IE do destinatário recuperado: {ie_reenvio}")
             except Exception as e:
@@ -3168,6 +3175,7 @@ def reenviar_nfe(nfe_id):
                 'nome_municipio': form_data.get('dest_municipio', 'SAO PAULO'),
                 'uf': form_data.get('dest_uf', 'SP'),
                 'ie': ie_reenvio,
+                'ie_indicador_nfe': ie_indicador_reenvio if 'ie_indicador_reenvio' in locals() else '',
                 'tipo_pessoa': tipo_pessoa_reenvio
             }
         
@@ -3187,6 +3195,22 @@ def reenviar_nfe(nfe_id):
                 'success': False,
                 'message': 'Dados do destinatário não encontrados no rascunho'
             }), 400
+
+        sucesso_trib, erros_tributacao = validar_tributacao_nfe(
+            emitente_data_for_template,
+            json_data.get('items', []),
+            destinatario_data,
+            form_data.get('tpNF', '1'),
+        )
+        if not sucesso_trib:
+            mensagem_tributacao = ' | '.join(erros_tributacao)
+            db.execute(text("""
+                UPDATE nfe_emitidas
+                   SET status = 'REJEITADA', mensagem_sefaz = :mensagem
+                 WHERE nfe_emitida_id = :nfe_id
+            """), {'mensagem': mensagem_tributacao, 'nfe_id': nfe_id})
+            db.commit()
+            return jsonify({'success': False, 'message': mensagem_tributacao}), 400
         
         # Gerar XML
         ambiente = json_data.get('ambiente', 'homologacao')

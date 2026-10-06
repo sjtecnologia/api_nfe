@@ -300,9 +300,17 @@ class NFSeValidationService:
 
     @staticmethod
     def _default_xsd_path() -> Path:
-        """Retorna caminho padrão do XSD NFS-e v2.04 disponível no repositório."""
+        """Retorna o XSD do documento de envio de lote RPS v2.04.
+
+        O XML gerado por ``NFSeService.gerar_xml_rps`` tem como raiz
+        ``EnviarLoteRpsEnvio``. O schema ``nfse_v2-04.xsd`` descreve a NFS-e
+        retornada pelo provedor e, portanto, rejeita corretamente (mas de
+        forma enganosa) o documento de envio. Usar o schema de envio como
+        padrão permite que o modo ``strict`` bloqueie apenas XMLs RPS de fato
+        inválidos.
+        """
         project_root = Path(__file__).resolve().parents[1]
-        return project_root / "docs" / "nfse_sjrp_giss" / "schemas_modificados_gissv2" / "Schemas_XSD_Servicos_Prestados" / "v2_04" / "nfse_v2-04.xsd"
+        return project_root / "Documentacao" / "Documentacao giss" / "schemas_modificados_gissv2" / "Schemas_XSD_Servicos_Prestados" / "v2_04" / "enviar-lote-rps-envio-v2_04.xsd"
 
     @staticmethod
     def validar_xml_contra_xsd(xml_content: str, xsd_path: Optional[str] = None) -> Dict[str, Any]:

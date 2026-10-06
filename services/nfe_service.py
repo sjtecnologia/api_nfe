@@ -60,7 +60,12 @@ except ImportError:
 
 
 # ========== VALIDAÇÃO TRIBUTÁRIA ==========
-def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool, List[str]]:
+def validar_tributacao_nfe(
+    emitente_data: Dict,
+    itens: List[Dict],
+    destinatario_data: Optional[Dict] = None,
+    tp_nf: str = '1',
+) -> Tuple[bool, List[str]]:
     """
     Valida compatibilidade entre CFOP, CST/CSOSN e regime tributário
     
@@ -68,6 +73,7 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
         (sucesso: bool, erros: List[str])
     """
     erros = []
+    destinatario_data = destinatario_data or {}
     
     # Determinar regime tributário
     crt = str(emitente_data.get('regime_tributario_id', '1'))
@@ -84,6 +90,35 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
             return f"Item {indice} ({descricao[:60]})"
         return f"Item {indice}"
 
+    def _destinatario_nao_contribuinte() -> bool:
+        """Espelha a classificação indIEDest usada na geração do XML."""
+        documento = ''.join(
+            caractere for caractere in str(destinatario_data.get('cpf_cnpj') or '')
+            if caractere.isdigit()
+        )
+        indicador_ie = str(destinatario_data.get('ie_indicador_nfe') or '').strip().upper()
+        ie = str(
+            destinatario_data.get('ie')
+            or destinatario_data.get('inscricao_estadual')
+            or ''
+        ).strip()
+        ie_digitos = ''.join(caractere for caractere in ie if caractere.isdigit())
+        ie_placeholder = not ie_digitos or set(ie_digitos) == {'0'}
+
+        # CPF e cadastro explicitamente marcado como não contribuinte sempre
+        # resultam em indIEDest=9. Sem IE numérica válida, o gerador também
+        # envia indIEDest=9 (inclusive para "ISENTO" no leiaute atual).
+        return (
+            len(documento) == 11
+            or indicador_ie == 'N'
+            or ie.strip().upper() in {'ISENTO', 'ISENTA'}
+            or ie_placeholder
+        )
+
+    nao_contribuinte = _destinatario_nao_contribuinte()
+    csosn_permitidos_nao_contribuinte = {'102', '103', '300', '400', '500'}
+    cfops_excecao_rejeicao_600 = {'5912', '5913', '5915', '5916', '6915', '6916'}
+
     for i, item in enumerate(itens, 1):
         item_label = _item_label(i, item)
         cfop = str(item.get('cfop', ''))
@@ -98,6 +133,22 @@ def validar_tributacao_nfe(emitente_data: Dict, itens: List[Dict]) -> Tuple[bool
             
             if not csosn:
                 erros.append(f"{item_label}: campo CSOSN é obrigatório para Simples Nacional")
+                continue
+
+            # Regra N12a-70 (Rejeição 600): em saída para não contribuinte
+            # (indIEDest=9), somente os CSOSN abaixo são aceitos. Validar antes
+            # de assinar/enviar evita consumir numeração e quota com rejeição da
+            # SEFAZ. As exceções do leiaute nacional são preservadas.
+            if (
+                nao_contribuinte
+                and str(tp_nf) != '0'
+                and cfop not in cfops_excecao_rejeicao_600
+                and csosn not in csosn_permitidos_nao_contribuinte
+            ):
+                erros.append(
+                    f"{item_label}: destinatário não contribuinte exige CSOSN 102, 103, 300, 400 ou 500; "
+                    f"foi informado {csosn}. A SEFAZ rejeitaria a NF-e com o código 600."
+                )
                 continue
             
             # CFOP 5401/6401 = Venda de produção própria com ST (SUBSTITUTO)

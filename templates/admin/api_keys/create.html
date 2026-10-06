@@ -55,6 +55,15 @@
                             </small>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="ambiente" class="form-label"><i class="fas fa-flask"></i> Ambiente</label>
+                            <select class="form-select" id="ambiente" name="ambiente">
+                                <option value="teste" selected>Teste / homologação</option>
+                                <option value="producao">Produção</option>
+                            </select>
+                            <small class="form-text text-muted">Chaves de teste usam o prefixo <code>emx_test_</code> e não devem ser usadas para documentos de produção.</small>
+                        </div>
+
                         <!-- Rate Limit -->
                         <div class="mb-3">
                             <label for="rate_limit" class="form-label">

@@ -7,6 +7,7 @@ from database.connection import get_db
 from database.models import Webhook, WebhookQueue
 from auth.permissions import get_accessible_client_ids
 from auth.api_key_auth import require_api_key
+from services.webhook_service import validate_webhook_url
 import json
 
 webhooks_bp = Blueprint('webhooks', __name__, url_prefix='/admin/webhooks')
@@ -56,6 +57,11 @@ def create_webhook(cliente_id):
         
         if not url:
             flash('URL é obrigatória.', 'error')
+            return redirect(url_for('webhooks.create_webhook', cliente_id=cliente_id))
+
+        url_ok, url_error = validate_webhook_url(url)
+        if not url_ok:
+            flash(f'URL de webhook inválida: {url_error}.', 'error')
             return redirect(url_for('webhooks.create_webhook', cliente_id=cliente_id))
         
         if not eventos:
@@ -201,6 +207,10 @@ def api_create_webhook():
     
     if not data.get('url'):
         return jsonify({"error": "URL obrigatória"}), 400
+
+    url_ok, url_error = validate_webhook_url(data.get('url'))
+    if not url_ok:
+        return jsonify({"error": "URL de webhook inválida", "message": url_error}), 400
     
     if not data.get('eventos'):
         return jsonify({"error": "Lista de eventos obrigatória"}), 400

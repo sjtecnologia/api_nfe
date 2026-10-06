@@ -57,6 +57,23 @@ class TestLoginRoute:
         # A resposta deve conter indicação de erro (não redirecionar para dashboard)
         assert b"login" in response.data.lower() or response.status_code == 200
 
+    def test_login_uses_production_active_column(self, client):
+        """A autenticação deve usar o nome histórico do schema produtivo."""
+        with patch("routes.auth_routes.get_db") as mock_db_gen:
+            mock_db = MagicMock()
+            mock_db_gen.return_value = iter([mock_db])
+            mock_db.execute.return_value.first.return_value = None
+
+            response = client.post(
+                "/auth/login",
+                data={"username": "teste", "password": "senha"},
+            )
+
+        assert response.status_code == 200
+        query = mock_db.execute.call_args.args[0].text
+        assert "_is_active = true" in query
+        assert "AND is_active = true" not in query
+
     def test_logout_redirects(self, client):
         """GET /auth/logout deve redirecionar."""
         response = client.get("/auth/logout", follow_redirects=False)
