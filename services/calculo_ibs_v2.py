@@ -12,8 +12,10 @@ Referência: Lei Complementar 214/2023 e Cartilha IBS FENACON
 """
 
 from typing import Optional
+from datetime import date
 from sqlalchemy import text
 from database.connection import get_db
+from utils.reforma_tributaria import vigencia_reforma
 
 
 class CalculoIBS:
@@ -35,7 +37,9 @@ class CalculoIBS:
         codigo_servico: str,
         municipio_origem: str,
         municipio_destino: Optional[str] = None,
-        regime_tributario: str = 'normal'
+        regime_tributario: str = 'normal',
+        *,
+        dhEmi: str
     ) -> dict:
         """
         Calcula IBS e CBS para uma operação
@@ -58,6 +62,8 @@ class CalculoIBS:
                 - observacoes: Observações sobre o cálculo
         """
         
+        vigencia_reforma(dhEmi)
+
         # FASE 1: Retorna estrutura preparatória (valores zerados)
         # FASE 2: Implementar cálculo real quando alíquotas disponíveis
         
@@ -76,7 +82,7 @@ class CalculoIBS:
     def buscar_aliquota_municipio(
         self,
         codigo_municipio: str,
-        data_referencia: Optional[str] = None
+        dhEmi: str
     ) -> Optional[float]:
         """
         Busca alíquota IBS vigente para um município
@@ -89,9 +95,7 @@ class CalculoIBS:
             Alíquota IBS ou None se não encontrada
         """
         
-        if data_referencia is None:
-            from datetime import date
-            data_referencia = date.today().isoformat()
+        vigencia_reforma(dhEmi)
         
         db = next(get_db())
         try:
@@ -108,7 +112,7 @@ class CalculoIBS:
             
             result = db.execute(query, {
                 'codigo_municipio': codigo_municipio,
-                'data_referencia': data_referencia
+                'data_referencia': dhEmi
             }).fetchone()
             
             if result:

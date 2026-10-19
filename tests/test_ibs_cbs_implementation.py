@@ -6,6 +6,7 @@ from database.connection import SessionLocal
 from database.models import RegimeTributario, ClassificacaoIBSCBS, Cliente
 from services.ibs_cbs_service import calcular_ibs_cbs
 from decimal import Decimal
+from datetime import date
 
 def testar_implementacao():
     """Testa se a implementação IBS/CBS está funcionando"""
@@ -33,7 +34,7 @@ def testar_implementacao():
         print("\n3. Testando Cálculo IBS/CBS...")
         if classificacoes:
             valor_teste = Decimal('1000.00')
-            resultado = calcular_ibs_cbs(valor_teste, classificacoes[0], db)
+            resultado = calcular_ibs_cbs(valor_teste, classificacoes[0], db, dhEmi=date.today())
             print(f"   Valor do Produto: R$ {valor_teste}")
             print(f"   ✓ IBS UF: R$ {resultado['vIBSUF']:.2f}")
             print(f"   ✓ IBS Municipal: R$ {resultado['vIBSMun']:.2f}")

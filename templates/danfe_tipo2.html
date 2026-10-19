@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>DANFE Simplificado Tipo 2</title>
+  <style>
+    @page { size: 56mm auto; margin: 2mm; }
+    * { box-sizing: border-box; }
+    html, body { width: 52mm; margin: 0; padding: 0; }
+    body { color: #111; font: 8pt/1.25 monospace; overflow-wrap: anywhere; }
+    header, section, footer { border-bottom: 1px dashed #222; padding: 2mm 0; }
+    h1, h2, p { margin: 0 0 1mm; }
+    h1 { font-size: 10pt; text-align: center; }
+    h2 { font-size: 8pt; text-align: center; }
+    .center { text-align: center; }
+    .strong { font-weight: bold; }
+    .notice { margin: 1mm 0; text-align: center; font-weight: bold; }
+    .row { display: flex; justify-content: space-between; gap: 2mm; }
+    .item { border-bottom: 1px dotted #777; padding: 1mm 0; }
+    .item-name { font-weight: bold; }
+    .qr { display: block; width: 35mm; height: 35mm; margin: 1mm auto; image-rendering: pixelated; }
+    .url { word-break: break-all; }
+    .no-border { border: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="center strong">{{ emitente_documento }}</p>
+    <p class="center strong">{{ emitente_nome }}</p>
+    <p class="center">{{ emitente_endereco }}</p>
+    <h1>DANFE Simplificado Tipo 2</h1>
+    {% if contingencia %}<p class="notice">EMITIDA EM CONTINGÊNCIA Pendente de autorização</p>{% endif %}
+    {% if homologacao %}<p class="notice">EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL</p>{% endif %}
+    <p class="center">Via do Estabelecimento</p>
+  </header>
+
+  <section>
+    <h2>ITENS</h2>
+    {% for item in itens %}
+    <div class="item">
+      <p class="item-name">{{ item.codigo }} - {{ item.descricao }}</p>
+      <p>{{ item.quantidade }} {{ item.unidade }} x {{ item.valor_unitario }} = {{ item.valor_total }}</p>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section>
+    <h2>TOTAIS</h2>
+    <p>Itens distintos: {{ quantidade_itens_distintos }}</p>
+    <div class="row"><span>Produtos</span><span>{{ soma_produtos }}</span></div>
+    {% if mostrar_acrescimos %}<div class="row"><span>Acréscimos</span><span>{{ acrescimos }}</span></div>{% endif %}
+    {% if mostrar_descontos %}<div class="row"><span>Descontos</span><span>{{ descontos }}</span></div>{% endif %}
+    {% if mostrar_valor_nota %}<div class="row strong"><span>Valor da NF</span><span>{{ valor_nota }}</span></div>{% endif %}
+    {% for pagamento in pagamentos %}
+    <div class="row"><span>Pagamento {{ pagamento.forma }}</span><span>{{ pagamento.valor }}</span></div>
+    {% endfor %}
+    {% if troco != '0,00' %}<div class="row"><span>Troco</span><span>{{ troco }}</span></div>{% endif %}
+  </section>
+
+  <section>
+    <h2>III-A - TRIBUTOS</h2>
+    {% for tributo in tributos %}<div class="row"><span>{{ tributo.nome }}</span><span>{{ tributo.valor }}</span></div>{% endfor %}
+  </section>
+
+  <section>
+    <h2>CHAVE DE ACESSO</h2>
+    {% if url_chave %}<p class="url">{{ url_chave }}</p>{% endif %}
+    <p class="center">{{ chave_url }}</p>
+  </section>
+
+  <section class="center">
+    <h2>Consulte pela Chave</h2>
+    {% if qrcode_imagem %}<img class="qr" src="{{ qrcode_imagem }}" alt="QR Code da NF-e">{% endif %}
+    <p class="url">{{ qrcode_url }}</p>
+    {% if contingencia %}<p class="notice">EMITIDA EM CONTINGÊNCIA Pendente de autorização</p>{% endif %}
+  </section>
+
+  <section>
+    <h2>CONSUMIDOR CNPJ: {{ consumidor_documento }}</h2>
+    {% if consumidor_nome %}<p>{{ consumidor_nome }}</p>{% endif %}
+    {% if endereco_entrega %}<p>Entrega: {{ endereco_entrega }}</p>{% endif %}
+  </section>
+
+  <section>
+    <div class="row"><span>NF-e</span><span>{{ numero }}</span></div>
+    <div class="row"><span>Série</span><span>{{ serie }}</span></div>
+    <p>Emissão: {{ emissao }}</p>
+    {% if protocolo %}<p>Protocolo de autorização: {{ protocolo }}</p>{% endif %}
+    {% if data_protocolo %}<p>Recebimento: {{ data_protocolo }}</p>{% endif %}
+  </section>
+
+  <footer class="no-border">
+    {% if inf_ad_fisco %}<p>{{ inf_ad_fisco }}</p>{% endif %}
+    {% if inf_cpl %}<p>{{ inf_cpl }}</p>{% endif %}
+  </footer>
+</body>
+</html>

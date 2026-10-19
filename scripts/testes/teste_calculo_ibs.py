@@ -23,7 +23,8 @@ def test_calculo_basico():
     resultado = calc.calcular(
         valor_base=1000.00,
         codigo_servico='01.01',
-        municipio_origem='3550308'  # São Paulo
+        municipio_origem='3550308',  # São Paulo
+        dhEmi='2026-01-01'
     )
     
     print(f"Valor base: R$ {resultado['valor_base']:.2f}")

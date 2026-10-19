@@ -59,13 +59,13 @@ class XMLSignatureService:
             xml_assinado = assinador.assinar(xml_content)
             
             print(f"[PYNFE] ✅ Assinatura criada: {len(xml_assinado)} caracteres")
-                    nfe_element = xml_tree.find('.//NFe')
-                if nfe_element is None:
-                    # Última tentativa: buscar qualquer elemento que termine com NFe
-                    for elem in xml_tree.iter():
-                        if elem.tag.endswith('NFe'):
-                            nfe_element = elem
-                            break
+            nfe_element = xml_tree.find('.//NFe')
+            if nfe_element is None:
+                # Última tentativa: buscar qualquer elemento que termine com NFe
+                for elem in xml_tree.iter():
+                    if elem.tag.endswith('NFe'):
+                        nfe_element = elem
+                        break
             
             if nfe_element is None:
                 print(f"[ERRO] Estrutura do XML:")

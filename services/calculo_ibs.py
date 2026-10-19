@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import date
 from sqlalchemy import text
 from database.connection import get_db
+from utils.reforma_tributaria import vigencia_reforma
 
 
 class CalculadoraIBS:
@@ -38,7 +39,7 @@ class CalculadoraIBS:
         self,
         valor_servico: Decimal,
         codigo_municipio: str,
-        data_referencia: Optional[date] = None,
+        dhEmi: date,
         tem_credito: bool = False,
         valor_credito: Decimal = Decimal('0.00')
     ) -> Dict:
@@ -48,7 +49,7 @@ class CalculadoraIBS:
         Args:
             valor_servico: Valor do serviço
             codigo_municipio: Código IBGE do município de prestação
-            data_referencia: Data para buscar alíquota vigente (padrão: hoje)
+            dhEmi: Data de emissão para vigência e busca da alíquota
             tem_credito: Se há crédito IBS de insumos
             valor_credito: Valor do crédito IBS a compensar
             
@@ -62,14 +63,13 @@ class CalculadoraIBS:
                 'municipio': str
             }
         """
-        if data_referencia is None:
-            data_referencia = date.today()
+        vigencia_reforma(dhEmi)
         
         # 1. Determinar base de cálculo
         base_calculo = self._calcular_base_ibs(valor_servico)
         
         # 2. Buscar alíquota vigente do município
-        aliquota = self._buscar_aliquota_ibs(codigo_municipio, data_referencia)
+        aliquota = self._buscar_aliquota_ibs(codigo_municipio, dhEmi)
         
         # 3. Calcular IBS bruto
         valor_ibs_bruto = base_calculo * (aliquota / Decimal('100'))
@@ -95,6 +95,7 @@ class CalculadoraIBS:
     def calcular_cbs_servico(
         self,
         valor_servico: Decimal,
+        dhEmi: date,
         tem_credito: bool = False,
         valor_credito: Decimal = Decimal('0.00')
     ) -> Dict:
@@ -115,6 +116,8 @@ class CalculadoraIBS:
                 'valor_cbs_liquido': Decimal
             }
         """
+        vigencia_reforma(dhEmi)
+
         # 1. Determinar base de cálculo
         base_calculo = self._calcular_base_cbs(valor_servico)
         
@@ -145,7 +148,7 @@ class CalculadoraIBS:
         self,
         valor_servico: Decimal,
         codigo_municipio: str,
-        data_referencia: Optional[date] = None,
+        dhEmi: date,
         tem_credito_ibs: bool = False,
         valor_credito_ibs: Decimal = Decimal('0.00'),
         tem_credito_cbs: bool = False,
@@ -168,13 +171,14 @@ class CalculadoraIBS:
         Returns:
             Dict com todos os cálculos de IBS e CBS
         """
+        vigencia_reforma(dhEmi)
+
         # Aplicar benefício fiscal se houver
         valor_ajustado = valor_servico
         beneficio_aplicado = None
         
         if aplicar_beneficio:
-            data_ref = data_referencia if data_referencia is not None else date.today()
-            beneficio_info = self._buscar_beneficio_fiscal(aplicar_beneficio, data_ref)
+            beneficio_info = self._buscar_beneficio_fiscal(aplicar_beneficio, dhEmi)
             if beneficio_info:
                 valor_ajustado = self._aplicar_beneficio(valor_servico, beneficio_info)
                 beneficio_aplicado = beneficio_info
@@ -183,7 +187,7 @@ class CalculadoraIBS:
         resultado_ibs = self.calcular_ibs_servico(
             valor_ajustado,
             codigo_municipio,
-            data_referencia,
+            dhEmi,
             tem_credito_ibs,
             valor_credito_ibs
         )
@@ -191,6 +195,7 @@ class CalculadoraIBS:
         # Calcular CBS
         resultado_cbs = self.calcular_cbs_servico(
             valor_ajustado,
+            dhEmi,
             tem_credito_cbs,
             valor_credito_cbs
         )
@@ -453,7 +458,8 @@ class ConversorTributacaoHistorica:
 
 def calcular_ibs_simples(
     valor: Decimal,
-    codigo_municipio: str
+    codigo_municipio: str,
+    dhEmi: date
 ) -> Decimal:
     """
     Função simplificada para cálculo rápido de IBS
@@ -466,11 +472,11 @@ def calcular_ibs_simples(
         Valor do IBS calculado
     """
     calc = CalculadoraIBS()
-    resultado = calc.calcular_ibs_servico(valor, codigo_municipio)
+    resultado = calc.calcular_ibs_servico(valor, codigo_municipio, dhEmi)
     return resultado['valor_ibs_liquido']
 
 
-def calcular_cbs_simples(valor: Decimal) -> Decimal:
+def calcular_cbs_simples(valor: Decimal, dhEmi: date) -> Decimal:
     """
     Função simplificada para cálculo rápido de CBS
     
@@ -481,7 +487,7 @@ def calcular_cbs_simples(valor: Decimal) -> Decimal:
         Valor do CBS calculado
     """
     calc = CalculadoraIBS()
-    resultado = calc.calcular_cbs_servico(valor)
+    resultado = calc.calcular_cbs_servico(valor, dhEmi)
     return resultado['valor_cbs_liquido']
 
 
@@ -513,6 +519,7 @@ if __name__ == '__main__':
     resultado_ibs = calc.calcular_ibs_servico(
         valor_servico=Decimal('1000.00'),
         codigo_municipio='3550308',  # São Paulo/SP
+        dhEmi=date.today(),
     )
     
     print("=== Exemplo 1: Cálculo IBS ===")
@@ -525,6 +532,7 @@ if __name__ == '__main__':
     resultado_completo = calc.calcular_completo(
         valor_servico=Decimal('1000.00'),
         codigo_municipio='3550308',
+        dhEmi=date.today(),
         tem_credito_ibs=True,
         valor_credito_ibs=Decimal('50.00')
     )

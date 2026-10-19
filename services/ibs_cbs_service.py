@@ -5,9 +5,10 @@ Aplicável apenas para clientes com regime tributário CRT=3 (Lucro Real/Presumi
 
 from decimal import Decimal
 from typing import Dict, Any, List, Tuple
+from utils.reforma_tributaria import vigencia_reforma
 
 
-def calcular_ibs_cbs(valor_produto: Decimal, classificacao, db) -> Dict[str, Any]:
+def calcular_ibs_cbs(valor_produto: Decimal, classificacao, db, *, dhEmi) -> Dict[str, Any]:
     """
     Calcula IBS/CBS com base na classificação tributária
     
@@ -20,6 +21,7 @@ def calcular_ibs_cbs(valor_produto: Decimal, classificacao, db) -> Dict[str, Any
         Dict com todos os valores calculados para IBS/CBS
     """
     from database.models import ClassificacaoIBSCBS
+    vigencia_reforma(dhEmi)
     
     # Se receber ID, busca o objeto
     if isinstance(classificacao, int):

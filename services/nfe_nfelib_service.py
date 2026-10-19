@@ -8,7 +8,8 @@ from typing import Dict, Any
 from decimal import Decimal, InvalidOperation
 from nfelib.nfe.bindings.v4_0.nfe_v4_00 import Nfe
 from nfelib.nfe.bindings.v4_0.leiaute_nfe_v4_00 import TenderEmi, Tendereco
-from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf, normalizar_texto as remover_acentos
+from utils.helpers import get_uf_ibge_code, limpar_cnpj_cpf, normalizar_texto as remover_acentos, converter_para_decimal
+from utils.reforma_tributaria import vigencia_reforma
 from services.ibs_cbs_service import calcular_ibs_cbs, gerar_xml_ibscbs, gerar_xml_totais_ibscbs
 from services.cbenef_sp_table import validar_cbenef_para_cst, codigos_para_cst, TABELA_CBENEF_SP
 from config.settings import HABILITAR_IBS_CBS
@@ -417,6 +418,84 @@ def gerar_chave_acesso(emitente_data: Dict[str, Any], form_data: Dict[str, Any],
     return chave_acesso
 
 
+def _injetar_valores_produto_liquido(xml_tree, items, ano_vigencia_reforma):
+    from lxml import etree
+
+    ns = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+    det_elements = xml_tree.findall('.//nfe:det', ns)
+    v_prod_liq_total = Decimal('0.00')
+    tributos_liquidos = (
+        ('vII', 'vII'),
+        ('vIPI', 'valor_ipi'),
+        ('vICMS', 'valor_icms'),
+        ('vPIS', 'valor_pis'),
+        ('vCOFINS', 'valor_cofins'),
+        ('vISSQN', 'valor_issqn'),
+    )
+    if ano_vigencia_reforma == 2027:
+        tributos_liquidos += (
+            ('vIBS', 'vIBS'),
+            ('vCBS', 'vCBS'),
+            ('vIS', 'vIS'),
+        )
+
+    for det_elem, item in zip(det_elements, items):
+        prod_elem = det_elem.find('nfe:prod', ns)
+        if prod_elem is None:
+            continue
+        valor_prod = Decimal(prod_elem.findtext('nfe:vProd', '0', ns))
+        quantidade_prod = Decimal(prod_elem.findtext('nfe:qCom', '0', ns))
+        tributos_item = Decimal('0.00')
+        for tag_xml, chave_item in tributos_liquidos:
+            valores_xml = det_elem.xpath(
+                ".//*[local-name()=$nome]/text()",
+                nome=tag_xml,
+            )
+            if valores_xml:
+                tributos_item += sum(
+                    (Decimal(str(valor).replace(',', '.')) for valor in valores_xml),
+                    Decimal('0.00'),
+                )
+            else:
+                valor_item = item.get(chave_item, item.get(tag_xml, '0'))
+                try:
+                    tributos_item += Decimal(str(valor_item or '0').replace(',', '.'))
+                except (InvalidOperation, ValueError):
+                    pass
+
+        valor_prod_liq = converter_para_decimal(valor_prod - tributos_item, 2)
+        valor_unitario_liq = (
+            converter_para_decimal(valor_prod_liq / quantidade_prod, 4)
+            if quantidade_prod else Decimal('0.0000')
+        )
+        vprod_elem = prod_elem.find('nfe:vProd', ns)
+        if vprod_elem is None:
+            raise ValueError(f"Item {det_elem.get('nItem')}: tag vProd ausente")
+        v_un_com_liq_elem = etree.Element('{http://www.portalfiscal.inf.br/nfe}vUnComLiq')
+        v_un_com_liq_elem.text = f"{valor_unitario_liq:.4f}"
+        v_prod_liq_elem = etree.Element('{http://www.portalfiscal.inf.br/nfe}vProdLiq')
+        v_prod_liq_elem.text = f"{valor_prod_liq:.2f}"
+        vprod_index = list(prod_elem).index(vprod_elem)
+        # TODO: validar posição contra XSD oficial da NT 2026.008 na homologação (tpAmb=2).
+        prod_elem.insert(vprod_index + 1, v_un_com_liq_elem)
+        prod_elem.insert(vprod_index + 2, v_prod_liq_elem)
+        v_prod_liq_total += valor_prod_liq
+
+    icms_tot_elem = xml_tree.find('.//nfe:total/nfe:ICMSTot', ns)
+    if icms_tot_elem is not None and icms_tot_elem.find('nfe:vProdLiqTot', ns) is None:
+        total_liquido_elem = etree.Element('{http://www.portalfiscal.inf.br/nfe}vProdLiqTot')
+        valor_prod_total_elem = icms_tot_elem.find('nfe:vProd', ns)
+        posicao_total = (
+            list(icms_tot_elem).index(valor_prod_total_elem) + 1
+            if valor_prod_total_elem is not None else len(icms_tot_elem)
+        )
+        total_liquido_elem.text = f"{v_prod_liq_total:.2f}"
+        # TODO: validar posição contra XSD oficial da NT 2026.008 na homologação (tpAmb=2).
+        icms_tot_elem.insert(posicao_total, total_liquido_elem)
+
+    return v_prod_liq_total
+
+
 def generate_nfe_xml_nfelib(
     emitente_data: Dict[str, Any],
     destinatario_data: Dict[str, Any],
@@ -484,6 +563,8 @@ def generate_nfe_xml_nfelib(
     
     # Remover microsegundos (apenas segundos como no XML aprovado)
     data_emissao = data_emissao.replace(microsecond=0)
+    ano_vigencia_reforma = vigencia_reforma(data_emissao)
+    print(f"[REFORMA] Vigência da emissão: {ano_vigencia_reforma}")
 
     # Evita rejeição/alerta por data de emissão futura.
     agora_brt = datetime.now(brt).replace(microsecond=0)
@@ -1204,7 +1285,12 @@ def generate_nfe_xml_nfelib(
                 print(f"  [IBS/CBS] Item {idx} - Convertido para int: {classificacao_id_int}")
 
                 # Calcular IBS/CBS usando conexão compartilhada
-                ibs_cbs_data = calcular_ibs_cbs(valor_total, classificacao_id_int, _db_ibs_cbs)
+                ibs_cbs_data = calcular_ibs_cbs(
+                    valor_total,
+                    classificacao_id_int,
+                    _db_ibs_cbs,
+                    dhEmi=data_emissao,
+                )
 
                 # Gerar XML IBS/CBS
                 ibs_cbs_xml = gerar_xml_ibscbs(ibs_cbs_data)
@@ -1517,6 +1603,39 @@ def generate_nfe_xml_nfelib(
                     print(f"  [IBS/CBS] Totalizadores adicionados: IBS R$ {v_ibs_total:.2f}, CBS R$ {v_cbs_total:.2f}")
 
             
+            _injetar_valores_produto_liquido(xml_tree, items, ano_vigencia_reforma)
+            det_elements = xml_tree.findall('.//nfe:det', ns)
+
+            modelo = str(form_data.get('modelo') or form_data.get('mod') or '55').strip().zfill(2)
+            pagamento_antecipado = (
+                str(form_data.get('tpNFDebito') or '').strip() == '06'
+                or str(form_data.get('tpOperGov') or '').strip() == '4'
+            )
+            if modelo != '65' and pagamento_antecipado:
+                for det_elem, item in zip(det_elements, items):
+                    icms_elem = det_elem.find('.//nfe:ICMS', ns)
+                    if icms_elem is None:
+                        continue
+                    grupo_previsto = icms_elem.find('nfe:ICMSPrevistoPagtoAntecip', ns)
+                    if grupo_previsto is None:
+                        # TODO: validar posição contra XSD oficial da NT 2026.008 na homologação (tpAmb=2).
+                        grupo_previsto = etree.SubElement(
+                            icms_elem,
+                            '{http://www.portalfiscal.inf.br/nfe}ICMSPrevistoPagtoAntecip',
+                        )
+                    valor_previsto = item.get('vICMSPrevisto')
+                    if valor_previsto is None:
+                        valores_icms = icms_elem.xpath(".//*[local-name()='vICMS']/text()")
+                        valor_previsto = sum(
+                            (Decimal(str(valor).replace(',', '.')) for valor in valores_icms),
+                            Decimal('0.00'),
+                        ) if valores_icms else Decimal('0.00')
+                    valor_previsto = converter_para_decimal(valor_previsto, 2)
+                    etree.SubElement(
+                        grupo_previsto,
+                        '{http://www.portalfiscal.inf.br/nfe}vICMSPrevisto',
+                    ).text = f"{valor_previsto:.2f}"
+
             # ========== ADICIONAR cBenef MANUALMENTE (nfelib não suporta) ==========
             print(f"🔧 [cBenef] Verificando necessidade de adicionar cBenef manualmente...")
             for idx, item in enumerate(items, 1):

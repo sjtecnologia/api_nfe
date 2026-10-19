@@ -218,7 +218,8 @@ def test_codigo_ibs():
         resultado = calc.calcular(
             valor_base=1000.00,
             codigo_servico='01.01',
-            municipio_origem='3550308'
+            municipio_origem='3550308',
+            dhEmi='2026-01-01'
         )
         print(f"  [OK] Cálculo stub: Total = R$ {resultado['total_tributos']:.2f}")
         

@@ -1273,57 +1273,90 @@ def emitir_nfe():
                         logger.debug(msg)
                         flash(msg, 'success')
                         
-                        # Gerar DANFE automaticamente sempre que NFe for autorizada
-                        try:
-                            logger.debug(" === GERANDO DANFE AUTOMATICAMENTE ===")
-                            from services.danfe_service import generate_danfe
-                            # OK: CORREÇÃO: Usar a variável nfe_id que já foi convertida para int
-                            # Garantir que o XML tem protNFe antes de gerar DANFE
-                            # Sem protNFe, brazilfiscalreport exibe "SEM VALOR FISCAL" mesmo em producao
-                            xml_para_danfe = xml_assinado
-                            if '<protNFe' not in xml_assinado:
-                                try:
-                                    from services.nfe_service import NFeService as _NFeS
-                                    _nfe_svc = _NFeS()
-                                    _resultado_protocolo = {
-                                        'chave_acesso': resultado_sefaz.get('chave_acesso'),
-                                        'protocolo': resultado_sefaz.get('protocolo'),
-                                        'status': '100',
-                                        'digVal': 'N/A',
-                                        'ambiente_real': True
-                                    }
-                                    xml_para_danfe = _nfe_svc._gerar_xml_protocolo(xml_assinado, _resultado_protocolo)
-                                    logger.debug("[DANFE] protNFe injetado no XML antes de gerar DANFE")
-                                except Exception as _e_prot:
-                                    logger.warning(f"[DANFE] Aviso: nao foi possivel injetar protNFe: {_e_prot}")
-                            pdf_path = generate_danfe(xml_para_danfe, nfe_id, emitente_cliente_id)
-                            
-                            if pdf_path and os.path.exists(pdf_path):
-                                logger.debug(f"OK: DANFE gerado: {pdf_path}")
-                                # Adicionar URL do DANFE à sessão (opcional - para uso futuro)
-                                pdf_url = url_for('nfe.download_danfe_pdf', nfe_id=nfe_id)
-                                if 'danfes_gerados' not in session:
-                                    session['danfes_gerados'] = {}
-                                # CORREÇÃO: Converter nfe_id para string para evitar erro de serialização JSON
-                                session['danfes_gerados'][str(nfe_id)] = {
-                                    'url': pdf_url,
-                                    'timestamp': datetime.now().timestamp()
+                        # Garantir que o XML tem protNFe antes de gerar qualquer DANFE.
+                        xml_para_danfe = xml_assinado
+                        if '<protNFe' not in xml_assinado:
+                            try:
+                                from services.nfe_service import NFeService as _NFeS
+                                _nfe_svc = _NFeS()
+                                _resultado_protocolo = {
+                                    'chave_acesso': resultado_sefaz.get('chave_acesso'),
+                                    'protocolo': resultado_sefaz.get('protocolo'),
+                                    'status': '100',
+                                    'digVal': 'N/A',
+                                    'ambiente_real': True
                                 }
-                                session.modified = True
-                                flash('DANFE gerado com sucesso!', 'success')
-                                
-                                # Marcar que DANFE foi gerado para abrir o modal
-                                danfe_gerado_com_sucesso = True
-                                caminho_danfe = url_for('nfe.download_danfe_pdf', nfe_id=nfe_id)
-                            else:
+                                xml_para_danfe = _nfe_svc._gerar_xml_protocolo(xml_assinado, _resultado_protocolo)
+                                logger.debug("[DANFE] protNFe injetado no XML antes de gerar DANFE")
+                            except Exception as _e_prot:
+                                logger.warning(f"[DANFE] Aviso: nao foi possivel injetar protNFe: {_e_prot}")
+
+                        def _registrar_danfe_entregavel(pdf_path):
+                            nonlocal danfe_gerado_com_sucesso, caminho_danfe
+                            if not pdf_path or not os.path.exists(pdf_path):
                                 logger.warning(f"AVISO: DANFE não foi gerado (pdf_path: {pdf_path})")
                                 flash('NFe emitida, mas o DANFE não foi gerado.', 'warning')
+                                return
+                            pdf_url = url_for('nfe.download_danfe_pdf', nfe_id=nfe_id)
+                            if 'danfes_gerados' not in session:
+                                session['danfes_gerados'] = {}
+                            session['danfes_gerados'][str(nfe_id)] = {
+                                'url': pdf_url,
+                                'timestamp': datetime.now().timestamp()
+                            }
+                            session.modified = True
+                            flash('DANFE gerado com sucesso!', 'success')
+                            danfe_gerado_com_sucesso = True
+                            caminho_danfe = pdf_url
+
+                        def _gerar_danfe_a4():
+                            try:
+                                logger.debug(" === GERANDO DANFE A4 ===")
+                                from services.danfe_service import generate_danfe
+
+                                pdf_path = generate_danfe(xml_para_danfe, nfe_id, emitente_cliente_id)
+                                _registrar_danfe_entregavel(pdf_path)
+                            except Exception as e:
+                                logger.error(f"ERRO: Erro ao gerar DANFE automático: {e}")
+                                import traceback
+                                traceback.print_exc()
+                                flash(f'NFe emitida com sucesso! DANFE: {str(e)}', 'warning')
+
+                        # TODO: remover detecção dinâmica após aplicar migracao_danfe_tipo2.sql
+                        usa_danfe_tipo2 = False
+                        try:
+                            emitente_flag = db.execute(
+                                text("SELECT * FROM clientes WHERE cliente_id = :cliente_id"),
+                                {'cliente_id': emitente_cliente_id},
+                            ).mappings().first()
+                            usa_danfe_tipo2 = bool(
+                                emitente_flag and emitente_flag.get('usa_danfe_tipo2') is True
+                            )
                         except Exception as e:
-                            logger.error(f"ERRO: Erro ao gerar DANFE automático: {e}")
-                            import traceback
-                            traceback.print_exc()
-                            # Não falhar a emissão por causa do DANFE
-                            flash(f'NFe emitida com sucesso! DANFE: {str(e)}', 'warning')
+                            logger.warning(f"[DANFE TIPO 2] Não foi possível consultar a flag; usando A4: {e}")
+
+                        if usa_danfe_tipo2:
+                            try:
+                                from services.danfe_simplificado_tipo2_service import DanfeSimplificadoTipo2Service
+
+                                private_key = certificado.get('private_key') if isinstance(certificado, dict) else None
+                                pdf_path = DanfeSimplificadoTipo2Service().gerar_danfe_tipo2(
+                                    {
+                                        'xml': xml_para_danfe,
+                                        'certificado': private_key,
+                                    },
+                                    protocolo={
+                                        'nProt': resultado_sefaz.get('protocolo'),
+                                        'dhRecbto': resultado_sefaz.get('data_autorizacao'),
+                                    },
+                                    caminho_pdf=os.path.join('static', 'danfe', f'danfe_{nfe_id}.pdf'),
+                                )
+                                _registrar_danfe_entregavel(pdf_path)
+                            except Exception as e:
+                                logger.error(f"ERRO_DANFE_TIPO2: {e}")
+                                _gerar_danfe_a4()
+                        else:
+                            _gerar_danfe_a4()
                         
                     else:
                         msg = f'ERRO: NFe rejeitada: {resultado_sefaz.get("message")}'
@@ -3072,6 +3105,13 @@ def reenviar_nfe(nfe_id):
         
         # Extrair dados do JSON
         json_data = nfe_data['json_nfe']
+        if isinstance(json_data, str):
+            try:
+                json_data = json.loads(json_data)
+            except (TypeError, ValueError):
+                return jsonify({'success': False, 'message': 'Dados salvos da NF-e estão inválidos; não foi possível reconstruir o reenvio.'}), 400
+        if not isinstance(json_data, dict):
+            return jsonify({'success': False, 'message': 'Dados salvos da NF-e estão inválidos; não foi possível reconstruir o reenvio.'}), 400
         
         # Buscar dados do emitente
         emitente_data = db.query(Cliente).filter_by(cliente_id=nfe_data['cliente_id']).first()
@@ -3100,7 +3140,7 @@ def reenviar_nfe(nfe_id):
         }
         # Buscar destinatário - pode estar no form_data ou já armazenado na NFe
         
-        form_data = json_data.get('form_data', {})
+        form_data = json_data.get('form_data', {}) or {}
         destinatario_id = form_data.get('destinatario')
         destinatario_data: Dict[str, Any] = {}
         
@@ -3137,7 +3177,34 @@ def reenviar_nfe(nfe_id):
             except Exception as e:
                 logger.error(f"Aviso: Erro ao buscar destinatário por ID: {e}")
         
-        # Se não encontrou pelo ID, tentar usar dados já armazenados na NFe
+        # Se o ID salvo estiver obsoleto, localizar o mesmo destinatário pelo documento.
+        if not destinatario_data:
+            cpf_cnpj_stored = nfe_data.get('destinatario_cnpj_cpf') or form_data.get('destinatario_cnpj_cpf')
+            cpf_cnpj_limpo = ''.join(ch for ch in str(cpf_cnpj_stored or '') if ch.isdigit())
+            if cpf_cnpj_limpo:
+                try:
+                    dest_result = db.execute(text("""
+                        SELECT destinatario_id, nome_razao_social, cpf_cnpj, logradouro, numero,
+                               bairro, cep, codigo_municipio, nome_municipio, uf, ie,
+                               ie_indicador_nfe, tipo_pessoa
+                          FROM destinatarios_nfe
+                         WHERE REPLACE(REPLACE(REPLACE(cpf_cnpj, '.', ''), '-', ''), '/', '') = :doc
+                           AND cliente_id = :cliente_id
+                         LIMIT 1
+                    """), {'doc': cpf_cnpj_limpo, 'cliente_id': nfe_data['cliente_id']}).fetchone()
+                    if dest_result:
+                        m = dest_result._mapping
+                        destinatario_data = {
+                            'nome_razao_social': m['nome_razao_social'], 'cpf_cnpj': m['cpf_cnpj'],
+                            'logradouro': m['logradouro'], 'numero': m['numero'], 'bairro': m['bairro'],
+                            'cep': m['cep'], 'codigo_municipio': m['codigo_municipio'],
+                            'nome_municipio': m['nome_municipio'], 'uf': m['uf'], 'ie': m['ie'],
+                            'ie_indicador_nfe': m['ie_indicador_nfe'], 'tipo_pessoa': m['tipo_pessoa']
+                        }
+                except Exception:
+                    logger.exception('[REENVIO] Erro ao localizar destinatário pelo documento')
+
+        # Se não encontrou pelo ID/documento, usar somente os dados persistidos no rascunho.
         if not destinatario_data and nfe_data.get('destinatario_razao_social'):
             logger.debug("Usando dados do destinatário já armazenados na NFe")
             # Buscar IE e tipo_pessoa na tabela pelo CNPJ/CPF
@@ -3167,13 +3234,13 @@ def reenviar_nfe(nfe_id):
             destinatario_data = {
                 'nome_razao_social': nfe_data.get('destinatario_razao_social'),
                 'cpf_cnpj': nfe_data.get('destinatario_cnpj_cpf'),
-                'logradouro': form_data.get('dest_logradouro', 'RUA TESTE'),
-                'numero': form_data.get('dest_numero', 'SN'),
-                'bairro': form_data.get('dest_bairro', 'CENTRO'),
-                'cep': form_data.get('dest_cep', '00000000'),
-                'codigo_municipio': form_data.get('dest_codigo_municipio', '3550308'),
-                'nome_municipio': form_data.get('dest_municipio', 'SAO PAULO'),
-                'uf': form_data.get('dest_uf', 'SP'),
+                'logradouro': form_data.get('dest_logradouro'),
+                'numero': form_data.get('dest_numero'),
+                'bairro': form_data.get('dest_bairro'),
+                'cep': form_data.get('dest_cep'),
+                'codigo_municipio': form_data.get('dest_codigo_municipio'),
+                'nome_municipio': form_data.get('dest_municipio'),
+                'uf': form_data.get('dest_uf') or form_data.get('uf_destino'),
                 'ie': ie_reenvio,
                 'ie_indicador_nfe': ie_indicador_reenvio if 'ie_indicador_reenvio' in locals() else '',
                 'tipo_pessoa': tipo_pessoa_reenvio
@@ -3195,6 +3262,21 @@ def reenviar_nfe(nfe_id):
                 'success': False,
                 'message': 'Dados do destinatário não encontrados no rascunho'
             }), 400
+
+        # Não deixar o gerador completar silenciosamente UF ausente com SP: isso pode
+        # transformar uma operação interestadual em interestadual com UFs iguais.
+        uf_destino = str(destinatario_data.get('uf') or '').strip().upper()
+        uf_origem = str(emitente_data_for_template.get('uf') or '').strip().upper()
+        if len(uf_destino) != 2 or not uf_destino.isalpha():
+            mensagem = 'UF do destinatário não encontrada no cadastro nem nos dados salvos da NF-e. Atualize o cadastro do destinatário antes de reenviar.'
+            db.execute(text("UPDATE nfe_emitidas SET status='REJEITADA', mensagem_sefaz=:msg WHERE nfe_emitida_id=:id"), {'msg': mensagem, 'id': nfe_id})
+            db.commit()
+            return jsonify({'success': False, 'message': mensagem}), 400
+        if len(uf_origem) != 2 or not uf_origem.isalpha():
+            mensagem = 'UF do emitente inválida no cadastro. Corrija o cadastro do emitente antes de reenviar.'
+            db.execute(text("UPDATE nfe_emitidas SET status='REJEITADA', mensagem_sefaz=:msg WHERE nfe_emitida_id=:id"), {'msg': mensagem, 'id': nfe_id})
+            db.commit()
+            return jsonify({'success': False, 'message': mensagem}), 400
 
         sucesso_trib, erros_tributacao = validar_tributacao_nfe(
             emitente_data_for_template,
@@ -3245,6 +3327,31 @@ def reenviar_nfe(nfe_id):
                 'success': False,
                 'message': _formatar_erro_nfe_para_usuario(ve)
             }), 400
+
+        # Confere o XML efetivamente montado (e não apenas o cadastro) antes de
+        # assiná-lo/enviá-lo. Evita transmitir idDest=2 com UFs iguais.
+        try:
+            from lxml import etree
+            xml_root = etree.fromstring(xml_gerado.encode('utf-8') if isinstance(xml_gerado, str) else xml_gerado)
+            ns = {'n': 'http://www.portalfiscal.inf.br/nfe'}
+            xml_id_dest = (xml_root.findtext('.//n:ide/n:idDest', namespaces=ns) or '').strip()
+            xml_uf_origem = (xml_root.findtext('.//n:emit/n:enderEmit/n:UF', namespaces=ns) or '').strip().upper()
+            xml_uf_destino = (xml_root.findtext('.//n:dest/n:enderDest/n:UF', namespaces=ns) or '').strip().upper()
+            if xml_id_dest == '2' and xml_uf_origem == xml_uf_destino:
+                mensagem = (
+                    f'XML de reenvio inconsistente: idDest=2, mas emitente e destinatário estão em '
+                    f'{xml_uf_origem or "UF não informada"}. Corrija a UF do destinatário antes de reenviar.'
+                )
+                db.execute(text("UPDATE nfe_emitidas SET status='REJEITADA', mensagem_sefaz=:msg WHERE nfe_emitida_id=:id"), {'msg': mensagem, 'id': nfe_id})
+                db.commit()
+                return jsonify({'success': False, 'message': mensagem}), 400
+            logger.info(
+                '[REENVIO] XML conferido: idDest=%s, UF origem=%s, UF destino=%s',
+                xml_id_dest, xml_uf_origem, xml_uf_destino
+            )
+        except (etree.XMLSyntaxError, AttributeError, TypeError) as exc:
+            logger.exception('[REENVIO] Não foi possível validar as UFs do XML gerado')
+            return jsonify({'success': False, 'message': f'Não foi possível validar o XML antes do envio: {exc}'}), 400
         
         # Assinar XML - BLOQUEIA SE FALHAR
         try:

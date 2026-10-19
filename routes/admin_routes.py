@@ -2799,6 +2799,7 @@ def create_cliente():
                 'telefone_contato': request.form.get('telefone_contato'),
                 'logo_path': logo_path,  # Novo campo
                 'ativo': request.form.get('ativo') == 'on',
+                'usa_danfe_tipo2': False,
                 'data_cadastro': datetime.now(),
                 'created_by_user_id': current_user.id
             }
@@ -2808,11 +2809,11 @@ def create_cliente():
                     INSERT INTO clientes (
                         razao_social, nome_fantasia, cnpj, cpf, produtor_rural, inscricao_estadual, inscricao_municipal,
                         regime_tributario_id, ambiente, cnae, cep, logradouro, numero, complemento, bairro,
-                        nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, logo_path, ativo, data_cadastro, created_by_user_id
+                        nome_municipio, codigo_municipio, uf, email_contato, telefone_contato, logo_path, ativo, usa_danfe_tipo2, data_cadastro, created_by_user_id
                     ) VALUES (
                         :razao_social, :nome_fantasia, :cnpj, :cpf, :produtor_rural, :inscricao_estadual, :inscricao_municipal,
                         :regime_tributario_id, :ambiente, :cnae, :cep, :logradouro, :numero, :complemento, :bairro,
-                        :nome_municipio, :codigo_municipio, :uf, :email_contato, :telefone_contato, :logo_path, :ativo, :data_cadastro, :created_by_user_id
+                        :nome_municipio, :codigo_municipio, :uf, :email_contato, :telefone_contato, :logo_path, :ativo, :usa_danfe_tipo2, :data_cadastro, :created_by_user_id
                     ) RETURNING cliente_id
                 """), data)
                 row = result.fetchone()
