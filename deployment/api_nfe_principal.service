@@ -1,0 +1,24 @@
+[Unit]
+Description=API NFe - Servidor Principal
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/api_nfe
+Environment="PATH=/var/www/api_nfe/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+Environment="FLASK_APP=app.py"
+Environment="FLASK_ENV=production"
+
+ExecStart=/var/www/api_nfe/venv/bin/python3 /var/www/api_nfe/app.py
+
+Restart=always
+RestartSec=10
+
+StandardOutput=append:/var/www/api_nfe/logs/api_principal.log
+StandardError=append:/var/www/api_nfe/logs/api_principal_error.log
+
+[Install]
+WantedBy=multi-user.target

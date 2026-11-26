@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if ncm %}Editar NCM{% else %}Novo NCM{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+            <h1 class="h3 mb-4">{% if ncm %}Editar NCM ({{ ncm.codigo }}){% else %}Novo NCM{% endif %}</h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{% if ncm %}{{ url_for('admin.edit_ncm', ncm_id=ncm.ncm_id) }}{% else %}{{ url_for('admin.create_ncm') }}{% endif %}" class="card p-4 shadow-sm">
+                {% if ncm %}
+                    <input type="hidden" name="ncm_id" value="{{ ncm.ncm_id }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label for="codigo" class="form-label">Código NCM:</label>
+                    <input type="text" id="codigo" name="codigo" class="form-control" maxlength="10" required
+                        value="{{ ncm.codigo if ncm else (form_data.codigo if form_data else '') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição:</label>
+                    <textarea id="descricao" name="descricao" class="form-control" rows="3" required>{{ ncm.descricao if ncm else (form_data.descricao if form_data else '') }}</textarea>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="data_inicio" class="form-label">Data de Início (Vigência):</label>
+                        <input type="date" id="data_inicio" name="data_inicio" class="form-control"
+                            value="{{ ncm.data_inicio.strftime('%Y-%m-%d') if ncm and ncm.data_inicio else (form_data.data_inicio if form_data else '') }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="data_fim" class="form-label">Data de Fim (Vigência):</label>
+                        <input type="date" id="data_fim" name="data_fim" class="form-control"
+                            value="{{ ncm.data_fim.strftime('%Y-%m-%d') if ncm and ncm.data_fim else (form_data.data_fim if form_data else '') }}">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="tipo_ato" class="form-label">Tipo de Ato Legal:</label>
+                        <input type="text" id="tipo_ato" name="tipo_ato" class="form-control"
+                            value="{{ ncm.tipo_ato if ncm else (form_data.tipo_ato if form_data else '') }}">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="numero_ato" class="form-label">Número do Ato:</label>
+                        <input type="text" id="numero_ato" name="numero_ato" class="form-control"
+                            value="{{ ncm.numero_ato if ncm else (form_data.numero_ato if form_data else '') }}">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="ano_ato" class="form-label">Ano do Ato:</label>
+                        <input type="text" id="ano_ato" name="ano_ato" class="form-control"
+                            value="{{ ncm.ano_ato if ncm else (form_data.ano_ato if form_data else '') }}">
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar NCM
+                    </button>
+                    <a href="{{ url_for('admin.list_ncms') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

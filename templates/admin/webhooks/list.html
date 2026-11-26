@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+
+{% block title %}Webhooks - {{ cliente.razao_social }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-webhook text-primary"></i> Webhooks
+            </h1>
+            <p class="text-muted mb-0">{{ cliente.razao_social }}</p>
+        </div>
+        <a href="{{ url_for('webhooks.create_webhook', cliente_id=cliente_id) }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Webhook
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message|safe }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i> Meus Webhooks
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> 
+                <strong>O que são Webhooks?</strong> 
+                Webhooks permitem que você receba notificações em tempo real sobre eventos da plataforma. 
+                Configure uma URL e selecione os eventos que deseja monitorar.
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 30%">URL</th>
+                            <th style="width: 25%">Eventos</th>
+                            <th style="width: 10%" class="text-center">Status</th>
+                            <th style="width: 10%" class="text-center">Sucesso</th>
+                            <th style="width: 10%" class="text-center">Falhas</th>
+                            <th style="width: 10%">Última Entrega</th>
+                            <th style="width: 15%" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for webhook in webhooks %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-link text-muted me-2"></i>
+                                    <div>
+                                        <small class="text-truncate d-block" style="max-width: 300px;">
+                                            {{ webhook.url }}
+                                        </small>
+                                        {% if webhook.secret %}
+                                            <small class="text-muted">
+                                                <i class="fas fa-shield-alt text-success"></i> Assinado
+                                            </small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if webhook.eventos %}
+                                    {% for evento in webhook.eventos[:2] %}
+                                        <span class="badge bg-secondary mb-1">{{ evento }}</span>
+                                    {% endfor %}
+                                    {% if webhook.eventos|length > 2 %}
+                                        <span class="badge bg-light text-dark">+{{ webhook.eventos|length - 2 }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if webhook.ativo %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check-circle"></i> Ativo
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-pause-circle"></i> Pausado
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-success">
+                                    {{ webhook.total_sucessos }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge {% if webhook.total_falhas > 0 %}bg-danger{% else %}bg-light text-dark{% endif %}">
+                                    {{ webhook.total_falhas }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if webhook.ultimo_sucesso %}
+                                    <small class="text-success">
+                                        <i class="fas fa-check"></i>
+                                        {{ webhook.ultimo_sucesso.strftime('%d/%m %H:%M') }}
+                                    </small>
+                                {% elif webhook.ultima_falha %}
+                                    <small class="text-danger">
+                                        <i class="fas fa-times"></i>
+                                        {{ webhook.ultima_falha.strftime('%d/%m %H:%M') }}
+                                    </small>
+                                {% else %}
+                                    <small class="text-muted">Nunca</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <form method="POST" 
+                                          action="{{ url_for('webhooks.test_webhook', webhook_id=webhook.webhook_id) }}" 
+                                          style="display:inline;">
+                                        <button type="submit" 
+                                                class="btn btn-outline-info" 
+                                                title="Enviar teste">
+                                            <i class="fas fa-vial"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" 
+                                          action="{{ url_for('webhooks.toggle_webhook', webhook_id=webhook.webhook_id) }}" 
+                                          style="display:inline;">
+                                        <button type="submit" 
+                                                class="btn btn-outline-warning" 
+                                                title="{% if webhook.ativo %}Pausar{% else %}Ativar{% endif %}">
+                                            <i class="fas fa-power-off"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" 
+                                          action="{{ url_for('webhooks.delete_webhook', webhook_id=webhook.webhook_id) }}" 
+                                          style="display:inline;"
+                                          onsubmit="return confirm('Tem certeza que deseja excluir este webhook? Esta ação não pode ser desfeita!');">
+                                        <button type="submit" 
+                                                class="btn btn-outline-danger" 
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="fas fa-webhook fa-3x mb-3 d-block opacity-25"></i>
+                                <p>Nenhum webhook configurado.</p>
+                                <a href="{{ url_for('webhooks.create_webhook', cliente_id=cliente_id) }}" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Criar Primeiro Webhook
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informações sobre Webhooks -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bell"></i> Eventos Disponíveis
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <span class="badge bg-success">nfe.autorizada</span>
+                            <small class="text-muted">NFe autorizada pela SEFAZ</small>
+                        </li>
+                        <li class="mb-2">
+                            <span class="badge bg-danger">nfe.rejeitada</span>
+                            <small class="text-muted">NFe rejeitada pela SEFAZ</small>
+                        </li>
+                        <li class="mb-2">
+                            <span class="badge bg-warning text-dark">nfe.cancelada</span>
+                            <small class="text-muted">NFe foi cancelada</small>
+                        </li>
+                        <li class="mb-2">
+                            <span class="badge bg-secondary">nfe.inutilizada</span>
+                            <small class="text-muted">Numeração inutilizada</small>
+                        </li>
+                        <li class="mb-2">
+                            <span class="badge bg-info">nfce.autorizada</span>
+                            <small class="text-muted">NFCe autorizada</small>
+                        </li>
+                        <li class="mb-2">
+                            <span class="badge bg-dark">nfce.cancelada</span>
+                            <small class="text-muted">NFCe cancelada</small>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-shield-alt"></i> Segurança
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small mb-2">
+                        <strong>Assinatura HMAC-SHA256:</strong> Configure um secret para verificar a autenticidade das requisições.
+                    </p>
+                    <p class="small mb-2">
+                        <strong>Verificação de Assinatura:</strong>
+                    </p>
+                    <div class="bg-dark text-light p-2 rounded">
+                        <code class="small">
+                            signature = request.headers.get('X-EmiteMax-Signature')<br>
+                            payload = request.get_data(as_text=True)<br>
+                            expected = hmac.new(secret, payload, sha256).hexdigest()
+                        </code>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-redo"></i> Política de Retry
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="small mb-0">
+                        <li>1ª tentativa: Imediata</li>
+                        <li>2ª tentativa: Após 1 minuto</li>
+                        <li>3ª tentativa: Após 5 minutos</li>
+                        <li>4ª tentativa: Após 15 minutos</li>
+                        <li class="text-danger">Após 4 falhas: Marcado como failed</li>
+                    </ul>
+                    <p class="small text-muted mt-2 mb-0">
+                        Seu endpoint deve responder com status HTTP 2xx em até 30 segundos.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

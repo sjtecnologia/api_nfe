@@ -1,0 +1,243 @@
+# EXEMPLOS DE TREINAMENTO NCM PARA LLM
+# ==================================================
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para papel fotográfico?
+
+**Assistente:** 🎯 NCM: 48.11.51.23
+📝 Descrição: De polietileno ou polipropileno, em ambas as faces, base para papel fotográfico
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para smartphone?
+
+**Assistente:** 🎯 NCM: 85.17.13.00
+📝 Descrição: Telefones inteligentes (<i>smartphones</i>)
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para açúcar refinado?
+
+**Assistente:** 🎯 NCM: 04.02.91.00
+📝 Descrição: Sem adição de açúcar ou de outros edulcorantes
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para café torrado?
+
+**Assistente:** 🎯 NCM: 21.01.30.00
+📝 Descrição: Chicória torrada e outros sucedâneos torrados do café e respectivos extratos, essências e concentrados
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para impressora laser?
+
+**Assistente:** 🎯 NCM: 32.07.10.20
+📝 Descrição: Suspensão de pigmentos em solventes orgânicos, do tipo utilizado em impressoras de jato de tinta para decoração de superfícies cerâmicas por cozimento
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para televisor LED?
+
+**Assistente:** 🎯 NCM: 84.31.42.00
+📝 Descrição: Lâminas para <i>bulldozers</i> ou <i>angledozers</i>
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para geladeira frost free?
+
+**Assistente:** 🎯 NCM: 84.18.10.00
+📝 Descrição: Combinações de refrigeradores e congeladores (<i>freezers</i>), munidos de portas ou gavetas exteriores separadas, ou de uma combinação desses elementos
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para computador desktop?
+
+**Assistente:** 🎯 NCM: 90.18.49.91
+📝 Descrição: Para desenho e construção de peças cerâmicas para restaurações dentárias, computadorizados
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para cavalos reprodutores?
+
+**Assistente:** 🎯 NCM: 01.01.21.00
+📝 Descrição: Reprodutores de raça pura
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para caneta esferográfica?
+
+**Assistente:** 🎯 NCM: 84.82.91.11
+📝 Descrição: Para carga de canetas esferográficas
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para livro técnico?
+
+**Assistente:** 🎯 NCM: 48.20.10.00
+📝 Descrição: Livros de registro e de contabilidade, blocos de notas, de encomendas, de recibos, de apontamentos, de papel para cartas, agendas e artigos semelhantes
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para medicamento antibiótico?
+
+**Assistente:** 🎯 NCM: 28.43.90.11
+📝 Descrição: Apresentados como medicamentos
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para perfume importado?
+
+**Assistente:** 🎯 NCM: 33.03.00.10
+📝 Descrição: Perfumes (extratos)
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para relógio digital?
+
+**Assistente:** 🎯 NCM: 84.71.60.54
+📝 Descrição: Mesas digitalizadoras
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para bicicleta mountain bike?
+
+**Assistente:** 🎯 NCM: 40.11.50.00
+📝 Descrição: Do tipo utilizado em bicicletas
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para tênis esportivo?
+
+**Assistente:** 🎯 NCM: 51.11.30.10
+📝 Descrição: De lã, feltrados, com trama combinada exclusivamente com fibras sintéticas e urdidura exclusivamente de algodão, de peso igual ou superior a 600 g/m<sup>2</sup>, próprios para fabricação de bolas de tênis
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para camiseta algodão?
+
+**Assistente:** 🎯 NCM: 23.06.10.00
+📝 Descrição: De sementes de algodão
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para arroz integral?
+
+**Assistente:** 🎯 NCM: 04.02.21.10
+📝 Descrição: Leite integral
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para óleo de soja?
+
+**Assistente:** 🎯 NCM: 04.05.90.10
+📝 Descrição: Óleo butírico de manteiga (<i>butter oil</i>)
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+
+**Exemplo de Classificação NCM:**
+
+**Usuário:** Qual NCM para pneu automotivo?
+
+**Assistente:** 🎯 NCM: 40.12.20.00
+📝 Descrição: Pneumáticos usados
+✅ Tipo: Analitico
+📋 Uso em NFe: Sim
+💡 Observações: NCM analítico adequado para uso em Nota Fiscal Eletrônica
+
+---
+

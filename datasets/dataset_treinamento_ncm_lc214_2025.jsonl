@@ -1,0 +1,194 @@
+[
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Café torrado em grãos 500g\n\nDados NCM disponíveis:\n**NCM 09.01.21.10** - Café torrado, não descafeinado, em grão\n**NCM 09.01.22.00** - Café torrado, não descafeinado, moído\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"09012110\",\n  \"cfop\": \"5101\",\n  \"cst\": null,\n  \"csosn\": \"101\",\n  \"cest\": null,\n  \"explicacao\": \"Café torrado em grão - NCM 09.01.21.10. EMBASAMENTO LEGAL LC 214/2025: Produto enquadrado no Anexo I (Cesta Básica Nacional) com REDUÇÃO DE 100% das alíquotas do IBS e CBS (Art. 8º - isenção). Posição 09.01 da NCM/SH especificamente mencionada no item 8 do Anexo I. Importante: A classificação NCM/SH está conforme Resolução Gecex nº 272/2021 (Art. 492, LC 214/2025). Alterações futuras na nomenclatura não afetarão este benefício fiscal (Art. 492, §2º).\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Ovos brancos grandes - bandeja com 12 unidades\n\nDados NCM disponíveis:\n**NCM 04.07.21.00** - Ovos frescos, de galinha\n**NCM 04.07.29.00** - Ovos frescos, de outras aves\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"04072100\",\n  \"cfop\": \"5101\",\n  \"cst\": null,\n  \"csosn\": \"101\",\n  \"cest\": null,\n  \"explicacao\": \"Ovos frescos de galinha - NCM 04.07.21.00. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo XV (Produtos Hortícolas, Frutas e Ovos) com REDUÇÃO DE 100% das alíquotas do IBS e CBS. Item 1 do Anexo XV: 'Ovos da subposição 0407.2 da NCM/SH'. Benefício fundamentado no princípio da segurança alimentar e combate à fome. Classificação NCM/SH conforme Resolução Gecex 272/2021 (Art. 492). Este benefício é permanente e não será afetado por alterações futuras na nomenclatura (Art. 492, §2º, LC 214/2025).\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Tomate fresco para salada - 1kg\n\nDados NCM disponíveis:\n**NCM 07.02.00.00** - Tomates, frescos ou refrigerados\n**NCM 20.02.10.00** - Tomates, preparados ou conservados\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"07020000\",\n  \"cfop\": \"5101\",\n  \"cst\": null,\n  \"csosn\": \"101\",\n  \"cest\": null,\n  \"explicacao\": \"Tomates frescos - NCM 07.02.00.00. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo XV com REDUÇÃO DE 100% das alíquotas do IBS e CBS. Item 2 do Anexo XV: 'Produtos hortícolas das posições 07.01, 07.02.00.00, 07.03, 07.04, 07.05, 07.06, 0707.00.00, 07.08, 07.09 e 07.10'. A posição 07.02.00.00 está expressamente listada. Exceções: cogumelos e trufas (0709.5 e 0710.80.00) não têm o benefício. Fundamentação: garantia de acesso à alimentação saudável e redução de desigualdades (Art. 8º e 9º da LC 214/2025).\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Farinha para pessoas com fenilcetonúria (PKU) - baixo teor de proteína\n\nDados NCM disponíveis:\n**NCM 19.01.90.90** - Outras preparações alimentícias de farinhas\n**NCM 11.01.00.10** - Farinha de trigo\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"19019090\",\n  \"cfop\": \"5101\",\n  \"cst\": null,\n  \"csosn\": \"101\",\n  \"cest\": null,\n  \"explicacao\": \"Farinha dietética com baixo teor de proteína - NCM 1901.90.90. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo I (Alimentos destinados ao consumo humano) com REDUÇÃO DE 100% das alíquotas do IBS e CBS. Item 24 do Anexo I especifica: 'Farinha com baixo teor de proteína para pessoas com aminoacidopatias, acidemias e defeitos do ciclo da uréia da NCM 1901.90.90'. Este NCM específico é mencionado expressamente na lei. Fundamentação: garantia de acesso a alimentos especiais para pessoas com erros inatos do metabolismo, assegurando direito à saúde e vida digna (Art. 8º, LC 214/2025). Classificação conforme Resolução Gecex 272/2021.\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Massa alimentícia especial para fenilcetonúria (PKU)\n\nDados NCM disponíveis:\n**NCM 19.02.19.00** - Massas alimentícias não cozidas, nem recheadas, nem preparadas\n**NCM 19.02.30.00** - Massas alimentícias recheadas\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"19021900\",\n  \"cfop\": \"5101\",\n  \"cst\": null,\n  \"csosn\": \"101\",\n  \"cest\": null,\n  \"explicacao\": \"Massa alimentícia dietética - NCM 1902.19.00. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo I com REDUÇÃO DE 100% das alíquotas do IBS e CBS. Item 25 do Anexo I: 'Massas com baixo teor de proteína para pessoas com aminoacidopatias, acidemias e defeitos do ciclo da uréia da NCM 1902.19.00'. NCM EXPRESSAMENTE citado na lei. Este produto especial garante nutrição adequada para portadores de erros inatos do metabolismo (fenilcetonúria, tirosinemia, etc.). Fundamentação constitucional: direito à saúde (Art. 196 CF/88) e princípio da neutralidade tributária com exceções sociais (Art. 2º e 8º, LC 214/2025).\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Fórmula dietoterápica para erros inatos do metabolismo\n\nDados NCM disponíveis:\n**NCM 21.06.90.90** - Outras preparações alimentícias não especificadas\n**NCM 30.04.90.99** - Outros medicamentos\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"21069090\",\n  \"cfop\": \"5101\",\n  \"cst\": null,\n  \"csosn\": \"101\",\n  \"cest\": null,\n  \"explicacao\": \"Fórmula dietoterápica - NCM 2106.9090. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo I com REDUÇÃO DE 100% das alíquotas do IBS e CBS. Item 26 do Anexo I: 'Fórmulas Dietoterápicas para Erros Inatos do Metabolismo da NCM 2106.9090'. NCM ESPECÍFICO citado na lei. Estas fórmulas são essenciais para tratamento de doenças metabólicas raras como fenilcetonúria, galactosemia, homocistinúria, entre outras. Fundamentação: direito à vida e à saúde (Art. 5º e 196 CF/88), acessibilidade a tratamentos essenciais (Art. 8º LC 214/2025). Importante: não confundir com suplementos comuns - apenas fórmulas para erros inatos do metabolismo têm este benefício.\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Perfume importado - Eau de Parfum 100ml\n\nDados NCM disponíveis:\n**NCM 33.03.00.10** - Perfumes (extratos)\n**NCM 33.03.00.20** - Águas-de-colônia\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"33030010\",\n  \"cfop\": \"5101\",\n  \"cst\": \"00\",\n  \"csosn\": null,\n  \"cest\": \"17.001.00\",\n  \"explicacao\": \"Perfume (extrato) - NCM 33.03.00.10. EMBASAMENTO LEGAL LC 214/2025: RESTRIÇÃO ESPECIAL para Zona Franca de Manaus (ZFM). Art. 381, alínea 'f': 'produtos de perfumaria ou de toucador, preparados e preparações cosméticas (posições 3303 a 3307 da Nomenclatura Comum do Mercosul)' têm VEDAÇÃO à apropriação de créditos tributários na ZFM, EXCETO se: 1) destinados exclusivamente a consumo interno na ZFM, OU 2) produzidos com matérias-primas da fauna e flora regionais, em conformidade com processo produtivo básico. CEST 17.001.00 (Segmento 17 - Higiene Pessoal). Produtos de perfumaria podem ter Substituição Tributária em alguns estados. Alíquota padrão aplicável (sem redução). Importante: permanece a incidência normal de IBS/CBS (sem isenção).\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Locomotiva elétrica para transporte ferroviário de carga\n\nDados NCM disponíveis:\n**NCM 86.01.10.00** - Locomotivas e locotratores, de fonte externa de eletricidade\n**NCM 86.01.20.00** - Locomotivas e locotratores, de acumuladores elétricos\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"86011000\",\n  \"cfop\": \"5101\",\n  \"cst\": \"40\",\n  \"csosn\": null,\n  \"cest\": null,\n  \"explicacao\": \"Locomotiva elétrica - NCM 86.01.10.00. EMBASAMENTO LEGAL LC 214/2025: SUSPENSÃO do pagamento do IBS e da CBS. Art. 119, §1º: 'O disposto no caput aplica-se também aos bens utilizados na execução de serviços de transporte de mercadorias em ferrovias, classificados nas posições 86.01, 86.02 e 86.06 da Nomenclatura Comum do Mercosul baseada no Sistema Harmonizado (NCM/SH)'. A SUSPENSÃO é regime especial que adia o pagamento do tributo condicionado ao uso específico do bem. Se destinado ao transporte ferroviário de mercadorias, o tributo fica suspenso. Fundamentação: incentivo ao modal ferroviário, redução de custos logísticos e desenvolvimento de infraestrutura (Art. 119, LC 214/2025). CST 40 (isenta/não tributada) ou suspensão conforme regulamento específico.\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Trilhos de aço para vias férreas\n\nDados NCM disponíveis:\n**NCM 73.02.10.00** - Trilhos\n**NCM 73.02.30.00** - Agulhas, jacarés, placas de apoio\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"73021000\",\n  \"cfop\": \"5101\",\n  \"cst\": \"40\",\n  \"csosn\": null,\n  \"cest\": null,\n  \"explicacao\": \"Trilhos ferroviários - NCM 73.02.10.00. EMBASAMENTO LEGAL LC 214/2025: SUSPENSÃO do pagamento do IBS e da CBS. Art. 119, §1º EXPRESSAMENTE inclui 'trilhos e demais elementos de vias férreas, classificados na posição 73.02 da NCM/SH'. Regime de suspensão condicional: tributos ficam suspensos enquanto o bem for utilizado na infraestrutura ferroviária. Fundamentação: incentivo ao desenvolvimento do transporte ferroviário de cargas, essencial para logística nacional e redução de emissões de carbono (modal mais sustentável). Posição 73.02 inteira beneficiada (trilhos, agulhas, jacarés, placas). CST 40 ou código específico de suspensão conforme regulamentação estadual/federal.\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: GLP (Gás Liquefeito de Petróleo) - botijão 13kg\n\nDados NCM disponíveis:\n**NCM 27.11.11.00** - Gás natural liquefeito\n**NCM 27.11.19.00** - Outros gases de petróleo e hidrocarbonetos gasosos, liquefeitos\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"27111900\",\n  \"cfop\": \"5101\",\n  \"cst\": \"00\",\n  \"csosn\": null,\n  \"cest\": \"01.001.00\",\n  \"explicacao\": \"GLP (Gás Liquefeito de Petróleo) - NCM 27.11.19.00. EMBASAMENTO LEGAL LC 214/2025: Alteração no Art. 23 da Lei 10.336/2001 sobre CIDE-Combustíveis. Texto atualizado: 'A incidência da CIDE sobre os gases liquefeitos de petróleo, classificados na subposição 2711.1 da Nomenclatura Comum do Mercosul - NCM, não alcança os produtos classificados no código 2711.11.00'. INTERPRETAÇÃO: GLP código 2711.19.00 PERMANECE sujeito à CIDE-Combustíveis normal. Apenas o código 2711.11.00 (gás natural liquefeito) é ISENTO da CIDE. GLP tem Substituição Tributária (CEST 01.001.00 - Segmento Combustíveis). Incidência normal de IBS/CBS sem redução. Fundamentação: Art. 428 da LC 214/2025 que altera legislação de CIDE.\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Banana prata fresca - 1kg\n\nDados NCM disponíveis:\n**NCM 08.03.10.00** - Bananas-da-terra (plátanos)\n**NCM 08.03.90.00** - Outras bananas frescas\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"08039000\",\n  \"cfop\": \"5101\",\n  \"cst\": null,\n  \"csosn\": \"101\",\n  \"cest\": null,\n  \"explicacao\": \"Banana fresca (tipo prata) - NCM 08.03.90.00. EMBASAMENTO LEGAL LC 214/2025: Produto do Anexo XV com REDUÇÃO DE 100% das alíquotas do IBS e CBS. Item 3 do Anexo XV: 'Frutas frescas ou refrigeradas e frutas congeladas sem adição de açúcar ou de outros edulcorantes classificadas nas posições 08.03, 08.04, 08.05, 08.06, 08.07, 08.08, 08.09 e 08.10 da NCM/SH'. A posição 08.03 (bananas) está EXPRESSAMENTE incluída. Exceção: frutas com adição de açúcar não têm benefício. Fundamentação: segurança alimentar, combate à fome e acesso à nutrição saudável (Art. 8º e 9º LC 214/2025). Classificação conforme Resolução Gecex 272/2021. Benefício permanente independente de alterações futuras na NCM (Art. 492, §2º).\"\n}"
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Você é um especialista brasileiro em classificação tributária NCM com conhecimento profundo da Lei Complementar 214/2025 (Reforma Tributária). Analise produtos e retorne o NCM correto com embasamento legal preciso."
+      },
+      {
+        "role": "user",
+        "content": "Produto: Mouse óptico USB para computador\n\nDados NCM disponíveis:\n**NCM 84.71.60.53** - Mouse (ratos)\n**NCM 84.71.60.52** - Teclados\n\nClassifique este produto fornecendo NCM, CFOP, CST/CSOSN, CEST e embasamento legal da LC 214/2025."
+      },
+      {
+        "role": "assistant",
+        "content": "{\n  \"ncm\": \"84716053\",\n  \"cfop\": \"5101\",\n  \"cst\": \"00\",\n  \"csosn\": null,\n  \"cest\": null,\n  \"explicacao\": \"Mouse óptico - NCM 84.71.60.53. EMBASAMENTO LEGAL LC 214/2025: Produto SEM regime diferenciado ou redução específica na Lei Complementar 214/2025. Sujeito à TRIBUTAÇÃO PADRÃO do IBS e CBS conforme alíquotas de referência estabelecidas pelo Senado Federal (Art. 18, LC 214/2025). Princípio da NEUTRALIDADE TRIBUTÁRIA: tributos devem evitar distorcer decisões de consumo (Art. 2º). Não há menção específica de periféricos de informática nos Anexos de benefícios fiscais. Aplicam-se as regras gerais: base de cálculo = valor da operação (Art. 12), alíquotas-padrão (Art. 14-16), não-cumulatividade plena (créditos sobre aquisições - Art. 27). NCM conforme Resolução Gecex 272/2021. Tributação normal sem exceções.\"\n}"
+      }
+    ]
+  }
+]

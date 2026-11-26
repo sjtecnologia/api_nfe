@@ -1,0 +1,114 @@
+# ==========================================================
+# SEGREDOS E CREDENCIAIS
+# ==========================================================
+# Obs.: .gitignore NÃO remove arquivo já rastreado. Para os arquivos
+# que já estão no histórico, é preciso "git rm --cached" + reescrita
+# de histórico (ver remediar-segredos.sh). Este bloco evita que
+# novos segredos sejam adicionados.
+.env
+.env.*
+!.env.example
+*.env
+
+# Chaves privadas (NUNCA versionar)
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+*.jks
+id_rsa*
+id_ed25519*
+*_key.pem
+*api_key*.pem
+
+# ==========================================================
+# BACKUPS E ROLLBACK (podem conter credenciais e dados pessoais)
+# ==========================================================
+*.bak
+*.bak-*
+*.backup
+*.orig
+* copy.py
+* copy.txt
+backups/
+backup_aws/
+rollback_*.tar.gz
+*.sql.gz
+*.dump
+database_dump.sql
+
+# ==========================================================
+# PYTHON
+# ==========================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ==========================================================
+# ARTEFATOS DE DEPLOY (não pertencem ao Git)
+# ==========================================================
+*.tar.gz
+*.zip
+
+# ==========================================================
+# ARQUIVOS GERADOS EM RUNTIME
+# ==========================================================
+static/danfe/
+static/xml/
+static/uploads/
+uploads/
+logs/
+*.log
+nfe_latest.xml
+last_nfe*.xml
+nfe_*_internal.xml
+test_nfse_*output.xml
+*.sqlite
+*.db
+
+# ==========================================================
+# CERTIFICADOS DIGITAIS E BUNDLES
+# ==========================================================
+Documentacao/*.pem
+ca-bundle-*.pem
+
+# ==========================================================
+# IDE E SISTEMA
+# ==========================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================================================
+# SCRIPTS TEMPORÁRIOS DE DEBUG/MIGRAÇÃO (raiz)
+# ==========================================================
+fix_*.py
+debug_*.py
+check_*.py
+corrigir_*.py
+verificar_*.py
+diagnostico_*.py
+analise_*.py
+
+# CA bundle publico (nao e segredo)
+!ca-bundle-icpbrasil.pem

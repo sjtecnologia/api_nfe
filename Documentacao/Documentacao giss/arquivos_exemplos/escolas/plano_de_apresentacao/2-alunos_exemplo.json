@@ -1,0 +1,76 @@
+[
+   {
+      "tipoDocumento":0,
+      "nome":"Vinicius Wilson Silveira",
+      "dataNascimento":"11/07/2012",
+      "documento":"60730528049",
+      "matricula":"3001",
+      "proprioResponsavel":false,
+      "email":"vinicius.silveira@eicon.com",
+      "telefone":"(11) 9889-12221",
+      "responsavelFinanceiro":{
+         "documento":"30722350074",
+         "nome":"Pai Silveira",
+         "email":"vinicius.silveira@eicon.com",
+         "telefone":"(11) 9889-12221",
+         "endereco":{
+            "rural":false,
+            "tipoLogradouro":"Rua",
+            "logradouro":"Xavier de Almeida",
+            "numero":"40",
+            "complemento":"apto 803",
+            "cep":"04211001"
+         }
+      },
+      "cursos":[
+         {
+            "codigo":"102",
+            "inicio":"01/01/2024",
+            "fim":"30/06/2024"
+         },
+         {
+            "codigo":"103",
+            "inicio":"01/06/2024",
+            "fim":"30/06/2024"
+         }
+      ],
+      "endereco":{
+         "rural":false,
+         "tipoLogradouro":"Rua",
+         "logradouro":"Xavier de Almeida",
+         "numero":"40",
+         "complemento":"apto 803",
+         "cep":"04211001"
+      }
+   },
+	{
+      "tipoDocumento":0,
+      "nome":"Carlos Wilson Silveira",
+      "dataNascimento":"11/07/2002",
+      "documento":"08714019086",
+      "matricula":"4001",
+      "proprioResponsavel":true,
+      "email":"vinicius.silveira@eicon.com",
+      "telefone":"(11) 9889-12221",
+      "cursos":[
+         {
+            "codigo":"102",
+            "inicio":"01/06/2024",
+            "fim":"30/06/2024"
+         },
+         {
+            "codigo":"103",
+            "inicio":"01/06/2024",
+            "fim":"30/10/2024"
+         }
+      ],
+      "endereco":{
+         "rural":false,
+         "tipoLogradouro":"Rua",
+         "logradouro":"Xavier de Almeida",
+         "numero":"40",
+         "complemento":"apto 803",
+         "cep":"04211001"
+      }
+   }
+]

@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+
+{% block title %}Inteligência EmiteMax{% endblock %}
+
+{% block content %}
+<style>
+    .ia-narrativa-section + .ia-narrativa-section { border-top: 1px solid rgba(0,0,0,.08); margin-top: 1.25rem; padding-top: 1.25rem; }
+    .ia-narrativa-section-title { color: var(--sj-secondary,#0288D1); font-size: 1rem; font-weight: 700; margin-bottom: .75rem; }
+    .ia-narrativa-list { counter-reset: ia-item; list-style: none; margin: 0; padding: 0; }
+    .ia-narrativa-item { counter-increment: ia-item; display: flex; gap: .75rem; line-height: 1.55; margin-bottom: .8rem; }
+    .ia-narrativa-item::before { align-items: center; background: rgba(2,136,209,.12); border-radius: 50%; color: var(--sj-secondary,#0288D1); content: counter(ia-item); display: flex; flex: 0 0 1.7rem; font-size: .85rem; font-weight: 700; height: 1.7rem; justify-content: center; margin-top: .1rem; }
+    .ia-narrativa-item-label { color: #263238; display: block; font-weight: 700; margin-bottom: .15rem; }
+    .ia-narrativa-text { color: #4f5b62; margin: 0; }
+    .ia-typing-status { color: var(--sj-secondary,#0288D1); font-size: .9rem; font-weight: 600; margin-bottom: .75rem; }
+    .ia-typing-cursor { animation: iaCursorBlink .9s step-end infinite; border-right: 2px solid var(--sj-secondary,#0288D1); white-space: pre-wrap; }
+    @keyframes iaCursorBlink { 50% { border-color: transparent; } }
+</style>
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+        <div>
+            <h2 class="mb-1"><i class="fas fa-brain me-2"></i>Inteligência EmiteMax</h2>
+            <p class="text-muted mb-0">Uma visão rápida dos principais sinais da sua empresa.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <select id="periodoDiagnostico" class="form-select" aria-label="Período do diagnóstico">
+                <option value="7">Últimos 7 dias</option>
+                <option value="15">Últimos 15 dias</option>
+                <option value="30" selected>Últimos 30 dias</option>
+                <option value="mes">Mês atual</option>
+            </select>
+            <input id="dataInicioDiagnostico" type="date" class="form-control" aria-label="Data inicial">
+            <input id="dataFimDiagnostico" type="date" class="form-control" aria-label="Data final">
+            <button id="btnAnalisarEmpresa" class="btn btn-primary text-nowrap"><i class="fas fa-chart-pie me-1"></i>Analisar empresa</button>
+            <button id="btnResumirDiagnostico" class="btn btn-outline-success text-nowrap" disabled><i class="fas fa-robot me-1"></i>Resumir com IA</button>
+        </div>
+    </div>
+
+    <div id="diagnosticoQualidade" class="alert alert-info d-none"></div>
+    <div id="diagnosticoResumo" class="row g-3 mb-4">
+        <div class="col-md-4"><div class="card border-left-warning"><div class="card-body"><small class="text-muted">Pontos de atenção</small><h3 id="totalAtencao">0</h3></div></div></div>
+        <div class="col-md-4"><div class="card border-left-success"><div class="card-body"><small class="text-muted">Destaques positivos</small><h3 id="totalPositivos">0</h3></div></div></div>
+        <div class="col-md-4"><div class="card border-left-info"><div class="card-body"><small class="text-muted">Informações</small><h3 id="totalInformativos">0</h3></div></div></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h5 class="mb-0">Vendas</h5></div><div class="card-body" id="dominioVendas">Sem dados.</div><div class="card-footer bg-transparent"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.analise_vendas') }}">Ver análise de vendas</a></div></div></div>
+        <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h5 class="mb-0">Estoque</h5></div><div class="card-body" id="dominioEstoque">Sem dados.</div><div class="card-footer bg-transparent"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.estoque_dashboard') }}">Ver estoque</a></div></div></div>
+        <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h5 class="mb-0">Fluxo de caixa</h5></div><div class="card-body" id="dominioCaixa">Sem dados.</div><div class="card-footer bg-transparent"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.fluxo_caixa_dashboard') }}">Ver fluxo de caixa</a></div></div></div>
+        <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h5 class="mb-0">Clientes</h5></div><div class="card-body" id="dominioClientes">Sem dados.</div><div class="card-footer bg-transparent"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">Ver clientes</a></div></div></div>
+    </div>
+
+    <div class="card mb-4"><div class="card-header"><h5 class="mb-0">O que merece atenção</h5></div><div class="card-body" id="sinaisAtencao"><p class="text-muted mb-0">Clique em Analisar empresa.</p></div></div>
+    <div class="card mb-4"><div class="card-header"><h5 class="mb-0">Destaques</h5></div><div class="card-body" id="sinaisPositivos"><p class="text-muted mb-0">Nenhum sinal calculado.</p></div></div>
+    <div id="diagnosticoNarrativa" class="card d-none"><div class="card-header"><h5 class="mb-0"><i class="fas fa-robot me-2"></i>Resumo da IA</h5></div><div class="card-body"><div id="diagnosticoTypingStatus" class="ia-typing-status d-none"><i class="fas fa-pen-nib me-1"></i>IA escrevendo...</div><div id="diagnosticoNarrativaTexto"></div></div></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const periodo = document.getElementById('periodoDiagnostico');
+    const inicio = document.getElementById('dataInicioDiagnostico');
+    const fim = document.getElementById('dataFimDiagnostico');
+    const analisar = document.getElementById('btnAnalisarEmpresa');
+    const resumir = document.getElementById('btnResumirDiagnostico');
+    let diagnosticoAtual = null;
+    let narrativaTimer = null;
+    let narrativaVersion = 0;
+
+    function paramsPeriodo() {
+        const params = new URLSearchParams();
+        if (inicio.value && fim.value) { params.set('data_inicio', inicio.value); params.set('data_fim', fim.value); }
+        else params.set('periodo', periodo.value);
+        return params;
+    }
+    function money(value) { return Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}); }
+    function loading(button, active, text) {
+        if (!button) return;
+        if (active) { button.dataset.original = button.innerHTML; button.disabled = true; button.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>${text}`; }
+        else { button.disabled = false; button.innerHTML = button.dataset.original || button.innerHTML; }
+    }
+    function signalsHtml(items, empty) {
+        if (!items.length) return `<p class="text-muted mb-0">${empty}</p>`;
+        return items.map((signal) => {
+            const action = signal.action && typeof signal.action === 'object' ? signal.action : null;
+            const actionUrl = action?.url || '/admin/inteligencia';
+            const actionLabel = action?.label || 'Ver diagnóstico';
+            const hrefUrl = actionUrl.startsWith('/admin/') ? new URL(actionUrl, window.location.origin) : null;
+            if (hrefUrl) paramsPeriodo().forEach((value, key) => hrefUrl.searchParams.set(key, value));
+            const href = hrefUrl ? `${hrefUrl.pathname}${hrefUrl.search}` : actionUrl;
+            return `<div class="alert ${signal.type === 'positive' ? 'alert-success' : signal.type === 'attention' ? 'alert-warning' : 'alert-info'} mb-2"><strong>${signal.title || 'Sinal identificado'}</strong><br><small>${signal.description || 'Consulte os dados do período para mais detalhes.'}</small><br><a href="${href}" class="btn btn-sm btn-link ps-0">${actionLabel}</a></div>`;
+        }).join('');
+    }
+    function renderDomain(id, content) { document.getElementById(id).innerHTML = content; }
+    function escapeHtml(value) { return String(value || '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char])); }
+    function renderNarrativa(text) {
+        const container = document.getElementById('diagnosticoNarrativaTexto');
+        const normalized = String(text || '').replace(/\r/g, '').trim();
+        const clean = (value) => String(value || '').replace(/\*{1,3}/g, '').replace(/^#+\s*/gm, '').replace(/\s+/g, ' ').trim();
+        const sectionPattern = /\*{0,3}(Observa[cç][oõ]es|Recomenda[cç][oõ]es)\s*:\s*\*{0,3}/gi;
+        const matches = [...normalized.matchAll(sectionPattern)];
+        const sections = matches.map((match, index) => ({title: /observ/i.test(match[1]) ? 'Observações' : 'Recomendações', body: normalized.slice((match.index || 0) + match[0].length, matches[index + 1]?.index ?? normalized.length).trim()}));
+        if (!sections.length) sections.push({title: 'Resumo', body: normalized});
+        container.innerHTML = sections.map((section) => {
+            const pattern = /(?:^|\s)(\d+)\.\s*\*{0,3}([^:*\n]+?)\*{0,3}\s*:\s*/g;
+            const itemMatches = [...section.body.matchAll(pattern)];
+            const items = itemMatches.map((match, index) => ({label: clean(match[2]), text: clean(section.body.slice((match.index || 0) + match[0].length, itemMatches[index + 1]?.index ?? section.body.length))})).filter((item) => item.label && item.text);
+            if (!items.length) return `<section class="ia-narrativa-section"><h6 class="ia-narrativa-section-title">${escapeHtml(section.title)}</h6><p class="ia-narrativa-text">${escapeHtml(clean(section.body))}</p></section>`;
+            return `<section class="ia-narrativa-section"><h6 class="ia-narrativa-section-title">${escapeHtml(section.title)}</h6><ol class="ia-narrativa-list">${items.map((item) => `<li class="ia-narrativa-item"><div><span class="ia-narrativa-item-label">${escapeHtml(item.label)}</span><p class="ia-narrativa-text">${escapeHtml(item.text)}</p></div></li>`).join('')}</ol></section>`;
+        }).join('');
+    }
+    function typeNarrativa(text) {
+        const container = document.getElementById('diagnosticoNarrativaTexto');
+        const status = document.getElementById('diagnosticoTypingStatus');
+        const version = ++narrativaVersion;
+        if (narrativaTimer) clearInterval(narrativaTimer);
+        const typing = document.createElement('div'); typing.className = 'ia-typing-cursor';
+        container.replaceChildren(typing); status.classList.remove('d-none');
+        let position = 0;
+        narrativaTimer = setInterval(() => {
+            if (version !== narrativaVersion) {
+                clearInterval(narrativaTimer);
+                return;
+            }
+            position += Math.max(1, Math.ceil((text.length - position) / 45));
+            typing.textContent = text.slice(0, position);
+            if (position >= text.length) {
+                clearInterval(narrativaTimer);
+                narrativaTimer = null;
+                status.classList.add('d-none');
+                renderNarrativa(text);
+            }
+        }, 24);
+    }
+    function render(data) {
+        diagnosticoAtual = data;
+        const summary = data.summary || {};
+        document.getElementById('totalAtencao').textContent = summary.attention || 0;
+        document.getElementById('totalPositivos').textContent = summary.positive || 0;
+        document.getElementById('totalInformativos').textContent = summary.informational || 0;
+        const sales = data.domains?.sales?.metricas || {};
+        const inventory = data.domains?.inventory?.metricas || {};
+        const cash = data.domains?.cash_flow?.metricas || {};
+        const customers = data.domains?.customers?.metricas || {};
+        renderDomain('dominioVendas', `<strong>${money(sales.faturamento)}</strong><br><small>${sales.quantidade_autorizada || 0} documentos autorizados<br>Ticket médio: ${money(sales.ticket_medio)}</small>`);
+        renderDomain('dominioEstoque', `<strong>${inventory.movimentacoes || 0}</strong> movimentações<br><small>${inventory.produtos_sem_movimentacao || 0} produtos sem movimentação</small>`);
+        renderDomain('dominioCaixa', `<strong>${money(cash.saldo)}</strong><br><small>Receitas: ${money(cash.receitas)}<br>Despesas: ${money(cash.despesas)}</small>`);
+        renderDomain('dominioClientes', `<strong>${customers.quantidade_total_clientes || 0}</strong> cadastrados<br><small>${customers.clientes_com_compra || 0} com compra no período<br>${customers.clientes_recorrentes || 0} recorrentes</small>`);
+        const signals = data.signals || [];
+        document.getElementById('sinaisAtencao').innerHTML = signalsHtml(signals.filter((s) => s.type === 'attention'), 'Nenhum ponto de atenção objetivo.');
+        document.getElementById('sinaisPositivos').innerHTML = signalsHtml(signals.filter((s) => s.type === 'positive'), 'Nenhum destaque positivo objetivo.');
+        const warnings = data.data_quality?.warnings || [];
+        const quality = document.getElementById('diagnosticoQualidade');
+        quality.classList.toggle('d-none', !warnings.length);
+        quality.innerHTML = warnings.length ? `<strong>Limitações dos dados</strong><ul class="mb-0">${warnings.map((warning) => `<li>${warning}</li>`).join('')}</ul>` : '';
+        resumir.disabled = !signals.length;
+        narrativaVersion += 1;
+        if (narrativaTimer) {
+            clearInterval(narrativaTimer);
+            narrativaTimer = null;
+        }
+        document.getElementById('diagnosticoTypingStatus').classList.add('d-none');
+        document.getElementById('diagnosticoNarrativa').classList.add('d-none');
+    }
+    async function executar() {
+        loading(analisar, true, 'Analisando...');
+        try { const response = await fetch(`/admin/api/inteligencia/diagnostico?${paramsPeriodo()}`); const payload = await response.json(); if (!response.ok || !payload.success) throw new Error(payload.error || 'Erro ao analisar empresa.'); render(payload.data); }
+        catch (error) { alert(error.message || 'Erro ao analisar empresa.'); }
+        finally { loading(analisar, false); }
+    }
+    async function resumirIa() {
+        loading(resumir, true, 'Resumindo...');
+        try { const response = await fetch(`/admin/api/inteligencia/diagnostico/resumir?${paramsPeriodo()}`, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''}, body: JSON.stringify({})}); const payload = await response.json(); if (!response.ok || !payload.success) throw new Error(payload.error || 'Não foi possível resumir o diagnóstico.'); render(payload.data); if (payload.data.narrative) { document.getElementById('diagnosticoNarrativa').classList.remove('d-none'); typeNarrativa(payload.data.narrative); } else alert('O diagnóstico foi calculado, mas não foi possível gerar o resumo por IA neste momento.'); }
+        catch (error) { alert(error.message || 'Não foi possível resumir o diagnóstico.'); }
+        finally { loading(resumir, false); }
+    }
+    analisar.addEventListener('click', executar);
+    resumir.addEventListener('click', resumirIa);
+    executar();
+})();
+</script>
+{% endblock %}

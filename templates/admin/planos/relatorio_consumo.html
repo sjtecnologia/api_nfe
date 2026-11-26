@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Consumo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="fas fa-chart-line"></i> Relatório de Consumo de NFe</h2>
+            <p class="text-muted">Monitoramento de uso dos planos pelos clientes</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{{ url_for('planos.list_assinaturas') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <button onclick="window.print()" class="btn btn-primary">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+        </div>
+    </div>
+
+    <!-- Resumo Geral -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-primary">{{ dados|length }}</h3>
+                    <small class="text-muted">Assinaturas Ativas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-success">{{ dados|selectattr('percentual', 'lt', 50)|list|length }}</h3>
+                    <small class="text-muted">Uso Baixo (&lt;50%)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h3 class="text-warning">{{ dados|selectattr('percentual', 'ge', 50)|selectattr('percentual', 'lt', 80)|list|length }}</h3>
+                    <small class="text-muted">Uso Médio (50-80%)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-danger">
+                <div class="card-body">
+                    <h3 class="text-danger">{{ dados|selectattr('percentual', 'ge', 80)|list|length }}</h3>
+                    <small class="text-muted">Uso Alto (&gt;80%)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Consumo -->
+    {% if dados %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-table"></i> Consumo Detalhado por Cliente</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Plano</th>
+                        <th>NFes Consumidas</th>
+                        <th>Limite</th>
+                        <th>Restantes</th>
+                        <th>% Uso</th>
+                        <th>Status</th>
+                        <th>Período</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in dados %}
+                    <tr class="
+                        {% if item.percentual >= 90 %}table-danger
+                        {% elif item.percentual >= 70 %}table-warning
+                        {% endif %}">
+                        <td>
+                            <strong>{{ item.assinatura.cliente.razao_social }}</strong><br>
+                            <small class="text-muted">{{ item.assinatura.cliente.cnpj }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary">{{ item.assinatura.plano.nome }}</span><br>
+                            <small class="text-muted">
+                                R$ {{ '%.2f'|format(item.assinatura.plano.valor_mensal|float) }}/mês
+                            </small>
+                        </td>
+                        <td class="text-center">
+                            <h5 class="mb-0">{{ item.assinatura.nfes_consumidas }}</h5>
+                        </td>
+                        <td class="text-center">
+                            {% if item.assinatura.plano.quantidade_nfes %}
+                            {{ item.assinatura.plano.quantidade_nfes }}
+                            {% else %}
+                            <i class="fas fa-infinity text-success"></i>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if item.restantes == 999999 %}
+                            <span class="text-success">Ilimitado</span>
+                            {% else %}
+                            <strong class="
+                                {% if item.restantes <= 5 %}text-danger
+                                {% elif item.restantes <= 10 %}text-warning
+                                {% else %}text-success
+                                {% endif %}">
+                                {{ item.restantes }}
+                            </strong>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.assinatura.plano.quantidade_nfes %}
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar 
+                                    {% if item.percentual >= 90 %}bg-danger
+                                    {% elif item.percentual >= 70 %}bg-warning
+                                    {% else %}bg-success{% endif %}" 
+                                    role="progressbar" 
+                                    style="width: {{ item.percentual }}%">
+                                    {{ item.percentual }}%
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if item.percentual >= 90 %}
+                            <i class="fas fa-exclamation-triangle text-danger" title="Atenção: Limite crítico"></i>
+                            {% elif item.percentual >= 70 %}
+                            <i class="fas fa-exclamation-circle text-warning" title="Alerta: Uso elevado"></i>
+                            {% else %}
+                            <i class="fas fa-check-circle text-success" title="OK"></i>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>
+                                {{ item.assinatura.periodo_ref_inicio.strftime('%d/%m/%Y') if item.assinatura.periodo_ref_inicio else 'N/A' }}<br>
+                                até {{ item.assinatura.periodo_ref_fim.strftime('%d/%m/%Y') if item.assinatura.periodo_ref_fim else 'N/A' }}
+                            </small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Alertas e Recomendações -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-bell"></i> Alertas e Recomendações</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        {% set criticos = dados|selectattr('percentual', 'ge', 90)|list %}
+                        {% set alerta = dados|selectattr('percentual', 'ge', 70)|selectattr('percentual', 'lt', 90)|list %}
+                        
+                        {% if criticos %}
+                        <li class="text-danger mb-2">
+                            <strong>{{ criticos|length }} cliente(s)</strong> com uso CRÍTICO (≥90%):
+                            {% for item in criticos[:5] %}
+                                {{ item.assinatura.cliente.razao_social }}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                            {% if criticos|length > 5 %}e outros...{% endif %}
+                            <br>
+                            <small>Ação recomendada: Contatar para upgrade de plano ou renovação antecipada</small>
+                        </li>
+                        {% endif %}
+                        
+                        {% if alerta %}
+                        <li class="text-warning mb-2">
+                            <strong>{{ alerta|length }} cliente(s)</strong> com uso ALTO (70-89%):
+                            Monitorar uso e considerar upgrade
+                        </li>
+                        {% endif %}
+                        
+                        {% if not criticos and not alerta %}
+                        <li class="text-success">
+                            <i class="fas fa-check-circle"></i> Nenhum alerta no momento. Todos os clientes estão dentro do consumo esperado.
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Nenhuma assinatura ativa encontrada.
+    </div>
+    {% endif %}
+</div>
+
+<style>
+@media print {
+    .btn, nav, .card-header { 
+        display: none !important; 
+    }
+    .card {
+        border: 1px solid #ddd !important;
+    }
+}
+</style>
+{% endblock %}

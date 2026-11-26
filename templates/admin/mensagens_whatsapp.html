@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Mensagens WhatsApp - EmiteMax{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tipo-btn { transition: all 0.2s; }
+    .tipo-btn.ativo { border-width: 2px; font-weight: 600; }
+    .tipo-btn:not(.ativo) { opacity: 0.6; }
+    #mensagem-output {
+        white-space: pre-wrap;
+        background: #e9fbe9;
+        border: 1px solid #b2dfdb;
+        border-radius: 12px 12px 12px 0;
+        padding: 18px 20px;
+        min-height: 120px;
+        font-size: 0.97rem;
+        line-height: 1.6;
+    }
+    .whatsapp-preview {
+        background: #e5ddd5;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    .tom-badge { cursor: pointer; user-select: none; }
+    .tom-badge.ativo { opacity: 1; font-weight: 600; }
+    .tom-badge:not(.ativo) { opacity: 0.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h3 class="mb-0"><i class="fab fa-whatsapp text-success"></i> Mensagens para WhatsApp</h3>
+            <small class="text-muted">IA gera mensagens prontas para cobrança, promoções, agradecimentos e muito mais</small>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Formulário -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-header"><h6 class="mb-0"><i class="fas fa-sliders-h me-1"></i> Configurar mensagem</h6></div>
+                <div class="card-body">
+
+                    <!-- Tipo da mensagem -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tipo da mensagem</label>
+                        <div class="d-flex flex-wrap gap-2" id="tipo-btns">
+                            <button type="button" class="btn btn-outline-danger btn-sm tipo-btn ativo" data-tipo="cobranca">💰 Cobrança</button>
+                            <button type="button" class="btn btn-outline-warning btn-sm tipo-btn" data-tipo="lembrete">⏰ Lembrete</button>
+                            <button type="button" class="btn btn-outline-success btn-sm tipo-btn" data-tipo="agradecimento">🙏 Agradecimento</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm tipo-btn" data-tipo="promocao">🎯 Promoção</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm tipo-btn" data-tipo="recuperar_cliente">🔄 Recuperar Cliente</button>
+                            <button type="button" class="btn btn-outline-info btn-sm tipo-btn" data-tipo="orcamento">📋 Orçamento</button>
+                        </div>
+                    </div>
+
+                    <!-- Tom -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tom da mensagem</label>
+                        <div class="d-flex gap-3">
+                            <span class="badge bg-secondary tom-badge ativo" data-tom="amigavel" onclick="selecionarTom(this)">😊 Amigável</span>
+                            <span class="badge bg-primary tom-badge" data-tom="formal" onclick="selecionarTom(this)">👔 Formal</span>
+                            <span class="badge bg-warning text-dark tom-badge" data-tom="persuasivo" onclick="selecionarTom(this)">🔥 Persuasivo</span>
+                        </div>
+                    </div>
+
+                    <!-- Nome do cliente -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nome do cliente (opcional)</label>
+                        <input type="text" class="form-control" id="nome-cliente" placeholder="Ex: João Silva">
+                    </div>
+
+                    <!-- Detalhes -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Detalhes adicionais (opcional)</label>
+                        <textarea class="form-control" id="detalhes" rows="3"
+                            placeholder="Ex: valor em aberto R$ 500, vencimento 10/08, desconto de 10% para pagamento até amanhã"></textarea>
+                    </div>
+
+                    <!-- Campos extras para Orçamento -->
+                    <div id="orcamento-campos" class="d-none">
+                        <hr>
+                        <p class="fw-semibold text-success mb-2"><i class="fas fa-file-invoice me-1"></i> Dados do Orçamento</p>
+                        <div class="mb-2">
+                            <label class="form-label small">Itens / Serviços (um por linha)</label>
+                            <textarea class="form-control form-control-sm" id="orcamento-itens" rows="4"
+                                placeholder="Ex:&#10;2x Cadeira escritório - R$ 350,00&#10;1x Mesa executiva - R$ 890,00"></textarea>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small">Validade do orçamento</label>
+                                <input type="text" class="form-control form-control-sm" id="orcamento-validade" placeholder="Ex: 7 dias">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small">Prazo de entrega</label>
+                                <input type="text" class="form-control form-control-sm" id="orcamento-prazo" placeholder="Ex: 3 dias úteis">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Condições de pagamento</label>
+                            <input type="text" class="form-control form-control-sm" id="orcamento-pagamento" placeholder="Ex: À vista ou 2x sem juros no cartão">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-success w-100" id="btn-gerar" onclick="gerarMensagem()">
+                        <i class="fab fa-whatsapp me-1"></i> Gerar Mensagem
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultado -->
+        <div class="col-lg-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0" id="resultado-titulo"><i class="fab fa-whatsapp me-1 text-success"></i> Preview da mensagem</h6>
+                    <button class="btn btn-sm btn-success d-none" id="btn-copiar" onclick="copiarMensagem()">
+                        <i class="fas fa-copy me-1"></i> Copiar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="estado-inicial" class="text-center py-5">
+                        <i class="fab fa-whatsapp fa-4x text-muted mb-3"></i>
+                        <p class="text-muted">Configure o tipo de mensagem e clique em <strong>Gerar Mensagem</strong></p>
+                    </div>
+                    <div id="loading" class="text-center py-5 d-none">
+                        <div class="spinner-border text-success mb-3" role="status"></div>
+                        <p class="text-muted">Escrevendo sua mensagem...</p>
+                    </div>
+                    <div id="erro" class="alert alert-danger d-none"></div>
+                    <div class="whatsapp-preview d-none" id="preview-area">
+                        <div id="mensagem-output"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const endpoint = '{{ url_for("admin_api.api_ia_mensagens_whatsapp") }}';
+let tipoAtivo = 'cobranca';
+let tomAtivo = 'amigavel';
+
+document.querySelectorAll('.tipo-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('ativo'));
+        this.classList.add('ativo');
+        tipoAtivo = this.dataset.tipo;
+        document.getElementById('orcamento-campos').classList.toggle('d-none', tipoAtivo !== 'orcamento');
+    });
+});
+
+function selecionarTom(el) {
+    document.querySelectorAll('.tom-badge').forEach(b => b.classList.remove('ativo'));
+    el.classList.add('ativo');
+    tomAtivo = el.dataset.tom;
+}
+
+async function gerarMensagem() {
+    const btn = document.getElementById('btn-gerar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Gerando...';
+
+    document.getElementById('estado-inicial').classList.add('d-none');
+    document.getElementById('erro').classList.add('d-none');
+    document.getElementById('preview-area').classList.add('d-none');
+    document.getElementById('btn-copiar').classList.add('d-none');
+    document.getElementById('loading').classList.remove('d-none');
+
+    try {
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            },
+            body: JSON.stringify({
+                tipo: tipoAtivo,
+                tom: tomAtivo,
+                nome_cliente: document.getElementById('nome-cliente').value.trim(),
+                detalhes: [
+                    document.getElementById('detalhes').value.trim(),
+                    tipoAtivo === 'orcamento' ? [
+                        document.getElementById('orcamento-itens').value.trim() ? 'Itens:\n' + document.getElementById('orcamento-itens').value.trim() : '',
+                        document.getElementById('orcamento-validade').value.trim() ? 'Validade: ' + document.getElementById('orcamento-validade').value.trim() : '',
+                        document.getElementById('orcamento-prazo').value.trim() ? 'Prazo de entrega: ' + document.getElementById('orcamento-prazo').value.trim() : '',
+                        document.getElementById('orcamento-pagamento').value.trim() ? 'Pagamento: ' + document.getElementById('orcamento-pagamento').value.trim() : '',
+                    ].filter(Boolean).join('\n') : ''
+                ].filter(Boolean).join('\n'),
+            })
+        });
+        const payload = await resp.json().catch(() => ({ success: false, error: `Erro HTTP ${resp.status}` }));
+        document.getElementById('loading').classList.add('d-none');
+
+        if (!resp.ok || !payload.success) throw new Error(payload.error || 'Erro ao gerar mensagem');
+
+        document.getElementById('mensagem-output').textContent = payload.data.mensagem;
+        document.getElementById('preview-area').classList.remove('d-none');
+        document.getElementById('btn-copiar').classList.remove('d-none');
+    } catch (err) {
+        document.getElementById('loading').classList.add('d-none');
+        document.getElementById('erro').textContent = err.message;
+        document.getElementById('erro').classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fab fa-whatsapp me-1"></i> Gerar Mensagem';
+    }
+}
+
+function copiarMensagem() {
+    navigator.clipboard.writeText(document.getElementById('mensagem-output').textContent).then(() => {
+        const btn = document.getElementById('btn-copiar');
+        btn.innerHTML = '<i class="fas fa-check me-1"></i> Copiado!';
+        setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy me-1"></i> Copiar'; }, 2000);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}Produtos - {{ cliente_nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">📦 Produtos</h1>
+                    <div class="page-subtitle">
+                        {{ cliente_nome }}
+                    </div>
+                </div>
+                <div>
+                    {% if can_create() %}
+                    <a href="{{ url_for('admin.importar_produtos') }}" class="btn btn-success">
+                        <i class="fas fa-file-upload"></i> Importar Lote
+                    </a>
+                    <a href="{{ url_for('admin.create_produto', cliente_id=cliente_id) }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Novo Produto
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="col-md-3">
+                    <label class="form-label">Código</label>
+                    <input type="text" class="form-control" name="codigo" placeholder="Código interno" value="{{ request.args.get('codigo', '') }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Descrição</label>
+                    <input type="text" class="form-control" name="descricao" placeholder="Descrição do produto" value="{{ request.args.get('descricao', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">NCM</label>
+                    <input type="text" class="form-control" name="ncm" placeholder="NCM" value="{{ request.args.get('ncm', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" name="ativo">
+                        <option value="">Todos</option>
+                        <option value="1" {% if request.args.get('ativo') == '1' %}selected{% endif %}>Ativo</option>
+                        <option value="0" {% if request.args.get('ativo') == '0' %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>                    {% if request.args.get('codigo') or request.args.get('descricao') or request.args.get('ncm') or (request.args.get('ativo') and request.args.get('ativo') != 'todos') %}
+                    <a href="{{ url_for('admin.list_produtos') }}?cliente_id={{ cliente_id }}" class="btn btn-secondary ms-1">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Produtos -->
+    <div class="card">
+        <div class="card-body">
+                    {% if produtos %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Código</th>
+                                        <th>Descrição</th>
+                                        <th>Unidade</th>
+                                        <th>Preço</th>
+                                        <th>NCM</th>
+                                        <th>Status</th>
+                                        <th width="150">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for produto in produtos %}
+                                        <tr>
+                                            <td>{{ produto.produto_id }}</td>
+                                            <td>{{ produto.codigo_interno }}</td>
+                                            <td>
+                                                <strong>{{ produto.descricao }}</strong>
+                                            </td>
+                                            <td>{{ produto.unidade_comercial }}</td>
+                                            <td>
+                                                {% if produto.preco_unitario_padrao %}
+                                                    R$ {{ "%.2f"|format(produto.preco_unitario_padrao) }}
+                                                {% else %}
+                                                    -
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if produto.ncm_codigo %}
+                                                    <span class="badge bg-info">{{ produto.ncm_codigo }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-{{ 'success' if produto.ativo else 'danger' }}">
+                                                    {{ 'Ativo' if produto.ativo else 'Inativo' }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {% if can_edit() %}
+                                                <div class="btn-group" role="group">
+                                                    <!-- Editar -->
+                                                    <a href="{{ url_for('admin.editar_produto', produto_id=produto.produto_id) }}"
+                                                       class="btn btn-sm btn-outline-primary" 
+                                                       title="Editar">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                    <!-- Duplicar -->
+                                                    <form method="post" action="{{ url_for('admin.duplicar_produto', produto_id=produto.produto_id) }}" style="display:inline;">
+                                                        <button type="submit" class="btn btn-sm btn-outline-info" title="Duplicar Produto" onclick="return confirm('Deseja duplicar este produto?');">
+                                                            <i class="fas fa-copy"></i>
+                                                        </button>
+                                                    </form>
+                                                    <!-- Toggle Status -->
+                                                    <button type="button" 
+                                                            class="btn btn-sm btn-outline-{{ 'danger' if produto.ativo else 'success' }} btn-toggle-status"
+                                                            data-produto-id="{{ produto.produto_id }}"
+                                                            data-novo-status="{{ 'false' if produto.ativo else 'true' }}"
+                                                            data-cliente-id="{{ cliente_id }}"
+                                                            title="{{ 'Desativar' if produto.ativo else 'Ativar' }}">
+                                                        <i class="fas fa-{{ 'eye-slash' if produto.ativo else 'eye' }}"></i>
+                                                    </button>
+                                                    <!-- Excluir (só se não foi usado em NFe) -->
+                                                    {% if produto.get('pode_excluir') %}
+                                                    <form method="post" action="{{ url_for('admin.delete_produto', produto_id=produto.produto_id) }}" style="display:inline;">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                                title="Excluir produto"
+                                                                onclick="return confirm('Tem certeza que deseja excluir o produto {{ produto.descricao|replace("'", "\\'") }}? Esta ação não pode ser desfeita.');">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                    {% endif %}
+                                                </div>
+                                                {% else %}
+                                                <span class="text-muted"><i class="fas fa-eye"></i> Visualização</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-box fa-4x text-muted mb-4"></i>
+                            <h5 class="text-muted">Nenhum produto cadastrado</h5>
+                            {% if can_create() %}
+                            <p class="text-muted">Comece adicionando um novo produto ao catálogo.</p>
+                            <a href="{{ url_for('admin.create_produto', cliente_id=cliente_id) }}" class="btn btn-primary btn-lg">
+                                <i class="fas fa-plus"></i> Adicionar Primeiro Produto
+                            </a>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                    {% if pagination and pagination.total_pages > 1 %}
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">
+                            Mostrando {{ (pagination.page - 1) * pagination.per_page + 1 }}–{{ [pagination.page * pagination.per_page, pagination.total] | min }} de {{ pagination.total }} produtos
+                        </small>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                    <a class="page-link" href="?page={{ pagination.page - 1 }}&codigo={{ request.args.get('codigo','') }}&descricao={{ request.args.get('descricao','') }}&ncm={{ request.args.get('ncm','') }}&ativo={{ request.args.get('ativo','') }}">«</a>
+                                </li>
+                                {% for p in range([1, pagination.page - 2] | max, [pagination.total_pages + 1, pagination.page + 3] | min) %}
+                                <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                                    <a class="page-link" href="?page={{ p }}&codigo={{ request.args.get('codigo','') }}&descricao={{ request.args.get('descricao','') }}&ncm={{ request.args.get('ncm','') }}&ativo={{ request.args.get('ativo','') }}">{{ p }}</a>
+                                </li>
+                                {% endfor %}
+                                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                    <a class="page-link" href="?page={{ pagination.page + 1 }}&codigo={{ request.args.get('codigo','') }}&descricao={{ request.args.get('descricao','') }}&ncm={{ request.args.get('ncm','') }}&ativo={{ request.args.get('ativo','') }}">»</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-toggle-status').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const produtoId = this.getAttribute('data-produto-id');
+            const novoStatus = this.getAttribute('data-novo-status');
+            const clienteId = this.getAttribute('data-cliente-id');
+            
+            alterarStatusProduto(produtoId, novoStatus, clienteId);
+        });
+    });
+});
+
+function alterarStatusProduto(produtoId, novoStatus, clienteId) {
+    if (confirm('Deseja alterar o status deste produto?')) {
+        fetch('/admin/produtos/alterar-status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'produto_id=' + produtoId + '&ativo=' + novoStatus + '&cliente_id=' + clienteId
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao alterar status do produto');
+        });
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,136 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:nfse="http://nfse.abrasf.org.br">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <nfse:RecepcionarLoteRpsRequest>
+         <nfseCabecMsg>&lt;p:cabecalho versao=&quot;2.00&quot; xmlns:ds=&quot;http://www.w3.org/2000/09/xmldsig#&quot; xmlns:p=&quot;http://www.giss.com.br/cabecalho-v2_04.xsd&quot; xmlns:p1=&quot;http://www.giss.com.br/tipos-v2_04.xsd&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&gt;
+					&lt;p:versaoDados&gt;2.00&lt;/p:versaoDados&gt;
+				&lt;/p:cabecalho&gt;</nfseCabecMsg>
+         <nfseDadosMsg>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;p:EnviarLoteRpsEnvio xmlns:ds=&quot;http://www.w3.org/2000/09/xmldsig#&quot; xmlns:p=&quot;http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd&quot; xmlns:p1=&quot;http://www.giss.com.br/tipos-v2_04.xsd&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&gt;
+	&lt;p:LoteRps versao=&quot;1.00&quot;&gt;
+		&lt;p1:NumeroLote&gt;7&lt;/p1:NumeroLote&gt;
+		&lt;p1:Prestador&gt;
+			&lt;p1:CpfCnpj&gt;
+				&lt;p1:Cnpj&gt;11042997000169&lt;/p1:Cnpj&gt;
+			&lt;/p1:CpfCnpj&gt;
+			&lt;p1:InscricaoMunicipal&gt;77761&lt;/p1:InscricaoMunicipal&gt;
+		&lt;/p1:Prestador&gt;
+		&lt;p1:QuantidadeRps&gt;1&lt;/p1:QuantidadeRps&gt;
+		&lt;p1:ListaRps&gt;
+			&lt;p1:Rps&gt;
+				&lt;p1:InfDeclaracaoPrestacaoServico&gt;
+					&lt;p1:Rps&gt;
+						&lt;p1:IdentificacaoRps&gt;
+							&lt;p1:Numero&gt;102&lt;/p1:Numero&gt;
+							&lt;p1:Serie&gt;NFT&lt;/p1:Serie&gt;
+							&lt;p1:Tipo&gt;1&lt;/p1:Tipo&gt;
+						&lt;/p1:IdentificacaoRps&gt;
+						&lt;p1:DataEmissao&gt;2024-06-01&lt;/p1:DataEmissao&gt;
+						&lt;p1:Status&gt;1&lt;/p1:Status&gt;
+					&lt;/p1:Rps&gt;
+					&lt;p1:Competencia&gt;2024-06-01&lt;/p1:Competencia&gt;
+					&lt;p1:Servico&gt;
+						&lt;p1:Valores&gt;
+							&lt;p1:ValorServicos&gt;100.0&lt;/p1:ValorServicos&gt;
+							&lt;p1:ValorDeducoes&gt;0.0&lt;/p1:ValorDeducoes&gt;
+							&lt;p1:ValorPis&gt;0.0&lt;/p1:ValorPis&gt;
+							&lt;p1:ValorCofins&gt;0.0&lt;/p1:ValorCofins&gt;
+							&lt;p1:ValorInss&gt;0.0&lt;/p1:ValorInss&gt;
+							&lt;p1:ValorIr&gt;0.0&lt;/p1:ValorIr&gt;
+							&lt;p1:ValorCsll&gt;0.0&lt;/p1:ValorCsll&gt;
+							&lt;p1:OutrasRetencoes&gt;0.0&lt;/p1:OutrasRetencoes&gt;
+							&lt;p1:ValTotTributos&gt;0.0&lt;/p1:ValTotTributos&gt;
+							&lt;p1:ValorIss&gt;0.0&lt;/p1:ValorIss&gt;
+							&lt;p1:Aliquota&gt;0.0&lt;/p1:Aliquota&gt;
+							&lt;p1:DescontoIncondicionado&gt;0.0&lt;/p1:DescontoIncondicionado&gt;
+							&lt;p1:DescontoCondicionado&gt;0.0&lt;/p1:DescontoCondicionado&gt;
+						&lt;/p1:Valores&gt;
+						&lt;p1:IssRetido&gt;1&lt;/p1:IssRetido&gt;
+						&lt;p1:ResponsavelRetencao&gt;1&lt;/p1:ResponsavelRetencao&gt;
+						&lt;p1:ItemListaServico&gt;08.01&lt;/p1:ItemListaServico&gt;
+						&lt;p1:CodigoTributacaoMunicipio&gt;88888888&lt;/p1:CodigoTributacaoMunicipio&gt;
+						&lt;p1:Discriminacao&gt;1&lt;/p1:Discriminacao&gt;
+						&lt;p1:CodigoMunicipio&gt;3550308&lt;/p1:CodigoMunicipio&gt;
+						&lt;p1:CodigoPais&gt;0076&lt;/p1:CodigoPais&gt;
+						&lt;p1:ExigibilidadeISS&gt;1&lt;/p1:ExigibilidadeISS&gt;
+						&lt;p1:IdentifNaoExigibilidade&gt;1&lt;/p1:IdentifNaoExigibilidade&gt;
+						&lt;p1:MunicipioIncidencia&gt;0&lt;/p1:MunicipioIncidencia&gt;
+					&lt;/p1:Servico&gt;
+					&lt;p1:Prestador&gt;
+						&lt;p1:CpfCnpj&gt;
+							&lt;p1:Cnpj&gt;11042997000169&lt;/p1:Cnpj&gt;
+						&lt;/p1:CpfCnpj&gt;
+						&lt;p1:InscricaoMunicipal&gt;77761&lt;/p1:InscricaoMunicipal&gt;
+					&lt;/p1:Prestador&gt;
+					&lt;p1:RegimeEspecialTributacao&gt;1&lt;/p1:RegimeEspecialTributacao&gt;
+					&lt;p1:OptanteSimplesNacional&gt;2&lt;/p1:OptanteSimplesNacional&gt;
+					&lt;p1:IncentivoFiscal&gt;2&lt;/p1:IncentivoFiscal&gt;
+				&lt;/p1:InfDeclaracaoPrestacaoServico&gt;
+			&lt;/p1:Rps&gt;
+		&lt;/p1:ListaRps&gt;
+	&lt;/p:LoteRps&gt;
+	&lt;Signature xmlns=&quot;http://www.w3.org/2000/09/xmldsig#&quot;&gt;
+		&lt;SignedInfo&gt;
+			&lt;CanonicalizationMethod Algorithm=&quot;http://www.w3.org/TR/2001/REC-xml-c14n-20010315&quot;/&gt;
+			&lt;SignatureMethod Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#rsa-sha1&quot;/&gt;
+			&lt;Reference URI=&quot;&quot;&gt;
+				&lt;Transforms&gt;
+					&lt;Transform Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#enveloped-signature&quot;/&gt;
+				&lt;/Transforms&gt;
+				&lt;DigestMethod Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#sha1&quot;/&gt;
+				&lt;DigestValue&gt;0uG3PUwAxeHj1SCwDAtdh1orJY0=&lt;/DigestValue&gt;
+			&lt;/Reference&gt;
+		&lt;/SignedInfo&gt;
+		&lt;SignatureValue&gt;V+jNBzHDSj9g2Qc903qbhiSr97wkD4VE7CDHJvFgWORe6ivB1Wazhs1uK1yfJy9G
+sS4kJGSE9oxxiAxwXoPtagkn9Bkarb3KCi/LAyytooeBKto7AvC5+3BCssH5aoss
+LJNFJn7w0KnoKI4MUoZ3gY2MnSnQ13
+FO4q0Sfn+NuSAuQ7rxASLsxGCG+/UFtBjyf1hEtzhCwWIMn4PD4LIOELHw8uC6xK
+XvzGy/QtT1TRFLhmFKF+jrpbR6F2hcHa2aRtyEYCyyzV0WoHoxjCG9CabVQzV5Q3
+V2ZO0jiVxCWsbxv+W/QmLg==&lt;/SignatureValue&gt;
+		&lt;KeyInfo&gt;
+			&lt;X509Data&gt;
+				&lt;X509Certificate&gt;
+bS5ici9hYy1vbmxpbmVyZmIvZHBjLWFjLW9ubGluZXJmYnY1LnBkZjCBugYDVR0f
+BIGyMIGvMFWgU6BRhk9odHRwOi8vaWNwLWJyYXNpbC52YWxpZGNlcnRpZmljYWRv
+cmEuY29tLmJyL2FjLW9ubGluZXJmYi9sY3ItYWMtb25saW5lcmZidjUuY3JsMFag
+VKBShlBodHRwOi8vaWNwLWJyYXNpbDIudmFsaWRjZXJ0aWZpY2Fkb3JhLmNvbS5i
+ci9hYy1vbmxpbmVyZmIvbGNyLWFjLW9ubGluZXJmYnY1LmNybDAOBgNVHQ8BAf8E
+BAMCBeAwHQYDVR0lBBYwFAYIKwYBBQUHAwIGCCsGAQUFBwMEMIHEBgNVHREEgbww
+gbmBJmFkbWluaXN0cmF0aXZvQGNvbnN1bHRvcmlhdmlzYW8uY29tLmJyoDgGBWBM
+AQMEoC8ELTE0MTAxOTU4MDMwMDU4MDk4MzgwMDAwMDAwMDAwMDAwMDAwMDAwMDAw
+MDAwMKAhBgVgTAEDAqAYBBZMVUlaIEFMQkVSVE8gUk9EUklHVUVToBkGBWBMAQMD
+oBAEDjExMDQyOTk3MDAwMTY5oBcGBWBMAQMHoA4EDDAwMDAwMDAwMDAwMDANBgkq
+hkiG9w0BAQsFAAOCAgEAeUjEdSZmaFSaIqvCPWUwlrAnXqBGEID7w+GjCWrQv5Em
+1pcD7cKcKWr1IKBhG4jNA9Ml6rz6P0nixLhDxHW8yAm++QUUzUATNOwZ5Zv98eXt
+NgnpHVKOGDG3RcwirvIpSu6DBBfcXEeI+c9wA7RMykuWrEaeQ0/S0+Pn4hn0VXtN
+xkZyhqctQdKC/e4a9zJ8UCKddfG6ifP8vfx/pvr0NFSdJkvfAD83cscKTIOPY1Cb
+46fMjVeU6TdugfO7NTQod8mebJ+AHm/7e74uvLOA/H0cUuXbrVvjrioPvEdBuUp+
+HkIfDuTlMQW7P1IMOxY+g8K1RHW7f5Tg6/aAY2Va+GoBvD+sdD/5rQjadYwwt9RG
+7hH+DzJia/J7KiQHxN655mQ8J/SYpwJXlXy8jKloPDE56WBpAkgHCREvt0LxJdk2
+YvaUNAKin1TgBVXNwoNJ84DlGGjW6t93zfcsADHg1MnpryZid1DZ2c9gL6YQ6Npb
+g9S/vXRZdf9t8hr1Tx0YWvI0bSzCiyZPyzG0G8FOSHX3OOQbK96V2cMCgJ6MwXKw
+NMmRyI2tyy8brWCvj4VSX7LlRBx9JT4dD/HhQhPxpxCV3HfPSAjBhmznOf3QWaWG
+G1nQm8S7Yfm2kT6erje0muB3YWvOWZBiPy3uCq0i72SeHzOkmt4uLgKGJF6wxSk=
+&lt;/X509Certificate&gt;
+			&lt;/X509Data&gt;
+			&lt;KeyValue&gt;
+&lt;RSAKeyValue&gt;
+&lt;Modulus&gt;
+5i5RSmpIlVGe38SePxgbvDNfBvlj48/VQ4sBxt2BtrIRhDOa4zrhY/pD7bVCTTSG
+guRVeOf0Uvy2Mh5iBBF+WOPee9Bbgo9CsdM4SHtg0iyeuaUg2iDKFExVXDAlWoAt
+UeN3I8OuWb1qlDc+cuDye14j4hr3W4QIJ2J/22QwULoh17J3U/pncP4rGbgWtDAT
+PKOjgsim340xR8CPIxfU8MHcjd5bv/J/w2mFMUdDo77hTYFVdVia+Fnm5u2pFOHu
+gPc+UMXXAbI8BlXrYQY2QTF1yuba3QYQw4a76NXsSjsgHyr6k2FT867zCAxJYusQ
+AvAk54ENic/z8iGxIP0qjw==
+&lt;/Modulus&gt;
+&lt;Exponent&gt;
+AQAB
+&lt;/Exponent&gt;
+&lt;/RSAKeyValue&gt;
+&lt;/KeyValue&gt;
+		&lt;/KeyInfo&gt;
+	&lt;/Signature&gt;
+&lt;/p:EnviarLoteRpsEnvio&gt;</nfseDadosMsg>
+      </nfse:RecepcionarLoteRpsRequest>
+   </soapenv:Body>
+</soapenv:Envelope>

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if csosn %}Editar CSOSN{% else %}Novo CSOSN{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-7 col-md-9">
+            <h1 class="h3 mb-4">{% if csosn %}Editar CSOSN ({{ csosn.codigo }}){% else %}Novo CSOSN{% endif %}</h1>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <form method="POST" action="{% if csosn %}{{ url_for('admin.edit_csosn', csosn_id=csosn.csosn_id) }}{% else %}{{ url_for('admin.create_csosn') }}{% endif %}" class="card p-4 shadow-sm">
+                {% if csosn %}
+                    <input type="hidden" name="csosn_id" value="{{ csosn.csosn_id }}">
+                {% endif %}
+                <div class="mb-3">
+                    <label for="codigo" class="form-label">Código CSOSN:</label>
+                    <input type="text" id="codigo" name="codigo" class="form-control" maxlength="5" required
+                        value="{{ csosn.codigo if csosn else (form_data.codigo if form_data else '') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição:</label>
+                    <textarea id="descricao" name="descricao" class="form-control" rows="3" required>{{ csosn.descricao if csosn else (form_data.descricao if form_data else '') }}</textarea>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar CSOSN
+                    </button>
+                    <a href="{{ url_for('admin.list_csosn') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

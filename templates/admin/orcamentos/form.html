@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if orcamento else 'Novo' }} orçamento{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1">{{ 'Editar orçamento ' ~ orcamento.numero if orcamento else 'Novo orçamento' }}</h1>
+      <p class="text-muted mb-0">Selecione o cliente final, os produtos e os valores.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('orcamentos.listar') }}">Voltar</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post" class="card shadow-sm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-5">
+          <label class="form-label">Cliente final</label>
+          <select class="form-select" name="destinatario_id">
+            <option value="">Selecione o cliente</option>
+            {% set destinatario_selecionado = form_data.get('destinatario_id') if form_data else (orcamento.destinatario_id|string if orcamento and orcamento.destinatario_id else '') %}
+            {% for d in destinatarios %}
+            <option value="{{ d.destinatario_id }}" {% if destinatario_selecionado|string == d.destinatario_id|string %}selected{% endif %}>{{ d.nome_razao_social }} — {{ d.cpf_cnpj }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">O cliente precisa estar cadastrado em Destinatários.</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Validade</label>
+          {% set validade_valor = form_data.get('validade') if form_data and form_data.get('validade') else (orcamento.validade.isoformat() if orcamento and orcamento.validade else '') %}
+          <input type="date" class="form-control" name="validade" value="{{ validade_valor }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Status</label>
+          {% if orcamento %}
+          <select class="form-select" name="status">
+            {% for chave, label in status_labels.items() if chave not in ('CONVERTIDO',) %}
+            <option value="{{ chave }}" {% if orcamento.status == chave %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input class="form-control" value="Rascunho" disabled>
+          <div class="form-text">Use os botões ao final para salvar ou enviar.</div>
+          {% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label">Observações</label>
+          <textarea class="form-control" name="observacao" rows="2">{{ form_data.get('observacao') if form_data and form_data.get('observacao') else (orcamento.observacao or '' if orcamento else '') }}</textarea>
+        </div>
+      </div>
+
+      <hr class="my-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h5 mb-0">Produtos</h2>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="adicionar-item"><i class="fas fa-plus"></i> Adicionar item</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle" id="tabela-itens">
+          <thead><tr><th>Produto</th><th style="width:140px">Quantidade</th><th style="width:180px">Valor unitário</th><th style="width:150px">Total</th><th></th></tr></thead>
+          <tbody>
+            {% for item in itens %}
+            <tr class="item-row">
+              <td>
+                <select class="form-select produto-select" name="produto_id" required>
+                  <option value="">Selecione</option>
+                  {% for p in produtos %}
+                  <option value="{{ p.produto_id }}" data-preco="{{ '%.2f'|format(p.preco_unitario_padrao) }}" {% if item.produto_id|string == p.produto_id|string %}selected{% endif %}>{{ p.descricao }} ({{ p.codigo_interno }})</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input type="number" step="0.001" min="0.001" class="form-control quantidade" name="quantidade" value="{{ item.quantidade }}" required></td>
+              <td><input type="number" step="0.01" min="0" class="form-control valor-unitario" name="valor_unitario" value="{{ '%.2f'|format(item.valor_unitario) }}" required></td>
+              <td class="total-linha text-nowrap">R$ {{ '%.2f'|format(item.valor_total) }}</td>
+              <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger remover-item"><i class="fas fa-trash"></i></button></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot><tr><th colspan="3" class="text-end">Total do orçamento</th><th class="text-nowrap" id="total-orcamento">R$ 0,00</th><th></th></tr></tfoot>
+        </table>
+      </div>
+      {% if not itens %}<p class="text-muted small" id="sem-itens">Nenhum item adicionado.</p>{% endif %}
+    </div>
+    <div class="card-footer d-flex justify-content-between">
+      <a class="btn btn-outline-secondary" href="{{ url_for('orcamentos.listar') }}">Cancelar</a>
+      <div class="d-flex gap-2">
+        {% if not orcamento %}
+        <button class="btn btn-outline-primary" type="submit" name="enviar" value="0">Salvar rascunho</button>
+        <button class="btn btn-primary" type="submit" name="enviar" value="1">Salvar e enviar</button>
+        {% else %}
+        <button class="btn btn-primary" type="submit">Salvar alterações</button>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+</div>
+
+<template id="item-template">
+  <tr class="item-row">
+    <td>
+      <select class="form-select produto-select" name="produto_id" required>
+        <option value="">Selecione</option>
+        {% for p in produtos %}
+        <option value="{{ p.produto_id }}" data-preco="{{ '%.2f'|format(p.preco_unitario_padrao) }}">{{ p.descricao }} ({{ p.codigo_interno }})</option>
+        {% endfor %}
+      </select>
+    </td>
+    <td><input type="number" step="0.001" min="0.001" class="form-control quantidade" name="quantidade" value="1" required></td>
+    <td><input type="number" step="0.01" min="0" class="form-control valor-unitario" name="valor_unitario" value="" required></td>
+    <td class="total-linha text-nowrap">R$ 0,00</td>
+    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger remover-item"><i class="fas fa-trash"></i></button></td>
+  </tr>
+</template>
+
+<script>
+(function () {
+  const tabela = document.getElementById('tabela-itens').querySelector('tbody');
+  const template = document.getElementById('item-template');
+  const totalGeral = document.getElementById('total-orcamento');
+  const semItens = document.getElementById('sem-itens');
+
+  function atualizarTotais() {
+    let total = 0;
+    tabela.querySelectorAll('.item-row').forEach(function (row) {
+      const qtd = parseFloat(row.querySelector('.quantidade').value) || 0;
+      const valor = parseFloat(row.querySelector('.valor-unitario').value) || 0;
+      const subtotal = qtd * valor;
+      total += subtotal;
+      row.querySelector('.total-linha').textContent = 'R$ ' + subtotal.toFixed(2);
+    });
+    totalGeral.textContent = 'R$ ' + total.toFixed(2);
+    if (semItens) semItens.style.display = tabela.querySelectorAll('.item-row').length ? 'none' : 'block';
+  }
+
+  function ligarLinha(row) {
+    row.querySelector('.produto-select').addEventListener('change', function () {
+      const option = this.options[this.selectedIndex];
+      const preco = option ? option.dataset.preco : '';
+      const campoValor = row.querySelector('.valor-unitario');
+      if (preco && !campoValor.value) campoValor.value = preco;
+      atualizarTotais();
+    });
+    row.querySelector('.quantidade').addEventListener('input', atualizarTotais);
+    row.querySelector('.valor-unitario').addEventListener('input', atualizarTotais);
+    row.querySelector('.remover-item').addEventListener('click', function () {
+      row.remove();
+      atualizarTotais();
+    });
+  }
+
+  document.getElementById('adicionar-item').addEventListener('click', function () {
+    const clone = template.content.firstElementChild.cloneNode(true);
+    tabela.appendChild(clone);
+    ligarLinha(clone);
+    atualizarTotais();
+  });
+
+  tabela.querySelectorAll('.item-row').forEach(ligarLinha);
+  atualizarTotais();
+})();
+</script>
+{% endblock %}

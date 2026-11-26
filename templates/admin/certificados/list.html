@@ -1,0 +1,262 @@
+{% extends 'base.html' %}
+
+{% block title %}Certificados Digitais - {{ cliente_nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">🔐 Certificados Digitais</h1>
+                    <div class="page-subtitle">
+                        {{ cliente_nome }}
+                    </div>
+                </div>
+                <div>
+                    <a href="{{ url_for('admin.create_certificado', cliente_id=cliente_id) }}" 
+                       class="btn btn-primary" title="Certificado A1 (arquivo .pfx/.p12)">
+                        <i class="fas fa-file-upload"></i> Certificado A1
+                    </a>
+                    <a href="{{ url_for('a3.select_certificate', cliente_id=cliente_id) }}" 
+                       class="btn btn-success" title="Certificado A3 (token/smartcard USB)">
+                        <i class="fas fa-usb"></i> Certificado A3
+                    </a>
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-control" name="tipo">
+                        <option value="">Todos</option>
+                        <option value="A1" {% if request.args.get('tipo') == 'A1' %}selected{% endif %}>A1 (Arquivo)</option>
+                        <option value="A3" {% if request.args.get('tipo') == 'A3' %}selected{% endif %}>A3 (Token/Smartcard)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select class="form-control" name="status">
+                        <option value="">Todos</option>
+                        <option value="ativo" {% if request.args.get('status') == 'ativo' %}selected{% endif %}>Ativo</option>
+                        <option value="expirado" {% if request.args.get('status') == 'expirado' %}selected{% endif %}>Expirado</option>
+                        <option value="proximo_vencimento" {% if request.args.get('status') == 'proximo_vencimento' %}selected{% endif %}>Próximo do Vencimento</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Arquivo/Label</label>
+                    <input type="text" class="form-control" name="nome_arquivo" placeholder="Nome do arquivo ou label" value="{{ request.args.get('nome_arquivo', '') }}">
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Certificados -->
+    <div class="card">
+        <div class="card-body">
+            {% if certificados %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Tipo</th>
+                            <th>Arquivo</th>
+                            <th>Fingerprint</th>
+                            <th>Status</th>
+                            <th>Validade</th>
+                            <th>Data Upload</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for certificado in certificados %}
+                        <tr>
+                            <td>
+                                <code>#{{ certificado.certificado_digital_id }}</code>
+                            </td>
+                            <td>
+                                {% if certificado.tipo_certificado == 'A3' %}
+                                    <span class="badge bg-success" title="Certificado A3 (Token/Smartcard)">
+                                        <i class="fas fa-usb"></i> A3
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-primary" title="Certificado A1 (Arquivo)">
+                                        <i class="fas fa-file"></i> A1
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <i class="fas fa-certificate text-primary"></i>
+                                {{ certificado.nome_arquivo_original or certificado.token_label or 'Certificado.pfx' }}
+                            </td>
+                            <td>
+                                {% if certificado.fingerprint %}
+                                <small class="text-muted" title="{{ certificado.fingerprint }}">
+                                    {{ certificado.fingerprint[:16] }}...
+                                </small>
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if certificado.ativo %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check"></i> Ativo
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-secondary">
+                                        <i class="fas fa-pause"></i> Inativo
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if certificado.validade_fim %}
+                                    <span class="text-info">
+                                        <i class="fas fa-calendar"></i>
+                                        {{ certificado.validade_fim.strftime('%d/%m/%Y') }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">A verificar</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if certificado.data_upload %}
+                                    <small>{{ certificado.data_upload.strftime('%d/%m/%Y %H:%M') }}</small>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-info" title="Ver Detalhes" 
+                                            data-certificado-id="{{ certificado.certificado_digital_id }}"
+                                            data-nome-arquivo="{{ certificado.nome_arquivo_original or 'N/A' }}"
+                                            data-fingerprint="{{ certificado.fingerprint or '' }}"
+                                            onclick="showDetails(this)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    
+                                    <form method="POST" 
+                                          action="{{ url_for('admin.toggle_certificado_status', certificado_id=certificado.certificado_digital_id) }}" 
+                                          style="display: inline;">
+                                        <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                                        {% if certificado.ativo %}
+                                        <button type="submit" class="btn btn-warning" 
+                                                title="Desativar" onclick="return confirm('Desativar certificado?')">
+                                            <i class="fas fa-pause"></i>
+                                        </button>
+                                        {% else %}
+                                        <button type="submit" class="btn btn-success" 
+                                                title="Ativar" onclick="return confirm('Ativar certificado?')">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                        {% endif %}
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-certificate fa-4x text-muted mb-4"></i>
+                <h5 class="text-muted">Nenhum certificado encontrado</h5>
+                <p class="text-muted">
+                    Adicione um certificado digital para poder emitir NF-e
+                </p>
+                <a href="{{ url_for('admin.create_certificado', cliente_id=cliente_id) }}" 
+                   class="btn btn-primary btn-lg">
+                    <i class="fas fa-plus"></i> Adicionar Certificado
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-certificate"></i>
+                    Detalhes do Certificado
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modalContent">
+                <i class="fas fa-spinner fa-spin"></i> Carregando...
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showDetails(button) {
+    const certificadoId = button.getAttribute('data-certificado-id');
+    const nomeArquivo = button.getAttribute('data-nome-arquivo');
+    const fingerprint = button.getAttribute('data-fingerprint');
+    
+    $('#modalContent').html('<i class="fas fa-spinner fa-spin"></i> Carregando...');
+    $('#detailsModal').modal('show');
+    
+    setTimeout(function() {
+        $('#modalContent').html(
+            '<div class="row mb-2">' +
+                '<div class="col-sm-4"><strong>ID:</strong></div>' +
+                '<div class="col-sm-8"><code>#' + certificadoId + '</code></div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-4"><strong>Arquivo:</strong></div>' +
+                '<div class="col-sm-8">' + nomeArquivo + '</div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-4"><strong>Fingerprint:</strong></div>' +
+                '<div class="col-sm-8">' +
+                    '<small class="text-muted" style="word-break: break-all;">' +
+                        (fingerprint || 'N/A') +
+                    '</small>' +
+                '</div>' +
+            '</div>' +
+            '<hr>' +
+            '<div class="alert alert-info">' +
+                '<i class="fas fa-info-circle"></i>' +
+                '<strong>Informações do Certificado</strong>' +
+                '<ul class="mb-0 mt-2">' +
+                    '<li>Utilizado para assinatura digital das NF-e</li>' +
+                    '<li>Armazenado de forma segura e criptografada</li>' +
+                    '<li>Verificar validade periodicamente</li>' +
+                    '<li>Apenas certificados ativos são usados para emissão</li>' +
+                '</ul>' +
+            '</div>'
+        );
+    }, 300);
+}
+</script>
+{% endblock %}

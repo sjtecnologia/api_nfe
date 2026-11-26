@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalhes do Cliente{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="h3 mb-4">Detalhes do Cliente</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% if cliente %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Razão Social:</dt>
+                <dd class="col-sm-9">{{ cliente.razao_social }}</dd>
+                <dt class="col-sm-3">Nome Fantasia:</dt>
+                <dd class="col-sm-9">{{ cliente.nome_fantasia }}</dd>
+                <dt class="col-sm-3">CNPJ:</dt>
+                <dd class="col-sm-9">{{ cliente.cnpj }}</dd>
+                <dt class="col-sm-3">Inscrição Estadual:</dt>
+                <dd class="col-sm-9">{{ cliente.inscricao_estadual }}</dd>
+                <dt class="col-sm-3">Inscrição Municipal:</dt>
+                <dd class="col-sm-9">{{ cliente.inscricao_municipal }}</dd>
+                <dt class="col-sm-3">Regime Tributário:</dt>
+                <dd class="col-sm-9">{{ regime if regime else '-' }}</dd>
+                <dt class="col-sm-3">CNAE:</dt>
+                <dd class="col-sm-9">{{ cliente.cnae }}</dd>
+                <dt class="col-sm-3">Endereço:</dt>
+                <dd class="col-sm-9">
+                    {{ cliente.logradouro }}, {{ cliente.numero }} {{ cliente.complemento }}<br>
+                    {{ cliente.bairro }} - {{ cliente.nome_municipio }} ({{ cliente.uf }})<br>
+                    CEP: {{ cliente.cep }}
+                </dd>
+                <dt class="col-sm-3">Contato:</dt>
+                <dd class="col-sm-9">
+                    Email: {{ cliente.email_contato }}<br>
+                    Telefone: {{ cliente.telefone_contato }}
+                </dd>
+                <dt class="col-sm-3">Ativo:</dt>
+                <dd class="col-sm-9">
+                    {% if cliente.ativo %}
+                        <span class="badge bg-success">Sim</span>
+                    {% else %}
+                        <span class="badge bg-danger">Não</span>
+                    {% endif %}
+                </dd>
+                <dt class="col-sm-3">Data de Cadastro:</dt>
+                <dd class="col-sm-9">
+                    {% if cliente.data_cadastro %}
+                        {{ cliente.data_cadastro.strftime('%d/%m/%Y %H:%M') }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+    </div>
+    <div class="mb-4">
+        <h5>Produtos do Cliente</h5>
+        <ul>
+            {% for p in produtos %}
+                <li>{{ p.descricao }} ({{ p.codigo_interno }}) {% if p.ativo %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-danger">Inativo</span>{% endif %}</li>
+            {% else %}
+                <li class="text-muted">Nenhum produto cadastrado.</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="mb-4">
+        <h5>Destinatários/Tomadores</h5>
+        <ul>
+            {% for d in destinatarios %}
+                <li>{{ d.nome_razao_social }} - {{ d.cpf_cnpj }} {% if d.email %}({{ d.email }}){% endif %}</li>
+            {% else %}
+                <li class="text-muted">Nenhum destinatário cadastrado.</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+        <div class="alert alert-warning">Cliente não encontrado.</div>
+    {% endif %}
+    <button type="button" class="btn btn-secondary" onclick="window.history.back();">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </button>
+</div>
+{% endblock %}

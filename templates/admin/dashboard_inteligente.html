@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Inteligente - EmiteMax{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card { border-left: 4px solid; transition: transform 0.2s; }
+    .metric-card:hover { transform: translateY(-2px); }
+    .metric-card.primary { border-color: #0d6efd; }
+    .metric-card.success { border-color: #198754; }
+    .metric-card.info    { border-color: #0dcaf0; }
+    .metric-card.warning { border-color: #ffc107; }
+    .metric-card.secondary { border-color: #6c757d; }
+    .delta-up   { color: #198754; }
+    .delta-down { color: #dc3545; }
+    .narrativa-box {
+        background: linear-gradient(135deg, #0d2137 0%, #1a3a5c 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+    .narrativa-box::before {
+        content: '✨';
+        position: absolute; top: 12px; right: 16px;
+        font-size: 2rem; opacity: 0.3;
+    }
+    .periodo-btn.ativo { font-weight: 600; }
+    .periodo-btn:not(.ativo) { opacity: 0.6; }
+    .nfe-badge { font-size: 0.72rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+
+    <!-- Cabeçalho + filtros -->
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0"><i class="fas fa-chart-line text-primary"></i> Dashboard Inteligente</h3>
+            <small class="text-muted" id="subtitulo">Carregando...</small>
+        </div>
+        <div class="col-auto d-flex gap-2 align-items-center flex-wrap">
+            <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-outline-primary periodo-btn ativo" data-periodo="mes" onclick="setPeriodo(this)">Este mês</button>
+                <button class="btn btn-outline-primary periodo-btn" data-periodo="mes_ant" onclick="setPeriodo(this)">Mês anterior</button>
+                <button class="btn btn-outline-primary periodo-btn" data-periodo="7" onclick="setPeriodo(this)">7 dias</button>
+                <button class="btn btn-outline-primary periodo-btn" data-periodo="30" onclick="setPeriodo(this)">30 dias</button>
+                <button class="btn btn-outline-primary periodo-btn" data-periodo="90" onclick="setPeriodo(this)">90 dias</button>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="carregarDashboard()">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="loading" class="text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <p class="text-muted">Analisando seus dados...</p>
+    </div>
+
+    <div id="conteudo" class="d-none">
+
+        <!-- Narrativa IA -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="narrativa-box" id="narrativa-box">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="fas fa-robot fa-lg mt-1 text-info"></i>
+                        <div id="narrativa-texto" style="line-height:1.7"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Métricas de Hoje -->
+        <h6 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="fas fa-calendar-day me-1"></i> Hoje</h6>
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card metric-card info h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">NF-es autorizadas (saída)</div>
+                        <div class="fs-2 fw-bold" id="nfes-hoje">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card metric-card success h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Faturamento hoje</div>
+                        <div class="fs-2 fw-bold" id="fat-hoje">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Métricas do período -->
+        <h6 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="fas fa-calendar-alt me-1"></i> Período: <span id="label-periodo-header"></span></h6>
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-2">
+                <div class="card metric-card primary h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">NF-es autorizadas</div>
+                        <div class="fs-3 fw-bold" id="nfes-mes">-</div>
+                        <div class="small" id="delta-nfes"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card metric-card success h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Faturamento</div>
+                        <div class="fs-3 fw-bold" id="fat-mes">-</div>
+                        <div class="small" id="delta-fat"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card metric-card info h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Ticket médio</div>
+                        <div class="fs-3 fw-bold" id="ticket-medio">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card metric-card warning h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Clientes atendidos</div>
+                        <div class="fs-3 fw-bold" id="clientes-mes">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-1">
+                <div class="card metric-card secondary h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Rejeitadas</div>
+                        <div class="fs-3 fw-bold text-danger" id="nfes-rejeitadas">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="card metric-card secondary h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small">Produto campeão</div>
+                        <div class="fw-semibold small" id="top-produto" style="line-height:1.3;margin-top:4px">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top produtos e clientes + Últimas NF-es -->
+        <div class="row g-4 mb-4">
+            <!-- Top produtos -->
+            <div class="col-md-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header py-2"><h6 class="mb-0"><i class="fas fa-trophy text-warning me-1"></i> Top Produtos</h6></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light"><tr><th>Produto</th><th class="text-center">Qtd</th><th class="text-end">Faturamento</th></tr></thead>
+                            <tbody id="top-produtos"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Top clientes -->
+            <div class="col-md-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header py-2"><h6 class="mb-0"><i class="fas fa-star text-success me-1"></i> Melhores Clientes</h6></div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light"><tr><th>Cliente</th><th class="text-center">NF-es</th><th class="text-end">Faturamento</th></tr></thead>
+                            <tbody id="top-clientes"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Últimas NF-es -->
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <h6 class="mb-0"><i class="fas fa-file-invoice me-1"></i> Últimas NF-es</h6>
+                <a href="{{ url_for('admin.list_nfes') }}" class="btn btn-outline-primary btn-sm">Ver todas</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Nº</th><th>Tipo</th><th>Destinatário</th><th class="text-end">Valor</th><th class="text-center">Status</th><th>Data</th></tr>
+                        </thead>
+                        <tbody id="ultimas-nfes"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="erro" class="alert alert-danger d-none mt-3"></div>
+</div>
+
+<script>
+const endpoint = '{{ url_for("admin_api.api_ia_dashboard_inteligente") }}';
+const sessionClienteId = {{ session.get("current_client_id") | tojson }};
+let periodoAtivo = 'mes';
+
+const fmtCur = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(Number(v||0));
+const fmtNum = v => new Intl.NumberFormat('pt-BR').format(Number(v||0));
+
+function deltaBadge(pct) {
+    const n = Number(pct||0);
+    if (n === 0) return '<span class="text-muted">— sem variação</span>';
+    const cl = n > 0 ? 'delta-up' : 'delta-down';
+    const icon = n > 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+    return `<span class="${cl}"><i class="fas ${icon} me-1"></i>${Math.abs(n).toFixed(1).replace('.',',')}% vs período anterior</span>`;
+}
+
+function statusBadge(s) {
+    const map = {AUTORIZADA:['success','Autorizada'], REJEITADA:['danger','Rejeitada'], CANCELADA:['secondary','Cancelada'], PROCESSANDO:['warning','Processando']};
+    const [cor, label] = map[s?.toUpperCase()] || ['secondary', s];
+    return `<span class="badge bg-${cor} nfe-badge">${label}</span>`;
+}
+
+function tipoBadge(t) {
+    const map = {Saída:['primary','Saída'], Entrada:['secondary','Entrada'], Devolução:['warning','Devolução']};
+    const [cor, label] = map[t] || ['secondary', t];
+    return `<span class="badge bg-${cor} nfe-badge">${label}</span>`;
+}
+
+function setPeriodo(btn) {
+    document.querySelectorAll('.periodo-btn').forEach(b => b.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    periodoAtivo = btn.dataset.periodo;
+    carregarDashboard();
+}
+
+async function carregarDashboard() {
+    document.getElementById('loading').classList.remove('d-none');
+    document.getElementById('conteudo').classList.add('d-none');
+    document.getElementById('erro').classList.add('d-none');
+
+    try {
+        let url = endpoint + `?periodo=${periodoAtivo}`;
+        if (sessionClienteId) url += `&cliente_id=${sessionClienteId}`;
+        // Dados operacionais não podem ser reutilizados do cache do navegador.
+        const resp = await fetch(url, { cache: 'no-store' });
+        const payload = await resp.json().catch(() => ({success:false, error:`Erro HTTP ${resp.status}`}));
+        if (!payload.success) throw new Error(payload.error);
+
+        const d = payload.data;
+        const mes = d.mes || {};
+        const hoje = d.hoje || {};
+
+        document.getElementById('label-periodo-header').textContent = d.label_periodo || '';
+        const agora = new Date();
+        document.getElementById('subtitulo').textContent =
+            `Atualizado às ${agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})} · ${d.label_periodo}`;
+
+        // Narrativa IA
+        const narBox = document.getElementById('narrativa-box');
+        if (d.narrativa_ia) {
+            document.getElementById('narrativa-texto').innerHTML = d.narrativa_ia.replace(/\n/g,'<br>');
+            narBox.classList.remove('d-none');
+        } else {
+            narBox.classList.add('d-none');
+        }
+
+        // Hoje
+        document.getElementById('nfes-hoje').textContent = fmtNum(hoje.nfes);
+        document.getElementById('fat-hoje').textContent  = fmtCur(hoje.faturamento);
+
+        // Período
+        document.getElementById('nfes-mes').textContent      = fmtNum(mes.total_nfes);
+        document.getElementById('fat-mes').textContent       = fmtCur(mes.faturamento);
+        document.getElementById('ticket-medio').textContent  = fmtCur(mes.ticket_medio);
+        document.getElementById('clientes-mes').textContent  = fmtNum(mes.clientes_ativos);
+        document.getElementById('nfes-rejeitadas').textContent = fmtNum(mes.nfes_rejeitadas);
+        document.getElementById('delta-nfes').innerHTML      = deltaBadge(mes.delta_nfes_pct);
+        document.getElementById('delta-fat').innerHTML       = deltaBadge(mes.delta_faturamento_pct);
+        document.getElementById('top-produto').textContent   = d.top_produto ? d.top_produto.descricao : 'Sem dados';
+
+        // Top produtos
+        document.getElementById('top-produtos').innerHTML = (d.top_produtos || []).map((p,i) => `
+            <tr>
+                <td class="small">${i+1}. ${p.descricao}</td>
+                <td class="text-center small">${fmtNum(p.ocorrencias)}</td>
+                <td class="text-end small">${fmtCur(p.valor_total)}</td>
+            </tr>`).join('') || '<tr><td colspan="3" class="text-muted text-center py-2">Sem dados</td></tr>';
+
+        // Top clientes
+        document.getElementById('top-clientes').innerHTML = (d.top_clientes || []).map((c,i) => `
+            <tr>
+                <td class="small">${i+1}. ${c.destinatario_razao_social || '-'}</td>
+                <td class="text-center small">${fmtNum(c.total_nfes)}</td>
+                <td class="text-end small">${fmtCur(c.faturamento)}</td>
+            </tr>`).join('') || '<tr><td colspan="3" class="text-muted text-center py-2">Sem dados</td></tr>';
+
+        // Últimas NF-es
+        document.getElementById('ultimas-nfes').innerHTML = (d.ultimas_nfes || []).map(n => `
+            <tr>
+                <td class="small">${n.numero||'-'}/${n.serie||'-'}</td>
+                <td>${tipoBadge(n.tipo)}</td>
+                <td class="small">${n.destinatario_razao_social||'-'}</td>
+                <td class="text-end small">${n.valor ? fmtCur(n.valor) : '-'}</td>
+                <td class="text-center">${statusBadge(n.status)}</td>
+                <td class="small text-muted">${n.data_emissao ? new Date(n.data_emissao+'T00:00').toLocaleDateString('pt-BR') : '-'}</td>
+            </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted py-3">Nenhuma NF-e</td></tr>';
+
+        document.getElementById('loading').classList.add('d-none');
+        document.getElementById('conteudo').classList.remove('d-none');
+    } catch(err) {
+        document.getElementById('loading').classList.add('d-none');
+        document.getElementById('erro').textContent = 'Erro: ' + err.message;
+        document.getElementById('erro').classList.remove('d-none');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', carregarDashboard);
+</script>
+{% endblock %}

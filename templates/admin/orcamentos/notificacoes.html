@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Notificações{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1"><i class="fas fa-bell text-primary"></i> Notificações</h1>
+      <p class="text-muted mb-0">Pedidos de orçamento, aprovações e conversões em pedido.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('orcamentos.listar') }}">Voltar aos orçamentos</a>
+      <form method="post" action="{{ url_for('orcamentos.ler_todas_notificacoes') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-primary"><i class="fas fa-check-double"></i> Marcar todas como lidas</button>
+      </form>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="card shadow-sm">
+    <div class="list-group list-group-flush">
+      {% for n in notificacoes %}
+      <div class="list-group-item {{ '' if n.lida else 'bg-light' }}">
+        <div class="d-flex flex-wrap justify-content-between gap-2">
+          <div>
+            <strong>{{ n.titulo }}</strong>
+            {% if not n.lida %}<span class="badge bg-danger ms-1">nova</span>{% endif %}
+            {% if n.mensagem %}<div class="text-muted mt-1">{{ n.mensagem }}</div>{% endif %}
+            <div class="small text-muted mt-1">{{ n.created_at.strftime('%d/%m/%Y %H:%M') if n.created_at else '' }}</div>
+          </div>
+          <div class="d-flex align-items-start gap-2">
+            {% if n.link %}<a class="btn btn-sm btn-outline-primary" href="{{ n.link }}">Abrir</a>{% endif %}
+            {% if not n.lida %}
+            <form method="post" action="{{ url_for('orcamentos.ler_notificacao', notificacao_id=n.notificacao_id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="link" value="{{ n.link or '' }}">
+              <button class="btn btn-sm btn-outline-secondary">Marcar lida</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="list-group-item text-center text-muted p-5">Nenhuma notificação.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

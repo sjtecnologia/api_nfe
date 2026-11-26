@@ -1,0 +1,81 @@
+{#
+  Macros reutilizáveis de badges de status para NFe, NFC-e e NFS-e.
+  Elimina as 3 variantes inconsistentes de badge espalhadas em 6+ templates.
+
+  Uso:
+    {% from 'macros/badges.html' import status_badge, status_badge_nfse %}
+
+    {{ status_badge(nfe.status) }}
+    {{ status_badge_nfse(nfse.codigo_status) }}
+#}
+
+{% macro status_badge(status) %}
+  {% set s = (status | string | upper) if status else '' %}
+  {% if s == 'AUTORIZADA' %}
+    <span class="badge bg-success">Autorizada</span>
+  {% elif s == 'CANCELADA' %}
+    <span class="badge bg-danger">Cancelada</span>
+  {% elif s == 'REJEITADA' %}
+    <span class="badge bg-dark">Rejeitada</span>
+  {% elif s in ('PROCESSANDO', 'PENDENTE') %}
+    <span class="badge bg-warning text-dark">{{ status | title }}</span>
+  {% elif s == 'INUTILIZADA' %}
+    <span class="badge bg-secondary">Inutilizada</span>
+  {% elif s == 'DENEGADA' %}
+    <span class="badge bg-warning text-dark">Denegada</span>
+  {% elif s == 'ERRO' %}
+    <span class="badge bg-danger">Erro</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ status or 'N/A' }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro status_badge_nfse(codigo_status) %}
+  {# Aceita código numérico de status da NFS-e (1=Autorizada, 2=Cancelada, etc.) #}
+  {% set c = codigo_status | int(-1) %}
+  {% if c == 1 %}
+    <span class="badge bg-success">Autorizada</span>
+  {% elif c == 2 %}
+    <span class="badge bg-danger">Cancelada</span>
+  {% elif c == 3 %}
+    <span class="badge bg-dark">Rejeitada</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ codigo_status or 'N/A' }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro finalidade_badge(finalidade) %}
+  {# Exibe o tipo/finalidade de emissão da NFe #}
+  {% set f = (finalidade | string) if finalidade else '' %}
+  {% if f in ('1', 'NF-e normal') %}
+    <span class="badge bg-primary">NF-e normal</span>
+  {% elif f in ('2', 'NF-e complementar') %}
+    <span class="badge bg-info text-dark">Complementar</span>
+  {% elif f in ('3', 'NF-e de ajuste') %}
+    <span class="badge bg-warning text-dark">Ajuste</span>
+  {% elif f in ('4', 'Devolução de mercadoria') %}
+    <span class="badge bg-secondary">Devolução</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ finalidade or 'N/A' }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro tipo_nfe_badge(tipo) %}
+  {# Exibe o modelo da NFe: 55 = NF-e, 65 = NFC-e #}
+  {% set t = (tipo | string) if tipo else '' %}
+  {% if t == '55' %}
+    <span class="badge bg-primary">NF-e</span>
+  {% elif t == '65' %}
+    <span class="badge bg-success">NFC-e</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ tipo or '—' }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro bool_badge(valor, label_true='Ativo', label_false='Inativo') %}
+  {% if valor %}
+    <span class="badge bg-success">{{ label_true }}</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ label_false }}</span>
+  {% endif %}
+{% endmacro %}

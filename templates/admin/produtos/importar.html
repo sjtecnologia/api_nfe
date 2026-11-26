@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Produtos em Lote{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-file-upload"></i> Importar Produtos em Lote</h2>
+            <p class="text-muted mb-0">Importe múltiplos produtos via CSV ou XLSX</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin.list_produtos') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-cloud-upload-alt"></i> Upload do Arquivo
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data" id="formImportacao">
+                        <div class="form-group">
+                            <label for="arquivo" class="font-weight-bold">Selecione o arquivo CSV ou XLSX</label>
+                            <div class="custom-file">
+                                <input type="file" class="custom-file-input" id="arquivo" name="arquivo" 
+                                       accept=".csv,.xlsx,.xls" required>
+                                <label class="custom-file-label" for="arquivo">Escolher arquivo...</label>
+                            </div>
+                            <small class="form-text text-muted">
+                                Formatos aceitos: CSV, XLSX, XLS | Tamanho máximo: 10MB
+                            </small>
+                        </div>
+
+                        <div class="alert alert-info mt-3">
+                            <h6 class="alert-heading"><i class="fas fa-info-circle"></i> Instruções</h6>
+                            <ul class="mb-0">
+                                <li>O arquivo deve conter as colunas obrigatórias: <strong>codigo, descricao, unidade, valor</strong></li>
+                                <li>Colunas opcionais: <strong>ncm_codigo, cfop_codigo, ativo</strong></li>
+                                <li>Use os templates abaixo como referência</li>
+                                <li>Produtos duplicados (mesmo código) serão ignorados</li>
+                                <li>NCM e CFOP devem existir no sistema</li>
+                            </ul>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="confirmar" required>
+                                <label class="custom-control-label" for="confirmar">
+                                    Confirmo que revisei o arquivo e os dados estão corretos
+                                </label>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-upload"></i> Importar Produtos
+                            </button>
+                            <button type="reset" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 bg-success text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-download"></i> Templates
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p>Baixe um template para começar:</p>
+                    
+                    <a href="{{ url_for('admin.download_template_csv') }}" class="btn btn-outline-success btn-block mb-2">
+                        <i class="fas fa-file-csv"></i> Baixar Template CSV
+                    </a>
+                    
+                    <a href="{{ url_for('admin.download_template_xlsx') }}" class="btn btn-outline-success btn-block">
+                        <i class="fas fa-file-excel"></i> Baixar Template XLSX
+                    </a>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 bg-warning text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-table"></i> Estrutura do Arquivo
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-bordered">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Coluna</th>
+                                <th>Obrigatório</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>codigo</strong></td>
+                                <td><span class="badge badge-danger">Sim</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>descricao</strong></td>
+                                <td><span class="badge badge-danger">Sim</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>unidade</strong></td>
+                                <td><span class="badge badge-danger">Sim</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>valor</strong></td>
+                                <td><span class="badge badge-danger">Sim</span></td>
+                            </tr>
+                            <tr>
+                                <td>ncm_codigo</td>
+                                <td><span class="badge badge-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>cfop_codigo</td>
+                                <td><span class="badge badge-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>ativo</td>
+                                <td><span class="badge badge-secondary">Não</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card shadow">
+                <div class="card-header py-3 bg-info text-white">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-lightbulb"></i> Dicas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0 small">
+                        <li>Use o Excel para editar o XLSX</li>
+                        <li>No CSV, use vírgula (,) como separador</li>
+                        <li>Valores decimais use ponto (10.50)</li>
+                        <li>Unidades comuns: UN, PC, KG, LT, M</li>
+                        <li>NCM: 8 dígitos sem pontos</li>
+                        <li>CFOP: 4 dígitos</li>
+                        <li>Ativo: true ou false</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Atualizar label do arquivo selecionado
+document.querySelector('.custom-file-input').addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name || 'Escolher arquivo...';
+    const label = e.target.nextElementSibling;
+    label.textContent = fileName;
+});
+
+// Validação antes de submeter
+document.getElementById('formImportacao').addEventListener('submit', function(e) {
+    const arquivo = document.getElementById('arquivo');
+    const confirmar = document.getElementById('confirmar');
+    
+    if (!arquivo.files.length) {
+        e.preventDefault();
+        alert('Selecione um arquivo antes de continuar');
+        return false;
+    }
+    
+    if (!confirmar.checked) {
+        e.preventDefault();
+        alert('Você deve confirmar que revisou os dados');
+        return false;
+    }
+    
+    // Mostrar loading
+    const btn = this.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+});
+</script>
+
+<style>
+.custom-file-label::after {
+    content: "Procurar";
+}
+</style>
+{% endblock %}

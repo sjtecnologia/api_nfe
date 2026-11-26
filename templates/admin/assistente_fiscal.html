@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}Assistente Fiscal - EmiteMax{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container {
+        height: 460px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    .msg-user {
+        align-self: flex-end;
+        max-width: 75%;
+        background: #0d6efd;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 18px 18px 4px 18px;
+        box-shadow: 0 2px 6px rgba(13,110,253,0.2);
+    }
+    .msg-assistant {
+        align-self: flex-start;
+        max-width: 82%;
+        background: white;
+        color: #212529;
+        padding: 12px 16px;
+        border-radius: 18px 18px 18px 4px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        border: 1px solid #e9ecef;
+        line-height: 1.6;
+    }
+    .aviso-legal {
+        font-size: 0.78rem;
+        color: #6c757d;
+        border-top: 1px solid #e9ecef;
+        margin-top: 10px;
+        padding-top: 8px;
+    }
+    .msg-typing {
+        align-self: flex-start;
+        background: white;
+        padding: 12px 16px;
+        border-radius: 18px;
+        border: 1px solid #e9ecef;
+    }
+    .dot-typing span {
+        display: inline-block;
+        width: 8px; height: 8px;
+        background: #adb5bd;
+        border-radius: 50%;
+        animation: blink 1.4s infinite;
+        margin: 0 2px;
+    }
+    .dot-typing span:nth-child(2){animation-delay:.2s}
+    .dot-typing span:nth-child(3){animation-delay:.4s}
+    @keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
+    .quick-question {
+        cursor: pointer;
+        font-size: 0.82rem;
+        border: 1px solid #0d2137;
+        color: #0d2137;
+        background: white;
+        padding: 5px 11px;
+        border-radius: 20px;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    .quick-question:hover { background: #0d2137; color: white; }
+    .historico-item {
+        cursor: pointer;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        background: white;
+        transition: all 0.2s;
+        margin-bottom: 6px;
+    }
+    .historico-item:hover { border-color: #0d6efd; background: #f0f4ff; }
+    .historico-item.ativa { border-color: #0d6efd; background: #e8f0fe; }
+    .historico-item .titulo {
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .historico-item .preview {
+        font-size: 0.75rem;
+        color: #6c757d;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .historico-lista { max-height: 300px; overflow-y: auto; }
+    .sidebar-sticky { position: sticky; top: 80px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0"><i class="fas fa-balance-scale text-primary"></i> Assistente Fiscal</h3>
+            <small class="text-muted">Tire dúvidas sobre NF-e, CFOP, CST, cancelamentos e regras tributárias</small>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary btn-sm" onclick="novaConversa()">
+                <i class="fas fa-plus me-1"></i> Nova conversa
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-3">
+
+        <!-- Sidebar: histórico + avisos -->
+        <div class="col-lg-3">
+        <div class="sidebar-sticky">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <span class="fw-semibold small"><i class="fas fa-history me-1"></i> Conversas anteriores</span>
+                    <button class="btn btn-link btn-sm p-0" onclick="carregarHistorico()" title="Atualizar">
+                        <i class="fas fa-sync-alt text-muted"></i>
+                    </button>
+                </div>
+                <div class="card-body p-2">
+                    <div id="historico-lista" class="historico-lista">
+                        <div class="text-muted small text-center py-3">
+                            <i class="fas fa-spinner fa-spin me-1"></i> Carregando...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Avisos importantes -->
+            <div class="card shadow-sm border-warning">
+                <div class="card-header bg-warning bg-opacity-10 py-2">
+                    <h6 class="mb-0 small"><i class="fas fa-exclamation-triangle me-1 text-warning"></i> Avisos importantes</h6>
+                </div>
+                <div class="card-body py-2">
+                    <ul class="list-unstyled mb-0 small text-muted">
+                        <li class="mb-2"><i class="fas fa-info-circle text-primary me-1"></i> As respostas são <strong>orientativas</strong> e baseadas nas regras gerais.</li>
+                        <li class="mb-2"><i class="fas fa-map-marker-alt text-warning me-1"></i> A legislação pode variar por <strong>estado ou município</strong>.</li>
+                        <li class="mb-2"><i class="fas fa-user-tie text-success me-1"></i> Valide decisões fiscais com seu <strong>contador</strong>.</li>
+                        <li><i class="fas fa-gavel text-danger me-1"></i> Este assistente <strong>não substitui</strong> consultoria jurídica ou contábil.</li>
+                    </ul>
+                </div>
+            </div>
+        </div><!-- /sidebar-sticky -->
+        </div><!-- /col-lg-3 -->
+
+        <!-- Chat principal -->
+        <div class="col-lg-9">
+            <div class="card shadow-sm">
+                <div class="card-header py-2 d-flex align-items-center gap-2">
+                    <i class="fas fa-robot text-primary"></i>
+                    <span class="fw-semibold small" id="titulo-conversa-atual">Nova conversa</span>
+                </div>
+                <div class="card-body p-3">
+                    <div id="chat-messages" class="chat-container mb-3">
+                        <div class="msg-assistant">
+                            <strong><i class="fas fa-robot me-1 text-primary"></i> Assistente Fiscal EmiteMax</strong><br><br>
+                            Olá! Estou aqui para ajudar com suas dúvidas fiscais:<br>
+                            <ul class="mt-2 mb-1">
+                                <li>Emissão de NF-e, NFC-e e NFS-e</li>
+                                <li>CFOPs, CST, CSOSN</li>
+                                <li>Cancelamentos e substituições</li>
+                                <li>Regras tributárias e regimes fiscais</li>
+                            </ul>
+                            Como posso te ajudar hoje?
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3" id="quick-questions">
+                        <button class="quick-question" onclick="usarPergunta(this.textContent)">Posso emitir NFC-e para outro estado?</button>
+                        <button class="quick-question" onclick="usarPergunta(this.textContent)">Qual CFOP para venda a consumidor final?</button>
+                        <button class="quick-question" onclick="usarPergunta(this.textContent)">Como cancelar uma nota emitida?</button>
+                        <button class="quick-question" onclick="usarPergunta(this.textContent)">Quando usar CST 060?</button>
+                        <button class="quick-question" onclick="usarPergunta(this.textContent)">Como emitir nota de devolução?</button>
+                    </div>
+
+                    <div class="input-group">
+                        <textarea id="input-pergunta" class="form-control" rows="2"
+                            placeholder="Digite sua dúvida fiscal aqui..."
+                            style="resize:none; border-radius:12px 0 0 12px;"
+                            onkeydown="handleKeyDown(event)"></textarea>
+                        <button class="btn btn-primary" id="btn-enviar" onclick="enviarPergunta()"
+                            style="border-radius:0 12px 12px 0; padding:0 20px;">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <small class="text-muted mt-1 d-block">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Enter para enviar · Shift+Enter para nova linha · Respostas são orientativas; valide com seu contador.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const endpointPerguntar = '{{ url_for("admin_api.api_ia_assistente_fiscal_perguntar") }}';
+const endpointConversas = '{{ url_for("admin_api.api_ia_assistente_fiscal_conversas") }}';
+const endpointMensagens = '{{ url_for("admin_api.api_ia_assistente_fiscal_mensagens") }}';
+const sessionClienteId  = {{ session.get("current_client_id") | tojson }};
+let conversationId = null;
+let enviando = false;
+
+function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatarTexto(t) {
+    return escapeHtml(t)
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g,'<em>$1</em>')
+        .replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>')
+        .replace(/^/,'<p>') + '</p>';
+}
+function getCSRFToken() { return document.querySelector('meta[name="csrf-token"]')?.content || ''; }
+function handleKeyDown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarPergunta(); } }
+function usarPergunta(t) { document.getElementById('input-pergunta').value = t; document.getElementById('input-pergunta').focus(); }
+
+function adicionarMensagem(role, html) {
+    const chat = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = role === 'user' ? 'msg-user' : 'msg-assistant';
+    div.innerHTML = html;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+}
+function mostrarTyping() {
+    const chat = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.id = 'typing-indicator'; div.className = 'msg-typing';
+    div.innerHTML = '<div class="dot-typing"><span></span><span></span><span></span></div>';
+    chat.appendChild(div); chat.scrollTop = chat.scrollHeight;
+}
+function removerTyping() { document.getElementById('typing-indicator')?.remove(); }
+
+function renderizarResposta(r) {
+    const aviso = 'Aviso: esta orientação é informativa';
+    const idx = r.indexOf(aviso);
+    let principal = r, avisoHtml = '';
+    if (idx !== -1) {
+        principal = r.substring(0, idx).trim();
+        avisoHtml = `<div class="aviso-legal"><i class="fas fa-exclamation-circle me-1"></i>${escapeHtml(r.substring(idx))}</div>`;
+    }
+    return formatarTexto(principal) + avisoHtml;
+}
+
+function novaConversa() {
+    conversationId = null;
+    document.getElementById('chat-messages').innerHTML = '';
+    document.getElementById('quick-questions').classList.remove('d-none');
+    document.getElementById('titulo-conversa-atual').textContent = 'Nova conversa';
+    adicionarMensagem('assistant','<strong><i class="fas fa-robot me-1 text-primary"></i> Nova conversa iniciada.</strong><br>Como posso te ajudar?');
+    marcarAtivo(null);
+    carregarHistorico();
+    document.getElementById('input-pergunta').focus();
+}
+
+async function enviarPergunta() {
+    if (enviando) return;
+    const input = document.getElementById('input-pergunta');
+    const pergunta = input.value.trim();
+    if (!pergunta) return;
+    if (!sessionClienteId) {
+        adicionarMensagem('assistant','<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i> Nenhuma empresa selecionada.</span>');
+        return;
+    }
+    enviando = true;
+    document.getElementById('btn-enviar').disabled = true;
+    document.getElementById('quick-questions').classList.add('d-none');
+    input.value = '';
+    adicionarMensagem('user', escapeHtml(pergunta));
+    mostrarTyping();
+    try {
+        const resp = await fetch(endpointPerguntar, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ pergunta, cliente_id: sessionClienteId, conversation_id: conversationId || null }),
+        });
+        const payload = await resp.json().catch(() => ({ success: false, error: `Erro HTTP ${resp.status}` }));
+        removerTyping();
+        if (!resp.ok || !payload.success) throw new Error(payload.error || 'Erro ao processar pergunta');
+        const data = payload.data || {};
+        if (data.conversation_id && !conversationId) {
+            conversationId = data.conversation_id;
+            document.getElementById('titulo-conversa-atual').textContent =
+                pergunta.substring(0, 55) + (pergunta.length > 55 ? '...' : '');
+            setTimeout(carregarHistorico, 500);
+        }
+        adicionarMensagem('assistant', renderizarResposta(data.answer || ''));
+    } catch (err) {
+        removerTyping();
+        adicionarMensagem('assistant', `<span class="text-danger"><i class="fas fa-times-circle me-1"></i> ${escapeHtml(err.message)}</span>`);
+    } finally {
+        enviando = false;
+        document.getElementById('btn-enviar').disabled = false;
+        input.focus();
+    }
+}
+
+function marcarAtivo(id) {
+    document.querySelectorAll('.historico-item').forEach(el => {
+        el.classList.toggle('ativa', String(el.dataset.id) === String(id));
+    });
+}
+
+async function carregarHistorico() {
+    const lista = document.getElementById('historico-lista');
+    try {
+        const q = sessionClienteId ? `?cliente_id=${sessionClienteId}&limit=20` : '?limit=20';
+        const resp = await fetch(endpointConversas + q);
+        const payload = await resp.json();
+        if (!payload.success || !payload.data?.length) {
+            lista.innerHTML = '<div class="text-muted small text-center py-3">Nenhuma conversa ainda.</div>';
+            return;
+        }
+        lista.innerHTML = payload.data.map(c => {
+            const titulo = escapeHtml(c.titulo || `Conversa #${c.conversation_id}`);
+            const preview = escapeHtml((c.last_message?.content || '').substring(0, 65));
+            const dt = c.updated_at ? new Date(c.updated_at).toLocaleDateString('pt-BR') : '';
+            const ativa = String(c.conversation_id) === String(conversationId) ? 'ativa' : '';
+            return `<div class="historico-item ${ativa}" data-id="${c.conversation_id}"
+                        onclick="abrirConversa(${c.conversation_id}, this.querySelector('.titulo').textContent)">
+                        <div class="titulo">${titulo}</div>
+                        <div class="preview">${preview || 'Sem mensagens'}</div>
+                        <div style="font-size:0.7rem;color:#adb5bd">${dt}</div>
+                    </div>`;
+        }).join('');
+    } catch {
+        lista.innerHTML = '<div class="text-muted small text-center py-2">Erro ao carregar.</div>';
+    }
+}
+
+async function abrirConversa(id, titulo) {
+    if (enviando || conversationId === id) return;
+    conversationId = id;
+    document.getElementById('titulo-conversa-atual').textContent = titulo;
+    document.getElementById('quick-questions').classList.add('d-none');
+    marcarAtivo(id);
+    const chat = document.getElementById('chat-messages');
+    chat.innerHTML = '<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i> Carregando conversa...</div>';
+    try {
+        const resp = await fetch(`${endpointMensagens}?conversation_id=${id}`);
+        const payload = await resp.json();
+        if (!payload.success) throw new Error(payload.error);
+        chat.innerHTML = '';
+        const msgs = payload.data?.mensagens || [];
+        if (!msgs.length) { chat.innerHTML = '<div class="text-muted text-center py-4">Sem mensagens nesta conversa.</div>'; return; }
+        msgs.forEach(m => {
+            if (m.role === 'user') adicionarMensagem('user', escapeHtml(m.content));
+            else if (m.role === 'assistant') adicionarMensagem('assistant', renderizarResposta(m.content || ''));
+        });
+    } catch (err) {
+        chat.innerHTML = `<div class="text-danger text-center py-4">${escapeHtml(err.message)}</div>`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', carregarHistorico);
+</script>
+{% endblock %}

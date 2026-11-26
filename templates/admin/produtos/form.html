@@ -1,0 +1,1436 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if produto else 'Novo' }} Produto{% endblock %}
+
+{% block extra_css %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+.select2-container--default .select2-selection--single {
+    height: 38px !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 36px !important;
+    padding-left: 12px !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px !important;
+    right: 10px !important;
+}
+.select2-dropdown {
+    border: 1px solid #ced4da !important;
+    border-radius: 0.25rem !important;
+}
+
+/* Estilos para o botão de IA */
+#btn-ia-sugestao {
+    transition: all 0.3s ease;
+}
+
+#btn-ia-sugestao:disabled {
+    opacity: 0.8;
+}
+
+#btn-gerar-descricao-ia:disabled {
+    opacity: 0.8;
+}
+
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Animação para as mensagens de feedback */
+#explicacao-ia {
+    animation: slideDown 0.5s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Transições suaves para campos CST/CSOSN */
+.col-md-6 {
+    transition: opacity 0.3s ease, height 0.3s ease;
+}
+
+.col-md-6:hidden {
+    opacity: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+/* Destaque visual para o regime tributário */
+.card-header h5 {
+    transition: color 0.3s ease;
+}
+
+.regime-simples {
+    color: #28a745 !important;
+}
+
+.regime-normal {
+    color: #007bff !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-box"></i>
+                        {{ 'Editar' if produto else 'Novo' }} Produto
+                        {% if produto %}
+                            <small class="text-muted">: {{ produto.descricao }}</small>
+                        {% endif %}
+                    </h4>
+                </div>
+                
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.editar_produto', produto_id=produto.produto_id) if produto else url_for('admin.store_produto') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <!-- Campo oculto para cliente_id -->
+                        <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                        
+                        <!-- INFORMAÇÕES BÁSICAS -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-info-circle text-primary"></i>
+                                    Informações Básicas
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- Código Interno -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="codigo_interno">Código Interno *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="codigo_interno" 
+                                           name="codigo_interno" 
+                                           value="{{ produto.codigo_interno if produto else '' }}" 
+                                           required
+                                           placeholder="Ex: PROD001">
+                                </div>
+                            </div>
+                            
+                            <!-- Unidade Comercial -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="unidade_comercial">Unidade Comercial *</label>
+                                    <select class="form-control" id="unidade_comercial" name="unidade_comercial" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="UN" {{ 'selected' if produto and produto.unidade_comercial == 'UN' else '' }}>UN - Unidade</option>
+                                        <option value="KG" {{ 'selected' if produto and produto.unidade_comercial == 'KG' else '' }}>KG - Quilograma</option>
+                                        <option value="MT" {{ 'selected' if produto and produto.unidade_comercial == 'MT' else '' }}>MT - Metro</option>
+                                        <option value="M2" {{ 'selected' if produto and produto.unidade_comercial == 'M2' else '' }}>M2 - Metro Quadrado</option>
+                                        <option value="M3" {{ 'selected' if produto and produto.unidade_comercial == 'M3' else '' }}>M3 - Metro Cúbico</option>
+                                        <option value="LT" {{ 'selected' if produto and produto.unidade_comercial == 'LT' else '' }}>LT - Litro</option>
+                                        <option value="CX" {{ 'selected' if produto and produto.unidade_comercial == 'CX' else '' }}>CX - Caixa</option>
+                                        <option value="PC" {{ 'selected' if produto and produto.unidade_comercial == 'PC' else '' }}>PC - Peça</option>
+                                        <option value="PR" {{ 'selected' if produto and produto.unidade_comercial == 'PR' else '' }}>PR - Par</option>
+                                        <option value="DZ" {{ 'selected' if produto and produto.unidade_comercial == 'DZ' else '' }}>DZ - Dúzia</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Tipo de Item -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="tipo_item">Tipo de Item *</label>
+                                    <select class="form-control" id="tipo_item" name="tipo_item" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="PRODUTO" {{ 'selected' if produto and produto.tipo_item in ['PRODUTO', 'produto'] else '' }}>Produto</option>
+                                        <option value="SERVICO" {{ 'selected' if produto and produto.tipo_item in ['SERVICO', 'servico'] else '' }}>Serviço</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Descrição -->
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="descricao">Descrição do Produto *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="descricao" 
+                                           name="descricao" 
+                                           value="{{ produto.descricao if produto else '' }}" 
+                                           required
+                                           maxlength="120"
+                                           placeholder="Descrição completa do produto/serviço">
+                                    <small class="text-muted">Máximo 120 caracteres</small>
+                                 <button type="button" id="btn-ia-sugestao" class="btn btn-outline-primary btn-sm mt-2">
+                                     <span class="btn-text">
+                                         <i class="fas fa-robot"></i>
+                                         Sugestão automática IA
+                                     </span>
+                                     <span class="btn-loading d-none">
+                                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                         Processando...
+                                     </span>
+                                 </button>
+                                 <button type="button"
+                                         id="btn-gerar-descricao-ia"
+                                         class="btn btn-outline-success btn-sm mt-2 ms-1"
+                                         data-product-id="{{ produto.produto_id if produto else '' }}">
+                                     <i class="fas fa-pen-fancy"></i>
+                                     Gerar descrição com IA
+                                 </button>
+                                 {% if produto and produto.descricao %}
+                                 <small class="d-block text-warning mt-1">
+                                     <i class="fas fa-info-circle"></i>
+                                     Este produto já possui uma descrição. A sugestão não substituirá o texto atual automaticamente.
+                                 </small>
+                                 {% endif %}
+                                </div>
+                            </div>
+                            
+                            <!-- Preço Unitário -->
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="preco_unitario_padrao">Preço Unitário Padrão</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">R$</span>
+                                        </div>
+                                        <input type="number" 
+                                               class="form-control" 
+                                               id="preco_unitario_padrao" 
+                                               name="preco_unitario_padrao" 
+                                               value="{{ produto.preco_unitario_padrao if produto else '' }}" 
+                                               step="0.01" 
+                                               min="0"
+                                               placeholder="0.00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- CLASSIFICAÇÃO FISCAL -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-clipboard-list text-success"></i>
+                                    Classificação Fiscal
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- NCM -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="ncm_id">NCM - Nomenclatura Comum do Mercosul *</label>
+                                    <select class="form-control js-select2-ncm" id="ncm_id" name="ncm_id" required>
+                                        <option value="">Selecione um NCM...</option>
+                                        {% if produto and produto.ncm_id %}
+                                            {% for ncm in ncms %}
+                                                {% if ncm.ncm_id == produto.ncm_id %}
+                                                    <option value="{{ ncm.ncm_id }}" selected>
+                                                        {{ ncm.codigo }} - {{ ncm.descricao }}
+                                                    </option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    </select>
+                                    <small class="text-muted">
+                                        <i class="fas fa-search"></i> Busca híbrida: banco local + Receita Federal online
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <!-- CEST -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cest">CEST - Código Especificador da Substituição Tributária</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="cest" 
+                                           name="cest" 
+                                           value="{{ produto.cest if produto and produto.cest else '' }}" 
+                                           placeholder="Ex: 01.001.00"
+                                           maxlength="7">
+                                    <small class="text-muted">Apenas para produtos sujeitos à ST</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- CFOP -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cfop_id">CFOP - Código Fiscal de Operação *</label>
+                                    <select class="form-control js-select2" id="cfop_id" name="cfop_id" required>
+                                        <option value="">Selecione um CFOP...</option>
+                                        {% for cfop in cfops %}
+                                            <option value="{{ cfop.cfop_id }}" 
+                                                    {{ 'selected' if produto and produto.cfop_id == cfop.cfop_id else '' }}>
+                                                {{ cfop.cfop }} - {{ cfop.descricao }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Operação padrão para este produto</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Origem da Mercadoria -->
+                            <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="origem_mercadoria">Origem da Mercadoria *</label>
+                                <select class="form-control" id="origem_mercadoria" name="origem_mercadoria" required>
+                                    <option value="">Selecione...</option>
+                                    {% for origem in origens_mercadoria %}
+                                        <option value="{{ origem.codigo }}" 
+                                                {{ 'selected' if produto and (produto.origem_mercadoria|string == origem.codigo) else '' }}>
+                                            {{ origem.codigo }} - {{ origem.descricao }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Procedência do produto</small>
+                                
+                                
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- TRIBUTAÇÃO -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-calculator text-warning"></i>
+                                    Tributação
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <!-- CST ICMS COM PESQUISA -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="cst_id">CST ICMS - Código de Situação Tributária</label>
+                                    <select class="form-control js-select2" id="cst_id" name="cst_id">
+                                        <option value="">Selecione um CST...</option>
+                                        {% for cst in csts %}
+                                            <option value="{{ cst.cst_id }}" 
+                                                    {{ 'selected' if produto and produto.cst_id == cst.cst_id else '' }}>
+                                                {{ cst.codigo }} - {{ cst.descricao }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Para empresas do Regime Normal</small>
+                                </div>
+                            </div>
+                            
+                            <!-- CSOSN COM PESQUISA -->
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="csosn_id">CSOSN - Código Simples Nacional</label>
+                                    <select class="form-control js-select2" id="csosn_id" name="csosn_id">
+                                        <option value="">Selecione um CSOSN...</option>
+                                        {% for csosn in csosns %}
+                                            <option value="{{ csosn.csosn_id }}" 
+                                                    {{ 'selected' if produto and produto.csosn_id == csosn.csosn_id else '' }}>
+                                                {{ csosn.codigo }} - {{ csosn.descricao }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="text-muted">Para empresas do Simples Nacional</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Informação importante sobre CST vs CSOSN -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-lightbulb"></i>
+                                    <strong>Dica:</strong> 
+                                    Use <strong>CST ICMS</strong> para empresas do Regime Normal ou 
+                                    <strong>CSOSN</strong> para empresas do Simples Nacional. 
+                                    Não é necessário preencher ambos.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- STATUS -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h5 class="mb-3">
+                                    <i class="fas fa-toggle-on text-info"></i>
+                                    Status
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <!-- Ativo -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox" 
+                                               class="custom-control-input" 
+                                               id="ativo" 
+                                               name="ativo" 
+                                               {{ 'checked' if not produto or produto.ativo else '' }}>
+                                        <label class="custom-control-label" for="ativo">
+                                            <strong>Produto Ativo</strong>
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">
+                                        Produtos inativos não aparecem nas listas de seleção para NFe
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- BOTÕES DE AÇÃO -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group mb-0">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-save"></i>
+                                        {{ 'Atualizar' if produto else 'Salvar' }} Produto
+                                    </button>
+                                    
+
+                                    <button type="button" class="btn btn-secondary btn-lg ms-2" onclick="window.history.back();">
+                                        <i class="fas fa-arrow-left"></i>
+                                        Voltar para Lista
+                                    </button>
+
+                                    {% if produto and produto.produto_id %}
+                                    <button type="button" class="btn btn-info btn-lg ms-2" onclick="validarProdutoManual()">
+                                        <i class="fas fa-check-circle"></i>
+                                        Validar Dados Tributários
+                                    </button>
+                                    {% endif %}
+                                    
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if produto and produto.produto_id %}
+                        <div class="row mt-3" id="resultado-validacao" style="display:none;">
+                            <div class="col-12">
+                                <div class="card" id="card-resultado">
+                                    <div class="card-body" id="corpo-resultado"></div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDescricaoIa" tabindex="-1" aria-labelledby="modalDescricaoIaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalDescricaoIaLabel">
+                    <i class="fas fa-pen-fancy me-1"></i>Gerar descrição com IA
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border">
+                    <strong>Informações que serão utilizadas</strong>
+                    <div id="descricaoIaDados" class="small mt-2"></div>
+                </div>
+                <div class="mb-3">
+                    <label for="descricaoIaAdicional" class="form-label">Informações adicionais (opcional)</label>
+                    <textarea id="descricaoIaAdicional" class="form-control" rows="3" maxlength="2000"
+                              placeholder="Ex.: cor preta, conexão USB, uso em escritório."></textarea>
+                    <small class="text-muted">A IA utilizará somente estas informações e os dados exibidos acima.</small>
+                </div>
+                <div id="descricaoIaErro" class="alert alert-warning d-none"></div>
+                <div id="descricaoIaLoading" class="text-center py-4 d-none">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="mt-2 mb-0">Gerando descrição...</p>
+                </div>
+                <div id="descricaoIaResultado" class="d-none">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Título</label>
+                        <div class="input-group">
+                            <input id="descricaoIaTitulo" class="form-control" readonly>
+                            <button type="button" class="btn btn-outline-secondary btn-copiar-descricao" data-target="descricaoIaTitulo">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Descrição curta</label>
+                        <div class="input-group">
+                            <textarea id="descricaoIaCurta" class="form-control" rows="2"></textarea>
+                            <button type="button" class="btn btn-outline-secondary btn-copiar-descricao" data-target="descricaoIaCurta">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Descrição completa</label>
+                        <div class="input-group">
+                            <textarea id="descricaoIaCompleta" class="form-control" rows="5"></textarea>
+                            <button type="button" class="btn btn-outline-secondary btn-copiar-descricao" data-target="descricaoIaCompleta">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Características</label>
+                            <ul id="descricaoIaCaracteristicas" class="small"></ul>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Benefícios</label>
+                            <ul id="descricaoIaBeneficios" class="small"></ul>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-bold">Palavras-chave</label>
+                        <div id="descricaoIaPalavrasChave" class="small"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btnGerarDescricaoIaModal" class="btn btn-success">
+                    <i class="fas fa-wand-magic-sparkles me-1"></i>Gerar descrição
+                </button>
+                <button type="button" id="btnRegenerarDescricaoIa" class="btn btn-outline-success d-none">
+                    <i class="fas fa-rotate me-1"></i>Regenerar
+                </button>
+                <button type="button" id="btnUsarDescricaoIa" class="btn btn-primary d-none">
+                    <i class="fas fa-check me-1"></i>Usar descrição
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    const NCM_SEARCH_URL = '{{ url_for("admin.api_search_ncms") }}';
+
+    // Select2 padrão para outros campos
+    $('.js-select2').select2({
+        width: '100%',
+        placeholder: 'Selecione ou pesquise...',
+        allowClear: true
+    });
+    
+    // Select2 especial para NCM com busca híbrida
+    $('.js-select2-ncm').select2({
+        width: '100%',
+        placeholder: 'Digite para buscar NCM...',
+        allowClear: true,
+        minimumInputLength: 0,  // Permite abrir sem digitar
+        ajax: {
+            url: '{{ url_for("admin.api_search_ncms") }}',
+            dataType: 'json',
+            delay: 300,
+            data: function (params) {
+                return {
+                    q: params.term || '',  // Permite busca vazia
+                    limit: 50
+                };
+            },
+            processResults: function (data) {
+                return {
+                    results: data.results.map(function(item) {
+                        return {
+                            id: item.id,
+                            text: item.text,
+                            codigo: item.codigo,
+                            descricao: item.descricao
+                        };
+                    })
+                };
+            },
+            cache: true
+        },
+        templateResult: function(ncm) {
+            if (ncm.loading) {
+                return ncm.text;
+            }
+            
+            return $(`
+                <div>
+                    <strong>${ncm.codigo || ncm.text.split(' - ')[0]}</strong>
+                    <br>
+                    <small class="text-muted">${ncm.descricao || ncm.text.split(' - ')[1] || ''}</small>
+                </div>
+            `);
+        },
+        templateSelection: function(ncm) {
+            return ncm.text || ncm.codigo + ' - ' + ncm.descricao;
+        }
+    });
+
+    // Função para coletar dados do formulário relevantes para IA
+    function coletarDadosIA() {
+        let preco = $('#preco_unitario_padrao').val();
+        return {
+            descricao: $('#descricao').val(),
+            tipo_item: $('#tipo_item').val(),
+            cliente_id: $('input[name="cliente_id"]').val(),
+            preco_unitario_padrao: preco === '' ? null : preco,
+            unidade_comercial: $('#unidade_comercial').val(),
+            codigo_interno: $('#codigo_interno').val()
+        };
+    }
+
+    // Função para mostrar estado de carregamento
+    function showLoading() {
+        $('#btn-ia-sugestao .btn-text').addClass('d-none');
+        $('#btn-ia-sugestao .btn-loading').removeClass('d-none');
+        $('#btn-ia-sugestao').prop('disabled', true);
+    }
+
+    // Função para esconder estado de carregamento
+    function hideLoading() {
+        $('#btn-ia-sugestao .btn-text').removeClass('d-none');
+        $('#btn-ia-sugestao .btn-loading').addClass('d-none');
+        $('#btn-ia-sugestao').prop('disabled', false);
+    }
+
+    let autoSuggestionTimer = null;
+    let autoValidationTimer = null;
+    let autoSuggestionInProgress = false;
+    let lastSuggestionFingerprint = '';
+
+    function criarFingerprintIA(dados) {
+        return [
+            dados.descricao || '',
+            dados.tipo_item || '',
+            dados.cliente_id || '',
+            dados.unidade_comercial || '',
+            dados.codigo_interno || ''
+        ].join('|').toLowerCase();
+    }
+
+    function podeSolicitarSugestaoIA(dados) {
+        return !!(dados.descricao && dados.tipo_item && dados.cliente_id);
+    }
+
+    function agendarSugestaoIA() {
+        const dados = coletarDadosIA();
+        if (!podeSolicitarSugestaoIA(dados)) {
+            return;
+        }
+
+        const fingerprint = criarFingerprintIA(dados);
+        if (fingerprint === lastSuggestionFingerprint || autoSuggestionInProgress) {
+            return;
+        }
+
+        clearTimeout(autoSuggestionTimer);
+        autoSuggestionTimer = setTimeout(function() {
+            const dadosAtuais = coletarDadosIA();
+            if (!podeSolicitarSugestaoIA(dadosAtuais)) {
+                return;
+            }
+
+            const fingerprintAtual = criarFingerprintIA(dadosAtuais);
+            if (fingerprintAtual === lastSuggestionFingerprint || autoSuggestionInProgress) {
+                return;
+            }
+
+            $('#btn-ia-sugestao').trigger('click');
+        }, 2000);
+    }
+
+    function agendarValidacaoIA() {
+        if (!$('#resultado-validacao').length) {
+            return;
+        }
+
+        clearTimeout(autoValidationTimer);
+        autoValidationTimer = setTimeout(function() {
+            if (typeof validarProdutoManual === 'function') {
+                validarProdutoManual();
+            }
+        }, 1200);
+    }
+
+    function normalizarRespostaSugestaoIA(resp) {
+        if (!resp) {
+            return { sucesso: false, erro: 'Resposta vazia da IA' };
+        }
+
+        if (resp.sucesso || resp.classificacao || resp.ids) {
+            return resp;
+        }
+
+        if (resp.ncm || resp.cfop || resp.cst || resp.csosn || resp.cest || resp.explicacao) {
+            return {
+                sucesso: true,
+                classificacao: resp,
+                ids: resp.ids || {},
+                avisos: resp.avisos || [],
+            };
+        }
+
+        return {
+            sucesso: false,
+            erro: resp.erro || resp.error || 'Resposta inesperada da IA',
+            detalhes: resp.detalhes || resp.details || null,
+        };
+    }
+
+    function renderizarSugestaoIA(resp) {
+        const payload = normalizarRespostaSugestaoIA(resp);
+
+        if (payload.erro || !payload.sucesso) {
+            var mensagemErro = payload.erro || 'Erro desconhecido ao obter sugestão';
+            if (payload.detalhes) {
+                mensagemErro += ' - ' + payload.detalhes;
+            }
+            $('#descricao').after('<div id="explicacao-ia" class="alert alert-warning mt-2"><i class="fas fa-exclamation-triangle"></i> ' + mensagemErro + '</div>');
+            autoSuggestionInProgress = false;
+            return false;
+        }
+
+        var sucessos = [];
+        var falhas = [];
+        var ids = payload.ids || {};
+        var classificacao = payload.classificacao || {};
+
+        console.log('[IA] 📊 IDs recebidos:', ids);
+        console.log('[IA] 📋 Classificação:', classificacao);
+
+        // Preenche NCM usando ID do banco ou código bruto como fallback
+        if (ids.ncm_id) {
+            console.log('[IA] 🔧 Preenchendo NCM com ID:', ids.ncm_id);
+            var ncmText = classificacao.ncm + ' - ' + (payload.ncm_descricao || 'NCM');
+            var $ncmSelect = $('#ncm_id');
+            if ($ncmSelect.find("option[value='" + ids.ncm_id + "']").length === 0) {
+                var newOption = new Option(ncmText, ids.ncm_id, true, true);
+                $ncmSelect.append(newOption);
+            } else {
+                $ncmSelect.val(ids.ncm_id);
+            }
+            $ncmSelect.trigger('change');
+            sucessos.push('NCM (' + classificacao.ncm + ')');
+        } else if (classificacao.ncm) {
+            if (selectByCodeOrId('#ncm_id', classificacao.ncm)) {
+                sucessos.push('NCM (' + classificacao.ncm + ')');
+            } else {
+                falhas.push('NCM: ' + classificacao.ncm + ' (não encontrado no banco)');
+            }
+        }
+
+        if (ids.cfop_id) {
+            console.log('[IA] 🔧 Preenchendo CFOP com ID:', ids.cfop_id);
+            var cfopText = classificacao.cfop + ' - ' + (payload.cfop_descricao || 'CFOP');
+            var $cfopSelect = $('#cfop_id');
+            if ($cfopSelect.find("option[value='" + ids.cfop_id + "']").length === 0) {
+                var newOption = new Option(cfopText, ids.cfop_id, true, true);
+                $cfopSelect.append(newOption);
+            } else {
+                $cfopSelect.val(ids.cfop_id);
+            }
+            $cfopSelect.trigger('change');
+            sucessos.push('CFOP (' + classificacao.cfop + ')');
+        } else if (classificacao.cfop) {
+            if (selectByCodeOrId('#cfop_id', classificacao.cfop)) {
+                sucessos.push('CFOP (' + classificacao.cfop + ')');
+            } else {
+                falhas.push('CFOP: ' + classificacao.cfop + ' (não encontrado no banco)');
+            }
+        }
+
+        if (ids.cst_id) {
+            console.log('[IA] 🔧 Preenchendo CST com ID:', ids.cst_id);
+            var cstText = classificacao.cst + ' - ' + (payload.cst_descricao || 'CST');
+            var $cstSelect = $('#cst_id');
+            if ($cstSelect.find("option[value='" + ids.cst_id + "']").length === 0) {
+                var newOption = new Option(cstText, ids.cst_id, true, true);
+                $cstSelect.append(newOption);
+            } else {
+                $cstSelect.val(ids.cst_id);
+            }
+            $cstSelect.trigger('change');
+            sucessos.push('CST (' + classificacao.cst + ')');
+        } else if (classificacao.cst) {
+            if (selectByCodeOrId('#cst_id', classificacao.cst)) {
+                sucessos.push('CST (' + classificacao.cst + ')');
+            } else {
+                const csosnSelecionado = String($('#csosn_id').val() || '').trim();
+                const cstVisivel = $('#cst_id').closest('.col-md-6').is(':visible');
+                if (csosnSelecionado && !cstVisivel) {
+                    console.log('[IA] CST ignorado no fluxo Simples (CSOSN ativo).');
+                } else {
+                    falhas.push('CST: ' + classificacao.cst + ' (não encontrado no banco)');
+                }
+            }
+        }
+
+        if (ids.csosn_id) {
+            console.log('[IA] 🔧 Preenchendo CSOSN com ID:', ids.csosn_id);
+            var csosnText = classificacao.csosn + ' - ' + (payload.csosn_descricao || 'CSOSN');
+            var $csosnSelect = $('#csosn_id');
+            if ($csosnSelect.find("option[value='" + ids.csosn_id + "']").length === 0) {
+                var newOption = new Option(csosnText, ids.csosn_id, true, true);
+                $csosnSelect.append(newOption);
+            } else {
+                $csosnSelect.val(ids.csosn_id);
+            }
+            $csosnSelect.trigger('change');
+            sucessos.push('CSOSN (' + classificacao.csosn + ')');
+        } else if (classificacao.csosn) {
+            if (selectByCodeOrId('#csosn_id', classificacao.csosn)) {
+                sucessos.push('CSOSN (' + classificacao.csosn + ')');
+            } else {
+                falhas.push('CSOSN: ' + classificacao.csosn + ' (não encontrado no banco)');
+            }
+        }
+
+        if (ids.cest || classificacao.cest) {
+            var cestValue = ids.cest || classificacao.cest;
+            if (cestValue && cestValue !== 'null' && cestValue !== 'None') {
+                console.log('[IA] 🔧 Preenchendo CEST:', cestValue);
+                $('#cest').val(cestValue);
+                sucessos.push('CEST (' + cestValue + ')');
+            }
+        }
+
+        var tipoAlerta = falhas.length > 0 ? 'alert-warning' : 'alert-success';
+        var icone = falhas.length > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle';
+
+        var mensagem = '<div id="explicacao-ia" class="alert ' + tipoAlerta + ' mt-2">';
+        mensagem += '<i class="fas ' + icone + '"></i> <strong>Sugestão da IA processada!</strong><br>';
+
+        if (sucessos.length > 0) {
+            mensagem += '<small>✅ <strong>Campos preenchidos:</strong> ' + sucessos.join(', ') + '</small><br>';
+        }
+
+        if (falhas.length > 0) {
+            mensagem += '<small>⚠️ <strong>Não encontrados no banco:</strong> ' + falhas.join(', ') + '</small><br>';
+        }
+
+        if (classificacao.explicacao) {
+            mensagem += '<small><strong>💡 Explicação:</strong> ' + classificacao.explicacao + '</small>';
+        }
+
+        mensagem += '</div>';
+        $('#descricao').after(mensagem);
+
+        setTimeout(function() {
+            $('#explicacao-ia').fadeOut(500, function() {
+                $(this).remove();
+            });
+        }, 15000);
+
+        lastSuggestionFingerprint = criarFingerprintIA(coletarDadosIA());
+        autoSuggestionInProgress = false;
+        agendarValidacaoIA();
+        return true;
+    }
+
+    function extrairMensagemErroAjax(xhr, fallbackMessage) {
+        if (xhr && xhr.responseJSON) {
+            return xhr.responseJSON.erro || xhr.responseJSON.error || xhr.responseJSON.details || xhr.responseJSON.detalhes || fallbackMessage;
+        }
+
+        if (xhr && xhr.status === 401) {
+            return 'Sessão expirada. Faça login novamente e tente outra vez.';
+        }
+
+        if (xhr && xhr.status === 403) {
+            return 'Sem permissão para acionar a IA neste cadastro.';
+        }
+
+        if (xhr && xhr.responseText) {
+            if (xhr.responseText.indexOf('Você precisa fazer login') !== -1 || xhr.responseText.indexOf('Login - EmiteMax') !== -1) {
+                return 'Sessão expirada. Faça login novamente e tente outra vez.';
+            }
+            return xhr.responseText;
+        }
+
+        return fallbackMessage;
+    }
+
+    function solicitarSugestaoIA(endpoint, dados, onSuccess, onError) {
+        const csrfToken = $('input[name="csrf_token"]').first().val() || '';
+        $.ajax({
+            url: endpoint,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: csrfToken ? { 'X-CSRFToken': csrfToken } : {},
+            data: JSON.stringify(dados),
+            timeout: 180000,
+            success: onSuccess,
+            error: onError,
+        });
+    }
+
+    function aplicarSugestaoComFallback(dados) {
+        let erroPublico = null;
+        let statusPublico = null;
+
+        function finalizarComErro(xhrAdmin, statusAdmin) {
+            autoSuggestionInProgress = false;
+
+            var mensagemErro = 'Não foi possível obter sugestão automática.';
+            if (statusPublico === 'timeout' || statusAdmin === 'timeout') {
+                mensagemErro = 'Tempo limite excedido. Tente novamente.';
+            } else {
+                mensagemErro = extrairMensagemErroAjax(erroPublico, extrairMensagemErroAjax(xhrAdmin, mensagemErro));
+            }
+
+            var detalhesErro = [];
+            if (erroPublico && erroPublico.status) {
+                detalhesErro.push('proxy público HTTP ' + erroPublico.status);
+            }
+            if (xhrAdmin && xhrAdmin.status) {
+                detalhesErro.push('admin HTTP ' + xhrAdmin.status);
+            }
+            if (detalhesErro.length) {
+                mensagemErro += ' (' + detalhesErro.join(' | ') + ')';
+            }
+
+            $('#descricao').after('<div id="explicacao-ia" class="alert alert-warning mt-2"><i class="fas fa-exclamation-triangle"></i> ' + mensagemErro + '</div>');
+            setTimeout(function() {
+                $('#explicacao-ia').fadeOut(500, function() {
+                    $(this).remove();
+                });
+            }, 8000);
+        }
+
+        function tentarAdmin() {
+            solicitarSugestaoIA('/admin/api/sugestao_tributaria', dados,
+                function(respAdmin) {
+                    console.log('[IA] ✅ Resposta do endpoint admin:', respAdmin);
+                    hideLoading();
+                    renderizarSugestaoIA(respAdmin);
+                },
+                function(xhrAdmin, statusAdmin) {
+                    console.log('[IA] Endpoint admin também falhou:', xhrAdmin, statusAdmin);
+                    hideLoading();
+                    finalizarComErro(xhrAdmin, statusAdmin);
+                }
+            );
+        }
+
+        // Prioridade: novo endpoint IA centralizado
+        $.ajax({
+            url: '/api/ia/classificar-produto',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': $('meta[name="csrf-token"]').attr('content') || '' },
+            data: JSON.stringify({ descricao: dados.descricao, cliente_id: dados.cliente_id, tipo_item: dados.tipo_item }),
+            timeout: 30000,
+            success: function(resp) {
+                if (resp.success && resp.data && (resp.data.ncm || resp.data.cfop)) {
+                    console.log('[IA] ✅ Resposta do endpoint IA centralizado:', resp.data);
+                    hideLoading();
+                    renderizarSugestaoIA(resp.data);
+                } else {
+                    console.log('[IA] Endpoint IA centralizado retornou sem dados, tentando proxy público...');
+                    tentarPublico();
+                }
+            },
+            error: function() {
+                console.log('[IA] Endpoint IA centralizado falhou, tentando proxy público...');
+                tentarPublico();
+            }
+        });
+
+        function tentarPublico() {
+            solicitarSugestaoIA('/api/sugestao-produto-ia', dados,
+                function(respPublico) {
+                    console.log('[IA] ✅ Resposta do proxy público:', respPublico);
+                    hideLoading();
+                    if (!renderizarSugestaoIA(respPublico)) {
+                        tentarAdmin();
+                    }
+                },
+                function(xhrPublico, status) {
+                    console.log('[IA] Proxy público falhou:', xhrPublico, status);
+                    erroPublico = xhrPublico;
+                    statusPublico = status;
+                    tentarAdmin();
+                }
+            );
+        }
+    }
+
+    // Função para selecionar option por código ou ID (melhorada para NCM)
+    function selectByCodeOrId(selectId, value, codeAttr) {
+        var $select = $(selectId);
+        if (!value) return false;
+        
+        console.log(`[IA] Tentando selecionar ${selectId} com valor: ${value}`);
+        
+        // Para NCM, primeiro tenta buscar pelo código exato
+        if (selectId === '#ncm_id') {
+            var normalizedValue = String(value).replace(/[^\d]/g, ''); // Remove tudo que não é dígito
+            var found = false;
+            
+            $select.find('option').each(function() {
+                var text = $(this).text();
+                var code = text.split(' - ')[0].replace(/[^\d]/g, ''); // Código NCM sem formatação
+                
+                if (code === normalizedValue) {
+                    $select.val($(this).val()).trigger('change');
+                    console.log(`[IA] NCM selecionado: ${text}`);
+                    found = true;
+                    return false; // break do loop
+                }
+            });
+            
+            if (found) return true;
+
+            // Fallback remoto: o select de NCM carrega opções via AJAX e pode iniciar vazio.
+            try {
+                $.ajax({
+                    url: NCM_SEARCH_URL,
+                    method: 'GET',
+                    dataType: 'json',
+                    data: {
+                        q: String(value),
+                        limit: 20,
+                    },
+                    async: false,
+                    success: function(data) {
+                        const results = (data && data.results) ? data.results : [];
+                        let melhor = null;
+                        for (let i = 0; i < results.length; i++) {
+                            const item = results[i] || {};
+                            const codigo = String(item.codigo || item.text || '').split(' - ')[0].replace(/[^\d]/g, '');
+                            if (!codigo) {
+                                continue;
+                            }
+                            if (codigo === normalizedValue) {
+                                melhor = item;
+                                break;
+                            }
+                            if (!melhor && normalizedValue.length >= 6 && codigo.indexOf(normalizedValue.slice(0, 6)) === 0) {
+                                melhor = item;
+                            }
+                        }
+
+                        if (melhor) {
+                            const optionText = melhor.text || `${melhor.codigo || value} - ${melhor.descricao || 'NCM'}`;
+                            if ($select.find("option[value='" + melhor.id + "']").length === 0) {
+                                const newOption = new Option(optionText, melhor.id, true, true);
+                                $select.append(newOption);
+                            } else {
+                                $select.val(melhor.id);
+                            }
+                            $select.trigger('change');
+                            found = true;
+                            console.log(`[IA] NCM selecionado via busca remota: ${optionText}`);
+                        }
+                    }
+                });
+            } catch (error) {
+                console.warn('[IA] Falha na busca remota de NCM:', error);
+            }
+
+            if (found) return true;
+
+            // Fallback: tenta compatibilidade por prefixo de 6 dígitos
+            if (normalizedValue.length >= 6) {
+                var prefix = normalizedValue.slice(0, 6);
+                $select.find('option').each(function() {
+                    var text = $(this).text();
+                    var code = text.split(' - ')[0].replace(/[^\d]/g, '');
+                    if (code.indexOf(prefix) === 0) {
+                        $select.val($(this).val()).trigger('change');
+                        console.log(`[IA] NCM selecionado por prefixo: ${$(this).text()}`);
+                        found = true;
+                        return false;
+                    }
+                });
+                if (found) return true;
+            }
+            
+            // Se não encontrou por código exato, tenta por substring
+            $select.find('option').each(function() {
+                var text = $(this).text().toLowerCase();
+                if (text.indexOf(String(value).toLowerCase()) !== -1) {
+                    $select.val($(this).val()).trigger('change');
+                    console.log(`[IA] NCM selecionado por substring: ${$(this).text()}`);
+                    found = true;
+                    return false;
+                }
+            });
+            return found;
+        }
+        
+        // Para outros selects (CFOP, CST, CSOSN)
+        // Tenta selecionar por ID direto primeiro
+        if ($select.find('option[value="'+value+'"]').length) {
+            $select.val(value).trigger('change');
+            return true;
+        }
+        
+        // Busca por código no texto
+        var found = false;
+        $select.find('option').each(function() {
+            var text = $(this).text();
+            var normalizedText = text.replace(/\D/g, '');
+            var normalizedValue = String(value).replace(/\D/g, '');
+
+            // Match exato de prefixo
+            if (normalizedText.indexOf(normalizedValue) === 0) {
+                $select.val($(this).val()).trigger('change');
+                found = true;
+                return false;
+            }
+
+            // Fallback para códigos com zeros à esquerda (ex.: 00 vs 000)
+            if (normalizedValue && normalizedText) {
+                const candidate = normalizedText.slice(0, normalizedValue.length).replace(/^0+/, '');
+                const target = normalizedValue.replace(/^0+/, '');
+                if (candidate && target && candidate === target) {
+                    $select.val($(this).val()).trigger('change');
+                    found = true;
+                    return false;
+                }
+            }
+
+            if (normalizedText.slice(0, 3).replace(/^0+/, '') === normalizedValue.slice(0, 3).replace(/^0+/, '') && normalizedValue.length <= 3) {
+                $select.val($(this).val()).trigger('change');
+                found = true;
+                return false;
+            }
+        });
+        
+        return found;
+    }
+
+    // Dispara sugestão IA apenas ao clicar no botão
+    $('#btn-ia-sugestao').on('click', function() {
+        console.log('[IA] Botão clicado!');
+        const dados = coletarDadosIA();
+        console.log('[IA] Dados coletados para IA:', dados);
+        
+        if (dados.descricao && dados.tipo_item && dados.cliente_id) {
+            autoSuggestionInProgress = true;
+            // Mostra indicador de carregamento
+            showLoading();
+            
+            // Remove mensagens anteriores
+            $('#explicacao-ia').remove();
+
+            aplicarSugestaoComFallback(dados);
+        } else {
+            var camposFaltando = [];
+            if (!dados.descricao) camposFaltando.push('Descrição');
+            if (!dados.tipo_item) camposFaltando.push('Tipo de Item');
+            if (!dados.cliente_id) camposFaltando.push('Cliente');
+            
+            alert('Preencha os seguintes campos antes de solicitar a sugestão automática:\n• ' + camposFaltando.join('\n• '));
+            console.log('[IA] Campos obrigatórios faltando:', dados);
+        }
+    });
+
+    $('#descricao, #tipo_item, input[name="cliente_id"]').on('input change', function() {
+        agendarSugestaoIA();
+    });
+
+    // Função para ajustar campos CST/CSOSN baseado no regime tributário do cliente
+    function ajustarCamposTributarios(clienteId) {
+        if (!clienteId) return;
+        
+        console.log('[REGIME] Buscando regime tributário para cliente:', clienteId);
+        
+        $.ajax({
+            url: `/admin/api/cliente/${clienteId}/info`,
+            method: 'GET',
+            success: function(resp) {
+                console.log('[REGIME] Dados do cliente:', resp);
+                
+                const $cstGroup = $('#cst_id').closest('.col-md-6');
+                const $csosnGroup = $('#csosn_id').closest('.col-md-6');
+                
+                if (resp.is_simples_nacional) {
+                    // Cliente é Simples Nacional - mostrar CSOSN, esconder CST
+                    $cstGroup.hide();
+                    $csosnGroup.show();
+                    $('#cst_id').prop('required', false);
+                    $('#csosn_id').prop('required', true);
+                    
+                    console.log('[REGIME] Cliente Simples Nacional - mostrando CSOSN');
+                } else {
+                    // Cliente é Regime Normal - mostrar CST, esconder CSOSN
+                    $cstGroup.show();
+                    $csosnGroup.hide();
+                    $('#cst_id').prop('required', true);
+                    $('#csosn_id').prop('required', false);
+                    
+                    console.log('[REGIME] Cliente Regime Normal - mostrando CST');
+                }
+                
+                // Atualiza título da seção para incluir o regime com classe CSS
+                const $sectionTitle = $('.card-header h5:contains("Tributação")');
+                if ($sectionTitle.length) {
+                    $sectionTitle
+                        .removeClass('regime-simples regime-normal')
+                        .addClass(resp.is_simples_nacional ? 'regime-simples' : 'regime-normal')
+                        .text(`💰 Tributação - ${resp.regime_nome || 'Regime não definido'}`);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.warn('[REGIME] Erro ao buscar regime do cliente:', error);
+                // Em caso de erro, mostra ambos os campos
+                $('#cst_id').closest('.col-md-6').show();
+                $('#csosn_id').closest('.col-md-6').show();
+            }
+        });
+    }
+
+    // Aplica ajuste quando a página carrega (se já há cliente_id)
+    $(document).ready(function() {
+        const clienteId = $('input[name="cliente_id"]').val();
+        if (clienteId) {
+            ajustarCamposTributarios(clienteId);
+            agendarSugestaoIA();
+        }
+    });
+
+    // Monitora mudanças no cliente_id (caso seja implementado seletor de cliente no futuro)
+    $('input[name="cliente_id"]').on('change', function() {
+        const clienteId = $(this).val();
+        ajustarCamposTributarios(clienteId);
+    });
+
+    const descricaoIaModalEl = document.getElementById('modalDescricaoIa');
+    const descricaoIaModal = descricaoIaModalEl && window.bootstrap
+        ? bootstrap.Modal.getOrCreateInstance(descricaoIaModalEl)
+        : null;
+    let ultimaDescricaoIa = null;
+
+    function coletarDadosDescricaoIa() {
+        const selectText = (selector) => {
+            const text = $(`${selector} option:selected`).text() || '';
+            return text.includes('Selecione') ? '' : text.trim();
+        };
+        return {
+            produto_id: $('#btn-gerar-descricao-ia').data('product-id') || null,
+            codigo_interno: $('#codigo_interno').val() || '',
+            descricao: $('#descricao').val() || '',
+            unidade_comercial: $('#unidade_comercial').val() || '',
+            tipo_item: $('#tipo_item').val() || '',
+            preco_unitario_padrao: $('#preco_unitario_padrao').val() || '',
+            cest: $('#cest').val() || '',
+            ncm_codigo: selectText('#ncm_id').split(' - ')[0] || '',
+            ncm_descricao: selectText('#ncm_id').split(' - ').slice(1).join(' - '),
+            cfop_codigo: selectText('#cfop_id').split(' - ')[0] || '',
+            cfop_descricao: selectText('#cfop_id').split(' - ').slice(1).join(' - '),
+        };
+    }
+
+    function mostrarDadosDescricaoIa() {
+        const dados = coletarDadosDescricaoIa();
+        const container = document.getElementById('descricaoIaDados');
+        if (!container) return;
+        container.innerHTML = '';
+        const labels = [
+            ['Descrição', dados.descricao],
+            ['Código', dados.codigo_interno],
+            ['Unidade', dados.unidade_comercial],
+            ['NCM', dados.ncm_codigo],
+            ['CFOP', dados.cfop_codigo],
+            ['Preço', dados.preco_unitario_padrao],
+        ];
+        labels.forEach(([label, value]) => {
+            const item = document.createElement('div');
+            item.textContent = `${value ? '✓' : '○'} ${label}: ${value || 'não informado'}`;
+            container.appendChild(item);
+        });
+    }
+
+    function preencherListaDescricaoIa(id, items) {
+        const list = document.getElementById(id);
+        if (!list) return;
+        list.innerHTML = '';
+        (items || []).forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            list.appendChild(li);
+        });
+        if (!list.children.length) {
+            const li = document.createElement('li');
+            li.textContent = 'Nenhuma informação adicional gerada.';
+            list.appendChild(li);
+        }
+    }
+
+    function renderizarDescricaoIa(data) {
+        ultimaDescricaoIa = data;
+        $('#descricaoIaTitulo').val(data.titulo || '');
+        $('#descricaoIaCurta').val(data.descricao_curta || '');
+        $('#descricaoIaCompleta').val(data.descricao_completa || '');
+        preencherListaDescricaoIa('descricaoIaCaracteristicas', data.caracteristicas);
+        preencherListaDescricaoIa('descricaoIaBeneficios', data.beneficios);
+        const keywords = document.getElementById('descricaoIaPalavrasChave');
+        keywords.textContent = (data.palavras_chave || []).join(', ') || 'Nenhuma palavra-chave gerada.';
+        $('#descricaoIaResultado').removeClass('d-none');
+        $('#btnRegenerarDescricaoIa, #btnUsarDescricaoIa').removeClass('d-none');
+    }
+
+    async function gerarDescricaoIa() {
+        const btn = document.getElementById('btnGerarDescricaoIaModal');
+        const dados = coletarDadosDescricaoIa();
+        const adicional = $('#descricaoIaAdicional').val() || '';
+        $('#descricaoIaErro').addClass('d-none').text('');
+        $('#descricaoIaLoading').removeClass('d-none');
+        $('#descricaoIaResultado').addClass('d-none');
+        if (btn) btn.disabled = true;
+
+        try {
+            const response = await fetch('/admin/api/ia/produtos/gerar-descricao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': $('input[name="csrf_token"]').first().val() || '',
+                },
+                body: JSON.stringify({ ...dados, informacoes_adicionais: adicional }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || 'Não foi possível gerar a descrição neste momento.');
+            }
+            renderizarDescricaoIa(payload.data || {});
+        } catch (error) {
+            $('#descricaoIaErro').removeClass('d-none').text(error.message || 'Não foi possível gerar a descrição neste momento.');
+        } finally {
+            $('#descricaoIaLoading').addClass('d-none');
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    $('#btn-gerar-descricao-ia').on('click', function() {
+        mostrarDadosDescricaoIa();
+        $('#descricaoIaAdicional').val('');
+        $('#descricaoIaResultado, #btnRegenerarDescricaoIa, #btnUsarDescricaoIa').addClass('d-none');
+        $('#descricaoIaErro').addClass('d-none').text('');
+        if (descricaoIaModal) descricaoIaModal.show();
+    });
+    $('#btnGerarDescricaoIaModal, #btnRegenerarDescricaoIa').on('click', gerarDescricaoIa);
+
+    $('.btn-copiar-descricao').on('click', async function() {
+        const target = document.getElementById($(this).data('target'));
+        if (!target) return;
+        try {
+            await navigator.clipboard.writeText(target.value || target.textContent || '');
+            const original = this.textContent;
+            this.textContent = 'Copiado';
+            setTimeout(() => { this.textContent = original; }, 1200);
+        } catch (error) {
+            target.select?.();
+            document.execCommand('copy');
+        }
+    });
+
+    $('#btnUsarDescricaoIa').on('click', function() {
+        const descricao = $('#descricaoIaCurta').val() || ultimaDescricaoIa?.descricao_curta || '';
+        if (descricao) $('#descricao').val(descricao.slice(0, 120)).trigger('input');
+        if (descricaoIaModal) descricaoIaModal.hide();
+    });
+});
+
+function validarProdutoManual() {
+    // Buscar informações do cliente para pegar o regime
+    const clienteId = $('input[name="cliente_id"]').val();
+    
+    // Buscar códigos ao invés de IDs
+    const cfopTexto = $('#cfop_id option:selected').text();
+    const cfop = cfopTexto ? cfopTexto.split(' - ')[0].trim() : '';
+    
+    const cstTexto = $('#cst_id option:selected').text();
+    const cst = cstTexto && cstTexto !== 'Selecione...' ? cstTexto.split(' - ')[0].trim() : null;
+    
+    const csosnTexto = $('#csosn_id option:selected').text();
+    const csosn = csosnTexto && csosnTexto !== 'Selecione...' ? csosnTexto.split(' - ')[0].trim() : null;
+    
+    // Determinar regime tributário
+    $.get(`/admin/api/cliente/${clienteId}/info`, function(clienteInfo) {
+        const regime = clienteInfo.is_simples_nacional ? 'Simples Nacional' : 'Lucro Presumido';
+        
+        const dados = {
+            regime_tributario: regime,
+            cfop: cfop,
+            cst_icms: cst,
+            csosn_icms: csosn,
+            descricao: $('#descricao').val()
+        };
+        
+        console.log('[VALIDAÇÃO] Enviando:', dados);
+        
+        $('#resultado-validacao').slideDown();
+        $('#corpo-resultado').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Validando...</div>');
+        
+        $.ajax({
+            url: '/api/validar-produto-ia',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': $('input[name="csrf_token"]').first().val() || ''
+            },
+            data: JSON.stringify(dados),
+            success: function(resp) {
+                console.log('[VALIDAÇÃO] Resposta:', resp);
+                if (resp.valido) {
+                    $('#card-resultado').attr('class', 'card border-success');
+                    let html = '<div class="alert alert-success mb-0"><i class="fas fa-check-circle"></i> <strong>Dados válidos!</strong>';
+                    if (resp.explicacao) {
+                        html += '<p class="mt-2 mb-0">' + resp.explicacao + '</p>';
+                    }
+                    html += '</div>';
+                    $('#corpo-resultado').html(html);
+                } else {
+                    $('#card-resultado').attr('class', 'card border-danger');
+                    let html = '<div class="alert alert-danger"><strong><i class="fas fa-exclamation-triangle"></i> Erros encontrados:</strong><ul class="mt-2 mb-0">';
+                    resp.erros.forEach(e => html += '<li>' + e + '</li>');
+                    html += '</ul>';
+                    if (resp.explicacao) {
+                        html += '<p class="mt-2 mb-0"><strong>Explicação:</strong> ' + resp.explicacao + '</p>';
+                    }
+                    html += '</div>';
+                    $('#corpo-resultado').html(html);
+                }
+            },
+            error: function(xhr) {
+                console.error('[VALIDAÇÃO] Erro:', xhr);
+                $('#card-resultado').attr('class', 'card border-warning');
+                $('#corpo-resultado').html('<div class="alert alert-warning mb-0"><i class="fas fa-exclamation-triangle"></i> Erro ao validar com IA</div>');
+            }
+        });
+    }).fail(function() {
+        $('#resultado-validacao').slideDown();
+        $('#card-resultado').attr('class', 'card border-warning');
+        $('#corpo-resultado').html('<div class="alert alert-warning mb-0"><i class="fas fa-exclamation-triangle"></i> Erro ao buscar dados do cliente</div>');
+    });
+}
+</script>
+{% endblock %}

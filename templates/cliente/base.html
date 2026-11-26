@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/imask/dist/imask.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}EmiteMax - Sistema de Emissão de Notas Fiscais{% endblock %}</title>
+    
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    
+    <!-- ✅ TEMA PERSONALIZADO SJ TECNOLOGIA -->
+    <style>
+        :root {
+            --sj-primary: #00BCD4;      /* Azul Ciano Principal */
+            --sj-secondary: #0288D1;    /* Azul Escuro */
+            --sj-accent: #607D8B;       /* Cinza Metálico */
+            --sj-light: #ECEFF1;       /* Cinza Claro */
+            --sj-dark: #263238;        /* Cinza Escuro */
+            --sj-success: #4CAF50;     /* Verde */
+            --sj-warning: #FF9800;     /* Laranja */
+            --sj-danger: #F44336;      /* Vermelho */
+        }
+        
+        /* ===== NAVBAR PERSONALIZADA ===== */
+        .nav-tabs .nav-link.active {
+            background-color: #f8f9fa !important;
+            color: #212529 !important;
+            border-color: #dee2e6 #dee2e6 #fff;
+        }
+        .nav-tabs .nav-link {
+            color: #212529 !important;
+        }
+        .card-header-tabs {
+            border-bottom: 1px solid #dee2e6;
+        }
+        .navbar-dark {
+            background: linear-gradient(135deg, #0d2137 0%, #1a3a5c 100%) !important;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+        }
+        
+        /* ===== LOGO E BRANDING ===== */
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            white-space: nowrap;
+        }
+        
+        .navbar-brand:hover {
+            text-decoration: none;
+        }
+        
+        .navbar-logo-img {
+            height: 50px;
+            width: auto;
+            max-width: 200px;
+            display: block;
+        }
+        
+        .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+            transition: all 0.3s ease;
+            border-radius: 6px;
+            margin: 0 2px;
+        }
+        
+        .nav-link:hover {
+            color: white !important;
+            background-color: rgba(255,255,255,0.1);
+            transform: translateY(-1px);
+        }
+        
+        .dropdown-menu {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-top: 3px solid var(--sj-primary);
+        }
+        
+        /* ===== BOTÕES PERSONALIZADOS ===== */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 188, 212, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--sj-secondary) 0%, var(--sj-primary) 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 188, 212, 0.4);
+        }
+        
+        .btn-outline-primary {
+            color: var(--sj-primary);
+            border-color: var(--sj-primary);
+            border-radius: 8px;
+        }
+        
+        .btn-outline-primary:hover {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+            box-shadow: 0 2px 8px rgba(0, 188, 212, 0.3);
+        }
+        
+        /* ===== CARDS PERSONALIZADOS ===== */
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            overflow: hidden;
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border-bottom: none;
+            border-radius: 12px 12px 0 0 !important;
+        }
+        
+        .card-title {
+            color: white;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+        
+        .card-header h5 {
+            color: white !important;
+            font-weight: 600;
+            margin-bottom: 0;
+        }
+        
+        .card-header i {
+            color: rgba(255,255,255,0.9);
+            margin-right: 8px;
+        }
+        
+        /* ===== CARD HEADER ALTERNATIVO (fundo claro) ===== */
+        .card-header.bg-light {
+            background: linear-gradient(135deg, var(--sj-light) 0%, #ffffff 100%) !important;
+            color: var(--sj-dark) !important;
+            border-bottom: 1px solid rgba(0, 188, 212, 0.1);
+        }
+        
+        .card-header.bg-light .card-title,
+        .card-header.bg-light h5 {
+            color: var(--sj-dark) !important;
+        }
+        
+        .card-header.bg-light i {
+            color: var(--sj-primary) !important;
+        }
+        
+        /* ===== DASHBOARD CARDS ESPECIAIS ===== */
+        .stats-card {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 188, 212, 0.4);
+        }
+        
+        .stats-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            transform: rotate(45deg);
+        }
+        
+        .stats-card .icon {
+            font-size: 2.5rem;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+        
+        .stats-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stats-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        /* ===== BORDAS LATERAIS COLORIDAS ===== */
+        .border-left-primary {
+            border-left: 4px solid var(--sj-primary) !important;
+        }
+        .border-left-success {
+            border-left: 4px solid var(--sj-success) !important;
+        }
+        .border-left-info {
+            border-left: 4px solid var(--sj-secondary) !important;
+        }
+        .border-left-warning {
+            border-left: 4px solid var(--sj-warning) !important;
+        }
+        .border-left-danger {
+            border-left: 4px solid var(--sj-danger) !important;
+        }
+        
+        /* ===== BADGES PERSONALIZADOS ===== */
+        .badge-primary {
+            background-color: var(--sj-primary) !important;
+        }
+        
+        .badge-secondary {
+            background-color: var(--sj-accent) !important;
+        }
+        
+        .badge-danger {
+            background-color: var(--sj-danger) !important;
+        }
+        
+        /* ===== ALERTAS PERSONALIZADOS ===== */
+        .alert {
+            border: none;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        
+        .alert-success {
+            background-color: #28a745 !important; /* verde Bootstrap mais forte */
+            color: #fff;
+        }
+        .alert-danger {
+            background-color: #dc3545 !important;
+            color: #fff;
+        }
+        .alert-warning {
+            background-color: #ffc107 !important;
+            color: #212529;
+        }
+        .alert-info {
+            background-color: #17a2b8 !important;
+            color: #fff;
+        }
+        
+        /* ===== FORMULÁRIOS PERSONALIZADOS ===== */
+        .form-control:focus {
+            border-color: var(--sj-primary);
+            box-shadow: 0 0 0 0.2rem rgba(0, 188, 212, 0.25);
+        }
+        
+        .custom-control-input:checked ~ .custom-control-label::before {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        /* ===== BREADCRUMB PERSONALIZADO ===== */
+        .breadcrumb {
+            background: linear-gradient(135deg, var(--sj-light) 0%, #ffffff 100%);
+            border-bottom: 1px solid rgba(0, 188, 212, 0.1);
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--sj-primary);
+            font-weight: 500;
+        }
+        
+        /* ===== FOOTER PERSONALIZADO ===== */
+        footer {
+            background: linear-gradient(135deg, var(--sj-dark) 0%, var(--sj-accent) 100%);
+            color: rgba(255,255,255,0.8);
+        }
+        
+        footer .text-muted {
+            color: rgba(255,255,255,0.6) !important;
+        }
+        
+        /* ===== TABELAS PERSONALIZADAS ===== */
+        .table thead th {
+            background-color: var(--sj-light);
+            color: var(--sj-dark);
+            font-weight: 600;
+            border-bottom: 2px solid var(--sj-primary);
+        }
+        
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(0, 188, 212, 0.02);
+        }
+        
+        /* ===== MODAL PERSONALIZADO ===== */
+        .modal-content {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+            border-bottom: none;
+        }
+        
+        .modal-header .close {
+            color: white;
+            opacity: 0.8;
+        }
+        
+        .modal-header .close:hover {
+            opacity: 1;
+        }
+        
+        /* ===== PROGRESS BARS PERSONALIZADAS ===== */
+        .progress {
+            height: 8px;
+            border-radius: 10px;
+            background-color: rgba(0, 188, 212, 0.1);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            border-radius: 10px;
+        }
+        
+        /* ===== SWITCH PERSONALIZADO ===== */
+        .custom-switch .custom-control-input:checked ~ .custom-control-label::before {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        .custom-switch .custom-control-input:checked ~ .custom-control-label::after {
+            background-color: white;
+        }
+        
+        /* ===== PAGINAÇÃO PERSONALIZADA ===== */
+        .page-link {
+            color: var(--sj-primary);
+            border-color: rgba(0, 188, 212, 0.2);
+        }
+        
+        .page-link:hover {
+            color: white;
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        .page-item.active .page-link {
+            background-color: var(--sj-primary);
+            border-color: var(--sj-primary);
+        }
+        
+        /* ===== SCROLLBAR PERSONALIZADA ===== */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--sj-light);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--sj-accent);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--sj-primary);
+        }
+        
+        /* ===== EFEITOS DE HOVER NOS ÍCONES ===== */
+        .icon-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .icon-hover:hover {
+            transform: scale(1.2) rotate(5deg);
+            color: var(--sj-primary);
+        }
+        
+        /* ===== GRADIENT TEXT ===== */
+        .gradient-text {
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: bold;
+        }
+        
+        /* ===== FLOATING ACTION BUTTON ===== */
+        .btn-fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--sj-primary) 0%, var(--sj-secondary) 100%);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 20px rgba(0, 188, 212, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .btn-fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(0, 188, 212, 0.6);
+            color: white;
+        }
+        
+        /* ===== LOADING SPINNER PERSONALIZADO ===== */
+        .sj-spinner {
+            border: 3px solid rgba(0, 188, 212, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid var(--sj-primary);
+            width: 40px;
+            height: 40px;
+            animation: sjSpin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        /* ===== CORES DE TEXTO ===== */
+        .text-gray-800 {
+            color: var(--sj-dark) !important;
+        }
+        .text-gray-300 {
+            color: var(--sj-accent) !important;
+        }
+        .text-primary {
+            color: var(--sj-primary) !important;
+        }
+        /* ===== MENSAGENS GLOBAIS COM AUTO-CLOSE ===== */
+        .alerts-global-container .alert {
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        /* ===== CORES DOS ALERTAS ===== */
+        .alert-danger.global-alert {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.95), rgba(220, 53, 69, 0.85));
+            color: white;
+            border-left-color: #dc3545 !important;
+        }
+
+        .alert-success.global-alert {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.95), rgba(40, 167, 69, 0.85));
+            color: white;
+            border-left-color: #28a745 !important;
+        }
+
+        .alert-info.global-alert {
+            background: linear-gradient(135deg, rgba(23, 162, 184, 0.95), rgba(23, 162, 184, 0.85));
+            color: white;
+            border-left-color: #17a2b8 !important;
+        }
+
+        .alert-warning.global-alert {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.95), rgba(255, 193, 7, 0.85));
+            color: #212529;
+            border-left-color: #ffc107 !important;
+        }
+
+        /* ===== ESTADOS DO ALERT ===== */
+        .alert.closing {
+            animation: slideOutRight 0.5s ease-out forwards;
+        }
+
+        .alert.showing {
+            animation: slideInRight 0.6s ease-out forwards;
+        }
+        
+        /* ===== ANIMAÇÕES PERSONALIZADAS ===== */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes sjSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .slide-in-left {
+            animation: slideInLeft 0.6s ease-out;
+        }
+        
+        /* ===== ANIMAÇÕES ===== */
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+        }
+
+        @keyframes progressCountdown {
+            from {
+                width: 100%;
+            }
+            to {
+                width: 0%;
+            }
+        }
+        
+        .slide-in-right {
+            animation: slideInRight 0.6s ease-out;
+        }
+        
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 768px) {
+            .navbar-brand {
+                font-size: 1.2rem;
+            }
+            
+            .card {
+                margin-bottom: 1rem;
+            }
+            
+            .btn-fab {
+                bottom: 20px;
+                right: 20px;
+                width: 48px;
+                height: 48px;
+                font-size: 20px;
+            }
+        }
+        /* ===== HOVER EFFECTS ===== */
+        .global-alert:hover .progress-bar {
+            animation-play-state: paused;
+        }
+
+        .global-alert:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+        }
+
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 768px) {
+            .alerts-global-container {
+                position: fixed !important;
+                top: 10px !important;
+                left: 10px !important;
+                right: 10px !important;
+                max-width: none !important;
+            }
+            
+            .global-alert {
+                margin-bottom: 8px !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .alert-content {
+                font-size: 0.9rem;
+            }
+            
+            .alert-icon {
+                font-size: 1rem !important;
+            }
+        }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.7);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .loading-overlay.active {
+            display: flex !important;
+        }
+        .spinner {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #3498db;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg);}
+            100% { transform: rotate(360deg);}
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+{% block scripts %}{% endblock %}
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            
+            <a class="navbar-brand"
+                href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
+                        {{ url_for('admin.admin_home') }}
+                    {% elif current_user.is_authenticated and session.current_client_id %}
+                        {{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}
+                    {% else %}
+                        {{ url_for('home.home') }}
+                    {% endif %}">
+                <img src="{{ url_for('static', filename='img/emitemax-logo-nav.png') }}" 
+                     alt="EmiteMax" 
+                     class="navbar-logo-img">
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mr-auto mb-2 mb-lg-0">
+                    {% if current_user.is_authenticated %}
+                        {# Menu dinâmico por role #}
+                        {% if current_user.is_super_admin() %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin.dashboard') }}">
+                                    <i class="fas fa-chart-line"></i> Dashboard
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('admin.list_clientes') }}">
+                                    <i class="fas fa-users"></i> Clientes
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-briefcase"></i> Gestão
+                                </a>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('admin.estoque_dashboard') }}">
+                                        <i class="fas fa-boxes"></i> Estoque
+                                    </a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.fluxo_caixa_dashboard') }}">
+                                        <i class="fas fa-wallet"></i> Fluxo de Caixa
+                                    </a>
+                                </div>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-cogs"></i> Cadastros Fiscais
+                                </a>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_cfops') }}"><i class="fas fa-exchange-alt"></i> CFOPs</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_ncms') }}"><i class="fas fa-barcode"></i> NCMs</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_cst') }}"><i class="fas fa-percentage"></i> CST ICMS</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_csosn') }}"><i class="fas fa-calculator"></i> CSOSN ICMS</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_origens_mercadoria') }}"><i class="fas fa-map-marker-alt"></i> Origem Mercadoria</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_regimes_tributarios') }}"><i class="fas fa-building"></i> Regimes Tributários</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_motivos_desoneracao') }}"><i class="fas fa-minus-circle"></i> Motivos Desoneração</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_classificacoes_ibs_cbs') }}">
+                                        <i class="fas fa-receipt text-primary"></i> Classificações IBS/CBS
+                                        <span class="badge bg-info ms-1">Reforma</span>
+                                    </a>
+                                </div>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-tools"></i> Sistema
+                                </a>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_usuarios') }}"><i class="fas fa-user"></i> Usuários</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_roles') }}"><i class="fas fa-user-tag"></i> Papéis</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_permissions') }}"><i class="fas fa-key"></i> Permissões</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.relatorio_certificados_vencimento') }}"><i class="fas fa-certificate"></i> Certificados Digitais</a>
+                                    {% if current_user.is_super_admin() %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('planos.list_planos') }}"><i class="fas fa-box-open"></i> Planos e Assinaturas</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-key"></i> API Keys</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_clientes') }}"><i class="fas fa-webhook"></i> Webhooks</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_faturamento') }}"><i class="fas fa-dollar-sign"></i> Faturamento</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_auditoria') }}"><i class="fas fa-clipboard-list"></i> Logs e Auditoria</a>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        {% elif current_user.is_admin() %}
+                            {% if session.current_client_id %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-box"></i> Produtos
+                                    </a>
+                                </li>
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-briefcase"></i> Gestão
+                                    </a>
+                                    <div class="dropdown-menu">
+                                        <a class="dropdown-item" href="{{ url_for('admin.estoque_dashboard') }}?cliente_id={{ session.current_client_id }}">
+                                            <i class="fas fa-boxes"></i> Estoque
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url_for('admin.fluxo_caixa_dashboard') }}?cliente_id={{ session.current_client_id }}">
+                                            <i class="fas fa-wallet"></i> Fluxo de Caixa
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url_for('admin.analise_vendas') }}">
+                                            <i class="fas fa-chart-line"></i> Análise de Vendas
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url_for('admin.dashboard_inteligente') }}">
+                                            <i class="fas fa-brain"></i> Inteligência EmiteMax
+                                        </a>
+                                    </div>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
+                                        <i class="fas fa-address-book"></i> Destinatários
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_certificados') }}">
+                                        <i class="fas fa-certificate"></i> Certificados
+                                    </a>
+                                </li>
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-gavel"></i> Regras Tributárias
+                                    </a>
+                                    <div class="dropdown-menu">
+                                        <a class="dropdown-item" href="{{ url_for('admin.list_regras_tributacao', cliente_id=session.get('current_client_id') or session.get('active_cliente_id')) }}">
+                                            <i class="fas fa-file-invoice"></i> Regras NFe
+                                        </a>
+                                        <a class="dropdown-item" href="{{ url_for('regras_servicos.list_regras_servicos') }}">
+                                            <i class="fas fa-file-alt"></i> Regras NFSe
+                                        </a>
+                                        <div class="dropdown-divider"></div>
+                                        <a class="dropdown-item" href="{{ url_for('classificacao_ibs_cbs.listar') }}">
+                                            <i class="fas fa-balance-scale"></i> IBS/CBS (LC 214/2025)
+                                        </a>
+                                    </div>
+                                </li>
+                            {% endif %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-tools"></i> Sistema
+                                </a>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_usuarios') }}"><i class="fas fa-user"></i> Usuários</a>
+                                    {% if current_user.is_super_admin() %}
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.list_auditoria') }}"><i class="fas fa-clipboard-list"></i> Logs e Auditoria</a>
+                                    {% endif %}
+                                </div>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                    <i class="fas fa-magic"></i> Auxiliares
+                                </a>
+                                <div class="dropdown-menu">
+                                    <a class="dropdown-item" href="{{ url_for('admin.dashboard_inteligente') }}">
+                                        <i class="fas fa-chart-line text-primary"></i> Dashboard Inteligente
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item" href="{{ url_for('admin.assistente_fiscal') }}">
+                                        <i class="fas fa-balance-scale text-primary"></i> Assistente Fiscal
+                                    </a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.consultor_vendas') }}">
+                                        <i class="fas fa-chart-pie text-success"></i> Consultor de Vendas
+                                    </a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.gerador_anuncios') }}">
+                                        <i class="fas fa-bullhorn text-warning"></i> Gerador de Anúncios
+                                    </a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.mensagens_whatsapp') }}">
+                                        <i class="fab fa-whatsapp text-success"></i> Mensagens WhatsApp
+                                    </a>
+                                </div>
+                            </li>
+                        {% elif current_user.role_name == 'Editor' %}
+                            {% if session.current_client_id %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfe.emitir_nfe') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-plus-circle"></i> Emitir NF-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-list"></i> NF-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.emitir_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-cash-register"></i> Emitir NFC-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.listar_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-receipt"></i> NFC-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
+                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-boxes"></i> Produtos
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
+                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
+                                    </a>
+                                </li>
+                                {# Editor NÃO vê Certificados nem Regras Tributárias #}
+                            {% endif %}
+                        {% elif current_user.role_name == 'Viewer' %}
+                            {% if session.current_client_id %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfe.list_nfes') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-list"></i> NF-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfce.listar_nfce') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-receipt"></i> NFC-es
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('nfse.index') }}">
+                                        <i class="fas fa-file-invoice-dollar"></i> NFS-e
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_produtos') }}?cliente_id={{ session.current_client_id }}">
+                                        <i class="fas fa-boxes"></i> Produtos
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('admin.list_destinatarios', cliente_id=session.current_client_id) }}">
+                                        <i class="fas fa-address-book"></i> Destinatários/Tomadores
+                                    </a>
+                                </li>
+                                {# Viewer NÃO vê Certificados, Regras Tributárias, nem botões de edição/criação #}
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                </ul>
+                
+                <!-- Menu do usuário logado -->
+                <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-circle"></i> {{ current_user.username }}
+                                {% if current_user.roles and current_user.roles|length > 0 %}
+                                    <small class="badge bg-info ms-1">{{ current_user.roles[0].name }}</small>
+                                {% else %}
+                                    <small class="badge bg-secondary ms-1">Sem papel</small>
+                                {% endif %}
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-right">
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-user"></i> {{ current_user.username }}
+                                </h6>
+                                
+                                <!-- Informações do Cliente Atual -->
+                                {% set accessible_clients = current_user.get_accessible_clients() if current_user.get_accessible_clients is defined else [] %}
+                                {% if not current_user.is_super_admin() and accessible_clients|length > 1 %}
+                                <span class="dropdown-item-text">
+                                    <small class="text-muted">Cliente Atual:</small><br>
+                                    {% set nome_cliente = session.current_client_name %}
+                                    {% if not nome_cliente and session.current_client_id and accessible_clients %}
+                                        {% for c in accessible_clients %}
+                                            {% if c.id == session.current_client_id or c.cliente_id == session.current_client_id %}
+                                                {% set nome_cliente = c.nome if c.nome is defined else c.razao_social %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                    <strong>{{ nome_cliente if nome_cliente else 'Nenhum cliente selecionado' }}</strong>
+                                </span>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="{{ url_for('home.switch_client') }}">
+                                    <i class="fas fa-exchange-alt"></i> Trocar Cliente
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                {% endif %}
+                                <a class="dropdown-item"
+                                    href="{% if current_user.is_authenticated and current_user.is_super_admin() %}
+                                            {{ url_for('admin.admin_home') }}
+                                        {% elif current_user.is_authenticated and session.current_client_id %}
+                                            {{ url_for('cliente.dashboard', cliente_hash=encode_id(session.current_client_id)) }}
+                                        {% else %}
+                                            {{ url_for('home.home') }}
+                                        {% endif %}">
+                                    
+                                   <i class="fas fa-tachometer-alt"></i> Dashboard                          
+                                </a>
+                                <!-- <a class="dropdown-item" href="{{ url_for('home.home') }}">
+                                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                                </a> -->
+                                
+                                <!-- <a class="dropdown-item" href="{{ url_for('cliente.selecionar_cliente') }}">
+                                    <i class="fas fa-exchange-alt"></i> Trocar Cliente
+                                </a> -->
+
+                                <a class="dropdown-item" href="{{ url_for('admin.perfil') }}">
+                                    <i class="fas fa-user-edit"></i> Meu Perfil
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">
+                                    <i class="fas fa-sign-out-alt"></i> Sair
+                                </a>
+                            </div>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('auth.login') }}">
+                                <i class="fas fa-sign-in-alt"></i> Login
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Breadcrumb para mostrar contexto atual -->
+    <!-- {% if current_user.is_authenticated and not current_user.is_admin() and session.current_client_id %}
+    <nav aria-label="breadcrumb" class="bg-light py-2">
+        <div class="container-fluid">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item">
+                    <i class="fas fa-building text-primary"></i>
+                    <strong>{{ session.current_client_name or 'Cliente Atual' }}</strong>
+                </li>
+                {% if request.endpoint %}
+                <li class="breadcrumb-item active" aria-current="page">
+                    {{ request.endpoint.replace('_', ' ').replace('.', ' - ').title() }}
+                </li>
+                {% endif %}
+            </ol>
+        </div>
+    </nav>
+    {% endif %} -->
+
+    <main class="container-fluid mt-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="alerts-global-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 450px;">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-lg auto-close-alert global-alert" 
+                         role="alert" 
+                         style="border-radius: 12px; border: none; border-left: 5px solid; margin-bottom: 12px; animation: slideInRight 0.6s ease-out; backdrop-filter: blur(15px);">
+                        <div class="d-flex align-items-start">
+                            <div class="alert-icon me-3" style="font-size: 1.2rem; margin-top: 2px;">
+                                {% if category == 'error' or category == 'danger' %}
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                {% elif category == 'success' %}
+                                    <i class="fas fa-check-circle"></i>
+                                {% elif category == 'warning' %}
+                                    <i class="fas fa-exclamation-circle"></i>
+                                {% elif category == 'info' %}
+                                    <i class="fas fa-info-circle"></i>
+                                {% else %}
+                                    <i class="fas fa-bell"></i>
+                                {% endif %}
+                            </div>
+                            <div class="alert-content flex-grow-1">
+                                <div class="alert-message" style="font-weight: 500; line-height: 1.4;">
+                                    {{ message }}
+                                </div>
+                                <div class="auto-close-progress" style="height: 3px; background: rgba(255,255,255,0.3); border-radius: 3px; margin-top: 8px; overflow: hidden;">
+                                    <div class="progress-bar" style="height: 100%; background: rgba(255,255,255,0.7); width: 100%; animation: progressCountdown 6s linear forwards;"></div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close ms-2" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+
+     <!-- Footer -->
+    <footer class="mt-5 py-3">
+        <div class="container-fluid text-center">
+            <small class="text-muted">
+                <i class="fas fa-code"></i> EmiteMax - Sistema de Nota Fiscal Eletrônica
+                {% if current_user.is_authenticated %}
+                    | Usuário: <strong>{{ current_user.username }}</strong>
+                    <span class="badge bg-primary ms-1">{{ current_user.roles[0].name }}</span>                    
+                {% endif %}
+                | © 2026
+            </small>
+        </div>
+    </footer>
+
+ 
+
+ 
+    <!-- ✅ JAVASCRIPT DE AUTO-CLOSE EM JS PURO -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        function initAutoCloseAlerts() {
+            document.querySelectorAll('.auto-close-alert:not(.initialized)').forEach(function(alert) {
+                alert.classList.add('initialized', 'showing');
+                let closeTime = 6000;
+                let timeoutId;
+                let isPaused = false;
+                const progressBar = alert.querySelector('.progress-bar');
+
+                function closeAlert() {
+                    alert.classList.add('closing');
+                    setTimeout(function() {
+                        alert.classList.remove('show', 'showing', 'closing');
+                        alert.style.display = 'none';
+                    }, 500);
+                }
+
+                function startTimer() {
+                    if (!isPaused) {
+                        timeoutId = setTimeout(closeAlert, closeTime);
+                    }
+                }
+
+                alert.addEventListener('mouseenter', function() {
+                    isPaused = true;
+                    if (timeoutId) clearTimeout(timeoutId);
+                    if (progressBar) progressBar.style.animationPlayState = 'paused';
+                });
+
+                alert.addEventListener('mouseleave', function() {
+                    isPaused = false;
+                    if (progressBar) progressBar.style.animationPlayState = 'running';
+                    timeoutId = setTimeout(closeAlert, 2000);
+                });
+
+                // Botão de fechar manual
+                const btnClose = alert.querySelector('.btn-close');
+                if (btnClose) {
+                    btnClose.addEventListener('click', function(e) {
+                        if (timeoutId) clearTimeout(timeoutId);
+                        closeAlert();
+                    });
+                }
+
+                startTimer();
+            });
+        }
+
+        // Inicializar imediatamente
+        initAutoCloseAlerts();
+
+        // Observer para alerts dinâmicos
+        const alertObserver = new MutationObserver(function(mutations) {
+            let hasNewAlerts = false;
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1 && (node.classList.contains('auto-close-alert') || node.querySelector('.auto-close-alert'))) {
+                        hasNewAlerts = true;
+                    }
+                });
+            });
+            if (hasNewAlerts) setTimeout(initAutoCloseAlerts, 100);
+        });
+
+        alertObserver.observe(document.body, { childList: true, subtree: true });
+
+        // Fallback: verificar periodicamente por novos alerts
+        setInterval(function() {
+            if (document.querySelectorAll('.auto-close-alert:not(.initialized)').length > 0) {
+                initAutoCloseAlerts();
+            }
+        }, 1000);
+    });
+    </script>
+    <!-- jQuery (necessário para Select2) -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    {% block extra_js %}{% endblock %}
+
+    <!-- Injeção automática do CSRF token em todos os formulários POST -->
+    <script>
+    (function() {
+        var csrfToken = '{{ csrf_token() }}';
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(function(form) {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfToken;
+                    form.prepend(input);
+                }
+            });
+        });
+    })();
+    </script>
+
+</body>
+</html>

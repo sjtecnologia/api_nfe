@@ -1,0 +1,154 @@
+{# Este template contém APENAS OS CAMPOS do formulário de regras de tributação, sem tags <form> ou botões. #}
+{# Ele deve ser incluído por templates pai que contenham a tag <form> e os botões de submit. #}
+
+    {# Input oculto para o cliente_id. Este campo é para exibir o cliente associado e será desabilitado. #}
+    {# O valor real do cliente_id é passado pelo input hidden no formulário pai. #}
+    <input type="hidden" name="cliente_id" value="{{ form_data.cliente_id | default(return_client_id) }}">
+
+    <div class="mb-3">
+        <label for="cliente_id_select" class="form-label">Cliente Associado (Opcional - Regra Global se vazio)</label>
+        <select class="form-select" id="cliente_id_select" name="cliente_id_display" disabled> 
+            <option value="">Regra Global</option>
+            {% for cliente_item in clientes %}
+                <option value="{{ cliente_item.cliente_id }}" {% if (form_data.cliente_id | default(return_client_id)) == cliente_item.cliente_id %}selected{% endif %}>
+                    {{ cliente_item.razao_social }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+<div class="mb-3">
+        <label for="descricao_regra" class="form-label">Descrição da Regra</label>
+        <input type="text" class="form-control" id="descricao_regra" name="descricao_regra" value="{{ form_data.descricao_regra | default('') }}">
+    </div>
+<div class="mb-3">
+        <label for="regime_tributario_id" class="form-label">Regime Tributário</label>
+        <select class="form-select" id="regime_tributario_id" name="regime_tributario_id" required>
+            <option value="">Selecione...</option>
+            {% for regime in regimes_tributarios %}
+                <option value="{{ regime.regime_tributario_id }}" {% if form_data.regime_tributario_id == regime.regime_tributario_id %}selected{% endif %}>{{ regime.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="cfop_id" class="form-label">CFOP</label>
+            <select class="form-select" id="cfop_id" name="cfop_id" required>
+                <option value="">Selecione...</option>
+                {% for cfop_item in cfops %}
+                    <option value="{{ cfop_item.cfop_id }}" {% if form_data.cfop_id == cfop_item.cfop_id %}selected{% endif %}>{{ cfop_item.cfop }} - {{ cfop_item.descricao | truncate(50, True, '...') }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="ncm_id" class="form-label">NCM (Opcional)</label>
+            <select class="form-select" id="ncm_id" name="ncm_id">
+                <option value="">Selecione...</option>
+                {% for ncm_item in ncms %}
+                    <option value="{{ ncm_item.ncm_id }}" {% if form_data.ncm_id == ncm_item.ncm_id %}selected{% endif %}>{{ ncm_item.codigo }} - {{ ncm_item.descricao | truncate(50, True, '...') }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+<div class="row">
+        <div class="col-md-4 mb-3">
+            <label for="uf_origem" class="form-label">UF Origem (Opcional)</label>
+            <input type="text" class="form-control" id="uf_origem" name="uf_origem" value="{{ form_data.uf_origem | default('') }}" maxlength="2">
+        </div>
+        <div class="col-md-4 mb-3">
+            <label for="uf_destino" class="form-label">UF Destino (Opcional)</label>
+            <input type="text" class="form-control" id="uf_destino" name="uf_destino" value="{{ form_data.uf_destino | default('') }}" maxlength="2">
+        </div>
+        <div class="col-md-4 mb-3">
+            <label for="tipo_item" class="form-label">Tipo de Item (Opcional)</label>
+            <input type="text" class="form-control" id="tipo_item" name="tipo_item" value="{{ form_data.tipo_item | default('') }}">
+        </div>
+    </div>
+    <div class="mb-3">
+        <label for="prioridade" class="form-label">Prioridade (menor número = maior prioridade)</label>
+<input type="number" class="form-control" id="prioridade" name="prioridade" value="{{ form_data.prioridade | default(100) }}">
+    </div>
+<fieldset class="mb-3">
+        <legend>Imposto ICMS</legend>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="cst_icms" class="form-label">CST ICMS (Opcional)</label>
+                <select class="form-select" id="cst_icms" name="cst_icms">
+                    <option value="">Selecione...</option>
+                    {% for cst_item in csts %}
+                        <option value="{{ cst_item.codigo }}" {% if form_data.cst_icms == cst_item.codigo %}selected{% endif %}>{{ cst_item.codigo }} - {{ cst_item.descricao | truncate(50, True, '...') }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="csosn_icms" class="form-label">CSOSN ICMS (Opcional)</label>
+                <select class="form-select" id="csosn_icms" name="csosn_icms">
+                    <option value="">Selecione...</option>
+                    {% for csosn_item in csosns %}
+                        <option value="{{ csosn_item.codigo }}" {% if form_data.csosn_icms == csosn_item.codigo %}selected{% endif %}>{{ csosn_item.codigo }} - {{ csosn_item.descricao | truncate(50, True, '...') }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="aliquota_icms" class="form-label">Alíquota ICMS (%)</label>
+                <input type="number" step="0.01" class="form-control" id="aliquota_icms" name="aliquota_icms" value="{{ form_data.aliquota_icms | default('') }}">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="reducao_base_icms" class="form-label">Redução Base ICMS (%)</label>
+                <input type="number" step="0.01" class="form-control" id="reducao_base_icms" name="reducao_base_icms" value="{{ form_data.reducao_base_icms | default('') }}">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="modalidade_bc_icms" class="form-label">Modalidade BC ICMS</label>
+                <input type="number" class="form-control" id="modalidade_bc_icms" name="modalidade_bc_icms" value="{{ form_data.modalidade_bc_icms | default('') }}">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="motivo_desoneracao_icms" class="form-label">Motivo Desoneração ICMS</label>
+                <select class="form-select" id="motivo_desoneracao_icms" name="motivo_desoneracao_icms">
+                    <option value="">Selecione...</option>
+                    {% for motivo in motivos_desoneracao %}
+                        <option value="{{ motivo.motivo_id }}" {% if form_data.motivo_desoneracao_icms == motivo.motivo_id %}selected{% endif %}>{{ motivo.codigo }} - {{ motivo.descricao | truncate(50, True, '...') }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </fieldset>
+<fieldset class="mb-3">
+        <legend>Outros Impostos (Opcional)</legend>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="cst_pis" class="form-label">CST PIS</label>
+                <input type="text" class="form-control" id="cst_pis" name="cst_pis" value="{{ form_data.cst_pis | default('') }}" maxlength="2">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="aliquota_pis" class="form-label">Alíquota PIS (%)</label>
+                <input type="number" step="0.01" class="form-control" id="aliquota_pis" name="aliquota_pis" value="{{ form_data.aliquota_pis | default('') }}">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="cst_cofins" class="form-label">CST COFINS</label>
+                <input type="text" class="form-control" id="cst_cofins" name="cst_cofins" value="{{ form_data.cst_cofins | default('') }}" maxlength="2">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="aliquota_cofins" class="form-label">Alíquota COFINS (%)</label>
+                <input type="number" step="0.01" class="form-control" id="aliquota_cofins" name="aliquota_cofins" value="{{ form_data.aliquota_cofins | default('') }}">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="cst_ipi" class="form-label">CST IPI</label>
+                <input type="text" class="form-control" id="cst_ipi" name="cst_ipi" value="{{ form_data.cst_ipi | default('') }}" maxlength="2">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="aliquota_ipi" class="form-label">Alíquota IPI (%)</label>
+                <input type="number" step="0.01" class="form-control" id="aliquota_ipi" name="aliquota_ipi" value="{{ form_data.aliquota_ipi | default('') }}">
+            </div>
+        </div>
+    </fieldset>
+<div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if form_data.ativo | default(true) %}checked{% endif %}>
+        <label class="form-check-label" for="ativo">
+            Regra Ativa
+        </label>
+    </div>

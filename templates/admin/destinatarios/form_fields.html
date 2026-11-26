@@ -1,0 +1,116 @@
+{# Este template contém APENAS OS CAMPOS do formulário de destinatário, sem tags <form> ou botões. #}
+{# Ele deve ser incluído por templates pai que contenham a tag <form> e os botões de submit. #}
+
+{# Campo oculto para o ID do destinatário, útil para pré-preencher em edições. #}
+<input type="hidden" name="destinatario_id" value="{{ destinatario.destinatario_id | default('') }}">
+
+{# Campo Cliente Associado - geralmente ocupa uma linha inteira, ou uma parte significativa #}
+<div class="row mb-3">
+    <div class="col-md-12"> {# col-md-12 ocupa a largura total da linha em telas médias e maiores #}
+        <label for="cliente_id_select" class="form-label">Cliente Associado</label>
+        <select class="form-select" id="cliente_id_select" name="cliente_id_display" disabled> 
+            <option value="">Selecione um cliente...</option>
+            {% for cliente_item in clientes %}
+                <option value="{{ cliente_item.cliente_id }}" {% if (form_data.cliente_id | default(return_client_id)) == cliente_item.cliente_id %}selected{% endif %}>
+                    {{ cliente_item.razao_social }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+{# Seção de Dados Cadastrais #}
+<div class="row mb-3">
+    <div class="col-md-4"> {# Ocupa 1/3 da linha em telas médias e maiores #}
+        <label for="tipo_pessoa" class="form-label">Tipo de Pessoa</label>
+        <select class="form-select" id="tipo_pessoa" name="tipo_pessoa" required>
+            <option value="" {% if not (form_data.tipo_pessoa | default(destinatario.tipo_pessoa)) %}selected{% endif %}>Selecione...</option>
+            <option value="F" {% if (form_data.tipo_pessoa | default(destinatario.tipo_pessoa)) == 'F' %}selected{% endif %}>Pessoa Física (CPF)</option>
+            <option value="J" {% if (form_data.tipo_pessoa | default(destinatario.tipo_pessoa)) == 'J' %}selected{% endif %}>Pessoa Jurídica (CNPJ)</option>
+        </select>
+    </div>
+    <div class="col-md-8"> {# Ocupa 2/3 da linha #}
+        <label for="nome_razao_social" class="form-label">Nome / Razão Social</label>
+        <input type="text" class="form-control" id="nome_razao_social" name="nome_razao_social" value="{{ form_data.nome_razao_social | default(destinatario.nome_razao_social | default('')) }}" required>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-5"> {# Exemplo de distribuição customizada, ajustando conforme a necessidade de cada campo #}
+        <label for="cpf_cnpj" class="form-label">CPF / CNPJ</label>
+        <input type="text" class="form-control" id="cpf_cnpj" name="cpf_cnpj" value="{{ form_data.cpf_cnpj | default(destinatario.cpf_cnpj | default('')) }}" required>
+    </div>
+    <div class="col-md-4">
+        <label for="ie" class="form-label">Inscrição Estadual</label>
+        <input type="text" class="form-control" id="ie" name="ie" value="{{ form_data.ie | default(destinatario.ie | default('')) }}">
+    </div>
+    <div class="col-md-3">
+        <label for="ie_indicador_nfe" class="form-label">Indicador IE NF-e</label>
+        <select class="form-select" id="ie_indicador_nfe" name="ie_indicador_nfe" required>
+            <option value="C" {% if (form_data.ie_indicador_nfe | default(destinatario.ie_indicador_nfe)) == 'C' %}selected{% endif %}>Contribuinte ICMS</option>
+            <option value="N" {% if (form_data.ie_indicador_nfe | default(destinatario.ie_indicador_nfe)) == 'N' %}selected{% endif %}>Não Contribuinte</option>
+            <option value="I" {% if (form_data.ie_indicador_nfe | default(destinatario.ie_indicador_nfe)) == 'I' %}selected{% endif %}>Isento</option>
+        </select>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" class="form-control" id="email" name="email" value="{{ form_data.email | default(destinatario.email | default('')) }}">
+    </div>
+    <div class="col-md-6">
+        <label for="telefone" class="form-label">Telefone</label>
+        <input type="tel" class="form-control" id="telefone" name="telefone" value="{{ form_data.telefone | default(destinatario.telefone | default('')) }}">
+    </div>
+</div>
+
+{# Seção de Endereço #}
+<h5 class="mt-4 mb-3 text-info">Endereço</h5> {# Título para a seção de endereço #}
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label for="cep" class="form-label">CEP</label>
+        <div class="input-group"> 
+            <input type="text" class="form-control" id="cep" name="cep" value="{{ form_data.cep | default(destinatario.cep | default('')) }}" required>
+            <button class="btn btn-outline-secondary" type="button" id="btn-buscar-cep">Buscar</button>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <label for="logradouro" class="form-label">Logradouro</label>
+        <input type="text" class="form-control" id="logradouro" name="logradouro" value="{{ form_data.logradouro | default(destinatario.logradouro | default('')) }}" required>
+    </div>
+    <div class="col-md-2">
+        <label for="numero" class="form-label">Número</label>
+        <input type="text" class="form-control" id="numero" name="numero" value="{{ form_data.numero | default(destinatario.numero | default('')) }}" required>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <label for="complemento" class="form-label">Complemento</label>
+        <input type="text" class="form-control" id="complemento" name="complemento" value="{{ form_data.complemento | default(destinatario.complemento | default('')) }}">
+    </div>
+    <div class="col-md-4">
+        <label for="bairro" class="form-label">Bairro</label>
+        <input type="text" class="form-control" id="bairro" name="bairro" value="{{ form_data.bairro | default(destinatario.bairro | default('')) }}" required>
+    </div>
+    <div class="col-md-4">
+        <label for="nome_municipio" class="form-label">Município</label>
+        <input type="text" class="form-control" id="nome_municipio" name="nome_municipio" value="{{ form_data.nome_municipio | default(destinatario.nome_municipio | default('')) }}" required>
+        <input type="hidden" id="codigo_municipio" name="codigo_municipio" value="{{ form_data.codigo_municipio | default(destinatario.codigo_municipio | default('')) }}">
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <label for="uf" class="form-label">UF</label>
+        <input type="text" class="form-control" id="uf" name="uf" value="{{ form_data.uf | default(destinatario.uf | default('')) }}" maxlength="2" required>
+        <input type="hidden" id="codigo_uf" name="codigo_uf" value="{{ form_data.codigo_uf | default(destinatario.codigo_uf | default('')) }}">
+    </div>
+    <div class="col-md-8"> {# Ocupa o restante da linha, para o País #}
+        <label for="nome_pais" class="form-label">País</label>
+        <input type="text" class="form-control" id="nome_pais" name="nome_pais" value="{{ form_data.nome_pais | default(destinatario.nome_pais | default('Brasil')) }}" required>
+        <input type="hidden" id="codigo_pais" name="codigo_pais" value="{{ form_data.codigo_pais | default(destinatario.codigo_pais | default('1058')) }}">
+    </div>
+</div>

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Catálogos de vendas{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div><h1 class="h3 mb-1"><i class="fas fa-store text-primary"></i> Catálogos de vendas</h1><p class="text-muted mb-0">Envie um link, receba pedidos e conclua a venda.</p></div>
+    <a class="btn btn-primary" href="{{ url_for('catalogo_vendas.novo_catalogo') }}"><i class="fas fa-plus"></i> Novo catálogo</a>
+  </div>
+  <div class="alert {{ 'alert-success' if conta_conectada else 'alert-light border' }} d-flex justify-content-between align-items-center gap-3">
+    <span><i class="fas fa-credit-card"></i> <strong>Pagamento online:</strong> {{ 'Conta Mercado Pago vinculada.' if conta_conectada else 'não configurado; os pedidos serão direcionados ao WhatsApp.' }}</span>
+    {% if conta_conectada %}
+      <form method="post" action="{{ url_for('catalogo_vendas.desconectar_pagamento') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('Desconectar a conta de pagamento?')">Desconectar</button></form>
+    {% elif pagamento_configurado %}
+      <a class="btn btn-sm btn-success" href="{{ url_for('catalogo_vendas.conectar_mercadopago') }}">Conectar Mercado Pago</a>
+    {% else %}
+      <span class="small text-muted">Configure as variáveis OAuth do Mercado Pago no servidor para habilitar.</span>
+    {% endif %}
+  </div>
+  <div class="card mb-4"><div class="card-header"><strong>Links de catálogo</strong></div><div class="card-body p-0">
+    {% if catalogos %}<div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Catálogo</th><th>Produtos</th><th>Pagamento</th><th>Status</th><th>Link</th><th></th></tr></thead><tbody>
+      {% for catalogo in catalogos %}<tr><td>{{ catalogo.titulo }}</td><td>{{ catalogo.total_itens }}</td><td>{{ 'Online' if catalogo.pagamento_online_ativo else 'WhatsApp' }}</td><td><span class="badge bg-{{ 'success' if catalogo.ativo else 'secondary' }}">{{ 'Ativo' if catalogo.ativo else 'Pausado' }}</span></td><td><a target="_blank" href="{{ url_for('catalogo_publico.ver_catalogo', token=catalogo.token_publico, _external=True) }}">Abrir catálogo</a></td><td class="text-end"><button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText('{{ url_for('catalogo_publico.ver_catalogo', token=catalogo.token_publico, _external=True) }}'); this.textContent='Copiado!'">Copiar</button><form class="d-inline" method="post" action="{{ url_for('catalogo_vendas.alternar_catalogo', catalogo_id=catalogo.catalogo_id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline-{{ 'warning' if catalogo.ativo else 'success' }}">{{ 'Pausar' if catalogo.ativo else 'Ativar' }}</button></form></td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<div class="text-center text-muted p-5">Crie o primeiro catálogo para começar a vender por link.</div>{% endif %}
+  </div></div>
+  <div class="card"><div class="card-header"><strong>Últimos pedidos</strong></div><div class="card-body p-0">
+    {% if pedidos %}<div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Pedido</th><th>Comprador</th><th>Valor</th><th>Venda</th><th>Pagamento</th><th>Data</th></tr></thead><tbody>{% for pedido in pedidos %}<tr><td>{{ pedido.numero }}</td><td>{{ pedido.comprador_nome }}</td><td>R$ {{ '%.2f'|format(pedido.valor_total) }}</td><td>{{ pedido.status|replace('_', ' ') }}</td><td>{{ pedido.status_pagamento|replace('_', ' ') }}</td><td>{{ pedido.created_at.strftime('%d/%m/%Y %H:%M') }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="text-center text-muted p-4">Ainda não há pedidos.</div>{% endif %}
+  </div></div>
+</div>
+{% endblock %}

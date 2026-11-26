@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if certificado %}Editar{% else %}Novo{% endif %} Certificado Digital{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-certificate"></i>
+                        {% if certificado %}Editar{% else %}Novo{% endif %} Certificado Digital
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    {% if certificado %}
+                    <div class="alert alert-info mb-4">
+                        <h6 class="alert-heading"><i class="fas fa-info-circle"></i> Certificado Atual</h6>
+                        <ul class="mb-0">
+                            <li><strong>Arquivo:</strong> {{ certificado.nome_arquivo_original or 'N/A' }}</li>
+                            <li><strong>Fingerprint:</strong> <code>{{ certificado.fingerprint[:20] if certificado.fingerprint else 'N/A' }}...</code></li>
+                            <li><strong>Válido de:</strong> {{ certificado.validade_inicio.strftime('%d/%m/%Y') if certificado.validade_inicio else 'N/A' }} até {{ certificado.validade_fim.strftime('%d/%m/%Y') if certificado.validade_fim else 'N/A' }}</li>
+                            <li><strong>Status:</strong> <span class="badge {% if certificado.ativo %}bg-success{% else %}bg-danger{% endif %}">{% if certificado.ativo %}Ativo{% else %}Inativo{% endif %}</span></li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    <form method="POST" action="{{ url_for('admin.salvar_certificado') }}" 
+                          enctype="multipart/form-data" id="certificadoForm">
+                        <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                        {% if certificado %}
+                        <input type="hidden" name="certificado_id" value="{{ certificado.certificado_digital_id }}">
+                        {% endif %}
+                        
+                        <div class="form-group">
+                            <label for="arquivo_certificado">
+                                <i class="fas fa-file-upload"></i>
+                                Arquivo do Certificado {% if not certificado %}*{% else %}(opcional - somente se quiser substituir){% endif %}
+                            </label>
+                            <input type="file" class="form-control-file" id="arquivo_certificado" 
+                                   name="arquivo_certificado" accept=".pfx,.p12" {% if not certificado %}required{% endif %}>
+                            <small class="form-text text-muted">
+                                {% if certificado %}Deixe vazio para manter o certificado atual. {% endif %}Selecione um arquivo .pfx ou .p12
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="senha_certificado">
+                                <i class="fas fa-key"></i>
+                                Senha do Certificado {% if not certificado %}*{% else %}(opcional - somente se quiser atualizar){% endif %}
+                            </label>
+                            <input type="password" class="form-control" id="senha_certificado" 
+                                   name="senha_certificado" placeholder="Digite a senha do certificado" {% if not certificado %}required{% endif %}>
+                            <small class="form-text text-muted">
+                                {% if certificado %}Deixe vazio para manter a senha atual. {% endif %}Senha utilizada para proteger o certificado digital
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Importante:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>O certificado deve estar válido</li>
+                                <li>Formato aceito: .pfx ou .p12</li>
+                                <li>A senha deve estar correta</li>
+                                <li>Será utilizado para assinatura das NF-e</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-{% if certificado %}save{% else %}upload{% endif %}"></i>
+                                {% if certificado %}Atualizar{% else %}Enviar{% endif %} Certificado
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="window.history.back();">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#arquivo_certificado').on('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const fileName = file.name.toLowerCase();
+            if (!fileName.endsWith('.pfx') && !fileName.endsWith('.p12')) {
+                alert('Por favor, selecione um arquivo .pfx ou .p12');
+                this.value = '';
+                return;
+            }
+            
+            const label = $('label[for="arquivo_certificado"]');
+            label.html('<i class="fas fa-file-check text-success"></i> Arquivo: ' + file.name);
+        }
+    });
+    
+    $('#certificadoForm').on('submit', function(e) {
+        const arquivo = $('#arquivo_certificado')[0].files[0];
+        const senha = $('#senha_certificado').val();
+        
+        if (!arquivo) {
+            e.preventDefault();
+            alert('Selecione um arquivo de certificado!');
+            return false;
+        }
+        
+        if (!senha) {
+            e.preventDefault();
+            alert('Digite a senha do certificado!');
+            return false;
+        }
+        
+        $('button[type="submit"]').html('<i class="fas fa-spinner fa-spin"></i> Enviando...').prop('disabled', true);
+        
+        return true;
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,6 @@
+codigo,descricao,unidade,valor,ncm_codigo,cfop_codigo,ativo
+TESTE001,Produto Teste 1,UN,100.50,8471.30.19,5.102,S
+TESTE002,Produto Teste 2,KG,250.00,8471.30.12,5.102,S
+TESTE003,Produto Teste 3,PC,50.75,8471.30.11,5.102,S
+TESTE004,Produto Teste SEM NCM,UN,75.00,,5.102,S
+TESTE005,Produto Teste INATIVO,UN,125.00,8471.30.19,5.102,N

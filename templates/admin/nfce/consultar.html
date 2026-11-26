@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+
+{% block title %}Consultar NFC-e #{{ nfce.nfe_emitida_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2><i class="fas fa-file-invoice"></i> NFC-e #{{ dados.numero or nfce.nfe_emitida_id }}</h2>
+            <p class="text-muted">{{ emitente.nome_fantasia or emitente.razao_social }}</p>
+        </div>
+        <div class="col-md-4 text-right">
+            <a href="{{ url_for('nfce.download_xml_nfce', nfce_id=nfce.nfe_emitida_id) }}" class="btn btn-primary">
+                <i class="fas fa-download"></i> Baixar XML
+            </a>
+            <a href="{{ url_for('nfce.listar_nfce') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações Gerais -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Informações Gerais</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">ID:</th>
+                            <td><strong>#{{ nfce.nfe_emitida_id }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Número:</th>
+                            <td><strong>{{ dados.numero or '-' }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Série:</th>
+                            <td>{{ dados.serie or '-' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Modelo:</th>
+                            <td>{{ dados.modelo or '65' }} (NFC-e)</td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if nfce.status == 'Autorizada' %}
+                                <span class="badge badge-success">{{ nfce.status }}</span>
+                                {% elif nfce.status == 'Cancelada' %}
+                                <span class="badge badge-danger">{{ nfce.status }}</span>
+                                {% else %}
+                                <span class="badge badge-warning">{{ nfce.status }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Ambiente:</th>
+                            <td>
+                                <span class="badge bg-warning">Homologação</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Data Criação:</th>
+                            <td>{{ nfce.data_criacao.strftime('%d/%m/%Y %H:%M:%S') if nfce.data_criacao else '-' }}</td>
+                        </tr>
+                        {% if nfce.data_autorizacao %}
+                        <tr>
+                            <th>Data Autorização:</th>
+                            <td>{{ nfce.data_autorizacao.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Chave de Acesso:</th>
+                            <td><small>{{ nfce.chave_acesso or '-' }}</small></td>
+                        </tr>
+                        <tr>
+                            <th>Protocolo:</th>
+                            <td>{{ dados.protocolo or nfce.protocolo_sefaz or '-' }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Emitente -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-building"></i> Emitente</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>{{ emitente.razao_social }}</strong></p>
+                    {% if emitente.nome_fantasia %}
+                    <p class="mb-1">{{ emitente.nome_fantasia }}</p>
+                    {% endif %}
+                    <p class="mb-1">CNPJ: {{ emitente.cnpj }}</p>
+                    <p class="mb-1">IE: {{ emitente.inscricao_estadual }}</p>
+                    <p class="mb-1">
+                        {{ emitente.logradouro }}, {{ emitente.numero }}<br>
+                        {{ emitente.bairro }} - {{ emitente.nome_municipio }}/{{ emitente.uf }}<br>
+                        CEP: {{ emitente.cep }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <!-- Chave de Acesso -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-key"></i> Chave de Acesso</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3" style="word-break: break-all;">
+                        <code style="font-size: 11px;">{{ nfce.chave_acesso or 'Chave não disponível' }}</code>
+                    </div>
+                    {% if dados.qrcode_url %}
+                    <div class="text-center">
+                        {% if dados.qrcode_url.startswith('data:image') %}
+                            <img src="{{ dados.qrcode_url }}" alt="QR Code" style="max-width: 200px;">
+                        {% else %}
+                            <img src="data:image/png;base64,{{ dados.qrcode_url }}" alt="QR Code" style="max-width: 200px;">
+                        {% endif %}
+                        <p class="text-muted small mt-2">Escaneie o QR Code para consultar</p>
+                    </div>
+                    {% else %}
+                    <div class="text-center">
+                        <p class="text-muted">QR Code não disponível</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Destinatário -->
+            {% if dados.destinatario and dados.destinatario.cpf_cnpj %}
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-user"></i> Destinatário</h5>
+                </div>
+                <div class="card-body">
+                    {% if dados.destinatario.nome %}
+                    <p class="mb-1"><strong>{{ dados.destinatario.nome }}</strong></p>
+                    {% endif %}
+                    <p class="mb-1">CPF/CNPJ: {{ dados.destinatario.cpf_cnpj }}</p>
+                    {% if dados.destinatario.email %}
+                    <p class="mb-0">E-mail: {{ dados.destinatario.email }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Consumidor não identificado
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Produtos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-shopping-cart"></i> Produtos ({{ dados.produtos|length if dados.produtos else 0 }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if dados.produtos %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th class="text-center">Qtd</th>
+                                    <th class="text-right">Valor Unit.</th>
+                                    <th class="text-right">Desconto</th>
+                                    <th class="text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in dados.produtos %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item.descricao }}</strong><br>
+                                        <small class="text-muted">ID: {{ item.produto_id }}</small>
+                                    </td>
+                                    <td class="text-center">{{ item.quantidade }}</td>
+                                    <td class="text-right">R$ {{ "%.2f"|format(item.valor_unitario) }}</td>
+                                    <td class="text-right">
+                                        {% if item.desconto > 0 %}
+                                        <span class="text-danger">-R$ {{ "%.2f"|format(item.desconto) }}</span>
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right">
+                                        <strong>R$ {{ "%.2f"|format(item.quantidade * item.valor_unitario - (item.desconto or 0)) }}</strong>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="4" class="text-right">TOTAL:</th>
+                                    <th class="text-right">
+                                        <span class="text-success" style="font-size: 1.3em;">
+                                            R$ {{ "%.2f"|format(dados.totais.valor_total if dados.totais else 0) }}
+                                        </span>
+                                    </th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    {% else %}
+                    <p class="text-muted">Nenhum produto</p>
+                    {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagamento e Observações -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-credit-card"></i> Pagamento</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1">
+                        <strong>Forma:</strong>
+                        {% if dados.forma_pagamento == '01' %}Dinheiro
+                        {% elif dados.forma_pagamento == '03' %}Cartão de Crédito
+                        {% elif dados.forma_pagamento == '04' %}Cartão de Débito
+                        {% elif dados.forma_pagamento == '16' %}PIX
+                        {% else %}{{ dados.forma_pagamento }}
+                        {% endif %}
+                    </p>
+                    {% if dados.valor_pago %}
+                    <p class="mb-1"><strong>Valor Pago:</strong> R$ {{ "%.2f"|format(dados.valor_pago) }}</p>
+                    {% endif %}
+                    {% if dados.troco and dados.troco > 0 %}
+                    <p class="mb-1"><strong>Troco:</strong> R$ {{ "%.2f"|format(dados.troco) }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if dados.informacoes_adicionais %}
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-comment"></i> Observações</h5>
+                </div>
+                <div class="card-body">
+                    <p>{{ dados.informacoes_adicionais }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Ações -->
+    {% if nfce.status == 'Autorizada' %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Ações</h5>
+                </div>
+                <div class="card-body">
+                    <button type="button" class="btn btn-danger" data-toggle="modal" data-target="#modalCancelar">
+                        <i class="fas fa-ban"></i> Cancelar NFC-e
+                    </button>
+                    <small class="text-muted ml-3">Prazo: até 24 horas após a emissão</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal Cancelamento -->
+<div class="modal fade" id="modalCancelar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cancelar NFC-e #{{ dados.numero or nfce.nfe_emitida_id }}</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Atenção!</strong> Esta ação não pode ser desfeita.
+                </div>
+                <form id="formCancelar">
+                    <div class="form-group">
+                        <label>Justificativa (mínimo 15 caracteres)</label>
+                        <textarea class="form-control" name="justificativa" rows="4" required minlength="15"
+                                  placeholder="Ex: Erro no valor, Cliente desistiu da compra, etc."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmarCancelamento()">
+                    <i class="fas fa-ban"></i> Confirmar Cancelamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmarCancelamento() {
+    let form = document.getElementById('formCancelar');
+    let justificativa = form.justificativa.value;
+    
+    if (justificativa.length < 15) {
+        alert('A justificativa deve ter pelo menos 15 caracteres');
+        return;
+    }
+    
+    if (!confirm('Tem certeza que deseja cancelar esta NFC-e?')) {
+        return;
+    }
+    
+    fetch('/admin/nfce/cancelar/{{ nfce.nfe_emitida_id }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `justificativa=${encodeURIComponent(justificativa)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            let msg = 'NFC-e cancelada com sucesso!';
+            if (data.protocolo) {
+                msg += '\nProtocolo: ' + data.protocolo;
+            }
+            alert(msg);
+            location.reload();
+        } else {
+            alert('Erro ao cancelar: ' + data.erro);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao cancelar NFC-e. Verifique o console para detalhes.');
+    });
+}
+</script>
+{% endblock %}

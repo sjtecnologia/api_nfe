@@ -1,0 +1,332 @@
+{% extends 'base.html' %}
+
+{% block title %}Análise de Vendas{% endblock %}
+
+{% block content %}
+<style>
+    .ia-narrativa-section + .ia-narrativa-section {
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+    }
+    .ia-narrativa-section-title {
+        color: var(--sj-secondary, #0288D1);
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
+    .ia-narrativa-list {
+        counter-reset: ia-item;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .ia-narrativa-item {
+        counter-increment: ia-item;
+        display: flex;
+        gap: 0.75rem;
+        line-height: 1.55;
+        margin-bottom: 0.8rem;
+    }
+    .ia-narrativa-item::before {
+        align-items: center;
+        background: rgba(2, 136, 209, 0.12);
+        border-radius: 50%;
+        color: var(--sj-secondary, #0288D1);
+        content: counter(ia-item);
+        display: flex;
+        flex: 0 0 1.7rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        height: 1.7rem;
+        justify-content: center;
+        margin-top: 0.1rem;
+    }
+    .ia-narrativa-item-label {
+        color: #263238;
+        display: block;
+        font-weight: 700;
+        margin-bottom: 0.15rem;
+    }
+    .ia-narrativa-text {
+        color: #4f5b62;
+        margin: 0;
+    }
+    .ia-typing-status {
+        color: var(--sj-secondary, #0288D1);
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+    }
+    .ia-typing-cursor {
+        animation: iaCursorBlink 0.9s step-end infinite;
+        border-right: 2px solid var(--sj-secondary, #0288D1);
+        white-space: pre-wrap;
+    }
+    @keyframes iaCursorBlink {
+        50% { border-color: transparent; }
+    }
+</style>
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1"><i class="fas fa-chart-line me-2"></i>Análise de Vendas</h2>
+            <small class="text-muted" id="periodoAtual">Análise histórica</small>
+        </div>
+        <div class="d-flex gap-2">
+            <select id="periodoAnalise" class="form-select" aria-label="Período da análise">
+                <option value="7">Últimos 7 dias</option>
+                <option value="15">Últimos 15 dias</option>
+                <option value="30" selected>Últimos 30 dias</option>
+                <option value="mes">Mês atual</option>
+            </select>
+            <input id="dataInicioAnalise" type="date" class="form-control" aria-label="Data inicial">
+            <input id="dataFimAnalise" type="date" class="form-control" aria-label="Data final">
+            <button id="btnAnalisarVendas" class="btn btn-primary text-nowrap">
+                <i class="fas fa-calculator me-1"></i>Analisar vendas
+            </button>
+            <button id="btnExplicarVendas" class="btn btn-outline-success text-nowrap" disabled>
+                <i class="fas fa-robot me-1"></i>Explicar com IA
+            </button>
+        </div>
+    </div>
+
+    <div id="alertaQualidade" class="alert alert-info d-none"></div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card border-left-primary"><div class="card-body"><small class="text-muted">Faturamento</small><h4 id="metricFaturamento">R$ 0,00</h4><small id="deltaFaturamento">-</small></div></div></div>
+        <div class="col-md-3"><div class="card border-left-info"><div class="card-body"><small class="text-muted">Documentos autorizados</small><h4 id="metricDocumentos">0</h4><small id="deltaDocumentos">-</small></div></div></div>
+        <div class="col-md-3"><div class="card border-left-success"><div class="card-body"><small class="text-muted">Ticket médio</small><h4 id="metricTicket">R$ 0,00</h4><small id="deltaTicket">-</small></div></div></div>
+        <div class="col-md-3"><div class="card border-left-warning"><div class="card-body"><small class="text-muted">Itens vendidos</small><h4 id="metricItens">0</h4><small id="metricTaxas">Cancelamentos: 0% | Rejeições: 0%</small></div></div></div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="mb-0">Destaques</h5></div>
+                <div class="card-body" id="destaques"><p class="text-muted mb-0">Clique em Analisar vendas.</p></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="mb-0">Pontos de atenção</h5></div>
+                <div class="card-body" id="pontosAtencao"><p class="text-muted mb-0">Nenhum indicador calculado.</p></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Produtos mais vendidos</h5></div>
+                <div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Produto</th><th>Qtd.</th><th>Participação</th></tr></thead><tbody id="produtosMaisVendidos"><tr><td colspan="3" class="text-muted">Sem dados</td></tr></tbody></table></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header"><h5 class="mb-0">Comparação com período anterior</h5></div>
+                <div class="card-body" id="comparacao"><p class="text-muted mb-0">Sem comparação calculada.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="narrativaIa" class="card mt-4 d-none">
+        <div class="card-header"><h5 class="mb-0"><i class="fas fa-robot me-2"></i>Explicação da IA</h5></div>
+        <div class="card-body">
+            <div id="iaTypingStatus" class="ia-typing-status d-none"><i class="fas fa-pen-nib me-1"></i>IA escrevendo...</div>
+            <div id="narrativaIaTexto"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const periodoEl = document.getElementById('periodoAnalise');
+    const dataInicioEl = document.getElementById('dataInicioAnalise');
+    const dataFimEl = document.getElementById('dataFimAnalise');
+    const btnAnalisar = document.getElementById('btnAnalisarVendas');
+    const btnExplicar = document.getElementById('btnExplicarVendas');
+    let ultimaAnalise = null;
+
+    const money = (value) => Number(value || 0).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+    const pct = (value) => value == null ? 'Sem comparação' : `${Number(value).toFixed(1).replace('.', ',')}%`;
+    const loading = (button, active, text) => {
+        if (!button) return;
+        if (active) {
+            button.dataset.original = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i>${text}`;
+        } else {
+            button.disabled = false;
+            button.innerHTML = button.dataset.original || button.innerHTML;
+        }
+    };
+
+    function queryPeriodo() {
+        const params = new URLSearchParams();
+        if (dataInicioEl.value && dataFimEl.value) {
+            params.set('data_inicio', dataInicioEl.value);
+            params.set('data_fim', dataFimEl.value);
+        } else {
+            params.set('periodo', periodoEl.value);
+        }
+        return params;
+    }
+
+    function renderIndicadores(id, items, emptyText) {
+        const container = document.getElementById(id);
+        if (!items || !items.length) {
+            container.innerHTML = `<p class="text-muted mb-0">${emptyText}</p>`;
+            return;
+        }
+        container.innerHTML = items.map((item) => `
+            <div class="alert ${item.tipo === 'positivo' ? 'alert-success' : 'alert-warning'} mb-2">
+                <strong>${item.titulo}</strong><br><small>${item.descricao}</small>
+            </div>
+        `).join('');
+    }
+
+    function escapeHtml(value) {
+        return String(value || '').replace(/[&<>'"]/g, (char) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        }[char]));
+    }
+
+    function renderNarrativaIa(text) {
+        const container = document.getElementById('narrativaIaTexto');
+        const normalized = String(text || '').replace(/\r/g, '').trim();
+        const clean = (value) => String(value || '')
+            .replace(/\*{1,3}/g, '')
+            .replace(/^#+\s*/gm, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const sectionPattern = /\*{0,3}(Observa[cç][oõ]es|Recomenda[cç][oõ]es)\s*:\s*\*{0,3}/gi;
+        const sections = [];
+        const matches = [...normalized.matchAll(sectionPattern)];
+
+        matches.forEach((match, index) => {
+            const title = /observ/i.test(match[1]) ? 'Observações' : 'Recomendações';
+            const start = (match.index || 0) + match[0].length;
+            const end = matches[index + 1]?.index ?? normalized.length;
+            sections.push({title, body: normalized.slice(start, end).trim()});
+        });
+        if (!sections.length) sections.push({title: 'Análise', body: normalized});
+
+        const renderSection = (section) => {
+            const itemPattern = /(?:^|\s)(\d+)\.\s*\*{0,3}([^:*\n]+?)\*{0,3}\s*:\s*/g;
+            const itemMatches = [...section.body.matchAll(itemPattern)];
+            const items = itemMatches.map((match, index) => {
+                const start = (match.index || 0) + match[0].length;
+                const end = itemMatches[index + 1]?.index ?? section.body.length;
+                return {label: clean(match[2]), text: clean(section.body.slice(start, end))};
+            }).filter((item) => item.label && item.text);
+
+            if (!items.length) {
+                return `<section class="ia-narrativa-section"><h6 class="ia-narrativa-section-title">${escapeHtml(section.title)}</h6><p class="ia-narrativa-text">${escapeHtml(clean(section.body))}</p></section>`;
+            }
+            return `<section class="ia-narrativa-section"><h6 class="ia-narrativa-section-title">${escapeHtml(section.title)}</h6><ol class="ia-narrativa-list">${items.map((item) => `<li class="ia-narrativa-item"><div><span class="ia-narrativa-item-label">${escapeHtml(item.label)}</span><p class="ia-narrativa-text">${escapeHtml(item.text)}</p></div></li>`).join('')}</ol></section>`;
+        };
+        container.innerHTML = sections.map(renderSection).join('');
+    }
+
+    function mostrarNarrativaComDigitacao(text) {
+        const container = document.getElementById('narrativaIaTexto');
+        const status = document.getElementById('iaTypingStatus');
+        const normalized = String(text || '');
+        const typing = document.createElement('div');
+        typing.className = 'ia-typing-cursor';
+        container.replaceChildren(typing);
+        status.classList.remove('d-none');
+
+        let position = 0;
+        const interval = setInterval(() => {
+            position += Math.max(1, Math.ceil((normalized.length - position) / 45));
+            typing.textContent = normalized.slice(0, position);
+            if (position >= normalized.length) {
+                clearInterval(interval);
+                status.classList.add('d-none');
+                renderNarrativaIa(normalized);
+            }
+        }, 24);
+    }
+
+    function renderAnalise(data) {
+        ultimaAnalise = data;
+        const m = data.metricas || {};
+        const c = data.comparativos || {};
+        const qualidade = data.qualidade_dados || {};
+        document.getElementById('periodoAtual').textContent = `${data.periodo.inicio} até ${data.periodo.fim}`;
+        document.getElementById('metricFaturamento').textContent = money(m.faturamento);
+        document.getElementById('metricDocumentos').textContent = m.quantidade_autorizada || 0;
+        document.getElementById('metricTicket').textContent = money(m.ticket_medio);
+        document.getElementById('metricItens').textContent = Number(m.quantidade_itens_vendidos || 0).toLocaleString('pt-BR');
+        document.getElementById('deltaFaturamento').textContent = `Variação: ${pct(c.faturamento?.percentual)}`;
+        document.getElementById('deltaDocumentos').textContent = `Variação: ${pct(c.documentos_autorizados?.percentual)}`;
+        document.getElementById('deltaTicket').textContent = `Variação: ${pct(c.ticket_medio?.percentual)}`;
+        document.getElementById('metricTaxas').textContent = `Cancelamentos: ${pct(m.taxa_cancelamento)} | Rejeições: ${pct(m.taxa_rejeicao)}`;
+
+        renderIndicadores('destaques', data.destaques, 'Nenhum destaque objetivo no período.');
+        renderIndicadores('pontosAtencao', data.pontos_atencao, 'Nenhum ponto de atenção objetivo no período.');
+
+        const rows = data.listas?.produtos_mais_vendidos || [];
+        document.getElementById('produtosMaisVendidos').innerHTML = rows.length ? rows.map((p) => `
+            <tr><td>${p.descricao || '-'}</td><td>${Number(p.quantidade || 0).toLocaleString('pt-BR')}</td><td>${pct(p.participacao_faturamento_pct)}</td></tr>
+        `).join('') : '<tr><td colspan="3" class="text-muted">Não encontramos produtos vendidos no período.</td></tr>';
+
+        const periodoAnterior = c.periodo_anterior || {};
+        document.getElementById('comparacao').innerHTML = `
+            <p class="mb-1"><strong>Período anterior:</strong> ${periodoAnterior.inicio || '-'} até ${periodoAnterior.fim || '-'}</p>
+            <p class="mb-1">Faturamento: <strong>${pct(c.faturamento?.percentual)}</strong></p>
+            <p class="mb-0">Ticket médio: <strong>${pct(c.ticket_medio?.percentual)}</strong></p>
+        `;
+
+        const alerta = document.getElementById('alertaQualidade');
+        const avisos = qualidade.avisos || [];
+        alerta.classList.toggle('d-none', !avisos.length);
+        alerta.innerHTML = avisos.length ? `<strong>Qualidade dos dados</strong><ul class="mb-0">${avisos.map((a) => `<li>${a}</li>`).join('')}</ul>` : '';
+        btnExplicar.disabled = !qualidade.suficiente;
+        document.getElementById('narrativaIa').classList.add('d-none');
+    }
+
+    async function analisar() {
+        loading(btnAnalisar, true, 'Analisando...');
+        try {
+            const response = await fetch(`/admin/api/inteligencia/analises/vendas?${queryPeriodo().toString()}`);
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || 'Não foi possível analisar vendas.');
+            renderAnalise(payload.data);
+        } catch (error) {
+            alert(error.message || 'Não foi possível analisar vendas.');
+        } finally {
+            loading(btnAnalisar, false);
+        }
+    }
+
+    async function explicar() {
+        loading(btnExplicar, true, 'Explicando...');
+        try {
+            const response = await fetch(`/admin/api/inteligencia/analises/vendas/explicar?${queryPeriodo().toString()}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''},
+                body: JSON.stringify({}),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || 'Não foi possível gerar a explicação.');
+            renderAnalise(payload.data);
+            if (payload.data.narrativa) {
+                document.getElementById('narrativaIa').classList.remove('d-none');
+                mostrarNarrativaComDigitacao(payload.data.narrativa);
+            } else if (payload.warning) {
+                alert('A análise foi calculada, mas não foi possível gerar a explicação por IA neste momento.');
+            }
+        } catch (error) {
+            alert(error.message || 'Não foi possível gerar a explicação por IA.');
+        } finally {
+            loading(btnExplicar, false);
+        }
+    }
+
+    btnAnalisar.addEventListener('click', analisar);
+    btnExplicar.addEventListener('click', explicar);
+})();
+</script>
+{% endblock %}

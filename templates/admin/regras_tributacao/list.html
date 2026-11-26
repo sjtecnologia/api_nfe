@@ -1,0 +1,321 @@
+{% extends 'base.html' %}
+
+{% block title %}Regras de Tributação{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="page-title">⚖️ Regras de Tributação (NFe)</h1>
+                    <div class="page-subtitle">
+                        {{ cliente_nome }}
+                    </div>
+                </div>
+                <div>
+                    <a href="{{ url_for('admin.nova_regra_tributacao', cliente_id=cliente_id) }}" 
+                       class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Nova Regra
+                    </a>
+                    {% if cliente_id %}
+                    <a href="{{ url_for('cliente.dashboard', cliente_hash=encode_id(cliente_id)) }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('admin.admin_home') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="col-md-2">
+                    <label class="form-label">CFOP</label>
+                    <input type="text" class="form-control" name="cfop" placeholder="CFOP" value="{{ request.args.get('cfop', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">NCM</label>
+                    <input type="text" class="form-control" name="ncm" placeholder="NCM" value="{{ request.args.get('ncm', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">UF Origem</label>
+                    <input type="text" class="form-control" name="uf_origem" placeholder="SP" value="{{ request.args.get('uf_origem', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">UF Destino</label>
+                    <input type="text" class="form-control" name="uf_destino" placeholder="RJ" value="{{ request.args.get('uf_destino', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">CST ICMS</label>
+                    <input type="text" class="form-control" name="cst_icms" placeholder="00" value="{{ request.args.get('cst_icms', '') }}">
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>                    {% if request.args.get('cfop') or request.args.get('ncm') or request.args.get('uf_origem') or request.args.get('uf_destino') or request.args.get('cst_icms') %}
+                    <a href="{{ url_for('admin.list_regras_tributacao') }}?cliente_id={{ cliente_id }}" class="btn btn-secondary ms-1">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Regras -->
+    <div class="card">
+        <div class="card-body">
+            {% if regras %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Prioridade</th>
+                            <th>CFOP</th>
+                            <th>NCM</th>
+                            <th>UF Origem</th>
+                            <th>UF Destino</th>
+                            <th>CST ICMS</th>
+                            <th>Alíq. ICMS</th>
+                            <th>Alíq. PIS</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for regra in regras %}
+                        <tr>
+                            <td>
+                                <code>#{{ regra.regra_tributacao_id }}</code>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">
+                                    {{ regra.prioridade or 100 }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if regra.cfop_codigo %}
+                                    <small>
+                                        <strong>{{ regra.cfop_codigo }}</strong><br>
+                                        <span class="text-muted">{{ (regra.cfop_descricao or '')[:30] }}...</span>
+                                    </small>
+                                {% else %}
+                                    <span class="text-muted">Todos</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if regra.ncm_codigo %}
+                                    <small>
+                                        <strong>{{ regra.ncm_codigo }}</strong><br>
+                                        <span class="text-muted">{{ (regra.ncm_descricao or '')[:25] }}...</span>
+                                    </small>
+                                {% else %}
+                                    <span class="text-muted">Todos</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge badge-secondary">
+                                    {{ regra.uf_origem or 'Todas' }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-secondary">
+                                    {{ regra.uf_destino or 'Todas' }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if regra.cst_icms %}
+                                    <code>{{ regra.cst_icms }}</code>
+                                {% elif regra.csosn_icms %}
+                                    <code>{{ regra.csosn_icms }}</code>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if regra.aliquota_icms %}
+                                    <strong class="text-success">{{ "%.2f"|format(regra.aliquota_icms) }}%</strong>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if regra.aliquota_pis %}
+                                    <strong class="text-info">{{ "%.2f"|format(regra.aliquota_pis) }}%</strong>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-info" title="Ver Detalhes"
+                                            data-regra-id="{{ regra.regra_tributacao_id }}"
+                                            data-cfop="{{ regra.cfop_codigo or 'Todos' }}"
+                                            data-ncm="{{ regra.ncm_codigo or 'Todos' }}"
+                                            data-cst="{{ regra.cst_icms or regra.csosn_icms or 'N/A' }}"
+                                            data-icms="{{ regra.aliquota_icms or 0 }}"
+                                            data-pis="{{ regra.aliquota_pis or 0 }}"
+                                            data-cofins="{{ regra.aliquota_cofins or 0 }}"
+                                            onclick="showDetails(this)">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    
+                                    <a href="{{ url_for('admin.edit_regra_tributacao', regra_tributacao_id=regra.regra_tributacao_id) }}" 
+                                       class="btn btn-warning" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    
+                                    <button type="button" class="btn btn-danger" title="Excluir" 
+                                            data-regra-id="{{ regra.regra_tributacao_id }}"
+                                            data-cfop="{{ regra.cfop_codigo or 'Todos' }}"
+                                            data-ncm="{{ regra.ncm_codigo or 'Todos' }}"
+                                            onclick="confirmarExclusao(this)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-calculator fa-4x text-muted mb-4"></i>
+                <h5 class="text-muted">Nenhuma regra de tributação encontrada</h5>
+                <p class="text-muted">
+                    Adicione regras de tributação para automatizar o cálculo de impostos nas NF-e
+                </p>
+                <a href="{{ url_for('admin.nova_regra_tributacao', cliente_id=cliente_id) }}" 
+                   class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Adicionar Regra
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Detalhes -->
+<div class="modal fade" id="detailsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-calculator"></i>
+                    Detalhes da Regra de Tributação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modalContent">
+                <i class="fas fa-spinner fa-spin"></i> Carregando...
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Formulário oculto para exclusão -->
+<form id="deleteForm" method="POST" style="display: none;">
+    <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showDetails(button) {
+    const regraId = button.getAttribute('data-regra-id');
+    const cfop = button.getAttribute('data-cfop');
+    const ncm = button.getAttribute('data-ncm');
+    const cst = button.getAttribute('data-cst');
+    const icms = button.getAttribute('data-icms');
+    const pis = button.getAttribute('data-pis');
+    const cofins = button.getAttribute('data-cofins');
+    
+    $('#modalContent').html('<i class="fas fa-spinner fa-spin"></i> Carregando...');
+    $('#detailsModal').modal('show');
+    
+    setTimeout(function() {
+        $('#modalContent').html(
+            '<div class="row mb-2">' +
+                '<div class="col-sm-3"><strong>ID:</strong></div>' +
+                '<div class="col-sm-9"><code>#' + regraId + '</code></div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-3"><strong>CFOP:</strong></div>' +
+                '<div class="col-sm-9">' + cfop + '</div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-3"><strong>NCM:</strong></div>' +
+                '<div class="col-sm-9">' + ncm + '</div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-3"><strong>CST/CSOSN:</strong></div>' +
+                '<div class="col-sm-9"><code>' + cst + '</code></div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-3"><strong>ICMS:</strong></div>' +
+                '<div class="col-sm-9"><strong class="text-success">' + icms + '%</strong></div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-3"><strong>PIS:</strong></div>' +
+                '<div class="col-sm-9"><strong class="text-info">' + pis + '%</strong></div>' +
+            '</div>' +
+            '<div class="row mb-2">' +
+                '<div class="col-sm-3"><strong>COFINS:</strong></div>' +
+                '<div class="col-sm-9"><strong class="text-warning">' + cofins + '%</strong></div>' +
+            '</div>' +
+            '<hr>' +
+            '<div class="alert alert-info">' +
+                '<i class="fas fa-info-circle"></i>' +
+                '<strong>Como funciona:</strong>' +
+                '<ul class="mb-0 mt-2">' +
+                    '<li><strong>Prioridade:</strong> Regras são aplicadas por ordem de prioridade (menor número = maior prioridade)</li>' +
+                    '<li><strong>Critérios:</strong> A primeira regra que atender a todos os critérios será utilizada</li>' +
+                    '<li><strong>Campos vazios:</strong> Significam "qualquer valor" (aplicam a todos)</li>' +
+                    '<li><strong>Automação:</strong> Utilizada automaticamente no cálculo de impostos da NF-e</li>' +
+                    '<li><strong>Hierarquia:</strong> Mais específica = maior prioridade (CFOP + NCM + UF > apenas CFOP)</li>' +
+                '</ul>' +
+            '</div>' +
+            '<div class="alert alert-warning">' +
+                '<i class="fas fa-exclamation-triangle"></i>' +
+                '<strong>Dica:</strong> Configure regras específicas com prioridade baixa (1-50) e regras gerais com prioridade alta (100+)' +
+            '</div>'
+        );
+    }, 300);
+}
+
+function confirmarExclusao(button) {
+    const regraId = button.getAttribute('data-regra-id');
+    const cfop = button.getAttribute('data-cfop');
+    const ncm = button.getAttribute('data-ncm');
+    
+    const mensagem = '⚠️ ATENÇÃO!\n\n' +
+                    'Tem certeza que deseja excluir esta regra de tributação?\n\n' +
+                    'ID: #' + regraId + '\n' +
+                    'CFOP: ' + cfop + '\n' +
+                    'NCM: ' + ncm + '\n\n' +
+                    'Esta ação não pode ser desfeita!';
+    
+    if (confirm(mensagem)) {
+        // Configurar formulário e enviar
+        const form = document.getElementById('deleteForm');
+        form.action = '/admin/regras-tributacao/excluir/' + regraId;
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

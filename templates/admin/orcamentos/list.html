@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Orçamentos{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1"><i class="fas fa-file-invoice-dollar text-primary"></i> Orçamentos</h1>
+      <p class="text-muted mb-0">Crie orçamentos, receba solicitações do portal e converta em pedidos.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('orcamentos.listar_portal_usuarios') }}">
+        <i class="fas fa-users"></i> Usuários do portal
+      </a>
+      <a class="btn btn-primary" href="{{ url_for('orcamentos.novo') }}">
+        <i class="fas fa-plus"></i> Novo orçamento
+      </a>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="row g-3 mb-4">
+    {% for chave, label in status_labels.items() %}
+    <div class="col-6 col-md-3 col-xl-2">
+      <a class="text-decoration-none" href="{{ url_for('orcamentos.listar', status=chave) }}">
+        <div class="card h-100 border-start border-4 border-{{ status_badges[chave] }} shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-uppercase small fw-bold text-muted">{{ label }}</div>
+            <div class="h4 mb-0">{{ contadores.get(chave, 0) }}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-9">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <strong>Lista de orçamentos</strong>
+          <form class="d-flex flex-wrap gap-2" method="get" action="{{ url_for('orcamentos.listar') }}">
+            <input class="form-control form-control-sm" name="q" value="{{ filtros.q }}" placeholder="Número ou cliente">
+            <select class="form-select form-select-sm" name="status">
+              <option value="">Todos os status</option>
+              {% for chave, label in status_labels.items() %}
+              <option value="{{ chave }}" {% if filtros.status == chave %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <select class="form-select form-select-sm" name="origem">
+              <option value="">Toda origem</option>
+              {% for chave, label in origem_labels.items() %}
+              <option value="{{ chave }}" {% if filtros.origem == chave %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-sm btn-outline-primary">Filtrar</button>
+          </form>
+        </div>
+        <div class="card-body p-0">
+          {% if orcamentos %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead><tr><th>Número</th><th>Cliente</th><th>Origem</th><th>Itens</th><th>Total</th><th>Status</th><th>Data</th><th></th></tr></thead>
+              <tbody>
+                {% for o in orcamentos %}
+                <tr>
+                  <td><strong>{{ o.numero }}</strong>{% if o.pedido_numero %}<br><small class="text-success">Pedido {{ o.pedido_numero }}</small>{% endif %}</td>
+                  <td>{{ o.cliente_nome or o.portal_nome or 'Não informado' }}</td>
+                  <td><span class="badge bg-light text-dark">{{ origem_labels.get(o.origem, o.origem) }}</span></td>
+                  <td>{{ o.total_itens }}</td>
+                  <td class="text-nowrap">R$ {{ '%.2f'|format(o.valor_total) }}</td>
+                  <td><span class="badge bg-{{ status_badges.get(o.status, 'secondary') }}">{{ status_labels.get(o.status, o.status) }}</span></td>
+                  <td class="text-nowrap">{{ o.created_at.strftime('%d/%m/%Y %H:%M') if o.created_at else '-' }}</td>
+                  <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('orcamentos.detalhe', orcamento_id=o.orcamento_id) }}">Abrir</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center text-muted p-5">Nenhum orçamento encontrado. Crie o primeiro ou aguarde uma solicitação do portal.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-3">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong><i class="fas fa-bell"></i> Notificações</strong>
+          <a class="small" href="{{ url_for('orcamentos.listar_notificacoes') }}">Ver todas</a>
+        </div>
+        <div class="list-group list-group-flush">
+          {% for n in notificacoes %}
+          <div class="list-group-item {{ '' if n.lida else 'bg-light' }}">
+            <div class="d-flex justify-content-between gap-2">
+              <strong class="small">{{ n.titulo }}</strong>
+              {% if not n.lida %}<span class="badge bg-danger">nova</span>{% endif %}
+            </div>
+            {% if n.mensagem %}<div class="small text-muted mt-1">{{ n.mensagem }}</div>{% endif %}
+            {% if n.link %}<a class="small" href="{{ n.link }}">Abrir</a>{% endif %}
+          </div>
+          {% else %}
+          <div class="list-group-item text-muted small">Sem notificações por enquanto.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

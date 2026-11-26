@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Selecionar Certificado A3{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-usb"></i> Selecionar Certificado A3 (Token/Smartcard)</h4>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Step 1: Detectar Tokens -->
+                    <div id="step1" class="step-section">
+                        <h5 class="text-primary"><i class="fas fa-search"></i> Passo 1: Detectar Tokens Conectados</h5>
+                        <p class="text-muted">Conecte seu token USB e clique em detectar.</p>
+                        <button type="button" class="btn btn-primary" id="btnDetectTokens">
+                            <i class="fas fa-sync"></i> Detectar Tokens
+                        </button>
+                        
+                        <div id="tokensResult" class="mt-3" style="display: none;">
+                            <h6>Tokens Encontrados:</h6>
+                            <div id="tokensList"></div>
+                        </div>
+                        
+                        <div id="noTokensWarning" class="alert alert-warning mt-3" style="display: none;">
+                            <strong>Nenhum token encontrado!</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Verifique se o token está conectado</li>
+                                <li>Instale os drivers do fabricante (SafeNet, Certisign, etc)</li>
+                                <li>No Windows: execute como Administrador</li>
+                                <li>No Linux: verifique permissões de USB</li>
+                            </ul>
+                        </div>
+                        
+                        <div id="pkcs11Error" class="alert alert-danger mt-3" style="display: none;">
+                            <h5><i class="fas fa-exclamation-circle"></i> Suporte A3 não disponível no servidor</h5>
+                            <p>O certificado A3 (token/smartcard) é um dispositivo físico conectado ao <strong>seu computador</strong>. Este sistema não consegue acessá-lo diretamente via web.</p>
+                            <hr>
+                            <p class="mb-1"><strong>Opções:</strong></p>
+                            <ul class="mb-0">
+                                <li>Se possui certificado A3, utilize o software do fabricante do token para <strong>exportar o certificado A1</strong> (.pfx / .p12) e cadastre-o na opção "<strong>Certificado A1</strong>".</li>
+                                <li>Consulte o suporte para habilitação do módulo A3 com assinatura local.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Step 2: Inserir PIN -->
+                    <div id="step2" class="step-section" style="display: none;">
+                        <h5 class="text-primary"><i class="fas fa-key"></i> Passo 2: Inserir PIN do Token</h5>
+                        <form id="formPin">
+                            <input type="hidden" id="selectedLibrary" name="library_path">
+                            <input type="hidden" id="selectedSlot" name="slot_id">
+                            
+                            <div class="form-group">
+                                <label for="tokenPin">PIN do Token:</label>
+                                <input type="password" class="form-control" id="tokenPin" required 
+                                       placeholder="Digite o PIN do seu token" autocomplete="off">
+                                <small class="form-text text-muted">
+                                    ⚠️ Cuidado: após 3 tentativas erradas o token pode bloquear
+                                </small>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-unlock"></i> Listar Certificados
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="btnBackToStep1">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <hr class="my-4" id="separator2" style="display: none;">
+                    
+                    <!-- Step 3: Selecionar Certificado -->
+                    <div id="step3" class="step-section" style="display: none;">
+                        <h5 class="text-primary"><i class="fas fa-certificate"></i> Passo 3: Selecionar Certificado</h5>
+                        <form id="formSelectCert" method="POST" action="{{ url_for('a3.register_certificate') }}">
+                            <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                            <input type="hidden" name="library_path" id="finalLibrary">
+                            <input type="hidden" name="slot_id" id="finalSlot">
+                            <input type="hidden" name="pin" id="finalPin">
+                            <input type="hidden" name="cert_label" id="finalCertLabel">
+                            
+                            <div id="certificatesList"></div>
+                            
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-primary" id="btnRegister" disabled>
+                                    <i class="fas fa-save"></i> Registrar Certificado
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="btnBackToStep2">
+                                    <i class="fas fa-arrow-left"></i> Voltar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.token-card {
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.token-card:hover {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.token-card.selected {
+    border-color: #28a745;
+    background-color: #d4edda;
+}
+
+.cert-card {
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.cert-card:hover {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.cert-card.selected {
+    border-color: #28a745;
+    background-color: #d4edda;
+}
+
+.cert-valid {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.cert-expired {
+    color: #dc3545;
+    font-weight: bold;
+}
+</style>
+
+<script>
+let currentStep = 1;
+let selectedToken = null;
+let selectedCertificate = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Detectar tokens
+    document.getElementById('btnDetectTokens').addEventListener('click', detectTokens);
+    
+    // Form PIN
+    document.getElementById('formPin').addEventListener('submit', function(e) {
+        e.preventDefault();
+        listCertificates();
+    });
+    
+    // Navegação entre steps
+    document.getElementById('btnBackToStep1').addEventListener('click', () => showStep(1));
+    document.getElementById('btnBackToStep2').addEventListener('click', () => showStep(2));
+});
+
+function showStep(step) {
+    // Esconder todos
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'none';
+    document.getElementById('separator2').style.display = 'none';
+    
+    // Mostrar step atual
+    document.getElementById('step' + step).style.display = 'block';
+    if (step >= 2) {
+        document.getElementById('separator2').style.display = 'block';
+    }
+    
+    currentStep = step;
+}
+
+function detectTokens() {
+    const btn = document.getElementById('btnDetectTokens');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detectando...';
+    
+    fetch('/a3/detect-tokens')
+        .then(response => response.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync"></i> Detectar Tokens';
+            
+            if (!data.success) {
+                if (data.message.includes('PyKCS11')) {
+                    document.getElementById('pkcs11Error').style.display = 'block';
+                } else {
+                    document.getElementById('noTokensWarning').style.display = 'block';
+                }
+                return;
+            }
+            
+            if (data.tokens.length === 0) {
+                document.getElementById('noTokensWarning').style.display = 'block';
+                return;
+            }
+            
+            // Exibir tokens
+            const tokensList = document.getElementById('tokensList');
+            tokensList.innerHTML = '';
+            
+            data.tokens.forEach(token => {
+                const card = document.createElement('div');
+                card.className = 'token-card';
+                card.innerHTML = `
+                    <h6><i class="fas fa-usb text-primary"></i> ${token.label}</h6>
+                    <p class="mb-1"><strong>Fabricante:</strong> ${token.manufacturer}</p>
+                    <p class="mb-1"><strong>Modelo:</strong> ${token.model}</p>
+                    <p class="mb-1"><strong>Serial:</strong> ${token.serial}</p>
+                    <p class="mb-0"><small class="text-muted">Biblioteca: ${token.library_info.fabricante}</small></p>
+                `;
+                
+                card.addEventListener('click', () => selectToken(token, card));
+                tokensList.appendChild(card);
+            });
+            
+            document.getElementById('tokensResult').style.display = 'block';
+        })
+        .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sync"></i> Detectar Tokens';
+            alert('Erro ao detectar tokens: ' + error);
+        });
+}
+
+function selectToken(token, cardElement) {
+    // Remover seleção anterior
+    document.querySelectorAll('.token-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // Marcar como selecionado
+    cardElement.classList.add('selected');
+    
+    selectedToken = token;
+    
+    // Preencher dados
+    document.getElementById('selectedLibrary').value = token.library_path;
+    document.getElementById('selectedSlot').value = token.slot_id;
+    
+    // Ir para step 2
+    showStep(2);
+}
+
+function listCertificates() {
+    const pin = document.getElementById('tokenPin').value;
+    
+    if (!pin) {
+        alert('Digite o PIN do token');
+        return;
+    }
+    
+    const data = {
+        library_path: document.getElementById('selectedLibrary').value,
+        slot_id: parseInt(document.getElementById('selectedSlot').value),
+        pin: pin
+    };
+    
+    // Loading
+    const submitBtn = document.querySelector('#formPin button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Acessando token...';
+    
+    fetch('/a3/list-certificates', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-unlock"></i> Listar Certificados';
+        
+        if (!result.success) {
+            alert('Erro ao listar certificados: ' + result.message);
+            return;
+        }
+        
+        if (result.certificates.length === 0) {
+            alert('Nenhum certificado encontrado no token');
+            return;
+        }
+        
+        // Salvar PIN para registro final
+        document.getElementById('finalLibrary').value = data.library_path;
+        document.getElementById('finalSlot').value = data.slot_id;
+        document.getElementById('finalPin').value = pin;
+        
+        // Exibir certificados
+        displayCertificates(result.certificates);
+        showStep(3);
+    })
+    .catch(error => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-unlock"></i> Listar Certificados';
+        alert('Erro ao listar certificados: ' + error);
+    });
+}
+
+function displayCertificates(certificates) {
+    const certsList = document.getElementById('certificatesList');
+    certsList.innerHTML = '';
+    
+    certificates.forEach(cert => {
+        const validClass = cert.is_valid ? 'cert-valid' : 'cert-expired';
+        const validText = cert.is_valid ? '✓ Válido' : '✗ Vencido';
+        const validUntil = new Date(cert.not_after).toLocaleDateString('pt-BR');
+        
+        const card = document.createElement('div');
+        card.className = 'cert-card';
+        card.innerHTML = `
+            <h6><i class="fas fa-certificate"></i> ${cert.common_name || 'Certificado'}</h6>
+            <p class="mb-1"><strong>Label:</strong> ${cert.label}</p>
+            <p class="mb-1"><strong>Válido até:</strong> ${validUntil}</p>
+            <p class="mb-1"><span class="${validClass}">${validText}</span></p>
+            <details class="mt-2">
+                <summary style="cursor: pointer; color: #007bff;">Ver detalhes</summary>
+                <div class="mt-2">
+                    <p class="mb-1"><small><strong>Subject:</strong> ${cert.subject}</small></p>
+                    <p class="mb-0"><small><strong>Fingerprint:</strong> ${cert.fingerprint}</small></p>
+                </div>
+            </details>
+        `;
+        
+        if (cert.is_valid) {
+            card.addEventListener('click', () => selectCertificate(cert, card));
+        } else {
+            card.style.opacity = '0.5';
+            card.style.cursor = 'not-allowed';
+        }
+        
+        certsList.appendChild(card);
+    });
+}
+
+function selectCertificate(cert, cardElement) {
+    // Remover seleção anterior
+    document.querySelectorAll('.cert-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    // Marcar como selecionado
+    cardElement.classList.add('selected');
+    
+    selectedCertificate = cert;
+    
+    // Preencher dados
+    document.getElementById('finalCertLabel').value = cert.label;
+    
+    // Habilitar botão de registro
+    document.getElementById('btnRegister').disabled = false;
+}
+</script>
+
+{% endblock %}

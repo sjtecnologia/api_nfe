@@ -1,0 +1,68 @@
+{% extends "portal/base.html" %}
+{% block title %}Orçamento {{ orcamento.numero }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-1">Orçamento {{ orcamento.numero }}</h1>
+    <p class="text-muted mb-0">
+      <span class="badge bg-{{ status_badges.get(orcamento.status, 'secondary') }}">{{ status_labels.get(orcamento.status, orcamento.status) }}</span>
+      {% if orcamento.pedido_numero %}<span class="badge bg-success">Pedido {{ orcamento.pedido_numero }}</span>{% endif %}
+    </p>
+  </div>
+  <a class="btn btn-outline-secondary" href="{{ url_for('portal.dashboard') }}">Voltar</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card portal-card">
+      <div class="card-header bg-white border-0 pt-3"><strong>Itens solicitados</strong></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table mb-0 align-middle">
+            <thead><tr><th>Produto</th><th>Unidade</th><th>Qtd.</th><th>Valor unit.</th><th>Total</th></tr></thead>
+            <tbody>
+              {% for item in itens %}
+              <tr>
+                <td><strong>{{ item.descricao }}</strong><br><small class="text-muted">{{ item.codigo_produto }}</small></td>
+                <td>{{ item.unidade }}</td>
+                <td>{{ item.quantidade }}</td>
+                <td class="text-nowrap">R$ {{ '%.2f'|format(item.valor_unitario) }}</td>
+                <td class="text-nowrap">R$ {{ '%.2f'|format(item.valor_total) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot><tr><th colspan="4" class="text-end">Total</th><th class="text-nowrap">R$ {{ '%.2f'|format(orcamento.valor_total) }}</th></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card portal-card mb-3">
+      <div class="card-header bg-white border-0 pt-3"><strong>Empresa</strong></div>
+      <div class="card-body">
+        <p class="mb-1"><strong>{{ orcamento.empresa_nome_fantasia or orcamento.empresa_razao_social }}</strong></p>
+        {% if orcamento.empresa_telefone %}<p class="mb-1 text-muted">{{ orcamento.empresa_telefone }}</p>{% endif %}
+        <p class="mb-0 small text-muted">Pedido feito em {{ orcamento.created_at.strftime('%d/%m/%Y %H:%M') if orcamento.created_at else '-' }}</p>
+        {% if orcamento.observacao %}<hr><p class="mb-0">{{ orcamento.observacao }}</p>{% endif %}
+      </div>
+    </div>
+
+    {% if orcamento.status in ('ENVIADO', 'SOLICITADO') %}
+    <div class="card portal-card">
+      <div class="card-header bg-white border-0 pt-3"><strong>Responder</strong></div>
+      <div class="card-body d-grid gap-2">
+        <form method="post" action="{{ url_for('portal.aprovar', orcamento_id=orcamento.orcamento_id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-success w-100" onclick="return confirm('Aprovar este orçamento?');"><i class="fas fa-check"></i> Aprovar orçamento</button>
+        </form>
+        <form method="post" action="{{ url_for('portal.recusar', orcamento_id=orcamento.orcamento_id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline-danger w-100" onclick="return confirm('Recusar este orçamento?');"><i class="fas fa-times"></i> Recusar</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

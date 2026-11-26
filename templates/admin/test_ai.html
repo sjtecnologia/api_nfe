@@ -1,0 +1,1119 @@
+{% extends "base.html" %}
+
+{% block title %}Teste de IA - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-robot"></i> Teste de IA</h2>
+            <p class="text-muted mb-0">Inspecione prompts, status e uma prévia sem tocar no fluxo fiscal atual.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+            </a>
+            <button class="btn btn-primary" onclick="loadAiStatus()">
+                <i class="fas fa-sync-alt"></i> Atualizar Status
+            </button>
+            <button class="btn btn-outline-primary" onclick="loadAiHealth()">
+                <i class="fas fa-heartbeat"></i> Verificar Saúde
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-signal"></i> Status</h5>
+                </div>
+                <div class="card-body">
+                    <div id="ai-status-loading" class="text-muted">Carregando status...</div>
+                    <div id="ai-status-content" class="d-none"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-scroll"></i> Prompts</h5>
+                    <span class="badge bg-light text-dark" id="ai-prompt-count">0</span>
+                </div>
+                <div class="card-body">
+                    <div id="ai-prompts-loading" class="text-muted">Carregando prompts...</div>
+                    <div id="ai-prompts-content" class="d-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-heartbeat"></i> Saúde Operacional da IA</h5>
+            <span id="ai-health-badge" class="badge bg-secondary">Não verificado</span>
+        </div>
+        <div class="card-body">
+            <div id="ai-health-loading" class="text-muted">Aguardando verificação...</div>
+            <div id="ai-health-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-chart-line"></i> Analytics IA (14 dias)</h5>
+            <div class="d-flex gap-2">
+                <select id="analytics-days" class="form-select form-select-sm" style="width: 130px;">
+                    <option value="7">Últimos 7 dias</option>
+                    <option value="14" selected>Últimos 14 dias</option>
+                    <option value="30">Últimos 30 dias</option>
+                    <option value="90">Últimos 90 dias</option>
+                </select>
+                <input id="analytics-cliente-id" class="form-control form-control-sm" style="width: 140px;" type="number" placeholder="Cliente ID">
+                <input id="analytics-funcionalidade" class="form-control form-control-sm" style="width: 190px;" type="text" placeholder="Funcionalidade">
+                <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiAnalytics()">
+                    Aplicar filtros
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="ai-analytics-loading" class="text-muted">Carregando analytics...</div>
+            <div id="ai-analytics-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-flask"></i> Prévia de Prompt</h5>
+        </div>
+        <div class="card-body">
+            <form id="ai-preview-form" class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Prompt</label>
+                    <select class="form-select" id="prompt-name" name="prompt_name" required></select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Variáveis JSON</label>
+                    <textarea class="form-control" id="prompt-variables" rows="4" placeholder='{"empresa": "ACME", "cliente": "Carlos"}'>{}</textarea>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-magic"></i> Gerar Prévia
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleVariables()">
+                        Exemplo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-code"></i> Resultado</h5>
+        </div>
+        <div class="card-body">
+            <pre id="ai-preview-result" class="mb-0 bg-light p-3 rounded" style="min-height: 240px; white-space: pre-wrap;">Selecione um prompt e clique em Gerar Prévia.</pre>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-box-open"></i> Classificação de Produto</h5>
+        </div>
+        <div class="card-body">
+            <form id="ai-classify-form" class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Descrição do produto</label>
+                    <input type="text" class="form-control" id="produto-descricao" placeholder="Ex.: Cadeira ergonômica com apoio lombar" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cliente ID</label>
+                    <input type="number" class="form-control" id="produto-cliente-id" placeholder="Opcional">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo item</label>
+                    <select class="form-select" id="produto-tipo-item">
+                        <option value="Produto" selected>Produto</option>
+                        <option value="Serviço">Serviço</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Unidade</label>
+                    <input type="text" class="form-control" id="produto-unidade" value="UN">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Código interno</label>
+                    <input type="text" class="form-control" id="produto-codigo-interno" placeholder="Opcional">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Classificar Produto
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleProduct()">
+                        Exemplo de Produto
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-clipboard-list"></i> Classificação do Produto</h5>
+        </div>
+        <div class="card-body">
+            <pre id="ai-classify-result" class="mb-0 bg-light p-3 rounded" style="min-height: 240px; white-space: pre-wrap;">Envie um produto para ver o resultado da classificação.</pre>
+        </div>
+    </div>
+
+    <div id="classification-context" class="alert alert-info d-none mt-4 mb-0"></div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-thumbs-up"></i> Feedback da IA</h5>
+        </div>
+        <div class="card-body">
+            <form id="ai-feedback-form" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Funcionalidade</label>
+                    <select class="form-select" id="feedback-funcionalidade" required>
+                        <option value="" selected disabled>Selecione</option>
+                        <option value="assistente_business">Assistente Business</option>
+                        <option value="assistente_fiscal">Assistente Fiscal</option>
+                        <option value="classificacao_produto">Classificação de Produto</option>
+                        <option value="daily_summary">Resumo Diário</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cliente ID</label>
+                    <input type="number" class="form-control" id="feedback-cliente-id" placeholder="Obrigatório">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Feedback</label>
+                    <select class="form-select" id="feedback-value" required>
+                        <option value="POSITIVO" selected>Positivo</option>
+                        <option value="NEGATIVO">Negativo</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Comentário</label>
+                    <input type="text" class="form-control" id="feedback-comment" placeholder="Opcional">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Registrar Feedback
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" onclick="applyLastClassificationToFeedback()">
+                        Usar última classificação
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleFeedback()">
+                        Exemplo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-landmark"></i> Assistente Fiscal (MVP Local)</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="resetFiscalConversation()">
+                Nova conversa
+            </button>
+        </div>
+        <div class="card-body">
+            <form id="ai-fiscal-form" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Cliente ID</label>
+                    <input type="number" class="form-control" id="fiscal-cliente-id" placeholder="Obrigatório" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Conversation ID</label>
+                    <input type="text" class="form-control" id="fiscal-conversation-id" placeholder="Gerado automaticamente" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Pergunta fiscal</label>
+                    <input type="text" class="form-control" id="fiscal-question" placeholder="Ex.: Qual CFOP devo usar para venda interestadual para consumidor final?" required>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Perguntar ao Assistente Fiscal
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="fillSampleFiscalQuestion()">
+                        Exemplo de pergunta
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-comments"></i> Resposta do Assistente Fiscal</h5>
+        </div>
+        <div class="card-body">
+            <pre id="ai-fiscal-result" class="mb-0 bg-light p-3 rounded" style="min-height: 220px; white-space: pre-wrap;">Faça uma pergunta para iniciar o Assistente Fiscal.</pre>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-clock"></i> Conversas Fiscais Recentes</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadFiscalConversations()">
+                Atualizar conversas
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="ai-fiscal-conversations-loading" class="text-muted">Carregando conversas...</div>
+            <div id="ai-fiscal-conversations-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Consultor de Vendas (MVP)</h5>
+            <div class="d-flex gap-2">
+                <input type="number" class="form-control form-control-sm" id="sales-cliente-id" placeholder="Cliente ID" style="width: 140px;">
+                <select class="form-select form-select-sm" id="sales-days" style="width: 130px;">
+                    <option value="14">14 dias</option>
+                    <option value="30" selected>30 dias</option>
+                    <option value="60">60 dias</option>
+                    <option value="90">90 dias</option>
+                </select>
+                <button class="btn btn-sm btn-outline-light" type="button" onclick="loadSalesAdvisorInsights()">
+                    Gerar insights
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="ai-sales-loading" class="text-muted">Informe um Cliente ID e clique em Gerar insights.</div>
+            <div id="ai-sales-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-history"></i> Histórico Recente</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiLogs()">
+                Atualizar histórico
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="ai-logs-loading" class="text-muted">Carregando histórico...</div>
+            <div id="ai-logs-content" class="d-none"></div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-comment-dots"></i> Feedbacks Recentes</h5>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="loadAiFeedbacks()">
+                Atualizar feedbacks
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="ai-feedbacks-loading" class="text-muted">Carregando feedbacks...</div>
+            <div id="ai-feedbacks-content" class="d-none"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let lastClassificationContext = null;
+
+function resetFiscalConversation() {
+    document.getElementById('fiscal-conversation-id').value = '';
+    document.getElementById('ai-fiscal-result').textContent = 'Nova conversa iniciada. Faça sua pergunta fiscal.';
+}
+
+function fillSampleFiscalQuestion() {
+    document.getElementById('fiscal-question').value = 'Posso emitir NFC-e para consumidor final de outro estado? Quais cuidados com CFOP e CST devo revisar?';
+}
+
+async function loadFiscalConversations() {
+    const loading = document.getElementById('ai-fiscal-conversations-loading');
+    const content = document.getElementById('ai-fiscal-conversations-content');
+    const clienteId = (document.getElementById('fiscal-cliente-id').value || '').trim();
+
+    const query = new URLSearchParams();
+    query.set('limit', '10');
+    if (clienteId) {
+        query.set('cliente_id', clienteId);
+    }
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch(`{{ url_for('admin_api.api_ia_assistente_fiscal_conversas') }}?${query.toString()}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Falha ao carregar conversas fiscais');
+        }
+
+        const rows = payload.data || [];
+        if (!rows.length) {
+            content.innerHTML = '<div class="text-muted">Nenhuma conversa fiscal registrada no filtro atual.</div>';
+        } else {
+            content.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Conversation ID</th>
+                                <th>Cliente</th>
+                                <th>Título</th>
+                                <th>Última mensagem</th>
+                                <th>Atualizada em</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map(item => `
+                                <tr>
+                                    <td><button type="button" class="btn btn-link btn-sm p-0" onclick="selectFiscalConversation('${item.conversation_id}')">${item.conversation_id}</button></td>
+                                    <td>${item.cliente_id ?? '-'}</td>
+                                    <td>${item.titulo || '-'}</td>
+                                    <td class="small text-muted">${item.last_message?.content || '-'}</td>
+                                    <td>${item.updated_at || item.last_message_at || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar conversas fiscais: ' + error;
+    }
+}
+
+function selectFiscalConversation(conversationId) {
+    document.getElementById('fiscal-conversation-id').value = conversationId;
+}
+
+async function loadSalesAdvisorInsights() {
+    const loading = document.getElementById('ai-sales-loading');
+    const content = document.getElementById('ai-sales-content');
+    const clienteId = (document.getElementById('sales-cliente-id').value || '').trim();
+    const days = document.getElementById('sales-days').value || '30';
+
+    loading.textContent = 'Gerando insights de vendas...';
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const endpoint = '{{ url_for('admin_api.api_ia_consultor_vendas_insights') }}';
+        const query = `cliente_id=${encodeURIComponent(clienteId)}&days=${encodeURIComponent(days)}`;
+        const response = await fetch(`${endpoint}?${query}`);
+        const payload = await response.json().catch(() => ({ success: false, error: `Resposta inválida do servidor (HTTP ${response.status})` }));
+
+        if (!response.ok || !payload.success) {
+            const msg = payload.error || `Falha ao gerar insights (HTTP ${response.status})`;
+            throw new Error(msg);
+        }
+
+        const data = payload.data || {};
+        const metricas = data.metricas || {};
+        const insights = data.insights || [];
+        const topProdutos = data.top_produtos || [];
+        const topDestinatarios = data.top_destinatarios || [];
+        const narrativaIa = (data.narrativa_ia && data.narrativa_ia.text) ? data.narrativa_ia.text : '';
+        const narrativaOrigem = (data.narrativa_ia && data.narrativa_ia.source) ? data.narrativa_ia.source : 'disabled';
+        const narrativaHtml = narrativaIa
+            ? `<div class="alert alert-secondary"><strong>Narrativa IA (${narrativaOrigem})</strong><br>${String(narrativaIa).replace(/\n/g, '<br>')}</div>`
+            : '';
+
+        const fmtCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+        const fmtPercent = (value) => `${Number(value || 0).toFixed(1).replace('.', ',')}%`;
+        const fmtNumber = (value) => new Intl.NumberFormat('pt-BR').format(Number(value || 0));
+
+        content.innerHTML = `
+            <div class="row g-3 mb-3">
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Notas autorizadas</div><div class="fs-4 fw-bold">${fmtNumber(metricas.total_notas ?? 0)}</div></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Faturamento</div><div class="fs-4 fw-bold">${fmtCurrency(metricas.faturamento)}</div></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Ticket médio</div><div class="fs-4 fw-bold">${fmtCurrency(metricas.ticket_medio)}</div></div></div>
+                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small">Taxa autorização</div><div class="fs-4 fw-bold">${fmtPercent(metricas.taxa_autorizacao)}</div></div></div>
+            </div>
+
+            <div class="alert alert-info mb-3">
+                <strong>Comparativo:</strong>
+                Faturamento ${fmtPercent(metricas.delta_faturamento_pct)} | 
+                Notas ${fmtPercent(metricas.delta_notas_pct)} (vs período anterior)
+            </div>
+
+            <h6>Insights automáticos</h6>
+            <ul>${insights.map(i => `<li>${i}</li>`).join('') || '<li>Sem insights para o período.</li>'}</ul>
+
+            ${narrativaHtml}
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <h6>Top produtos</h6>
+                    <ul>${topProdutos.map(p => `<li>${p.descricao} (${p.total_ocorrencias} ocorrências, ${fmtCurrency(p.valor_total)})</li>`).join('') || '<li>Sem dados</li>'}</ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>Top destinatários</h6>
+                    <ul>${topDestinatarios.map(d => `<li>${d.destinatario} (${d.total_notas} notas, ${fmtCurrency(d.faturamento)})</li>`).join('') || '<li>Sem dados</li>'}</ul>
+                </div>
+            </div>
+        `;
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao gerar insights de vendas: ' + error;
+    }
+}
+
+async function loadAiStatus() {
+    const statusLoading = document.getElementById('ai-status-loading');
+    const statusContent = document.getElementById('ai-status-content');
+    const promptsLoading = document.getElementById('ai-prompts-loading');
+    const promptsContent = document.getElementById('ai-prompts-content');
+    const promptSelect = document.getElementById('prompt-name');
+    const promptCount = document.getElementById('ai-prompt-count');
+
+    statusLoading.classList.remove('d-none');
+    promptsLoading.classList.remove('d-none');
+    statusContent.classList.add('d-none');
+    promptsContent.classList.add('d-none');
+
+    try {
+        const [statusResp, promptsResp] = await Promise.all([
+            fetch('{{ url_for('admin_api.api_ia_status') }}'),
+            fetch('{{ url_for('admin_api.api_ia_prompts') }}')
+        ]);
+
+        const statusJson = await statusResp.json();
+        const promptsJson = await promptsResp.json();
+
+        if (!statusResp.ok || !statusJson.success) {
+            throw new Error(statusJson.error || 'Falha ao carregar status');
+        }
+        if (!promptsResp.ok || !promptsJson.success) {
+            throw new Error(promptsJson.error || 'Falha ao carregar prompts');
+        }
+
+        const status = statusJson.data || {};
+        statusContent.innerHTML = `
+            <dl class="row mb-0">
+                <dt class="col-sm-6">Provider configurado</dt><dd class="col-sm-6">${status.provider_url_configured ? 'Sim' : 'Não'}</dd>
+                <dt class="col-sm-6">Modelo padrão</dt><dd class="col-sm-6">${status.provider_model || '-'}</dd>
+                <dt class="col-sm-6">Temperatura</dt><dd class="col-sm-6">${status.default_temperature ?? '-'}</dd>
+                <dt class="col-sm-6">Max tokens</dt><dd class="col-sm-6">${status.default_max_tokens ?? '-'}</dd>
+                <dt class="col-sm-6">Limite mensal</dt><dd class="col-sm-6">${status.default_monthly_limit ?? '-'}</dd>
+                <dt class="col-sm-6">Prompts</dt><dd class="col-sm-6">${status.prompt_count ?? 0}</dd>
+                <dt class="col-sm-6">Feedbacks</dt><dd class="col-sm-6">${status.feedback_count ?? 0}</dd>
+                <dt class="col-sm-6">Positivos</dt><dd class="col-sm-6">${status.feedback_positive_count ?? 0} (${status.feedback_positive_rate ?? 0}%)</dd>
+                <dt class="col-sm-6">Negativos</dt><dd class="col-sm-6">${status.feedback_negative_count ?? 0}</dd>
+            </dl>
+            ${statusJson.warning ? `<div class="alert alert-warning py-2 px-3 mt-3 mb-0">${statusJson.warning}</div>` : ''}
+        `;
+
+        const prompts = promptsJson.data || [];
+        promptSelect.innerHTML = prompts.map(prompt => `<option value="${prompt.nome}">${prompt.nome} - ${prompt.funcionalidade}</option>`).join('');
+        promptCount.textContent = prompts.length;
+
+        promptsContent.innerHTML = prompts.map(prompt => `
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between gap-3 mb-2">
+                    <strong>${prompt.nome}</strong>
+                    <span class="badge bg-secondary">${prompt.funcionalidade}</span>
+                </div>
+                <div class="text-muted small mb-2">Versão ${prompt.versao} | Modelo ${prompt.modelo || '-'}</div>
+                <div style="white-space: pre-wrap;">${prompt.prompt}</div>
+            </div>
+        `).join('');
+
+        statusLoading.classList.add('d-none');
+        promptsLoading.classList.add('d-none');
+        statusContent.classList.remove('d-none');
+        promptsContent.classList.remove('d-none');
+    } catch (error) {
+        statusLoading.textContent = 'Falha ao carregar status da IA: ' + error;
+        promptsLoading.textContent = 'Falha ao carregar prompts da IA: ' + error;
+    }
+}
+
+async function loadAiHealth() {
+    const loading = document.getElementById('ai-health-loading');
+    const content = document.getElementById('ai-health-content');
+    const badge = document.getElementById('ai-health-badge');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+    badge.className = 'badge bg-secondary';
+    badge.textContent = 'Verificando...';
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_health') }}');
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Falha no healthcheck');
+        }
+
+        const data = payload.data || {};
+        const checks = data.checks || [];
+        const operational = !!data.operational;
+
+        badge.className = `badge ${operational ? 'bg-success' : 'bg-danger'}`;
+        badge.textContent = operational ? 'Operacional' : 'Com falhas';
+
+        content.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Verificação</th>
+                            <th>HTTP</th>
+                            <th>Status</th>
+                            <th>Detalhe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${checks.map(item => `
+                            <tr>
+                                <td>${item.name}</td>
+                                <td>${item.status_code ?? '-'}</td>
+                                <td><span class="badge ${item.ok ? 'bg-success' : 'bg-danger'}">${item.ok ? 'OK' : 'FALHA'}</span></td>
+                                <td class="text-muted small">${item.error || item.url || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        badge.className = 'badge bg-danger';
+        badge.textContent = 'Falha';
+        loading.textContent = 'Falha ao verificar saúde da IA: ' + error;
+    }
+}
+
+async function loadAiAnalytics() {
+    const loading = document.getElementById('ai-analytics-loading');
+    const content = document.getElementById('ai-analytics-content');
+    const days = document.getElementById('analytics-days').value || '14';
+    const clienteId = (document.getElementById('analytics-cliente-id').value || '').trim();
+    const funcionalidade = (document.getElementById('analytics-funcionalidade').value || '').trim();
+
+    const query = new URLSearchParams();
+    query.set('days', days);
+    if (clienteId) {
+        query.set('cliente_id', clienteId);
+    }
+    if (funcionalidade) {
+        query.set('funcionalidade', funcionalidade);
+    }
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch(`/admin/api/ia/analytics?${query.toString()}`);
+        const payload = await response.json();
+
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Falha ao carregar analytics');
+        }
+
+        const data = payload.data || {};
+        const summary = data.summary || {};
+        const history = data.daily_history || [];
+        const byFunc = data.by_functionality || [];
+        const topErrors = data.top_errors || [];
+        const filters = data.applied_filters || {};
+
+        const dailyRows = history.map(item => `
+            <tr>
+                <td>${item.date}</td>
+                <td>${item.requests}</td>
+                <td>${item.success}</td>
+                <td>${item.errors}</td>
+                <td>${item.feedback_positive}</td>
+                <td>${item.feedback_negative}</td>
+            </tr>
+        `).join('');
+
+        const byFuncRows = byFunc.length
+            ? byFunc.map(item => `
+                <tr>
+                    <td>${item.funcionalidade}</td>
+                    <td>${item.requests}</td>
+                    <td>${item.success_rate}%</td>
+                    <td>${item.tokens}</td>
+                    <td>R$ ${(Number(item.cost || 0)).toFixed(4)}</td>
+                    <td>${item.avg_response_time_ms} ms</td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="6" class="text-muted">Sem dados no período.</td></tr>';
+
+        const errorRows = topErrors.length
+            ? topErrors.map(item => `
+                <tr>
+                    <td class="small">${item.message}</td>
+                    <td class="text-end">${item.count}</td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="2" class="text-muted">Sem erros registrados no período filtrado.</td></tr>';
+
+        const filterTags = [
+            `Período: ${data.period_days || days} dias`,
+            filters.cliente_id ? `Cliente: ${filters.cliente_id}` : 'Cliente: todos',
+            filters.funcionalidade ? `Funcionalidade: ${filters.funcionalidade}` : 'Funcionalidade: todas',
+        ];
+
+        content.innerHTML = `
+            <div class="mb-3">
+                ${filterTags.map(tag => `<span class="badge bg-light text-dark me-1">${tag}</span>`).join('')}
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Score de confiança estimado</div>
+                        <div class="fs-3 fw-bold">${summary.confidence_score ?? 0}%</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Sucesso das chamadas</div>
+                        <div class="fs-5 fw-bold">${summary.success_rate ?? 0}%</div>
+                        <div class="small text-muted">${summary.success_requests ?? 0}/${summary.total_requests ?? 0}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Feedback positivo</div>
+                        <div class="fs-5 fw-bold">${summary.feedback_positive_rate ?? 0}%</div>
+                        <div class="small text-muted">${summary.feedback_positive ?? 0}/${summary.feedback_total ?? 0}</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <div class="text-muted small">Custo no período</div>
+                        <div class="fs-5 fw-bold">R$ ${(Number(summary.total_cost || 0)).toFixed(4)}</div>
+                        <div class="small text-muted">Tokens: ${summary.total_tokens ?? 0}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-lg-7">
+                    <h6 class="mb-2">Histórico diário</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Req.</th>
+                                    <th>OK</th>
+                                    <th>Erro</th>
+                                    <th>FB+</th>
+                                    <th>FB-</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${dailyRows || '<tr><td colspan="6" class="text-muted">Sem histórico.</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <h6 class="mb-2">Funcionalidades mais usadas</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Funcionalidade</th>
+                                    <th>Req.</th>
+                                    <th>Sucesso</th>
+                                    <th>Tokens</th>
+                                    <th>Custo</th>
+                                    <th>Tempo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${byFuncRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <h6 class="mb-2">Top erros de IA no período</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Mensagem</th>
+                                    <th class="text-end">Ocorrências</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${errorRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar analytics: ' + error;
+    }
+}
+
+async function loadAiLogs() {
+    const loading = document.getElementById('ai-logs-loading');
+    const content = document.getElementById('ai-logs-content');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_logs') }}?limit=10');
+        const payload = await response.json();
+        const logs = payload.data || [];
+
+        if (!logs.length) {
+            content.innerHTML = '<div class="text-muted">Nenhum uso registrado até o momento.</div>';
+        } else {
+            content.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Funcionalidade</th>
+                                <th>Modelo</th>
+                                <th>Status</th>
+                                <th>Tokens</th>
+                                <th>Custo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${logs.map(log => `
+                                <tr>
+                                    <td>${log.created_at || '-'}</td>
+                                    <td>${log.funcionalidade || '-'}</td>
+                                    <td>${log.model || '-'}</td>
+                                    <td><span class="badge ${log.status === 'SUCCESS' ? 'bg-success' : 'bg-danger'}">${log.status || '-'}</span></td>
+                                    <td>${log.total_tokens ?? 0}</td>
+                                    <td>R$ ${(Number(log.cost_estimated || 0)).toFixed(4)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar histórico: ' + error;
+    }
+}
+
+async function loadAiFeedbacks() {
+    const loading = document.getElementById('ai-feedbacks-loading');
+    const content = document.getElementById('ai-feedbacks-content');
+
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_feedbacks') }}?limit=10');
+        const payload = await response.json();
+        const feedbacks = payload.data || [];
+
+        if (!feedbacks.length) {
+            content.innerHTML = '<div class="text-muted">Nenhum feedback registrado até o momento.</div>';
+        } else {
+            content.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Funcionalidade</th>
+                                <th>Feedback</th>
+                                <th>Cliente</th>
+                                <th>Comentário</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${feedbacks.map(item => `
+                                <tr>
+                                    <td>${item.created_at || '-'}</td>
+                                    <td>${item.funcionalidade || '-'}</td>
+                                    <td><span class="badge ${item.feedback === 'POSITIVO' ? 'bg-success' : 'bg-danger'}">${item.feedback || '-'}</span></td>
+                                    <td>${item.cliente_id ?? '-'}</td>
+                                    <td class="text-muted small">${item.comentario || '-'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        loading.classList.add('d-none');
+        content.classList.remove('d-none');
+    } catch (error) {
+        loading.textContent = 'Falha ao carregar feedbacks: ' + error;
+    }
+}
+
+function fillSampleVariables() {
+    document.getElementById('prompt-variables').value = JSON.stringify({
+        empresa: 'EmiteMax',
+        cliente: 'Cliente Demonstração',
+        produto: 'Cadeira ergonômica',
+        objetivo: 'teste rápido'
+    }, null, 2);
+}
+
+function fillSampleProduct() {
+    document.getElementById('produto-descricao').value = 'Cadeira ergonômica com apoio lombar';
+    document.getElementById('produto-cliente-id').value = '';
+    document.getElementById('produto-tipo-item').value = 'Produto';
+    document.getElementById('produto-unidade').value = 'UN';
+    document.getElementById('produto-codigo-interno').value = 'CAD-ERG-001';
+}
+
+function fillSampleFeedback() {
+    document.getElementById('feedback-funcionalidade').value = 'classificacao_produto';
+    document.getElementById('feedback-cliente-id').value = '';
+    document.getElementById('feedback-value').value = 'POSITIVO';
+    document.getElementById('feedback-comment').value = 'Resposta útil para classificação fiscal.';
+}
+
+function applyLastClassificationToFeedback() {
+    const contextBox = document.getElementById('classification-context');
+    if (!lastClassificationContext) {
+        contextBox.classList.remove('d-none');
+        contextBox.className = 'alert alert-warning mt-4 mb-0';
+        contextBox.textContent = 'Nenhuma classificação recente encontrada.';
+        return;
+    }
+
+    document.getElementById('feedback-funcionalidade').value = lastClassificationContext.funcionalidade || 'classificacao_produto';
+    document.getElementById('feedback-cliente-id').value = lastClassificationContext.cliente_id || '';
+    if (lastClassificationContext.comentario_sugerido) {
+        document.getElementById('feedback-comment').value = lastClassificationContext.comentario_sugerido;
+    }
+
+    contextBox.classList.remove('d-none');
+    contextBox.className = 'alert alert-info mt-4 mb-0';
+    contextBox.innerHTML = `
+        <strong>Última classificação aplicada ao feedback.</strong><br>
+        Cliente ID: ${lastClassificationContext.cliente_id ?? '-'}<br>
+        Funcionalidade: ${lastClassificationContext.funcionalidade || '-'}
+    `;
+}
+
+document.getElementById('ai-preview-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    const promptName = document.getElementById('prompt-name').value;
+    const variablesRaw = document.getElementById('prompt-variables').value;
+    const resultBox = document.getElementById('ai-preview-result');
+
+    let variables = {};
+    try {
+        variables = variablesRaw ? JSON.parse(variablesRaw) : {};
+    } catch (error) {
+        resultBox.textContent = 'Variáveis JSON inválidas: ' + error;
+        return;
+    }
+
+    resultBox.textContent = 'Gerando prévia...';
+
+    try {
+        const response = await fetch(`{{ url_for('admin_api.api_ia_prompt_preview', prompt_name='__PROMPT__') }}`.replace('__PROMPT__', encodeURIComponent(promptName)), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ variables })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            resultBox.textContent = payload.error || 'Falha ao gerar prévia';
+            return;
+        }
+        resultBox.textContent = payload.data.rendered_prompt;
+    } catch (error) {
+        resultBox.textContent = 'Erro ao gerar prévia: ' + error;
+    }
+});
+
+loadAiStatus();
+loadAiLogs();
+loadAiHealth();
+loadAiAnalytics();
+loadFiscalConversations();
+
+document.getElementById('ai-classify-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const resultBox = document.getElementById('ai-classify-result');
+    const payload = {
+        descricao: document.getElementById('produto-descricao').value.trim(),
+        cliente_id: document.getElementById('produto-cliente-id').value ? Number(document.getElementById('produto-cliente-id').value) : null,
+        tipo_item: document.getElementById('produto-tipo-item').value,
+        unidade_comercial: document.getElementById('produto-unidade').value.trim() || 'UN',
+        codigo_interno: document.getElementById('produto-codigo-interno').value.trim(),
+    };
+
+    if (!payload.descricao) {
+        resultBox.textContent = 'Informe a descrição do produto.';
+        return;
+    }
+
+    resultBox.textContent = 'Classificando produto...';
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_classificar_produto') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+        resultBox.textContent = JSON.stringify(body, null, 2);
+
+        if (response.ok && body.success) {
+            const classificacao = body.data || {};
+            const classificacaoDetalhe = classificacao.classificacao || {};
+            const ids = classificacao.ids || {};
+            const avisos = Array.isArray(classificacao.avisos) ? classificacao.avisos : [];
+
+            lastClassificationContext = {
+                cliente_id: payload.cliente_id,
+                funcionalidade: 'classificacao_produto',
+                comentario_sugerido: [
+                    `NCM: ${classificacaoDetalhe.ncm || '-'}`,
+                    `CFOP: ${classificacaoDetalhe.cfop || '-'}`,
+                    `CST: ${classificacaoDetalhe.cst || classificacaoDetalhe.cst_icms || '-'}`,
+                    `CSOSN: ${classificacaoDetalhe.csosn || classificacaoDetalhe.csosn_icms || '-'}`,
+                    `IDs: ${JSON.stringify(ids)}`,
+                    avisos.length ? `Avisos: ${avisos.join(' | ')}` : null,
+                ].filter(Boolean).join('\n'),
+            };
+
+            const contextBox = document.getElementById('classification-context');
+            contextBox.classList.remove('d-none');
+            contextBox.className = 'alert alert-info mt-4 mb-0';
+            contextBox.innerHTML = `
+                <strong>Classificação pronta para feedback.</strong><br>
+                Clique em <em>Usar última classificação</em> para preencher o formulário.
+            `;
+        }
+    } catch (error) {
+        resultBox.textContent = 'Erro ao classificar produto: ' + error;
+    }
+});
+
+document.getElementById('ai-feedback-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const resultBox = document.getElementById('ai-preview-result');
+    const payload = {
+        funcionalidade: document.getElementById('feedback-funcionalidade').value,
+        cliente_id: document.getElementById('feedback-cliente-id').value ? Number(document.getElementById('feedback-cliente-id').value) : null,
+        feedback: document.getElementById('feedback-value').value,
+        comentario: document.getElementById('feedback-comment').value.trim(),
+    };
+
+    if (!payload.funcionalidade || !payload.cliente_id) {
+        resultBox.textContent = 'Informe funcionalidade e cliente ID para registrar feedback.';
+        return;
+    }
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_feedback') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+        if (!response.ok) {
+            resultBox.textContent = body.error || 'Falha ao registrar feedback';
+            return;
+        }
+        resultBox.textContent = 'Feedback registrado com sucesso: ' + JSON.stringify(body.data, null, 2);
+        loadAiLogs();
+        loadAiFeedbacks();
+    } catch (error) {
+        resultBox.textContent = 'Erro ao registrar feedback: ' + error;
+    }
+});
+
+loadAiFeedbacks();
+
+document.getElementById('ai-fiscal-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const resultBox = document.getElementById('ai-fiscal-result');
+    const clienteIdRaw = document.getElementById('fiscal-cliente-id').value;
+    const conversationIdRaw = document.getElementById('fiscal-conversation-id').value;
+    const pergunta = document.getElementById('fiscal-question').value.trim();
+
+    if (!clienteIdRaw || !pergunta) {
+        resultBox.textContent = 'Informe cliente ID e pergunta fiscal.';
+        return;
+    }
+
+    const payload = {
+        cliente_id: Number(clienteIdRaw),
+        pergunta,
+    };
+    if (conversationIdRaw) {
+        payload.conversation_id = Number(conversationIdRaw);
+    }
+
+    resultBox.textContent = 'Consultando assistente fiscal...';
+
+    try {
+        const response = await fetch('{{ url_for('admin_api.api_ia_assistente_fiscal_perguntar') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const body = await response.json();
+
+        if (!response.ok || !body.success) {
+            resultBox.textContent = body.error || 'Falha ao consultar Assistente Fiscal';
+            return;
+        }
+
+        const data = body.data || {};
+        document.getElementById('fiscal-conversation-id').value = data.conversation_id || '';
+        resultBox.textContent = data.answer || 'Sem resposta.';
+        loadAiLogs();
+        loadFiscalConversations();
+    } catch (error) {
+        resultBox.textContent = 'Erro ao consultar assistente fiscal: ' + error;
+    }
+});
+</script>
+{% endblock %}

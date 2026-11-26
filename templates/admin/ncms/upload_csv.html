@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Enviar NCMs para IA (CSV)</h2>
+<form method="POST" enctype="multipart/form-data">
+    <input type="file" name="file" accept=".csv" required>
+    <button type="submit" class="btn btn-primary">Enviar</button>
+</form>
+{% endblock %}

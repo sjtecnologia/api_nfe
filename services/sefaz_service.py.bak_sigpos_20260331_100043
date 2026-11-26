@@ -1,0 +1,617 @@
+import requests
+import xml.etree.ElementTree as ET
+from datetime import datetime
+import os
+import base64
+import tempfile
+from cryptography.hazmat.primitives.serialization import pkcs12, Encoding, PrivateFormat, NoEncryption
+
+class SefazService:
+    """Serviço para comunicação com SEFAZ real"""
+    
+    # URLs SEFAZ-SP Homologação
+    URLS_HOMOLOGACAO = {
+        'autorizacao': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx',
+        'consulta': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx',
+        'status_servico': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx',
+        'recepcao_evento': 'https://homologacao.nfe.fazenda.sp.gov.br/ws/nferecepcaoevento4.asmx'
+    }
+    
+    # URLs SEFAZ-SP Produção 
+    URLS_PRODUCAO = {
+        'autorizacao': 'https://nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx',
+        'consulta': 'https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx',
+        'status_servico': 'https://nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx',
+        'recepcao_evento': 'https://nfe.fazenda.sp.gov.br/ws/nferecepcaoevento4.asmx'
+    }
+    
+    def __init__(self, ambiente='homologacao', cert_path=None, key_path=None, urls_override=None):
+        self.ambiente = ambiente
+        # Permitir override de URLs para contingência SVC-AN/SVC-RS
+        if urls_override:
+            self.urls = urls_override
+            self._modo_contingencia = True
+        else:
+            self.urls = self.URLS_HOMOLOGACAO if ambiente == 'homologacao' else self.URLS_PRODUCAO
+            self._modo_contingencia = False
+        self.cert_path = cert_path
+        self.key_path = key_path
+        
+        # Usar bundle de certificados que inclui ICP-Brasil
+        # Caminho absoluto para o bundle customizado no servidor
+        self.ca_bundle = '/home/ubuntu/api_nfe/ca-bundle-icpbrasil.pem'
+        if not os.path.exists(self.ca_bundle):
+            # Fallback para certificados do sistema se bundle não existir
+            self.ca_bundle = True
+            
+        modo_str = 'CONTINGÊNCIA' if self._modo_contingencia else 'NORMAL'
+        print(f"[?] SefazService inicializado - Ambiente: {ambiente} - Modo: {modo_str}")
+        print(f"[?] URL autorizacao: {self.urls.get('autorizacao', 'N/A')}")
+        print(f"[?] CA Bundle: {self.ca_bundle}")
+        if cert_path:
+            print(f"[?] Certificado digital configurado")
+    
+    def enviar_nfe(self, xml_assinado, chave_acesso):
+        """
+        Envia NFe para autorização na SEFAZ
+        """
+        try:
+            print(f"[OUT] === ENVIANDO NFE REAL PARA SEFAZ ===")
+            print(f"[?] Ambiente: {self.ambiente}")
+            print(f"[KEY] Chave: {chave_acesso}")
+            print(f"[?] XML: {len(xml_assinado)} caracteres")
+            print(f"[DEBUG] XML tem Signature: {'<Signature' in xml_assinado}")
+            
+            # Criar envelope SOAP
+            envelope_soap = self._criar_envelope_autorizacao(xml_assinado, chave_acesso)
+            
+            # Debug: salvar envelope em arquivo temporário
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False, dir='/tmp') as f:
+                f.write(envelope_soap)
+                print(f"[DEBUG] Envelope salvo em: {f.name}")
+            
+            # Headers para requisição SOAP 1.2
+            headers = {
+                'Content-Type': 'application/soap+xml; charset=utf-8',
+            }
+            
+            print(f"[?] Enviando para: {self.urls['autorizacao']}")
+            
+            # Fazer requisição
+            request_kwargs = {
+                'data': envelope_soap.encode('utf-8'),
+                'headers': headers,
+                'timeout': 30,
+                'verify': self.ca_bundle  # Usar bundle com ICP-Brasil
+            }
+            
+            # Adicionar certificado digital se disponível
+            if self.cert_path and self.key_path:
+                request_kwargs['cert'] = (self.cert_path, self.key_path)
+                print(f"[?] Usando certificado digital para autenticação")
+            else:
+                print(f"[!] AVISO: Nenhum certificado digital configurado - SEFAZ pode rejeitar")
+            
+            response = requests.post(self.urls['autorizacao'], **request_kwargs)
+            
+            print(f"[?] Status HTTP: {response.status_code}")
+            print(f"[?] Resposta recebida: {len(response.text)} chars")
+            
+            if response.status_code == 200:
+                return self._processar_resposta_autorizacao(response.text, chave_acesso)
+            else:
+                print(f"[X] Erro HTTP: {response.status_code}")
+                print(f"[X] Resposta completa: {response.text}")
+                
+                mensagem_erro = f'Erro HTTP {response.status_code}'
+                if response.status_code == 403:
+                    mensagem_erro = 'Acesso negado - Certificado digital inválido ou não configurado'
+                elif response.status_code == 401:
+                    mensagem_erro = 'Não autorizado - Verifique o certificado digital'
+                elif response.status_code == 400:
+                    # Tentar extrair mensagem de erro do XML
+                    try:
+                        import xml.etree.ElementTree as ET
+                        root = ET.fromstring(response.text)
+                        # Buscar faultstring no SOAP
+                        faultstring = root.find('.//{http://www.w3.org/2003/05/soap-envelope}Fault/{http://www.w3.org/2003/05/soap-envelope}Reason/{http://www.w3.org/2003/05/soap-envelope}Text')
+                        if faultstring is not None and faultstring.text:
+                            mensagem_erro = f'Erro SEFAZ: {faultstring.text}'
+                            print(f"[X] Mensagem SEFAZ: {faultstring.text}")
+                    except:
+                        pass
+                
+                return {
+                    'status': 'ERRO_HTTP',
+                    'codigo': response.status_code,
+                    'mensagem': mensagem_erro,
+                    'resposta_completa': response.text
+                }
+                
+        except Exception as e:
+            print(f"[X] Erro ao enviar NFe: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'status': 'ERRO_ENVIO',
+                'mensagem': f'Erro na comunicação: {e}'
+            }
+    
+    def _criar_envelope_autorizacao(self, xml_nfe, chave_acesso):
+        """Cria envelope SOAP para autorização"""
+        
+        # Gerar número do lote (timestamp)
+        numero_lote = datetime.now().strftime("%Y%m%d%H%M%S")
+        
+        # DEBUG: Ver o que está chegando
+        print(f"[ENVELOPE-DEBUG] XML recebido tem {len(xml_nfe)} caracteres")
+        print(f"[ENVELOPE-DEBUG] XML tem Signature: {'<Signature' in xml_nfe}")
+        
+        # CRÍTICO: Remover APENAS declaração XML (sem strip que altera canonicalização)
+        # .strip() pode remover espaços que fazem parte da assinatura digital
+        xml_nfe_limpo = xml_nfe
+        if xml_nfe_limpo.startswith('<?xml'):
+            # Remove até o final da declaração XML (sem strip!)
+            xml_nfe_limpo = xml_nfe_limpo.split('?>', 1)[1]
+            # Remover APENAS o primeiro caractere se for quebra de linha após declaração
+            if xml_nfe_limpo and xml_nfe_limpo[0] in ['\n', '\r']:
+                xml_nfe_limpo = xml_nfe_limpo[1:]
+        
+        print(f"[ENVELOPE-DEBUG] Após remover declaração: {len(xml_nfe_limpo)} caracteres")
+        print(f"[ENVELOPE-DEBUG] Ainda tem Signature: {'<Signature' in xml_nfe_limpo}")
+        
+        # NÃO REMOVER xmlns do NFe - O XML gerado pelo nfelib está correto
+        # A SEFAZ precisa do namespace explícito no elemento NFe
+        print(f"[ENVELOPE-DEBUG] ✅ xmlns mantido em NFe (padrão NFe 4.0)")
+        
+        # CRÍTICO: Envelope SOAP sem formatação (erro 588 causado por \n e espaços)
+        envelope = f'<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"><enviNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><idLote>{numero_lote}</idLote><indSinc>1</indSinc>{xml_nfe_limpo}</enviNFe></nfeDadosMsg></soap12:Body></soap12:Envelope>'
+        
+        print(f"[?] Envelope SOAP criado COMPACTO (sem \\n) - Lote: {numero_lote}")
+        return envelope
+    
+    def _processar_resposta_autorizacao(self, resposta_xml, chave_acesso):
+        """Processa resposta da SEFAZ"""
+        try:
+            print(f"[SEARCH] Processando resposta da SEFAZ...")
+            print(f"[DEBUG] Resposta completa (primeiros 1000 chars): {resposta_xml[:1000]}")
+            
+            # Parse do XML de resposta
+            root = ET.fromstring(resposta_xml)
+            
+            # Namespace pode variar
+            namespaces = {
+                'soap': 'http://www.w3.org/2003/05/soap-envelope',
+                'nfe': 'http://www.portalfiscal.inf.br/nfe'
+            }
+            
+            # Buscar código de status do LOTE (cStat do retorno)
+            cstat_lote = root.find('.//nfe:cStat', namespaces)
+            xmotivo_lote = root.find('.//nfe:xMotivo', namespaces)
+            
+            # Buscar código de status da NFE individual (dentro de protNFe)
+            cstat_nfe = root.find('.//nfe:protNFe//nfe:infProt//nfe:cStat', namespaces)
+            xmotivo_nfe = root.find('.//nfe:protNFe//nfe:infProt//nfe:xMotivo', namespaces)
+            protocolo_element = root.find('.//nfe:protNFe//nfe:infProt//nfe:nProt', namespaces)
+            
+            # Preferir status da NFe individual, senão usar do lote
+            codigo_status = None
+            motivo = None
+            
+            if cstat_nfe is not None:
+                codigo_status = cstat_nfe.text
+                motivo = xmotivo_nfe.text if xmotivo_nfe is not None else 'Sem motivo'
+                print(f"[INFO] Status NFe individual: {codigo_status} - {motivo}")
+            elif cstat_lote is not None:
+                codigo_status = cstat_lote.text
+                motivo = xmotivo_lote.text if xmotivo_lote is not None else 'Sem motivo'
+                print(f"[INFO] Status Lote: {codigo_status} - {motivo}")
+            
+            protocolo = protocolo_element.text if protocolo_element is not None else None
+            
+            if codigo_status:
+                print(f"[RESULT] Código final: {codigo_status} - {motivo}")
+                
+                # Códigos de sucesso da SEFAZ
+                # 100 = Autorizada
+                # 150 = Autorizada fora de prazo
+                codigos_sucesso = ['100', '150']
+                
+                # Códigos de processamento (não é sucesso nem rejeição final)
+                # 103 = Lote recebido com sucesso
+                # 104 = Lote processado
+                # 105 = Lote em processamento
+                codigos_processamento = ['103', '104', '105']
+                
+                if codigo_status in codigos_sucesso:
+                    return {
+                        'success': True,
+                        'status': 'AUTORIZADA',
+                        'codigo': codigo_status,
+                        'mensagem': motivo,
+                        'protocolo': protocolo,
+                        'chave_acesso': chave_acesso,
+                        'data_autorizacao': datetime.now().isoformat(),
+                        'resposta_completa': resposta_xml
+                    }
+                elif codigo_status in codigos_processamento:
+                    # Lote em processamento - aguardar consulta posterior
+                    return {
+                        'success': False,
+                        'status': 'PROCESSANDO',
+                        'codigo': codigo_status,
+                        'mensagem': f'Lote em processamento - Consulte o status posteriormente. {motivo}',
+                        'chave_acesso': chave_acesso,
+                        'resposta_completa': resposta_xml
+                    }
+                else:
+                    # Rejeição
+                    return {
+                        'success': False,
+                        'status': 'REJEITADA',
+                        'codigo': codigo_status,
+                        'mensagem': motivo,
+                        'protocolo': protocolo,
+                        'chave_acesso': chave_acesso,
+                        'resposta_completa': resposta_xml
+                    }
+            else:
+                print(f"[X] Não foi possível extrair status da resposta")
+                print(f"[DEBUG] XML completo: {resposta_xml}")
+                return {
+                    'success': False,
+                    'status': 'ERRO_RESPOSTA',
+                    'mensagem': 'Resposta da SEFAZ inválida - não foi possível extrair status',
+                    'resposta_completa': resposta_xml
+                }
+                
+        except Exception as e:
+            print(f"[X] Erro ao processar resposta: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'status': 'ERRO_PROCESSAMENTO',
+                'mensagem': f'Erro ao processar resposta: {e}',
+                'resposta_completa': resposta_xml
+            }
+    
+    def consultar_status_servico(self):
+        """Consulta status do serviço SEFAZ"""
+        try:
+            print(f"[SEARCH] Consultando status do serviço SEFAZ...")
+            
+            # tpAmb: 1=Produção, 2=Homologação
+            tp_amb = '1' if self.ambiente == 'producao' else '2'
+            
+            envelope = f'''<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+                xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+                xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Header>
+    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">
+      <cUF>35</cUF>
+      <versaoDados>4.00</versaoDados>
+    </nfeCabecMsg>
+  </soap12:Header>
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">
+      <consStatServ xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+        <tpAmb>{tp_amb}</tpAmb>
+        <cUF>35</cUF>
+        <xServ>STATUS</xServ>
+      </consStatServ>
+    </nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>'''
+            
+            headers = {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4/nfeStatusServicoNF'
+            }
+            
+            request_kwargs = {
+                'data': envelope,
+                'headers': headers,
+                'timeout': 30,
+                'verify': self.ca_bundle  # Usar bundle com ICP-Brasil
+            }
+            
+            # Adicionar certificado digital se disponível
+            if self.cert_path and self.key_path:
+                request_kwargs['cert'] = (self.cert_path, self.key_path)
+            
+            response = requests.post(self.urls['status_servico'], **request_kwargs)
+            
+            if response.status_code == 200:
+                # Parse básico da resposta
+                if 'Serviço em Operação' in response.text or '107' in response.text:
+                    print(f"[OK] Serviço SEFAZ operacional")
+                    return {'status': 'OK', 'mensagem': 'Serviço em operação'}
+                else:
+                    print(f"[!] Serviço SEFAZ com problemas")
+                    return {'status': 'PROBLEMA', 'mensagem': 'Serviço indisponível'}
+            else:
+                print(f"[X] Erro ao consultar status: {response.status_code}")
+                return {'status': 'ERRO', 'mensagem': f'HTTP {response.status_code}'}
+                
+        except Exception as e:
+            print(f"[X] Erro na consulta de status: {e}")
+            return {'status': 'ERRO', 'mensagem': str(e)}
+
+    def cancelar_nfe(self, chave_nfe, protocolo, justificativa, cnpj_emitente,
+                     certificado_pem=None, certificado_pfx=None, senha_certificado=None):
+        """Envia evento de cancelamento (110111) para a SEFAZ."""
+        cert_temp_path = None
+        key_temp_path = None
+        pfx_temp_path = None
+        try:
+            if not chave_nfe or len(chave_nfe) != 44:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'message': 'Chave de acesso inválida para cancelamento'
+                }
+
+            if not protocolo:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'message': 'Protocolo de autorização não informado'
+                }
+
+            if not justificativa or len(justificativa.strip()) < 15:
+                return {
+                    'success': False,
+                    'status': 'ERRO_VALIDACAO',
+                    'message': 'Justificativa deve ter no mínimo 15 caracteres'
+                }
+
+            cert_path = self.cert_path
+            key_path = self.key_path
+
+            if (not cert_path or not key_path) and certificado_pfx and not senha_certificado:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Senha do certificado do cliente não informada para cancelamento'
+                }
+
+            # Fluxo de cancelamento pode receber apenas PKCS#12 do banco.
+            # Se PEM não estiver pronto, converte o PFX para arquivos temporários.
+            if (not cert_path or not key_path) and certificado_pfx and senha_certificado:
+                cert_bytes = certificado_pfx
+                if isinstance(cert_bytes, str):
+                    cert_bytes = base64.b64decode(cert_bytes)
+
+                private_key, certificate, _additional = pkcs12.load_key_and_certificates(
+                    cert_bytes,
+                    senha_certificado.encode('utf-8')
+                )
+
+                if not private_key or not certificate:
+                    return {
+                        'success': False,
+                        'status': 'ERRO_CERTIFICADO',
+                        'message': 'Não foi possível extrair certificado/chave do arquivo PFX'
+                    }
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as cert_file:
+                    cert_file.write(certificate.public_bytes(Encoding.PEM))
+                    cert_temp_path = cert_file.name
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.key', delete=False) as key_file:
+                    key_file.write(private_key.private_bytes(
+                        encoding=Encoding.PEM,
+                        format=PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=NoEncryption()
+                    ))
+                    key_temp_path = key_file.name
+
+                cert_path = cert_temp_path
+                key_path = key_temp_path
+
+            # Suporte a PEM sem senha (arquivo único com cert/chave) vindo do banco.
+            if not cert_path and certificado_pem:
+                pem_bytes = certificado_pem
+                if isinstance(pem_bytes, str):
+                    if 'BEGIN' in pem_bytes:
+                        pem_bytes = pem_bytes.encode('utf-8')
+                    else:
+                        pem_bytes = base64.b64decode(pem_bytes)
+
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as pem_file:
+                    pem_file.write(pem_bytes)
+                    cert_temp_path = pem_file.name
+
+                cert_path = cert_temp_path
+
+            if not cert_path:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CERTIFICADO',
+                    'message': 'Certificado do cliente não configurado para comunicação com a SEFAZ'
+                }
+
+            cert_request = (cert_path, key_path) if key_path else cert_path
+
+            endpoint = self.urls.get('recepcao_evento')
+            if not endpoint:
+                return {
+                    'success': False,
+                    'status': 'ERRO_CONFIG',
+                    'message': 'Endpoint de recepção de evento não configurado'
+                }
+
+            c_uf = chave_nfe[0:2]
+            tp_amb = '1' if self.ambiente == 'producao' else '2'
+            id_lote = datetime.now().strftime('%Y%m%d%H%M%S')
+            sequencia_evento = '1'
+            id_evento = 'ID110111' + chave_nfe + sequencia_evento.zfill(2)
+            dh_evento = datetime.now().astimezone().isoformat(timespec='seconds')
+
+            NFE_NS = 'http://www.portalfiscal.inf.br/nfe'
+            evento_xml = (
+                '<envEvento xmlns="' + NFE_NS + '" versao="1.00">'
+                + '<idLote>' + id_lote + '</idLote>'
+                + '<evento versao="1.00">'
+                + '<infEvento Id="' + id_evento + '">'
+                + '<cOrgao>' + c_uf + '</cOrgao>'
+                + '<tpAmb>' + tp_amb + '</tpAmb>'
+                + '<CNPJ>' + cnpj_emitente + '</CNPJ>'
+                + '<chNFe>' + chave_nfe + '</chNFe>'
+                + '<dhEvento>' + dh_evento + '</dhEvento>'
+                + '<tpEvento>110111</tpEvento>'
+                + '<nSeqEvento>' + sequencia_evento + '</nSeqEvento>'
+                + '<verEvento>1.00</verEvento>'
+                + '<detEvento versao="1.00">'
+                + '<descEvento>Cancelamento</descEvento>'
+                + '<nProt>' + str(protocolo) + '</nProt>'
+                + '<xJust>' + justificativa.strip() + '</xJust>'
+                + '</detEvento>'
+                + '</infEvento>'
+                + '</evento>'
+                + '</envEvento>'
+            )
+
+            # Assinar XML do evento com PyNFe - igual ao fluxo de emissão
+            from pynfe.processamento.assinatura import AssinaturaA1
+            from lxml import etree as _etree
+
+            pfx_bytes = certificado_pfx
+            if isinstance(pfx_bytes, str):
+                pfx_bytes = base64.b64decode(pfx_bytes)
+
+            with tempfile.NamedTemporaryFile(suffix='.pfx', delete=False) as _pfx_f:
+                _pfx_f.write(pfx_bytes)
+                pfx_temp_path = _pfx_f.name
+
+            assinador = AssinaturaA1(pfx_temp_path, senha_certificado)
+            xml_root = _etree.fromstring(evento_xml.encode('utf-8'))
+            evento_xml_assinado = assinador.assinar(xml_root, retorna_string=True)
+            print('[CANCELAMENTO] XML do evento assinado: ' + str(len(evento_xml_assinado)) + ' chars')
+
+            envelope = (
+                '<?xml version="1.0" encoding="utf-8"?>'
+                '<soap12:Envelope'
+                ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+                ' xmlns:xsd="http://www.w3.org/2001/XMLSchema"'
+                ' xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">'
+                '<soap12:Header>'
+                '<nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">'
+                + '<cUF>' + c_uf + '</cUF>'
+                + '<versaoDados>1.00</versaoDados>'
+                + '</nfeCabecMsg>'
+                + '</soap12:Header>'
+                + '<soap12:Body>'
+                + '<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">'
+                + evento_xml_assinado
+                + '</nfeDadosMsg>'
+                + '</soap12:Body>'
+                + '</soap12:Envelope>'
+            )
+
+            headers = {
+                'Content-Type': (
+                    'application/soap+xml; charset=utf-8;'
+                    ' action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEventoNF"'
+                ),
+            }
+
+            response = requests.post(
+                endpoint,
+                data=envelope.encode('utf-8'),
+                headers=headers,
+                timeout=30,
+                verify=self.ca_bundle,
+                cert=cert_request
+            )
+
+            if response.status_code != 200:
+                return {
+                    'success': False,
+                    'status': 'ERRO_HTTP',
+                    'codigo': response.status_code,
+                    'message': f'Erro HTTP {response.status_code} no cancelamento',
+                    'resposta_completa': response.text
+                }
+
+            return self._processar_resposta_cancelamento(response.text)
+
+        except Exception as e:
+            print(f"[X] Erro ao cancelar NFe: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'status': 'ERRO_CANCELAMENTO',
+                'message': f'Erro ao cancelar NFe: {e}'
+            }
+        finally:
+            if cert_temp_path and os.path.exists(cert_temp_path):
+                try:
+                    os.unlink(cert_temp_path)
+                except Exception:
+                    pass
+            if key_temp_path and os.path.exists(key_temp_path):
+                try:
+                    os.unlink(key_temp_path)
+                except Exception:
+                    pass
+            if pfx_temp_path and os.path.exists(pfx_temp_path):
+                try:
+                    os.unlink(pfx_temp_path)
+                except Exception:
+                    pass
+
+    def _processar_resposta_cancelamento(self, resposta_xml):
+        """Processa resposta do evento de cancelamento da SEFAZ."""
+        try:
+            root = ET.fromstring(resposta_xml)
+            namespaces = {
+                'nfe': 'http://www.portalfiscal.inf.br/nfe'
+            }
+
+            cstat_lote = root.find('.//nfe:retEnvEvento//nfe:cStat', namespaces)
+            xmotivo_lote = root.find('.//nfe:retEnvEvento//nfe:xMotivo', namespaces)
+
+            cstat_evento = root.find('.//nfe:retEvento//nfe:infEvento//nfe:cStat', namespaces)
+            xmotivo_evento = root.find('.//nfe:retEvento//nfe:infEvento//nfe:xMotivo', namespaces)
+            protocolo_evento = root.find('.//nfe:retEvento//nfe:infEvento//nfe:nProt', namespaces)
+
+            codigo = cstat_evento.text if cstat_evento is not None else (
+                cstat_lote.text if cstat_lote is not None else None
+            )
+            motivo = xmotivo_evento.text if xmotivo_evento is not None else (
+                xmotivo_lote.text if xmotivo_lote is not None else 'Sem motivo retornado pela SEFAZ'
+            )
+            protocolo = protocolo_evento.text if protocolo_evento is not None else None
+
+            if codigo in ['135', '155']:
+                return {
+                    'success': True,
+                    'status': 'CANCELADA',
+                    'codigo': codigo,
+                    'message': motivo,
+                    'protocolo': protocolo,
+                    'data_cancelamento': datetime.now().isoformat(),
+                    'resposta_completa': resposta_xml
+                }
+
+            return {
+                'success': False,
+                'status': 'REJEITADA',
+                'codigo': codigo,
+                'message': motivo,
+                'protocolo': protocolo,
+                'resposta_completa': resposta_xml
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'status': 'ERRO_PROCESSAMENTO',
+                'message': f'Erro ao processar resposta de cancelamento: {e}',
+                'resposta_completa': resposta_xml
+            }

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Novo usuário do portal{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h3 mb-1">Novo usuário do portal</h1>
+      <p class="text-muted mb-0">O cliente acessará o sistema com este login e fará pedidos de orçamento.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('orcamentos.listar_portal_usuarios') }}">Voltar</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post" class="card shadow-sm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Nome do cliente</label>
+          <input class="form-control" name="nome" required value="{{ form_data.get('nome', '') }}" placeholder="Nome do contato">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Cliente final vinculado</label>
+          <select class="form-select" name="destinatario_id">
+            <option value="">Não vincular / informar depois</option>
+            {% for d in destinatarios %}
+            <option value="{{ d.destinatario_id }}" {% if form_data.get('destinatario_id')|string == d.destinatario_id|string %}selected{% endif %}>{{ d.nome_razao_social }} — {{ d.cpf_cnpj }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Opcional. Ajuda a preencher os dados do comprador nos pedidos.</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Login</label>
+          <input class="form-control" name="username" required value="{{ form_data.get('username', '') }}" placeholder="cliente.exemplo">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">E-mail</label>
+          <input type="email" class="form-control" name="email" required value="{{ form_data.get('email', '') }}" placeholder="cliente@email.com">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Telefone / WhatsApp</label>
+          <input class="form-control" name="telefone" required value="{{ form_data.get('telefone', '') }}" placeholder="(11) 99999-9999">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Senha</label>
+          <input type="password" class="form-control" name="password" required minlength="8" autocomplete="new-password">
+          <div class="form-text">Mínimo 8 caracteres, com maiúscula, minúscula e número.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Confirmar senha</label>
+          <input type="password" class="form-control" name="confirm_password" required minlength="8" autocomplete="new-password">
+        </div>
+      </div>
+    </div>
+    <div class="card-footer text-end">
+      <button class="btn btn-primary"><i class="fas fa-user-plus"></i> Criar acesso</button>
+    </div>
+  </form>
+</div>
+<script>
+document.querySelector('form').addEventListener('submit', function (event) {
+  const senha = document.querySelector('[name="password"]').value;
+  const confirmacao = document.querySelector('[name="confirm_password"]').value;
+  if (senha !== confirmacao) {
+    event.preventDefault();
+    alert('As senhas não coincidem.');
+  }
+});
+</script>
+{% endblock %}

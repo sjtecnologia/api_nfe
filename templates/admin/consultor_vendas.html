@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Consultor de Vendas - EmiteMax{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h3><i class="fas fa-chart-pie text-primary"></i> Consultor de Vendas</h3>
+            <p class="text-muted mb-0">Análise inteligente de desempenho e insights automáticos para o seu negócio.</p>
+        </div>
+    </div>
+
+    <!-- Controles -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Período de análise</label>
+                    <select class="form-select" id="sales-days">
+                        <option value="14">Últimos 14 dias</option>
+                        <option value="30" selected>Últimos 30 dias</option>
+                        <option value="60">Últimos 60 dias</option>
+                        <option value="90">Últimos 90 dias</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" type="button" onclick="gerarInsights()">
+                        <i class="fas fa-magic me-1"></i> Gerar Insights
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading-area" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-3 text-muted">Analisando dados de vendas...</p>
+    </div>
+
+    <!-- Erro -->
+    <div id="error-area" class="alert alert-danger d-none"></div>
+
+    <!-- Resultados -->
+    <div id="results-area" class="d-none">
+
+        <!-- Métricas principais -->
+        <div class="row g-3 mb-4" id="metricas-cards"></div>
+
+        <!-- Comparativo período anterior -->
+        <div class="alert alert-info mb-4" id="comparativo-area"></div>
+
+        <!-- Insights automáticos -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-lightbulb text-warning me-2"></i> Insights Automáticos</h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0" id="insights-list"></ul>
+            </div>
+        </div>
+
+        <!-- Narrativa IA -->
+        <div class="card mb-4 d-none" id="narrativa-card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-robot text-primary me-2"></i> Análise Gerada por IA</h5>
+            </div>
+            <div class="card-body" id="narrativa-content"></div>
+        </div>
+
+        <!-- Top produtos e destinatários -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-boxes text-success me-2"></i> Top Produtos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Produto</th>
+                                        <th class="text-center">Ocorrências</th>
+                                        <th class="text-end">Valor Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="top-produtos-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-address-book text-info me-2"></i> Top Clientes/Destinatários</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Destinatário</th>
+                                        <th class="text-center">Notas</th>
+                                        <th class="text-end">Faturamento</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="top-destinatarios-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Estado inicial -->
+    <div id="initial-area" class="text-center py-5">
+        <i class="fas fa-chart-line fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted">Selecione o período e clique em <strong>Gerar Insights</strong></h5>
+    </div>
+</div>
+
+<script>
+const endpoint = '{{ url_for("admin_api.api_ia_consultor_vendas_insights") }}';
+const sessionClienteId = '{{ session.get("current_client_id", "") }}';
+
+const fmtCurrency = v => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
+const fmtPercent = v => `${Number(v || 0).toFixed(1).replace('.', ',')}%`;
+const fmtNumber  = v => new Intl.NumberFormat('pt-BR').format(Number(v || 0));
+
+function badgeDelta(pct) {
+    const n = Number(pct || 0);
+    const color = n >= 0 ? 'success' : 'danger';
+    const icon  = n >= 0 ? 'arrow-up' : 'arrow-down';
+    return `<span class="badge bg-${color}"><i class="fas fa-${icon} me-1"></i>${fmtPercent(Math.abs(n))}</span>`;
+}
+
+async function gerarInsights() {
+    const days = document.getElementById('sales-days').value;
+
+    document.getElementById('initial-area').classList.add('d-none');
+    document.getElementById('error-area').classList.add('d-none');
+    document.getElementById('results-area').classList.add('d-none');
+    document.getElementById('loading-area').classList.remove('d-none');
+
+    try {
+        const query = new URLSearchParams({ days });
+        if (sessionClienteId) query.set('cliente_id', sessionClienteId);
+        const resp = await fetch(`${endpoint}?${query.toString()}`);
+        const payload = await resp.json().catch(() => ({ success: false, error: `Erro HTTP ${resp.status}` }));
+
+        if (!resp.ok || !payload.success) throw new Error(payload.error || 'Falha ao gerar insights');
+
+        const data        = payload.data || {};
+        const metricas    = data.metricas || {};
+        const insights    = data.insights || [];
+        const topProd     = data.top_produtos || [];
+        const topDest     = data.top_destinatarios || [];
+        const narrativa   = data.narrativa_ia;
+
+        // Métricas
+        document.getElementById('metricas-cards').innerHTML = [
+            { label: 'Notas Autorizadas', value: fmtNumber(metricas.total_notas ?? 0), icon: 'file-invoice', color: 'primary', delta: metricas.delta_notas_pct },
+            { label: 'Faturamento',       value: fmtCurrency(metricas.faturamento),    icon: 'dollar-sign',  color: 'success', delta: metricas.delta_faturamento_pct },
+            { label: 'Ticket Médio',      value: fmtCurrency(metricas.ticket_medio),   icon: 'receipt',      color: 'info',    delta: null },
+            { label: 'Taxa Autorização',  value: fmtPercent(metricas.taxa_autorizacao),icon: 'check-circle', color: 'warning', delta: null },
+        ].map(m => `
+            <div class="col-md-3">
+                <div class="card border-${m.color} h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="text-muted small">${m.label}</span>
+                            <i class="fas fa-${m.icon} text-${m.color}"></i>
+                        </div>
+                        <div class="fs-4 fw-bold">${m.value}</div>
+                        ${m.delta !== null && m.delta !== undefined ? `<div class="mt-1">${badgeDelta(m.delta)} vs período anterior</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Comparativo
+        document.getElementById('comparativo-area').innerHTML =
+            `<i class="fas fa-info-circle me-2"></i>
+             <strong>Comparativo com período anterior:</strong>
+             Faturamento ${badgeDelta(metricas.delta_faturamento_pct)} &nbsp;|&nbsp;
+             Notas emitidas ${badgeDelta(metricas.delta_notas_pct)}`;
+
+        // Insights
+        document.getElementById('insights-list').innerHTML = insights.length
+            ? insights.map(i => `<li class="mb-1">${i}</li>`).join('')
+            : '<li class="text-muted">Sem insights para o período selecionado.</li>';
+
+        // Narrativa IA
+        const narrativaCard = document.getElementById('narrativa-card');
+        if (narrativa && narrativa.text) {
+            document.getElementById('narrativa-content').innerHTML =
+                String(narrativa.text).replace(/\n/g, '<br>');
+            narrativaCard.classList.remove('d-none');
+        } else {
+            narrativaCard.classList.add('d-none');
+        }
+
+        // Top produtos
+        document.getElementById('top-produtos-body').innerHTML = topProd.length
+            ? topProd.map(p => `
+                <tr>
+                    <td>${p.descricao}</td>
+                    <td class="text-center">${fmtNumber(p.total_ocorrencias)}</td>
+                    <td class="text-end">${fmtCurrency(p.valor_total)}</td>
+                </tr>`).join('')
+            : '<tr><td colspan="3" class="text-muted text-center">Sem dados</td></tr>';
+
+        // Top destinatários
+        document.getElementById('top-destinatarios-body').innerHTML = topDest.length
+            ? topDest.map(d => `
+                <tr>
+                    <td>${d.destinatario}</td>
+                    <td class="text-center">${fmtNumber(d.total_notas)}</td>
+                    <td class="text-end">${fmtCurrency(d.faturamento)}</td>
+                </tr>`).join('')
+            : '<tr><td colspan="3" class="text-muted text-center">Sem dados</td></tr>';
+
+        document.getElementById('loading-area').classList.add('d-none');
+        document.getElementById('results-area').classList.remove('d-none');
+
+    } catch (err) {
+        document.getElementById('loading-area').classList.add('d-none');
+        document.getElementById('error-area').textContent = 'Erro: ' + err.message;
+        document.getElementById('error-area').classList.remove('d-none');
+    }
+}
+</script>
+{% endblock %}

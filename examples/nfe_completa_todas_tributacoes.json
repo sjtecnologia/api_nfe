@@ -1,0 +1,519 @@
+{
+  "destinatario": {
+    "tipo_pessoa": "J",
+    "cpf_cnpj": "12345678000199",
+    "nome": "EMPRESA TESTE LTDA",
+    "nome_fantasia": "Empresa Teste",
+    "inscricao_estadual": "123456789",
+    "email": "contato@empresateste.com.br",
+    "telefone": "(11) 3333-4444",
+    "endereco": "Rua Exemplo",
+    "numero": "1000",
+    "complemento": "Sala 101",
+    "bairro": "Centro",
+    "cidade": "São Paulo",
+    "uf": "SP",
+    "cep": "01310100",
+    "codigo_municipio": "3550308",
+    "codigo_pais": "1058",
+    "nome_pais": "BRASIL",
+    "indicador_inscricao_estadual": "1"
+  },
+  "natureza_operacao": "Venda de Mercadoria",
+  "tipo_operacao": "1",
+  "finalidade_emissao": "1",
+  "consumidor_final": "1",
+  "presenca_comprador": "1",
+  "itens": [
+    {
+      "numero_item": "1",
+      "codigo_produto": "PROD001",
+      "descricao": "PRODUTO COM ICMS 00 (Tributado Integralmente)",
+      "ncm": "84714100",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 10,
+      "valor_unitario_comercial": 100.00,
+      "valor_total_bruto": 1000.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 10,
+      "valor_unitario_tributavel": 100.00,
+      "valor_frete": 0.00,
+      "valor_seguro": 0.00,
+      "valor_desconto": 0.00,
+      "valor_outras_despesas": 0.00,
+      "icms": {
+        "origem": "0",
+        "cst": "00",
+        "modalidade_bc": "3",
+        "base_calculo": 1000.00,
+        "aliquota": 18.00,
+        "valor": 180.00
+      },
+      "ipi": {
+        "cst": "50",
+        "base_calculo": 1000.00,
+        "aliquota": 10.00,
+        "valor": 100.00
+      },
+      "pis": {
+        "cst": "01",
+        "base_calculo": 1000.00,
+        "aliquota": 1.65,
+        "valor": 16.50
+      },
+      "cofins": {
+        "cst": "01",
+        "base_calculo": 1000.00,
+        "aliquota": 7.6,
+        "valor": 76.00
+      },
+      "ibs": {
+        "base_calculo": 1000.00,
+        "aliquota": 0.80,
+        "valor": 8.00
+      },
+      "cbs": {
+        "base_calculo": 1000.00,
+        "aliquota": 0.35,
+        "valor": 3.50
+      }
+    },
+    {
+      "numero_item": "2",
+      "codigo_produto": "PROD002",
+      "descricao": "PRODUTO COM ICMS 10 (Tributado com cobrança de ICMS ST)",
+      "ncm": "84714900",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 5,
+      "valor_unitario_comercial": 200.00,
+      "valor_total_bruto": 1000.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 5,
+      "valor_unitario_tributavel": 200.00,
+      "icms": {
+        "origem": "0",
+        "cst": "10",
+        "modalidade_bc": "3",
+        "base_calculo": 1000.00,
+        "aliquota": 18.00,
+        "valor": 180.00,
+        "modalidade_bc_st": "4",
+        "mva_st": 50.00,
+        "base_calculo_st": 1500.00,
+        "aliquota_st": 18.00,
+        "valor_st": 90.00
+      },
+      "pis": {
+        "cst": "01",
+        "base_calculo": 1000.00,
+        "aliquota": 1.65,
+        "valor": 16.50
+      },
+      "cofins": {
+        "cst": "01",
+        "base_calculo": 1000.00,
+        "aliquota": 7.6,
+        "valor": 76.00
+      }
+    },
+    {
+      "numero_item": "3",
+      "codigo_produto": "PROD003",
+      "descricao": "PRODUTO COM ICMS 20 (Redução de Base de Cálculo)",
+      "ncm": "39269090",
+      "cfop": "5102",
+      "unidade_comercial": "KG",
+      "quantidade_comercial": 100,
+      "valor_unitario_comercial": 15.00,
+      "valor_total_bruto": 1500.00,
+      "unidade_tributavel": "KG",
+      "quantidade_tributavel": 100,
+      "valor_unitario_tributavel": 15.00,
+      "icms": {
+        "origem": "0",
+        "cst": "20",
+        "modalidade_bc": "3",
+        "percentual_reducao_bc": 33.33,
+        "base_calculo": 1000.05,
+        "aliquota": 18.00,
+        "valor": 180.01
+      },
+      "pis": {
+        "cst": "01",
+        "base_calculo": 1500.00,
+        "aliquota": 1.65,
+        "valor": 24.75
+      },
+      "cofins": {
+        "cst": "01",
+        "base_calculo": 1500.00,
+        "aliquota": 7.6,
+        "valor": 114.00
+      }
+    },
+    {
+      "numero_item": "4",
+      "codigo_produto": "PROD004",
+      "descricao": "PRODUTO COM ICMS 30 (Isenta ou não tributada e com cobrança do ICMS ST)",
+      "ncm": "84713090",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 3,
+      "valor_unitario_comercial": 500.00,
+      "valor_total_bruto": 1500.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 3,
+      "valor_unitario_tributavel": 500.00,
+      "icms": {
+        "origem": "0",
+        "cst": "30",
+        "modalidade_bc_st": "4",
+        "mva_st": 40.00,
+        "base_calculo_st": 2100.00,
+        "aliquota_st": 18.00,
+        "valor_st": 378.00
+      },
+      "pis": {
+        "cst": "04",
+        "valor": 0.00
+      },
+      "cofins": {
+        "cst": "04",
+        "valor": 0.00
+      }
+    },
+    {
+      "numero_item": "5",
+      "codigo_produto": "PROD005",
+      "descricao": "PRODUTO COM ICMS 40 (Isenta)",
+      "ncm": "09011100",
+      "cfop": "5102",
+      "unidade_comercial": "KG",
+      "quantidade_comercial": 50,
+      "valor_unitario_comercial": 30.00,
+      "valor_total_bruto": 1500.00,
+      "unidade_tributavel": "KG",
+      "quantidade_tributavel": 50,
+      "valor_unitario_tributavel": 30.00,
+      "icms": {
+        "origem": "0",
+        "cst": "40",
+        "valor": 0.00,
+        "motivo_desoneracao": "3"
+      },
+      "pis": {
+        "cst": "04",
+        "valor": 0.00
+      },
+      "cofins": {
+        "cst": "04",
+        "valor": 0.00
+      }
+    },
+    {
+      "numero_item": "6",
+      "codigo_produto": "PROD006",
+      "descricao": "PRODUTO COM ICMS 41 (Não tributada)",
+      "ncm": "84715000",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 2,
+      "valor_unitario_comercial": 750.00,
+      "valor_total_bruto": 1500.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 2,
+      "valor_unitario_tributavel": 750.00,
+      "icms": {
+        "origem": "0",
+        "cst": "41",
+        "valor": 0.00
+      },
+      "pis": {
+        "cst": "06",
+        "valor": 0.00
+      },
+      "cofins": {
+        "cst": "06",
+        "valor": 0.00
+      }
+    },
+    {
+      "numero_item": "7",
+      "codigo_produto": "PROD007",
+      "descricao": "PRODUTO COM ICMS 51 (Diferimento)",
+      "ncm": "84716090",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 4,
+      "valor_unitario_comercial": 375.00,
+      "valor_total_bruto": 1500.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 4,
+      "valor_unitario_tributavel": 375.00,
+      "icms": {
+        "origem": "0",
+        "cst": "51",
+        "modalidade_bc": "3",
+        "percentual_diferimento": 33.33,
+        "base_calculo": 1500.00,
+        "aliquota": 18.00,
+        "valor_icms_operacao": 270.00,
+        "valor_icms_diferido": 89.99,
+        "valor": 180.01
+      },
+      "pis": {
+        "cst": "01",
+        "base_calculo": 1500.00,
+        "aliquota": 1.65,
+        "valor": 24.75
+      },
+      "cofins": {
+        "cst": "01",
+        "base_calculo": 1500.00,
+        "aliquota": 7.6,
+        "valor": 114.00
+      }
+    },
+    {
+      "numero_item": "8",
+      "codigo_produto": "PROD008",
+      "descricao": "PRODUTO COM ICMS 60 (ICMS cobrado anteriormente por ST)",
+      "ncm": "22021000",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 20,
+      "valor_unitario_comercial": 25.00,
+      "valor_total_bruto": 500.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 20,
+      "valor_unitario_tributavel": 25.00,
+      "icms": {
+        "origem": "0",
+        "cst": "60",
+        "base_calculo_st_retido": 500.00,
+        "aliquota_suportada_consumidor": 18.00,
+        "valor_icms_st_retido": 90.00
+      },
+      "pis": {
+        "cst": "01",
+        "base_calculo": 500.00,
+        "aliquota": 1.65,
+        "valor": 8.25
+      },
+      "cofins": {
+        "cst": "01",
+        "base_calculo": 500.00,
+        "aliquota": 7.6,
+        "valor": 38.00
+      }
+    },
+    {
+      "numero_item": "9",
+      "codigo_produto": "PROD009",
+      "descricao": "PRODUTO COM ICMS 70 (Redução de BC e cobrança de ICMS ST)",
+      "ncm": "84717090",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 1,
+      "valor_unitario_comercial": 2000.00,
+      "valor_total_bruto": 2000.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 1,
+      "valor_unitario_tributavel": 2000.00,
+      "icms": {
+        "origem": "0",
+        "cst": "70",
+        "modalidade_bc": "3",
+        "percentual_reducao_bc": 20.00,
+        "base_calculo": 1600.00,
+        "aliquota": 18.00,
+        "valor": 288.00,
+        "modalidade_bc_st": "4",
+        "mva_st": 30.00,
+        "base_calculo_st": 2600.00,
+        "aliquota_st": 18.00,
+        "valor_st": 180.00
+      },
+      "pis": {
+        "cst": "01",
+        "base_calculo": 2000.00,
+        "aliquota": 1.65,
+        "valor": 33.00
+      },
+      "cofins": {
+        "cst": "01",
+        "base_calculo": 2000.00,
+        "aliquota": 7.6,
+        "valor": 152.00
+      }
+    },
+    {
+      "numero_item": "10",
+      "codigo_produto": "PROD010",
+      "descricao": "PRODUTO COM ICMS 90 (Outros - situação tributária complexa)",
+      "ncm": "84718000",
+      "cfop": "5102",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 1,
+      "valor_unitario_comercial": 3000.00,
+      "valor_total_bruto": 3000.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 1,
+      "valor_unitario_tributavel": 3000.00,
+      "icms": {
+        "origem": "0",
+        "cst": "90",
+        "modalidade_bc": "3",
+        "base_calculo": 3000.00,
+        "aliquota": 12.00,
+        "valor": 360.00
+      },
+      "pis": {
+        "cst": "99",
+        "base_calculo": 3000.00,
+        "aliquota": 0.65,
+        "valor": 19.50
+      },
+      "cofins": {
+        "cst": "99",
+        "base_calculo": 3000.00,
+        "aliquota": 3.00,
+        "valor": 90.00
+      },
+      "ibs": {
+        "base_calculo": 3000.00,
+        "aliquota": 0.80,
+        "valor": 24.00
+      },
+      "cbs": {
+        "base_calculo": 3000.00,
+        "aliquota": 0.35,
+        "valor": 10.50
+      }
+    },
+    {
+      "numero_item": "11",
+      "codigo_produto": "SERV001",
+      "descricao": "SERVIÇO COM ISSQN",
+      "ncm": "00",
+      "cfop": "5933",
+      "unidade_comercial": "UN",
+      "quantidade_comercial": 1,
+      "valor_unitario_comercial": 1000.00,
+      "valor_total_bruto": 1000.00,
+      "unidade_tributavel": "UN",
+      "quantidade_tributavel": 1,
+      "valor_unitario_tributavel": 1000.00,
+      "icms": {
+        "origem": "0",
+        "cst": "41",
+        "valor": 0.00
+      },
+      "pis": {
+        "cst": "01",
+        "base_calculo": 1000.00,
+        "aliquota": 1.65,
+        "valor": 16.50
+      },
+      "cofins": {
+        "cst": "01",
+        "base_calculo": 1000.00,
+        "aliquota": 7.6,
+        "valor": 76.00
+      },
+      "issqn": {
+        "base_calculo": 1000.00,
+        "aliquota": 5.00,
+        "valor": 50.00,
+        "codigo_municipio": "3550308",
+        "codigo_servico": "01.01"
+      }
+    }
+  ],
+  "totais": {
+    "base_calculo_icms": 14100.05,
+    "valor_icms": 1648.01,
+    "base_calculo_icms_st": 6200.00,
+    "valor_icms_st": 648.00,
+    "valor_fcp": 0.00,
+    "valor_produtos": 16500.00,
+    "valor_frete": 0.00,
+    "valor_seguro": 0.00,
+    "valor_desconto": 0.00,
+    "valor_outras_despesas": 0.00,
+    "valor_ipi": 100.00,
+    "valor_pis": 238.00,
+    "valor_cofins": 936.00,
+    "valor_ibs": 32.00,
+    "valor_cbs": 14.00,
+    "valor_total_nota": 17248.00
+  },
+  "transporte": {
+    "modalidade_frete": "0",
+    "transportadora": {
+      "cpf_cnpj": "98765432000188",
+      "razao_social": "TRANSPORTADORA TESTE LTDA",
+      "inscricao_estadual": "ISENTO",
+      "endereco_completo": "Rua das Carretas, 500",
+      "municipio": "São Paulo",
+      "uf": "SP"
+    },
+    "veiculo": {
+      "placa": "ABC1D23",
+      "uf": "SP",
+      "rntc": "12345678"
+    },
+    "volumes": [
+      {
+        "quantidade": 15,
+        "especie": "Caixas",
+        "marca": "Marca Teste",
+        "numeracao": "1 a 15",
+        "peso_liquido": 150.50,
+        "peso_bruto": 180.00
+      }
+    ]
+  },
+  "cobranca": {
+    "forma_pagamento": "0",
+    "pagamentos": [
+      {
+        "meio_pagamento": "01",
+        "valor": 10000.00
+      },
+      {
+        "meio_pagamento": "03",
+        "valor": 7248.00,
+        "dados_cartao": {
+          "tipo_integracao": "2",
+          "cnpj_credenciadora": "12345678000199",
+          "bandeira": "01",
+          "numero_autorizacao": "123456"
+        }
+      }
+    ],
+    "duplicatas": [
+      {
+        "numero": "001",
+        "data_vencimento": "2025-01-20",
+        "valor": 8624.00
+      },
+      {
+        "numero": "002",
+        "data_vencimento": "2025-02-20",
+        "valor": 8624.00
+      }
+    ]
+  },
+  "informacoes_adicionais": {
+    "informacoes_complementares": "NFe de exemplo contendo todos os tipos de tributação possíveis. ICMS: CST 00, 10, 20, 30, 40, 41, 51, 60, 70, 90. PIS/COFINS: CST 01, 04, 06, 99. IPI CST 50. IBS e CBS conforme LC 214/2025. Volumes: 15 caixas. Peso: 150.50kg líquido / 180kg bruto. Pagamento: Entrada R$ 10.000,00 + Cartão débito R$ 7.248,00. Parcelamento em 2x.",
+    "informacoes_fisco": "Documento emitido por ME/EPP optante pelo Simples Nacional não gera direito a crédito fiscal de IPI"
+  },
+  "referenciadas": [
+    {
+      "chave_acesso": "35250112345678000199550010000000011234567890"
+    }
+  ]
+}

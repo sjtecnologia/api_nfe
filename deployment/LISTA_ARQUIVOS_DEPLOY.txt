@@ -1,0 +1,233 @@
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║     📋 LISTA RÁPIDA DE ARQUIVOS - API v2 DEPLOY                ║
+║                                                                ║
+║     Data: 18/12/2025                                           ║
+║     Total: 14 arquivos (11 novos + 3 modificados)             ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  🆕 ARQUIVOS NOVOS (11)                                       ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+1.  auth/api_key_auth.py
+    └─ Sistema de autenticação por API Key (270 linhas)
+
+2.  routes/api_keys_routes.py
+    └─ Gerenciamento de API Keys via web (220 linhas)
+
+3.  routes/api_v2_routes.py
+    └─ Endpoints da API v2 - NFe emission (350 linhas)
+
+4.  routes/webhooks_routes.py
+    └─ Gerenciamento de Webhooks via web (200 linhas)
+
+5.  services/webhook_service.py
+    └─ Sistema de envio de webhooks (180 linhas)
+
+6.  database/migrations/add_api_keys.sql
+    └─ Migration: 4 tabelas + funções (200 linhas)
+
+7.  templates/admin/api_keys/list.html
+    └─ Página de listagem de API Keys (190 linhas)
+
+8.  templates/admin/api_keys/create.html
+    └─ Formulário de criação de API Key (280 linhas)
+
+9.  templates/admin/api_keys/stats.html
+    └─ Estatísticas de uso (250 linhas)
+
+10. templates/admin/webhooks/list.html
+    └─ Página de listagem de Webhooks (220 linhas)
+
+11. templates/admin/webhooks/create.html
+    └─ Formulário de configuração de Webhook (280 linhas)
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  ✏️  ARQUIVOS MODIFICADOS (3)                                 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+1.  database/models.py
+    └─ Adicionar 4 classes: ApiKey, ApiUsageLog, Webhook, WebhookQueue
+    └─ Linhas adicionadas: ~170
+
+2.  app.py
+    └─ Registrar 3 novos blueprints
+    └─ Linhas adicionadas: ~10
+
+3.  docs/API_INTEGRACAO_MANUAL.md
+    └─ Documentação completa da API v2 e Webhooks
+    └─ Linhas adicionadas: ~400
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  📚 DOCUMENTAÇÃO (2)                                          ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+1.  deployment/ARQUIVOS_API_V2_DEPLOY.md
+    └─ Documentação completa do deploy
+
+2.  deployment/COMANDOS_DEPLOY_RAPIDO.md
+    └─ Comandos rápidos de SCP, FTP e manutenção
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  🚀 PROCEDIMENTO DE DEPLOY                                    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+OPÇÃO A - DEPLOY AUTOMATIZADO (Recomendado):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. Upload do script:
+     scp deployment/deploy_api_v2.sh user@servidor:/tmp/
+
+  2. Executar no servidor:
+     ssh user@servidor
+     sudo /tmp/deploy_api_v2.sh
+
+  ✅ O script faz automaticamente:
+     • Backup do banco e código
+     • Verificação de arquivos
+     • Execução da migration
+     • Ajuste de permissões
+     • Restart do serviço
+     • Testes básicos
+
+OPÇÃO B - DEPLOY MANUAL:
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1️⃣  BACKUP (CRÍTICO!)
+      sudo -u postgres pg_dump sjtnfe > backup_$(date +%Y%m%d).sql
+
+  2️⃣  UPLOAD DOS ARQUIVOS
+      # Via SCP (copiar comandos do COMANDOS_DEPLOY_RAPIDO.md)
+      scp auth/api_key_auth.py user@servidor:/var/www/api_nfe/auth/
+      scp routes/*.py user@servidor:/var/www/api_nfe/routes/
+      ... (ver arquivo completo)
+
+  3️⃣  EXECUTAR MIGRATION
+      cd /var/www/api_nfe
+      sudo -u postgres psql sjtnfe -f database/migrations/add_api_keys.sql
+
+  4️⃣  AJUSTAR PERMISSÕES
+      sudo chown -R www-data:www-data /var/www/api_nfe
+      sudo chmod -R 755 /var/www/api_nfe/templates
+
+  5️⃣  REINICIAR SERVIÇO
+      sudo systemctl restart api_nfe
+
+  6️⃣  TESTAR
+      curl http://localhost:8080/api/v2/nfes
+      # Deve retornar: {"error": "API Key não fornecida"}
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  ✅ CHECKLIST PÓS-DEPLOY                                      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  [ ] Migration executada com sucesso
+  [ ] 4 tabelas criadas (api_keys, api_usage_logs, webhooks, webhook_queue)
+  [ ] Serviço reiniciado sem erros
+  [ ] API v2 respondendo (teste com curl)
+  [ ] Logs sem erros críticos
+  [ ] Acessar painel de API Keys: /admin/api-keys/{cliente_id}
+  [ ] Acessar painel de Webhooks: /admin/webhooks/{cliente_id}
+  [ ] Criar uma API Key de teste
+  [ ] Testar emissão de NFe via API
+  [ ] Configurar webhook worker (cron ou systemd)
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  🔗 ARQUIVOS DE REFERÊNCIA                                    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  📄 deployment/ARQUIVOS_API_V2_DEPLOY.md
+     └─ Documentação completa do deploy
+
+  📄 deployment/COMANDOS_DEPLOY_RAPIDO.md
+     └─ Comandos SCP, FTP, SQL e manutenção
+
+  📄 deployment/deploy_api_v2.sh
+     └─ Script automatizado de deploy
+
+  📄 docs/API_INTEGRACAO_MANUAL.md
+     └─ Manual completo da API com exemplos
+
+  📄 database/migrations/add_api_keys.sql
+     └─ Migration SQL (executar no banco)
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  ⚠️  ATENÇÕES IMPORTANTES                                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  🔴 SEMPRE FAZER BACKUP ANTES DO DEPLOY!
+
+  🔴 EXECUTAR MIGRATION ANTES DE REINICIAR O SERVIÇO
+     (Se reiniciar antes, a aplicação vai dar erro de tabela não encontrada)
+
+  🟡 Webhook worker precisa ser configurado separadamente
+     (Adicionar ao cron ou criar serviço systemd)
+
+  🟡 Nenhuma dependência Python nova é necessária
+     (Usa apenas bibliotecas já instaladas: hmac, hashlib, secrets, requests)
+
+  🟢 API v1 continua funcionando normalmente
+     (Compatibilidade total com código existente)
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  📊 ESTATÍSTICAS DO CÓDIGO                                    ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Total de arquivos:        14 arquivos
+  Arquivos novos:           11 arquivos
+  Arquivos modificados:      3 arquivos
+  Linhas de código novas:   ~1990 linhas
+  Tabelas no banco:          4 tabelas
+  Funções PostgreSQL:        3 funções
+  Índices criados:          12 índices
+  Endpoints API v2:          7 endpoints
+  Templates HTML:            5 páginas
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  🎯 FUNCIONALIDADES IMPLEMENTADAS                             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  ✅ Sistema de autenticação por API Key
+  ✅ Rate limiting configurável por key
+  ✅ IP Whitelist por key
+  ✅ Permissões granulares
+  ✅ Emissão de NFe via API (POST /api/v2/nfe/emitir)
+  ✅ Consulta de NFes via API (GET /api/v2/nfes)
+  ✅ Download de XML via API
+  ✅ Cancelamento de NFe via API
+  ✅ Sistema de Webhooks com retry
+  ✅ Assinatura HMAC-SHA256 em webhooks
+  ✅ Interface web para gerenciar API Keys
+  ✅ Interface web para gerenciar Webhooks
+  ✅ Estatísticas de uso com gráficos
+  ✅ Logs detalhados de requisições
+  ✅ Documentação completa com exemplos
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃  📞 SUPORTE                                                   ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Em caso de problemas durante o deploy:
+
+  1. Verificar logs:
+     tail -f /var/log/api_nfe/error.log
+
+  2. Verificar se migration foi executada:
+     sudo -u postgres psql sjtnfe -c "\dt api_keys"
+
+  3. Verificar se serviço está rodando:
+     systemctl status api_nfe
+
+  4. Fazer rollback se necessário:
+     sudo -u postgres psql sjtnfe < backup_YYYYMMDD.sql
+
+  5. Consultar documentação completa:
+     cat deployment/ARQUIVOS_API_V2_DEPLOY.md
+
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║            🎉 Pronto para Deploy! Boa sorte! 🚀                ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝

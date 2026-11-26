@@ -1,0 +1,66 @@
+{% extends "portal/base.html" %}
+{% block title %}Meus orçamentos{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-1">Olá, {{ perfil.nome }}</h1>
+    <p class="text-muted mb-0">Você está comprando de <strong>{{ perfil.nome_fantasia or perfil.razao_social }}</strong>.</p>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('portal.novo_orcamento') }}"><i class="fas fa-plus"></i> Pedir orçamento</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card portal-card">
+      <div class="card-header bg-white border-0 pt-3"><strong>Meus pedidos de orçamento</strong></div>
+      <div class="card-body p-0">
+        {% if orcamentos %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>Número</th><th>Itens</th><th>Valor</th><th>Status</th><th>Data</th><th></th></tr></thead>
+            <tbody>
+              {% for o in orcamentos %}
+              <tr>
+                <td><strong>{{ o.numero }}</strong>{% if o.pedido_id %}<br><small class="text-success">Pedido gerado</small>{% endif %}</td>
+                <td>{{ o.total_itens }}</td>
+                <td class="text-nowrap">R$ {{ '%.2f'|format(o.valor_total) }}</td>
+                <td><span class="badge status-pill bg-{{ status_badges.get(o.status, 'secondary') }}">{{ status_labels.get(o.status, o.status) }}</span></td>
+                <td class="text-nowrap">{{ o.created_at.strftime('%d/%m/%Y %H:%M') if o.created_at else '-' }}</td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ url_for('portal.detalhe', orcamento_id=o.orcamento_id) }}">Abrir</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted p-5">
+          <i class="fas fa-file-invoice-dollar fa-2x mb-2"></i>
+          <p class="mb-2">Você ainda não fez nenhum pedido de orçamento.</p>
+          <a class="btn btn-sm btn-primary" href="{{ url_for('portal.novo_orcamento') }}">Fazer o primeiro pedido</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card portal-card">
+      <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between">
+        <strong><i class="fas fa-bell"></i> Notificações</strong>
+        <a class="small" href="{{ url_for('portal.notificacoes_portal') }}">Ver todas</a>
+      </div>
+      <div class="list-group list-group-flush">
+        {% for n in notificacoes[:6] %}
+        <div class="list-group-item {{ '' if n.lida else 'bg-light' }}">
+          <strong class="small">{{ n.titulo }}</strong>
+          {% if n.mensagem %}<div class="small text-muted">{{ n.mensagem }}</div>{% endif %}
+          {% if n.link %}<a class="small" href="{{ n.link }}">Abrir</a>{% endif %}
+        </div>
+        {% else %}
+        <div class="list-group-item text-muted small">Nenhuma notificação.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

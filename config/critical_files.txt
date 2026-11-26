@@ -1,0 +1,18 @@
+# Arquivos críticos do núcleo fiscal e de autenticação.
+# Um arquivo por linha; comentários e linhas vazias são ignorados.
+app.py
+routes/nfe_routes.py
+routes/nfce_routes.py
+routes/nfse_routes.py
+services/nfe_service.py
+services/sefaz_service.py
+services/certificate_service.py
+auth/decorators.py
+auth/permissions.py
+auth/login_manager.py
+database/models.py
+database/connection.py
+templates/base.html
+templates/cliente/base.html
+templates/admin/nfes/emitir.html
+templates/admin/nfce/emitir.html

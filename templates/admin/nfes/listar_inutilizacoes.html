@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+
+{% block title %}Inutilizações de Numeração - EmiteMax{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <!-- Header -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="fas fa-ban text-warning"></i> Inutilizações de Numeração</h2>
+                    <p class="text-muted">Cliente: <strong>{{ cliente.nome_razao_social }}</strong></p>
+                </div>
+                <div>
+                    <a href="{{ url_for('nfe.list_nfes', cliente_id=cliente_id) }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar para NFes
+                    </a>
+                    <button type="button" class="btn btn-success" onclick="abrirModalLote()">
+                        <i class="fas fa-file-archive"></i> Baixar Lote por Período
+                    </button>
+                    <a href="{{ url_for('nfe.form_inutilizar', cliente_id=cliente_id) }}" class="btn btn-danger">
+                        <i class="fas fa-ban"></i> Nova Inutilização
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form id="formFiltro" class="row align-items-end">
+                        <div class="col-md-2">
+                            <label for="filtroModelo">Modelo</label>
+                            <select class="form-control" id="filtroModelo">
+                                <option value="">Todos</option>
+                                <option value="55">NFe (55)</option>
+                                <option value="65">NFCe (65)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="filtroSerie">Série</label>
+                            <input type="number" class="form-control" id="filtroSerie" placeholder="Ex: 1">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="filtroStatus">Status</label>
+                            <select class="form-control" id="filtroStatus">
+                                <option value="">Todos</option>
+                                <option value="AUTORIZADA">Autorizada</option>
+                                <option value="REJEITADA">Rejeitada</option>
+                                <option value="PROCESSANDO">Processando</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="filtroAno">Ano</label>
+                            <input type="text" class="form-control" id="filtroAno" placeholder="Ex: 26" maxlength="2">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="fas fa-filter"></i> Filtrar
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="limparFiltros()">
+                                <i class="fas fa-eraser"></i> Limpar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Estatísticas -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-check-circle"></i> Autorizadas
+                            </h5>
+                            <h2 id="countAutorizadas">{{ stats.autorizadas or 0 }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-times-circle"></i> Rejeitadas
+                            </h5>
+                            <h2 id="countRejeitadas">{{ stats.rejeitadas or 0 }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-clock"></i> Processando
+                            </h5>
+                            <h2 id="countProcessando">{{ stats.processando or 0 }}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <i class="fas fa-ban"></i> Total
+                            </h5>
+                            <h2 id="countTotal">{{ inutilizacoes|length }}</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de Inutilizações -->
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-list"></i> Histórico de Inutilizações
+                </div>
+                <div class="card-body">
+                    {% if inutilizacoes %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="tabelaInutilizacoes">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Data/Hora</th>
+                                    <th>Modelo</th>
+                                    <th>Série</th>
+                                    <th>Números</th>
+                                    <th>Ano</th>
+                                    <th>Justificativa</th>
+                                    <th>Status</th>
+                                    <th>Protocolo</th>
+                                    <th>Usuário</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for inut in inutilizacoes %}
+                                <tr data-modelo="{{ inut.modelo }}" 
+                                    data-serie="{{ inut.serie }}" 
+                                    data-status="{{ inut.status }}" 
+                                    data-ano="{{ inut.ano }}">
+                                    <td>{{ inut.inutilizacao_id }}</td>
+                                    <td>
+                                        {{ inut.data_criacao.strftime('%d/%m/%Y') }}<br>
+                                        <small class="text-muted">{{ inut.data_criacao.strftime('%H:%M:%S') }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-info">
+                                            {{ 'NFe' if inut.modelo == '55' else 'NFCe' }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">{{ inut.serie }}</td>
+                                    <td class="text-center">
+                                        <strong>{{ inut.numero_inicial }}</strong>
+                                        {% if inut.numero_inicial != inut.numero_final %}
+                                        a <strong>{{ inut.numero_final }}</strong>
+                                        {% endif %}
+                                        <br>
+                                        <small class="text-muted">
+                                            ({{ inut.numero_final - inut.numero_inicial + 1 }} número{% if inut.numero_final != inut.numero_inicial %}s{% endif %})
+                                        </small>
+                                    </td>
+                                    <td class="text-center">{{ inut.ano }}</td>
+                                    <td>
+                                        <span title="{{ inut.justificativa }}">
+                                            {{ inut.justificativa[:50] }}{% if inut.justificativa|length > 50 %}...{% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if inut.status == 'AUTORIZADA' %}
+                                            <span class="badge" style="background-color: #28a745; color: white;">
+                                                <i class="fas fa-check-circle"></i> Autorizada
+                                            </span>
+                                        {% elif inut.status == 'REJEITADA' %}
+                                            <span class="badge" style="background-color: #dc3545; color: white;">
+                                                <i class="fas fa-times-circle"></i> Rejeitada
+                                            </span>
+                                        {% elif inut.status == 'PROCESSANDO' %}
+                                            <span class="badge" style="background-color: #ffc107; color: #212529;">
+                                                <i class="fas fa-clock"></i> Processando
+                                            </span>
+                                        {% else %}
+                                            <span class="badge" style="background-color: #6c757d; color: white;">
+                                                {{ inut.status or 'Pendente' }}
+                                            </span>
+                                        {% endif %}
+                                        {% if inut.codigo_status %}
+                                        <br><small class="text-muted">Cód: {{ inut.codigo_status }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if inut.protocolo %}
+                                            <code>{{ inut.protocolo }}</code>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if inut.created_by_user %}
+                                            {{ inut.created_by_user.username }}
+                                        {% else %}
+                                            <span class="text-muted">Sistema</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-info" 
+                                                    onclick="verDetalhes({{ inut.inutilizacao_id }})"
+                                                    title="Ver detalhes">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            {% if inut.xml_resposta %}
+                                            <button type="button" class="btn btn-secondary" 
+                                                    onclick="baixarXML({{ inut.inutilizacao_id }}, 'resposta')"
+                                                    title="Baixar XML de resposta">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle fa-3x mb-3"></i>
+                        <h5>Nenhuma Inutilização Encontrada</h5>
+                        <p class="mb-0">
+                            Não há registros de inutilização de numeração para este cliente.
+                            <a href="{{ url_for('nfe.form_inutilizar', cliente_id=cliente_id) }}">
+                                Clique aqui para criar a primeira inutilização.
+                            </a>
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Detalhes -->
+<div class="modal fade" id="modalDetalhes" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Detalhes da Inutilização
+                </h5>
+                <button type="button" class="close text-white" onclick="fecharModal()">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="modalDetalhesBody">
+                <div class="text-center py-5">
+                    <div class="spinner-border" role="status">
+                        <span class="sr-only">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="fecharModal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Download em Lote -->
+<div class="modal fade" id="modalLote" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-archive"></i> Baixar XMLs em Lote
+                </h5>
+                <button type="button" class="close text-white" data-bs-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form id="formLote" method="GET" action="{{ url_for('nfe.download_lote_xmls_inutilizacao') }}">
+                <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+                <div class="modal-body">
+                    <p class="text-muted">
+                        Gera um arquivo <strong>.zip</strong> com todos os XMLs das inutilizações
+                        <span class="badge bg-success text-white">Autorizadas</span> no período informado.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="loteDataInicio" class="form-label fw-bold">Data Início</label>
+                            <input type="date" class="form-control" id="loteDataInicio" name="data_inicio" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="loteDataFim" class="form-label fw-bold">Data Fim</label>
+                            <input type="date" class="form-control" id="loteDataFim" name="data_fim" required>
+                        </div>
+                    </div>
+                    <div class="alert alert-info py-2">
+                        <i class="fas fa-info-circle"></i>
+                        O ZIP incluirá o XML de pedido e o XML de resposta de cada inutilização autorizada.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-download"></i> Baixar ZIP
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Aplicar filtros na tabela
+function aplicarFiltros() {
+    const modelo = document.getElementById('filtroModelo').value;
+    const serie = document.getElementById('filtroSerie').value;
+    const status = document.getElementById('filtroStatus').value;
+    const ano = document.getElementById('filtroAno').value;
+
+    const linhas = document.querySelectorAll('#tabelaInutilizacoes tbody tr');
+    let contadorVisivel = 0;
+
+    linhas.forEach(linha => {
+        let mostrar = true;
+
+        if (modelo && linha.dataset.modelo !== modelo) mostrar = false;
+        if (serie && linha.dataset.serie !== serie) mostrar = false;
+        if (status && linha.dataset.status !== status) mostrar = false;
+        if (ano && linha.dataset.ano !== ano) mostrar = false;
+
+        linha.style.display = mostrar ? '' : 'none';
+        if (mostrar) contadorVisivel++;
+    });
+
+    // Atualizar contador total
+    document.getElementById('countTotal').textContent = contadorVisivel;
+}
+
+// Limpar filtros
+function limparFiltros() {
+    document.getElementById('formFiltro').reset();
+    aplicarFiltros();
+}
+
+// Ver detalhes da inutilização
+function verDetalhes(inutilizacaoId) {
+    const modal = $('#modalDetalhes');
+    const body = document.getElementById('modalDetalhesBody');
+
+    body.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border" role="status">
+                <span class="sr-only">Carregando...</span>
+            </div>
+        </div>
+    `;
+
+    modal.modal('show');
+
+    // Buscar detalhes no servidor
+    fetch(`/admin/nfe/inutilizacao/${inutilizacaoId}/detalhes`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const inut = data.inutilizacao;
+                body.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="border-bottom pb-2">Dados da Inutilização</h6>
+                            <dl class="row">
+                                <dt class="col-sm-4">ID:</dt>
+                                <dd class="col-sm-8">${inut.inutilizacao_id}</dd>
+                                
+                                <dt class="col-sm-4">Modelo:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge badge-info">
+                                        ${inut.modelo === '55' ? 'NFe (55)' : 'NFCe (65)'}
+                                    </span>
+                                </dd>
+                                
+                                <dt class="col-sm-4">Série:</dt>
+                                <dd class="col-sm-8">${inut.serie}</dd>
+                                
+                                <dt class="col-sm-4">Números:</dt>
+                                <dd class="col-sm-8">
+                                    <strong>${inut.numero_inicial}</strong> a <strong>${inut.numero_final}</strong>
+                                    <br><small class="text-muted">(${inut.numero_final - inut.numero_inicial + 1} números)</small>
+                                </dd>
+                                
+                                <dt class="col-sm-4">Ano:</dt>
+                                <dd class="col-sm-8">${inut.ano}</dd>
+                                
+                                <dt class="col-sm-4">Data/Hora:</dt>
+                                <dd class="col-sm-8">${inut.data_criacao}</dd>
+                            </dl>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6 class="border-bottom pb-2">Resposta SEFAZ</h6>
+                            <dl class="row">
+                                <dt class="col-sm-4">Status:</dt>
+                                <dd class="col-sm-8">
+                                    ${inut.status === 'AUTORIZADA' ? 
+                                        '<span class="badge" style="background-color: #28a745; color: white;">Autorizada</span>' :
+                                    inut.status === 'REJEITADA' ?
+                                        '<span class="badge" style="background-color: #dc3545; color: white;">Rejeitada</span>' :
+                                    inut.status === 'PROCESSANDO' ?
+                                        '<span class="badge" style="background-color: #ffc107; color: #212529;">Processando</span>' :
+                                        '<span class="badge" style="background-color: #6c757d; color: white;">Erro</span>'}
+                                </dd>
+                                
+                                <dt class="col-sm-4">Código:</dt>
+                                <dd class="col-sm-8">${inut.codigo_status || '-'}</dd>
+                                
+                                <dt class="col-sm-4">Protocolo:</dt>
+                                <dd class="col-sm-8">
+                                    ${inut.protocolo ? '<code>' + inut.protocolo + '</code>' : '-'}
+                                </dd>
+                                
+                                <dt class="col-sm-4">Chave:</dt>
+                                <dd class="col-sm-8">
+                                    ${inut.chave_inutilizacao ? '<code class="small">' + inut.chave_inutilizacao + '</code>' : '-'}
+                                </dd>
+                                
+                                <dt class="col-sm-4">Mensagem:</dt>
+                                <dd class="col-sm-8">
+                                    ${inut.mensagem_sefaz || '-'}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <h6 class="border-bottom pb-2">Justificativa</h6>
+                            <p>${inut.justificativa}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <h6 class="border-bottom pb-2">Auditoria</h6>
+                            <dl class="row">
+                                <dt class="col-sm-3">Criado por:</dt>
+                                <dd class="col-sm-9">${inut.created_by_user || 'Sistema'}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                `;
+            } else {
+                body.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Erro ao carregar detalhes: ${data.message}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            body.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Erro ao carregar detalhes: ${error.message}
+                </div>
+            `;
+        });
+}
+
+// Fechar modal
+function fecharModal() {
+    $('#modalDetalhes').modal('hide');
+    $('body').removeClass('modal-open');
+    $('.modal-backdrop').remove();
+}
+
+// Baixar XML
+function baixarXML(inutilizacaoId, tipo) {
+    window.open(`/admin/nfe/inutilizacao/${inutilizacaoId}/xml/${tipo}`, '_blank');
+}
+
+// Abrir modal de download em lote — pré-preenche com mês atual
+function abrirModalLote() {
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoje.getDate()).padStart(2, '0');
+    const primeiroDia = `${ano}-${mes}-01`;
+    const ultimoDia = `${ano}-${mes}-${dia}`;
+    document.getElementById('loteDataInicio').value = primeiroDia;
+    document.getElementById('loteDataFim').value = ultimoDia;
+    const modal = new bootstrap.Modal(document.getElementById('modalLote'));
+    modal.show();
+}
+</script>
+{% endblock %}

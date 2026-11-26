@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Orçamento {{ orcamento.numero }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Orçamento {{ orcamento.numero }}</h1>
+      <p class="text-muted mb-0">
+        <span class="badge bg-{{ status_badges.get(orcamento.status, 'secondary') }}">{{ status_labels.get(orcamento.status, orcamento.status) }}</span>
+        <span class="badge bg-light text-dark">{{ origem_labels.get(orcamento.origem, orcamento.origem) }}</span>
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('orcamentos.listar') }}">Voltar</a>
+      {% if orcamento.status not in ('CONVERTIDO', 'CANCELADO') %}
+      <a class="btn btn-outline-primary" href="{{ url_for('orcamentos.editar', orcamento_id=orcamento.orcamento_id) }}"><i class="fas fa-edit"></i> Editar</a>
+      {% endif %}
+      {% if orcamento.status not in ('CONVERTIDO', 'CANCELADO') %}
+      <form method="post" action="{{ url_for('orcamentos.converter_em_pedido', orcamento_id=orcamento.orcamento_id) }}" onsubmit="return confirm('Converter este orçamento em pedido?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-success"><i class="fas fa-shopping-cart"></i> Converter em pedido</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header"><strong>Itens do orçamento</strong></div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+              <thead><tr><th>Produto</th><th>Unidade</th><th>Qtd.</th><th>Valor unit.</th><th>Total</th></tr></thead>
+              <tbody>
+                {% for item in itens %}
+                <tr>
+                  <td><strong>{{ item.descricao }}</strong><br><small class="text-muted">{{ item.codigo_produto }}</small></td>
+                  <td>{{ item.unidade }}</td>
+                  <td>{{ item.quantidade }}</td>
+                  <td class="text-nowrap">R$ {{ '%.2f'|format(item.valor_unitario) }}</td>
+                  <td class="text-nowrap">R$ {{ '%.2f'|format(item.valor_total) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-center text-muted p-4">Nenhum item.</td></tr>
+                {% endfor %}
+              </tbody>
+              <tfoot><tr><th colspan="4" class="text-end">Total</th><th class="text-nowrap">R$ {{ '%.2f'|format(orcamento.valor_total) }}</th></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card shadow-sm mb-3">
+        <div class="card-header"><strong>Dados</strong></div>
+        <div class="card-body">
+          <p class="mb-1"><strong>Cliente:</strong> {{ orcamento.cliente_nome or orcamento.portal_nome or 'Não informado' }}</p>
+          {% if orcamento.cliente_cpf_cnpj %}<p class="mb-1"><strong>CPF/CNPJ:</strong> {{ orcamento.cliente_cpf_cnpj }}</p>{% endif %}
+          {% if orcamento.cliente_email or orcamento.portal_email %}<p class="mb-1"><strong>E-mail:</strong> {{ orcamento.cliente_email or orcamento.portal_email }}</p>{% endif %}
+          {% if orcamento.cliente_telefone or orcamento.portal_telefone %}<p class="mb-1"><strong>Telefone:</strong> {{ orcamento.cliente_telefone or orcamento.portal_telefone }}</p>{% endif %}
+          <p class="mb-1"><strong>Validade:</strong> {{ orcamento.validade.strftime('%d/%m/%Y') if orcamento.validade else 'Não informada' }}</p>
+          <p class="mb-1"><strong>Criado em:</strong> {{ orcamento.created_at.strftime('%d/%m/%Y %H:%M') if orcamento.created_at else '-' }}</p>
+          {% if orcamento.pedido_numero %}<p class="mb-1"><strong>Pedido gerado:</strong> <span class="badge bg-success">{{ orcamento.pedido_numero }}</span></p>{% endif %}
+          {% if orcamento.observacao %}<hr><p class="mb-0 text-muted">{{ orcamento.observacao }}</p>{% endif %}
+        </div>
+      </div>
+
+      {% if orcamento.status != 'CONVERTIDO' %}
+      <div class="card shadow-sm">
+        <div class="card-header"><strong>Alterar status</strong></div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('orcamentos.alterar_status', orcamento_id=orcamento.orcamento_id) }}" class="d-flex gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <select class="form-select" name="status">
+              {% for chave, label in status_labels.items() if chave != 'CONVERTIDO' %}
+              <option value="{{ chave }}" {% if orcamento.status == chave %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-primary">Atualizar</button>
+          </form>
+          <div class="form-text mt-2">Ao marcar como "Enviado ao cliente", o usuário do portal é notificado.</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

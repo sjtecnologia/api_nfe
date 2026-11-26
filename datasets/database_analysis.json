@@ -1,0 +1,230 @@
+{
+  "timestamp": "2025-09-28T17:57:20.954640",
+  "database_type": "PostgreSQL",
+  "database_config": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "sjtnfe"
+  },
+  "tables": [
+    "certificados_digitais",
+    "cfops",
+    "clientes",
+    "csosn_icms",
+    "cst_icms",
+    "destinatarios_nfe",
+    "motivos_desoneracao_icms",
+    "ncms",
+    "nfe_emitidas",
+    "origens_mercadoria",
+    "permissions",
+    "produtos",
+    "regimes_tributarios",
+    "regras_tributacao",
+    "role_permissions",
+    "roles",
+    "user_clients",
+    "user_roles",
+    "users"
+  ],
+  "produtos_columns": [
+    {
+      "name": "produto_id",
+      "type": "bigint",
+      "nullable": false,
+      "default": null,
+      "max_length": null,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "cliente_id",
+      "type": "bigint",
+      "nullable": false,
+      "default": null,
+      "max_length": null,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "codigo_interno",
+      "type": "character varying",
+      "nullable": false,
+      "default": null,
+      "max_length": 50,
+      "precision": null,
+      "scale": null
+    },
+    {
+      "name": "descricao",
+      "type": "text",
+      "nullable": true,
+      "default": null,
+      "max_length": null,
+      "precision": null,
+      "scale": null
+    },
+    {
+      "name": "ncm_id",
+      "type": "bigint",
+      "nullable": false,
+      "default": null,
+      "max_length": null,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "cest",
+      "type": "character varying",
+      "nullable": true,
+      "default": null,
+      "max_length": 7,
+      "precision": null,
+      "scale": null
+    },
+    {
+      "name": "unidade_comercial",
+      "type": "character varying",
+      "nullable": true,
+      "default": null,
+      "max_length": 6,
+      "precision": null,
+      "scale": null
+    },
+    {
+      "name": "preco_unitario_padrao",
+      "type": "numeric",
+      "nullable": true,
+      "default": null,
+      "max_length": null,
+      "precision": 15,
+      "scale": 2
+    },
+    {
+      "name": "origem_mercadoria",
+      "type": "integer",
+      "nullable": false,
+      "default": null,
+      "max_length": null,
+      "precision": 32,
+      "scale": 0
+    },
+    {
+      "name": "tipo_item",
+      "type": "character varying",
+      "nullable": false,
+      "default": null,
+      "max_length": 10,
+      "precision": null,
+      "scale": null
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true",
+      "max_length": null,
+      "precision": null,
+      "scale": null
+    },
+    {
+      "name": "created_by_user_id",
+      "type": "bigint",
+      "nullable": true,
+      "default": null,
+      "max_length": null,
+      "precision": 64,
+      "scale": 0
+    },
+    {
+      "name": "cfop_id",
+      "type": "integer",
+      "nullable": false,
+      "default": null,
+      "max_length": null,
+      "precision": 32,
+      "scale": 0
+    },
+    {
+      "name": "cst_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null,
+      "max_length": null,
+      "precision": 32,
+      "scale": 0
+    },
+    {
+      "name": "csosn_id",
+      "type": "integer",
+      "nullable": true,
+      "default": null,
+      "max_length": null,
+      "precision": 32,
+      "scale": 0
+    }
+  ],
+  "foreign_keys": [
+    {
+      "from_column": "cliente_id",
+      "to_table": "clientes",
+      "to_column": "cliente_id"
+    },
+    {
+      "from_column": "cliente_id",
+      "to_table": "clientes",
+      "to_column": "cliente_id"
+    },
+    {
+      "from_column": "cliente_id",
+      "to_table": "clientes",
+      "to_column": "cliente_id"
+    },
+    {
+      "from_column": "cliente_id",
+      "to_table": "clientes",
+      "to_column": "cliente_id"
+    },
+    {
+      "from_column": "ncm_id",
+      "to_table": "ncms",
+      "to_column": "ncm_id"
+    },
+    {
+      "from_column": "ncm_id",
+      "to_table": "ncms",
+      "to_column": "ncm_id"
+    },
+    {
+      "from_column": "ncm_id",
+      "to_table": "ncms",
+      "to_column": "ncm_id"
+    },
+    {
+      "from_column": "ncm_id",
+      "to_table": "ncms",
+      "to_column": "ncm_id"
+    },
+    {
+      "from_column": "created_by_user_id",
+      "to_table": "users",
+      "to_column": "id"
+    },
+    {
+      "from_column": "cfop_id",
+      "to_table": "cfops",
+      "to_column": "cfop_id"
+    },
+    {
+      "from_column": "cst_id",
+      "to_table": "cst_icms",
+      "to_column": "cst_id"
+    },
+    {
+      "from_column": "csosn_id",
+      "to_table": "csosn_icms",
+      "to_column": "csosn_id"
+    }
+  ],
+  "total_produtos": 2
+}

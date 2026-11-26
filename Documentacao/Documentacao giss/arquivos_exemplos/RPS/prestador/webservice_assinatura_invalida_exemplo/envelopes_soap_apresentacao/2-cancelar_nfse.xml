@@ -1,0 +1,98 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:nfse="http://nfse.abrasf.org.br">
+	<soapenv:Header/>
+	<soapenv:Body>
+		<nfse:CancelarNfseRequest>
+			<nfseCabecMsg>
+				&lt;p:cabecalho versao=&quot;2.00&quot; xmlns:ds=&quot;http://www.w3.org/2000/09/xmldsig#&quot; xmlns:p=&quot;http://www.giss.com.br/cabecalho-v2_04.xsd&quot; xmlns:p1=&quot;http://www.giss.com.br/tipos-v2_04.xsd&quot; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&gt;
+					&lt;p:versaoDados&gt;2.00&lt;/p:versaoDados&gt;
+				&lt;/p:cabecalho&gt;
+			</nfseCabecMsg>
+			<nfseDadosMsg>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;can:CancelarNfseEnvio xmlns:can=&quot;http://www.giss.com.br/cancelar-nfse-envio-v2_04.xsd&quot; xmlns:tip=&quot;http://www.giss.com.br/tipos-v2_04.xsd&quot; xmlns:xd=&quot;http://www.w3.org/2000/09/xmldsig#&quot;&gt;
+	&lt;can:Pedido&gt;
+		&lt;tip:InfPedidoCancelamento Id=&quot;string&quot;&gt;
+			&lt;tip:IdentificacaoNfse&gt;
+				&lt;tip:Numero&gt;59&lt;/tip:Numero&gt;
+				&lt;tip:CpfCnpj&gt;
+					&lt;tip:Cnpj&gt;11042997000169&lt;/tip:Cnpj&gt;
+				&lt;/tip:CpfCnpj&gt;
+				&lt;!--Optional:--&gt;
+				&lt;tip:InscricaoMunicipal&gt;77761&lt;/tip:InscricaoMunicipal&gt;
+				&lt;tip:CodigoMunicipio&gt;1&lt;/tip:CodigoMunicipio&gt;
+			&lt;/tip:IdentificacaoNfse&gt;
+			&lt;tip:CodigoCancelamento&gt;2&lt;/tip:CodigoCancelamento&gt;
+		&lt;/tip:InfPedidoCancelamento&gt;
+		&lt;!--Optional:--&gt;
+		&lt;Signature xmlns=&quot;http://www.w3.org/2000/09/xmldsig#&quot;&gt;
+			&lt;SignedInfo&gt;
+				&lt;CanonicalizationMethod Algorithm=&quot;http://www.w3.org/TR/2001/REC-xml-c14n-20010315&quot;/&gt;
+				&lt;SignatureMethod Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#rsa-sha1&quot;/&gt;
+				&lt;Reference URI=&quot;&quot;&gt;
+					&lt;Transforms&gt;
+						&lt;Transform Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#enveloped-signature&quot;/&gt;
+					&lt;/Transforms&gt;
+					&lt;DigestMethod Algorithm=&quot;http://www.w3.org/2000/09/xmldsig#sha1&quot;/&gt;
+					&lt;DigestValue&gt;RDPo2ux3/5YM2aQzmuTeyzcE4/A=&lt;/DigestValue&gt;
+				&lt;/Reference&gt;
+			&lt;/SignedInfo&gt;
+			&lt;SignatureValue&gt;bD8OirO6yQasK0G2dK6EpANhnDo4FVLcdvdv46asjO8fKWdtP1FLBqtas3UGVFS4
+Rf7NTCKoyiTmNAYn4Hc8D+KQuxZO4Tkd/qpvDifnkx5IZsdw2/u1R3GBCknEoPdJ
+x5FsyCcVsin3Ei2Xv5pJJpYQoqciPe0CgWHwZsyrcrIhu0fHf2N8WY80yN6fDeOg
+MMqhSEz8DUmM+Ef6IkqIjN5zVxk2ZG2QQVqDelzrxTW/0SjoiT7NrKD5FEobiHca
+LgHNcchj8wn5LlP4G/dWbCxDjmJeDoNVtnFGlJEJTH21o1tcSu8UB37aTNBrRr06
+g2UjkNX1lrOVMipmc7iACw==&lt;/SignatureValue&gt;
+			&lt;KeyInfo&gt;
+				&lt;X509Data&gt;
+					&lt;X509Certificate&gt;MIIIOzCCBiOgAwIBAgIISNV1bHXeAhswDQYJKoZIhvcNAQELBQAwdTELMAkGA1UE
+BhMCQlIxEzARBgNVBAoTCklDUC1CcmFzaWwxNjA0BgNVBAsTLVNlY3JldGFyaWEg
+ZGEgUmVjZWl0YSBGZWRlcmFsIGRvIEJyYXNpbCAtIFJGQjEZMBcGA1UEAxMQQUMg
+T05MSU5FIFJGQiB2NTAeFw0yNDA5MDQxNDQ3MDJaFw0yNTA5MDQxNDQ3MDJaMIIB
+PjELMAkGA1UEBhMCQlIxCzAJBgNVBAgTAlNQMRIwEAYDVQQHEwlTQU8gUEFVTE8x
+EzARBgNVBAoTCklDUC1CcmFzaWwxNjA0BgNVBAsTLVNlY3JldGFyaWEgZGEgUmVj
+ZWl0YSBGZWRlcmFsIGRvIEJyYXNpbCAtIFJGQjEWMBQGA1UECxMNUkZCIGUtQ05Q
+SiBBMTEqMCgGA1UECxMhQVIgQ0VSVElGSUNDIENFUlRJRklDQUNBTyBESUdJVEFM
+MRkwFwYDVQQLExBWaWRlb2NvbmZlcmVuY2lhMRcwFQYDVQQLEw4zMzA0NTY5NjAw
+MDEyMTFJMEcGA1UEAxNAR0lFU1BQIEdFU1RBTyBJTlRFTElHRU5URSBERSBFRFVD
+QUNBTyBFIFNBVURFIFBVQjoxMTA0Mjk5NzAwMDE2OTCCASIwDQYJKoZIhvcNAQEB
+BQADggEPADCCAQoCggEBAOYuUUpqSJVRnt/Enj8YG7wzXwb5Y+PP1UOLAcbdgbay
+EYQzmuM64WP6Q+21Qk00hoLkVXjn9FL8tjIeYgQRfljj3nvQW4KPQrHTOEh7YNIs
+nrmlINogyhRMVVwwJVqALVHjdyPDrlm9apQ3PnLg8ntd4+Ia91uECCdif9tkMFC6
+Ideyd1P6Z3D+Kxm4FrQwEzyjo4LIpt+NMUfAjyMX1PDB3I3eW7/yf8NphTFHQ6O+
+4U2BVXVYmvhZ5ubtqRTh7o
+MDAwMKAhBgVgTAEDAqAYBBZMVUlaIEFMQkVSVE8gUk9EUklHVUVToBkGBWBMAQMD
+oBAEDjExMDQyOTk3MDAwMTY5oBcGBWBMAQMHoA4EDDAwMDAwMDAwMDAwMDANBgkq
+hkiG9w0BAQsFAAOCAgEAeUjEdSZmaFSaIqvCPWUwlrAnXqBGEID7w+GjCWrQv5Em
+1pcD7cKcKWr1IKBhG4jNA9Ml6rz6P0nixLhDxHW8yAm++QUUzUATNOwZ5Zv98eXt
+NgnpHVKOGDG3RcwirvIpSu6DBBfcXEeI+c9wA7RMykuWrEaeQ0/S0+Pn4hn0VXtN
+xkZyhqctQdKC/e4a9zJ8UCKddfG6ifP8vfx/pvr0NFSdJkvfAD83cscKTIOPY1Cb
+46fMjVeU6TdugfO7NTQod8mebJ+AHm/7e74uvLOA/H0cUuXbrVvjrioPvEdBuUp+
+HkIfDuTlMQW7P1IMOxY+g8K1RHW7f5Tg6/aAY2Va+GoBvD+sdD/5rQjadYwwt9RG
+7hH+DzJia/J7KiQHxN655mQ8J/SYpwJXlXy8jKloPDE56WBpAkgHCREvt0LxJdk2
+YvaUNAKin1TgBVXNwoNJ84DlGGjW6t93zfcsADHg1MnpryZid1DZ2c9gL6YQ6Npb
+g9S/vXRZdf9t8hr1Tx0YWvI0bSzCiyZPyzG0G8FOSHX3OOQbK96V2cMCgJ6MwXKw
+NMmRyI2tyy8brWCvj4VSX7LlRBx9JT4dD/HhQhPxpxCV3HfPSAjBhmznOf3QWaWG
+G1nQm8S7Yfm2kT6erje0muB3YWvOWZBiPy3uCq0i72SeHzOkmt4uLgKGJF6wxSk=
+&lt;/X509Certificate&gt;
+				&lt;/X509Data&gt;
+				&lt;KeyValue&gt;
+&lt;RSAKeyValue&gt;
+&lt;Modulus&gt;
+5i5RSmpIlVGe38SePxgbvDNfBvlj48/VQ4sBxt2BtrIRhDOa4zrhY/pD7bVCTTSG
+guRVeOf0Uvy2Mh3U/pncP4rGbgWtDAT
+PKOjgsim340xR8CPIxfU8MHcjd5bv/J/w2mFMUdDo77hTYFVdVia+Fnm5u2pFOHu
+gPc+UMXXAbI8BlXrYQY2QTF1yuba3QYQw4a76NXsSjsgHyr6k2FT867zCAxJYusQ
+AvAk54ENic/z8iGxIP0qjw==
+&lt;/Modulus&gt;
+&lt;Exponent&gt;
+AQAB
+&lt;/Exponent&gt;
+&lt;/RSAKeyValue&gt;
+&lt;/KeyValue&gt;
+			&lt;/KeyInfo&gt;
+		&lt;/Signature&gt;
+	&lt;/can:Pedido&gt;
+&lt;/can:CancelarNfseEnvio&gt;</nfseDadosMsg>
+		</nfse:CancelarNfseRequest>
+	</soapenv:Body>
+</soapenv:Envelope>
+

@@ -1,0 +1,33 @@
+#!/bin/bash
+# Comandos para executar na EC2 (copie e cole um por vez)
+
+# 1. Listar bancos de dados (comando alternativo compatível)
+PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d postgres -c "SELECT datname FROM pg_database WHERE datistemplate = false;"
+
+# 2. Dropar banco sjtnfe (se existir)
+PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d postgres -c "DROP DATABASE IF EXISTS sjtnfe;"
+
+# 3. Criar banco sjtnfe
+PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d postgres -c "CREATE DATABASE sjtnfe WITH ENCODING='UTF8';"
+
+# 4. Confirmar que o banco foi criado
+PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d postgres -c "SELECT datname FROM pg_database WHERE datname='sjtnfe';"
+
+# 5. Restaurar backup (ESTE VAI DEMORAR ~2-5 minutos)
+echo "Iniciando restauração do backup..."
+time PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d sjtnfe -f /home/ubuntu/sjtnfe_backup_20251230_124256.sql
+
+# 6. Verificar tabelas criadas
+PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d sjtnfe -c "SELECT schemaname, tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename;"
+
+# 7. Contar total de tabelas
+PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d sjtnfe -c "SELECT COUNT(*) as total_tabelas FROM information_schema.tables WHERE table_schema='public';"
+
+# 8. Verificar algumas tabelas principais (exemplo)
+PGPASSWORD='***SENHA_RDS_ROTACIONADA***' psql -h nfe-database.cenw06664z53.us-east-1.rds.amazonaws.com -U postgres -d sjtnfe -c "SELECT table_name, (SELECT COUNT(*) FROM information_schema.columns WHERE table_name=t.table_name) as num_colunas FROM information_schema.tables t WHERE table_schema='public' ORDER BY table_name LIMIT 10;"
+
+# 9. Limpar arquivo de backup (opcional - após confirmar que deu tudo certo)
+# rm /home/ubuntu/sjtnfe_backup_20251230_124256.sql
+
+# 10. Desconectar da EC2
+# exit

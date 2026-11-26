@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoria e Logs{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-clipboard-list"></i> Logs de Auditoria
+        </h1>
+        <div>
+            <a href="{{ url_for('admin.estatisticas_auditoria') }}" class="btn btn-info">
+                <i class="fas fa-chart-bar"></i> Estatísticas
+            </a>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="fas fa-download"></i> Exportar
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{{ url_for('admin.export_auditoria', formato='csv', **filtros) }}">
+                        <i class="fas fa-file-csv"></i> CSV
+                    </a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('admin.export_auditoria', formato='xlsx', **filtros) }}">
+                        <i class="fas fa-file-excel"></i> Excel (XLSX)
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card de Filtros -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter"></i> Filtros
+                <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosCollapse">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </h6>
+        </div>
+        <div class="collapse show" id="filtrosCollapse">
+            <div class="card-body">
+                <form method="get" action="{{ url_for('admin.list_auditoria') }}" id="filtroForm">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="user_id" class="form-label">Usuário</label>
+                            <select name="user_id" id="user_id" class="form-select">
+                                <option value="">Todos</option>
+                                {% for usuario in usuarios %}
+                                <option value="{{ usuario.id }}" {% if filtros.user_id == usuario.id %}selected{% endif %}>
+                                    {{ usuario.username }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="acao" class="form-label">Ação</label>
+                            <select name="acao" id="acao" class="form-select">
+                                <option value="">Todas</option>
+                                {% for acao_opt in acoes_disponiveis %}
+                                <option value="{{ acao_opt }}" {% if filtros.acao == acao_opt %}selected{% endif %}>
+                                    {{ acao_opt }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="tabela" class="form-label">Tabela</label>
+                            <select name="tabela" id="tabela" class="form-select">
+                                <option value="">Todas</option>
+                                {% for tabela_opt in tabelas_disponiveis %}
+                                <option value="{{ tabela_opt }}" {% if filtros.tabela == tabela_opt %}selected{% endif %}>
+                                    {{ tabela_opt }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="per_page" class="form-label">Por Página</label>
+                            <select name="per_page" id="per_page" class="form-select">
+                                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                                <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="data_inicio" class="form-label">Data Inicial</label>
+                            <input type="date" name="data_inicio" id="data_inicio" 
+                                   class="form-control" value="{{ filtros.data_inicio or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="data_fim" class="form-label">Data Final</label>
+                            <input type="date" name="data_fim" id="data_fim" 
+                                   class="form-control" value="{{ filtros.data_fim or '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <a href="{{ url_for('admin.list_auditoria') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Limpar
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resultados -->
+    <div class="card">
+        <div class="card-header">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Registros de Auditoria 
+                <span class="badge bg-secondary">{{ total }} registros</span>
+            </h6>
+        </div>
+        <div class="card-body">
+            {% if logs %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">ID</th>
+                            <th style="width: 12%;">Data/Hora</th>
+                            <th style="width: 10%;">Usuário</th>
+                            <th style="width: 10%;">Ação</th>
+                            <th style="width: 12%;">Tabela</th>
+                            <th style="width: 8%;">Registro</th>
+                            <th style="width: 10%;">IP</th>
+                            <th style="width: 28%;">Descrição</th>
+                            <th style="width: 5%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td><strong>{{ log.auditoria_id }}</strong></td>
+                            <td>
+                                <small>{{ log.timestamp.strftime('%d/%m/%Y') if log.timestamp }}</small><br>
+                                <small class="text-muted">{{ log.timestamp.strftime('%H:%M:%S') if log.timestamp }}</small>
+                            </td>
+                            <td>
+                                {% if log.user_id %}
+                                    <i class="fas fa-user text-primary"></i> {{ log.username }}
+                                {% else %}
+                                    <i class="fas fa-robot text-secondary"></i> {{ log.username }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.acao == 'CREATE' %}
+                                    <span class="badge bg-success">{{ log.acao }}</span>
+                                {% elif log.acao == 'UPDATE' %}
+                                    <span class="badge bg-warning text-dark">{{ log.acao }}</span>
+                                {% elif log.acao == 'DELETE' %}
+                                    <span class="badge bg-danger">{{ log.acao }}</span>
+                                {% elif log.acao in ['LOGIN_SUCCESS', 'LOGIN'] %}
+                                    <span class="badge bg-info">{{ log.acao }}</span>
+                                {% elif log.acao == 'LOGIN_FAILED' %}
+                                    <span class="badge bg-danger">{{ log.acao }}</span>
+                                {% elif log.acao == 'LOGOUT' %}
+                                    <span class="badge bg-secondary">{{ log.acao }}</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark">{{ log.acao }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code>{{ log.tabela_afetada or '-' }}</code>
+                            </td>
+                            <td>
+                                {% if log.registro_id %}
+                                    <span class="badge bg-secondary">#{{ log.registro_id }}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ log.ip_address or '-' }}</small>
+                            </td>
+                            <td>
+                                <small>{{ log.descricao[:60] + '...' if log.descricao and log.descricao|length > 60 else (log.descricao or '-') }}</small>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('admin.view_auditoria', auditoria_id=log.auditoria_id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if total_pages > 1 %}
+            <nav aria-label="Navegação de auditoria">
+                <ul class="pagination justify-content-center mt-3">
+                    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin.list_auditoria', page=page-1, per_page=per_page, **filtros) if page > 1 else '#' }}">
+                            Anterior
+                        </a>
+                    </li>
+                    
+                    {% for p in range(1, total_pages + 1) %}
+                        {% if p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                            <li class="page-item {% if p == page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin.list_auditoria', page=p, per_page=per_page, **filtros) }}">
+                                    {{ p }}
+                                </a>
+                            </li>
+                        {% elif p == page - 3 or p == page + 3 %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin.list_auditoria', page=page+1, per_page=per_page, **filtros) if page < total_pages else '#' }}">
+                            Próxima
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="text-center text-muted">
+                <small>Página {{ page }} de {{ total_pages }} ({{ total }} registros)</small>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-clipboard-list fa-4x text-muted mb-3"></i>
+                <h5 class="text-muted">Nenhum log encontrado</h5>
+                <p class="text-muted">Tente ajustar os filtros ou limpar para ver todos os registros.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Card de Limpeza (apenas super_admin) -->
+    {% if current_user.is_super_admin() %}
+    <div class="card mt-4 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <h6 class="m-0 font-weight-bold">
+                <i class="fas fa-exclamation-triangle"></i> Manutenção de Logs
+            </h6>
+        </div>
+        <div class="card-body">
+            <p>Remova logs de auditoria antigos para liberar espaço no banco de dados.</p>
+            <form method="post" action="{{ url_for('admin.limpar_auditoria') }}" 
+                  onsubmit="return confirm('Tem certeza que deseja remover logs antigos? Esta ação não pode ser desfeita.');">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="dias" class="form-label">Remover logs com mais de:</label>
+                        <select name="dias" id="dias" class="form-select">
+                            <option value="90">90 dias (3 meses)</option>
+                            <option value="180">180 dias (6 meses)</option>
+                            <option value="365" selected>365 dias (1 ano)</option>
+                            <option value="730">730 dias (2 anos)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8 d-flex align-items-end">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-trash-alt"></i> Limpar Logs Antigos
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

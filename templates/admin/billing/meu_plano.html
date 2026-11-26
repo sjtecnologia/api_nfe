@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Meu Plano - EmiteMax{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <p class="text-uppercase text-muted small mb-1">Conta comercial</p>
+      <h1 class="h3 mb-1">Meu plano</h1>
+      <p class="text-muted mb-0">Capacidades e recursos da empresa ativa.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="#planos-disponiveis">Comparar planos</a>
+  </div>
+
+  {% if plan and subscription %}
+  <section class="card border-0 shadow-sm mb-4" aria-labelledby="plano-atual-heading">
+    <div class="card-body p-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <p class="text-muted small mb-1">Plano atual</p>
+          <h2 id="plano-atual-heading" class="h4 mb-2">{% if plan.availability == 'EXISTING_CUSTOMERS' %}{{ plan.name }}{% else %}{{ plan.name }}{% endif %}</h2>
+          {% if plan.availability == 'EXISTING_CUSTOMERS' %}
+          <p class="text-success mb-0"><strong>Condição comercial preservada</strong></p>
+          {% else %}
+          <p class="text-muted mb-0">Status: {{ subscription.status|title }}</p>
+          {% endif %}
+        </div>
+        <div class="text-md-end">
+          <p class="text-muted small mb-1">Preço contratado</p>
+          <p class="h5 mb-0">{% if subscription.contracted_price is not none %}R$ {{ '%.2f'|format(subscription.contracted_price|float) }}{% else %}Contratual{% endif %}<small class="text-muted"> / mês</small></p>
+        </div>
+      </div>
+      <hr>
+      <div class="row g-3">
+        <div class="col-sm-4">
+          <div class="border rounded p-3 h-100">
+            <p class="text-muted small mb-1">Empresas</p>
+            {% if capacities.companies %}<strong>{{ capacities.companies.used }}{% if capacities.companies.limit is not none %} / {{ capacities.companies.limit }}{% endif %}</strong>{% else %}<strong>Condição atual</strong>{% endif %}
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="border rounded p-3 h-100">
+            <p class="text-muted small mb-1">Usuários</p>
+            {% if capacities.users %}<strong>{{ capacities.users.used }}{% if capacities.users.limit is not none %} / {{ capacities.users.limit }}{% endif %}</strong>{% else %}<strong>Condição atual</strong>{% endif %}
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="border rounded p-3 h-100">
+            <p class="text-muted small mb-1">NF-e no período</p>
+            {% if plan.availability == 'EXISTING_CUSTOMERS' %}<strong>Condição preservada</strong><p class="small text-muted mb-0">Sem novo limite aplicado</p>{% else %}<strong>{{ nfe_usage }} / {{ plan.nfe_policy|replace(' NF-e/mês', '') }}</strong><p class="small mb-0 {% if nfe_usage_state == 'LIMIT_REACHED' %}text-danger{% elif nfe_usage_state == 'APPROACHING_LIMIT' %}text-warning{% else %}text-muted{% endif %}">{% if nfe_usage_state == 'LIMIT_REACHED' %}Limite atingido{% elif nfe_usage_state == 'APPROACHING_LIMIT' %}Atenção ao consumo{% else %}Uso normal{% endif %}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% if plan.availability == 'EXISTING_CUSTOMERS' %}
+      <div class="alert alert-light border mt-4 mb-0">Seu acesso atual permanece preservado. Novos recursos comerciais podem exigir uma contratação específica.</div>
+      {% endif %}
+    </div>
+  </section>
+  {% elif cliente_id %}
+  <div class="alert alert-secondary mb-4">Não foi possível carregar os dados do seu plano agora.</div>
+  {% endif %}
+
+  {% if plan and subscription %}
+  <section class="mb-5" aria-labelledby="recursos-heading">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 id="recursos-heading" class="h5 mb-0">Recursos do plano</h2>
+      <span class="badge bg-light text-dark border">{{ plan.name }}</span>
+    </div>
+    <div class="row g-3">
+      {% for feature in plan.features %}<div class="col-md-6 col-xl-4"><div class="border rounded p-3 h-100"><span class="text-success me-2">&#10003;</span>{{ feature }}</div></div>{% endfor %}
+    </div>
+    {% if plan.notes %}<p class="small text-muted mt-3 mb-0">{{ plan.notes|join(' ') }}</p>{% endif %}
+  </section>
+  {% endif %}
+
+  <section id="planos-disponiveis" aria-labelledby="planos-heading">
+    <div class="mb-3"><h2 id="planos-heading" class="h5 mb-1">Planos disponíveis</h2><p class="text-muted small mb-0">Compare as opções para uma futura contratação ou upgrade.</p></div>
+    <div class="row g-3">
+      {% for available_plan in catalog.plans if available_plan.availability in ['NEW_SALES', 'CONTACT_SALES'] %}
+      <div class="col-md-6 col-xl-3">
+        <article class="card h-100 shadow-sm">
+          <div class="card-body d-flex flex-column">
+            <h3 class="h6">{{ available_plan.name }}</h3>
+            <p class="h5 mb-3">{% if available_plan.price %}R$ {{ '%.2f'|format(available_plan.price|float) }} <small class="text-muted">/ mês</small>{% else %}Fale conosco{% endif %}</p>
+            <ul class="list-unstyled small text-muted mb-4">
+              <li class="mb-2">{{ available_plan.nfe_policy }}</li>
+              <li class="mb-2">{% if available_plan.companies %}{{ available_plan.companies }} empresa(s){% else %}Capacidade contratual{% endif %}</li>
+              <li>{% if available_plan.users %}{{ available_plan.users }} usuário(s){% else %}Capacidade contratual{% endif %}</li>
+            </ul>
+            <a class="btn btn-outline-primary mt-auto" href="#upgrade-info">{% if available_plan.availability == 'CONTACT_SALES' %}Falar com a equipe{% else %}Falar sobre upgrade{% endif %}</a>
+          </div>
+        </article>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="upgrade-info" class="alert alert-light border mt-4 mb-0">Solicitações de upgrade são analisadas pela equipe comercial. Nenhuma alteração de plano ou cobrança é feita nesta tela.</div>
+  </section>
+
+  {% if access and not access.enabled and access.reason == 'PLAN_NOT_ENTITLED' %}
+  <div class="alert alert-warning mt-4"><strong>Recurso disponível em plano superior.</strong> Análise inteligente de vendas está disponível a partir do plano Profissional.</div>
+  {% endif %}
+</div>
+{% endblock %}

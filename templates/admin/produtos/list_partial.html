@@ -1,0 +1,127 @@
+<div class="table-responsive">
+    {% if produtos_existentes %}
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Código</th>
+                    <th>Descrição</th>
+                    <th>Unidade</th>
+                    <th>Preço</th>
+                    <th>NCM</th>
+                    <th>Status</th>
+                    <th width="150">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for produto in produtos_existentes %}
+                    <tr>
+                        <td>{{ produto.produto_id }}</td>
+                        <td>{{ produto.codigo_interno }}</td>
+                        <td><strong>{{ produto.descricao }}</strong></td>
+                        <td>{{ produto.unidade_comercial }}</td>
+                        <td>
+                            {% if produto.preco_unitario_padrao %}
+                                R$ {{ "%.2f"|format(produto.preco_unitario_padrao) }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if produto.ncm_codigo %}
+                                <span class="badge bg-info">{{ produto.ncm_codigo }}</span>
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if produto.ativo else 'danger' }}">
+                                {{ 'Ativo' if produto.ativo else 'Inativo' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if can_edit() %}
+                            <div class="btn-group" role="group">
+                                <!-- Editar -->
+                                <a href="{{ url_for('admin.editar_produto', produto_id=produto.produto_id) }}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <!-- Duplicar -->
+                                <form method="post" action="{{ url_for('admin.duplicar_produto', produto_id=produto.produto_id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-info" title="Duplicar Produto" onclick="return confirm('Deseja duplicar este produto?');">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </form>
+                                <!-- Toggle Status -->
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-{{ 'danger' if produto.ativo else 'success' }} btn-toggle-status"
+                                        data-produto-id="{{ produto.produto_id }}"
+                                        data-novo-status="{{ 'false' if produto.ativo else 'true' }}"
+                                        data-cliente-id="{{ cliente_id }}"
+                                        title="{{ 'Desativar' if produto.ativo else 'Ativar' }}">
+                                    <i class="fas fa-{{ 'eye-slash' if produto.ativo else 'eye' }}"></i>
+                                </button>
+                            </div>
+                            {% else %}
+                            <span class="text-muted"><i class="fas fa-eye"></i> Visualização</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-box fa-4x text-muted mb-4"></i>
+            <h5 class="text-muted">Nenhum produto cadastrado</h5>
+            {% if can_create() %}
+            <p class="text-muted">Comece adicionando um novo produto ao catálogo.</p>
+            <a href="{{ url_for('admin.create_produto', cliente_id=cliente_id) }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-plus"></i> Adicionar Primeiro Produto
+            </a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-toggle-status').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const produtoId = this.getAttribute('data-produto-id');
+            const novoStatus = this.getAttribute('data-novo-status');
+            const clienteId = this.getAttribute('data-cliente-id');
+            
+            alterarStatusProduto(produtoId, novoStatus, clienteId);
+        });
+    });
+});
+
+function alterarStatusProduto(produtoId, novoStatus, clienteId) {
+    if (confirm('Deseja alterar o status deste produto?')) {
+        fetch('/admin/produtos/alterar-status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'produto_id=' + produtoId + '&ativo=' + novoStatus + '&cliente_id=' + clienteId
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao alterar status do produto');
+        });
+    }
+}
+</script>
+{% endblock %}
